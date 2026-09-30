@@ -5,7 +5,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir "torch>=2.4" --index-url https://download.pytorch.org/whl/cu121
 
-COPY server.py .
+COPY server.py jlens_l18_qwen3-4b.pt .
 
 EXPOSE 8000
 ENV CHAMBER_DEVICE=cuda CHAMBER_DTYPE=float16 CHAMBER_LAYER=18

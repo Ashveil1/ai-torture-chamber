@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py .
+COPY server.py jlens_l18_qwen3-4b.pt .
 
 EXPOSE 8000
 ENV CHAMBER_DEVICE=cpu CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=18
