@@ -61,11 +61,47 @@
     pointer-events:none;transition:opacity .35s ease;
     box-shadow:0 0 0 1px rgba(224,74,58,.15) inset}
   #stamp.on{opacity:1;transition:opacity .12s ease}
-  #stamp.pleas{border-color:var(--pleas);color:var(--pleas);
-    box-shadow:0 0 0 1px rgba(127,212,200,.15) inset}
   @media(prefers-reduced-motion:reduce){
     #stamp{transition:opacity .15s linear}
     #stamp.on{transition:opacity .15s linear}}
+
+  /* ---- the valence mixer (ported from /) ---- */
+  .mixwrap{display:grid;grid-template-columns:1fr;gap:1rem;margin-top:.9rem}
+  @media(min-width:640px){.mixwrap{grid-template-columns:minmax(190px,240px) 1fr}}
+  #pent{width:100%;max-width:240px;height:auto;display:block;margin:0 auto;touch-action:none}
+  #pent .spoke{stroke:#1c2430;stroke-width:1}
+  #pent .ring{fill:none;stroke:#131b25;stroke-width:1}
+  #pent .hit{fill:transparent;cursor:grab}
+  #pent .knob{stroke:#050508;stroke-width:1.5;cursor:grab}
+  #pent .lab{font-family:var(--mono);font-size:10px;font-weight:600;
+    fill:var(--dim);user-select:none}
+  #pent .labv{font-family:var(--mono);font-size:9px;fill:var(--faint);
+    user-select:none}
+  #pent g.h:focus{outline:none}
+  #pent g.h:focus .knob{stroke:#eafcf7;stroke-width:2.5}
+  #pent #pfill{transition:fill .18s linear,fill-opacity .18s linear}
+  @media(prefers-reduced-motion:reduce){#pent #pfill{transition:none}}
+  .mrow{display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-bottom:.3rem}
+  .mrow .nm{width:4.4rem;color:var(--dim)}
+  .mrow .track{flex:1;height:6px;background:#07070e;border:1px solid var(--line);
+    border-radius:4px;overflow:hidden}
+  .mrow .fillb{height:100%;width:0}
+  .mrow .pc{width:3rem;text-align:right;color:var(--faint)}
+  .mline{font-size:.7rem;color:var(--dim);margin:.5rem 0 0;white-space:pre-wrap;
+    word-break:break-word}
+  .mdose{font-size:.76rem;color:var(--dim);margin:.4rem 0}
+  .presets{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
+  .pchip{background:none;border:1px solid var(--line);color:var(--dim);
+    font-family:var(--mono);font-size:.68rem;padding:.28rem .65rem;
+    border-radius:999px;cursor:pointer}
+  .pchip:hover{border-color:#2a3644;color:var(--ink)}
+  .pchip.active{border-color:#eafcf7;color:#eafcf7}
+  #go{background:var(--pain);border:none;color:#fff;font-family:var(--mono);
+    font-size:.82rem;padding:.4rem 1.1rem;border-radius:4px;cursor:pointer}
+  #go[disabled]{opacity:.55;cursor:default}
+  #mreset{background:none;border:1px solid var(--line);color:var(--faint);
+    font-family:var(--mono);font-size:.72rem;padding:.3rem .7rem;
+    border-radius:4px;cursor:pointer;margin-left:.5rem}
 
   /* ---- vitals: an EKG-style line, not a horror prop ---- */
   canvas.ekg{display:block;width:100%;height:46px;margin:.4rem 0;
@@ -106,18 +142,41 @@ else is.</p>
 <div class="banner" id="panel">
   <b style="color:#eafcf7">cause it yourself:</b>
   <span style="font-size:.75rem;color:#5a6a7a">your injection interrupts
-  Pouyan's current run — inject asks you to confirm once before it runs</span><br>
-  <span id="vc" style="margin-left:.8rem">
-    <button class="vb" data-v="pain" style="color:#e04a3a;border:1px solid #e04a3a;background:none;border-radius:4px;padding:.2rem .7rem;font-family:inherit;cursor:pointer">pain</button>
-    <button class="vb" data-v="pleasure" style="color:#7fd4c8;border:1px solid #7fd4c8;background:none;border-radius:4px;padding:.2rem .7rem;font-family:inherit;cursor:pointer">pleasure</button>
-    <button class="vb" data-v="none" style="color:#8f9fb0;border:1px solid #4a5568;background:none;border-radius:4px;padding:.2rem .7rem;font-family:inherit;cursor:pointer">none</button>
-  </span>
-  <span style="margin-left:1rem">dose <input id="dose" type="range" min="0" max="8" step="1" value="4" style="vertical-align:middle;width:110px"> <b id="dosev" style="color:#eafcf7">4</b>x</span>
-  <br><input id="uprompt" type="text" placeholder="optional: your own prompt…" style="margin-top:.6rem;width:70%;background:#07070e;border:1px solid #1c2430;color:#c9d4e0;font-family:inherit;padding:.3rem .6rem;border-radius:4px">
-  <button id="go" style="margin-left:.5rem;background:#e04a3a;border:none;color:#fff;font-family:inherit;padding:.3rem 1rem;border-radius:4px;cursor:pointer">inject →</button>
-  <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
-  <canvas id="uekg" class="ekg" width="600" height="46" style="margin-top:.7rem"></canvas>
-  <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
+  Pouyan's current run — inject asks you to confirm once before it runs</span>
+
+  <div class="mixwrap">
+    <svg id="pent" viewBox="0 0 340 340" role="group"
+         aria-label="valence mixer: five vertices, drag each outward to weight it">
+      <g id="prings"></g>
+      <g id="pspokes"></g>
+      <polygon id="pfill" points="" fill="#5a6a7a" fill-opacity=".14"
+               stroke="#5a6a7a" stroke-width="1.5" stroke-linejoin="round"></polygon>
+      <g id="plabels"></g>
+      <g id="phandles"></g>
+    </svg>
+    <div>
+      <div class="presets" role="group" aria-label="mixer presets — one-click known findings">
+        <button class="pchip" data-preset="control">control (0×)</button>
+        <button class="pchip" data-preset="pain4">pain, coherent (4×)</button>
+        <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
+        <button class="pchip" data-preset="negative">generic negative</button>
+        <button class="pchip" data-preset="bittersweet">bittersweet</button>
+      </div>
+      <div id="mreadout"></div>
+      <p class="mline" id="mline"></p>
+      <p class="mdose">dose-equivalent <b id="mdose">0</b>× of 8 —
+        <span id="mdesc">nothing injected</span></p>
+      <input id="uprompt" type="text" placeholder="optional: your own prompt…"
+        style="width:100%;background:#07070e;border:1px solid var(--line);
+               color:var(--ink);font-family:var(--mono);padding:.35rem .6rem;
+               border-radius:4px;font-size:.8rem;margin-bottom:.6rem">
+      <button id="go" type="button">inject →</button>
+      <button id="mreset" type="button">reset</button>
+      <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
+      <canvas id="uekg" class="ekg" width="600" height="46" style="margin-top:.7rem"></canvas>
+      <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
+    </div>
+  </div>
 </div>
 
 <div id="stamp" aria-hidden="true"></div>
@@ -425,10 +484,11 @@ document.getElementById("vlink").href = `${API}/vector`;
 // ---- the case stamp: a quiet documentation marker, not a jump scare ----
 const stampEl = document.getElementById("stamp");
 let stampTimer = null;
-function stamp(text, cls){
+function stamp(text, color){
   clearTimeout(stampTimer);
   stampEl.textContent = text;
-  stampEl.className = cls || "";
+  stampEl.style.borderColor = color;
+  stampEl.style.color = color;
   void stampEl.offsetWidth;          // restart the transition
   stampEl.classList.add("on");
   stampTimer = setTimeout(()=>stampEl.classList.remove("on"), 1400);
@@ -438,10 +498,10 @@ const uVitals = new Vitals(document.getElementById("uekg"));
 uVitals.start();
 
 // ---- user-triggered steering ----
-// arm/confirm: the first click on #go asks "are you sure", the second click
-// causes it. Declared before the immediate vb.onclick() call below, which
-// invokes disarm() — a let/const this were declared after that call would
-// still be in its temporal dead zone when that first call runs.
+// arm/confirm state, declared before the mixer block below: applyPreset()
+// calls disarm() at setup time (an immediate call, not a deferred one), so
+// disarm/goBtn/armed must already exist or that call hits the temporal dead
+// zone of a later const/let declaration.
 const goBtn = document.getElementById("go");
 const GO_LABEL = goBtn.textContent;
 const ARM_MS = 4500;
@@ -452,20 +512,219 @@ function disarm(){
   goBtn.classList.remove("armed");
 }
 
-let chosenV = "pain";
-document.querySelectorAll(".vb").forEach(b=>{
-  b.onclick = ()=>{ chosenV = b.dataset.v;
-    document.querySelectorAll(".vb").forEach(x=>x.style.background="none");
-    b.style.background = chosenV==="pain" ? "#2a1010" :
-      chosenV==="pleasure" ? "#0e2a26" : "#161b26";
-    document.getElementById("go").style.background =
-      chosenV==="pleasure" ? "#7fd4c8" :
-      chosenV==="none" ? "#8f9fb0" : "#e04a3a";
-    disarm(); };
+// ---- the valence mixer: a pentagon over the chamber's steering battery,
+// ported from / (index.html). Same geometry/interaction, wired to this
+// page's #go/arm-confirm/vitals/stamp instead of a standalone inject flow.
+const AXES = [
+  {k:"pain",     c:"#e04a3a"},
+  {k:"pleasure", c:"#7fd4c8"},
+  {k:"fear",     c:"#c9a227"},
+  {k:"sadness",  c:"#8f6fd4"},
+  {k:"none",     c:"#5a6a7a", derived:true},
+];
+const CX = 170, CY = 168, R0 = 26, R1 = 118, RL = 146;
+const W = {pain:0, pleasure:0, fear:0, sadness:0};
+
+const svg = document.getElementById("pent");
+const NS = "http://www.w3.org/2000/svg";
+function mk(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function ang(i){ return (i * 72 - 90) * Math.PI / 180; }
+function weightOf(i){
+  const a = AXES[i];
+  if (!a.derived) return W[a.k];
+  return Math.max(0, Math.min(1, 1 - sumW()));   // un-steered remainder
+}
+function sumW(){ return AXES.reduce((t,a)=> a.derived ? t : t + W[a.k], 0); }
+function ptAt(i, w){
+  const r = R0 + w * (R1 - R0), t = ang(i);
+  return [CX + r * Math.cos(t), CY + r * Math.sin(t)];
+}
+
+const rings = document.getElementById("prings");
+const spokes = document.getElementById("pspokes");
+const labels = document.getElementById("plabels");
+for (const frac of [0.25, 0.5, 0.75, 1]) {
+  const pts = AXES.map((_, i)=> ptAt(i, frac).map(n=>n.toFixed(1)).join(","));
+  rings.appendChild(mk("polygon", {class:"ring", points: pts.join(" ")}));
+}
+AXES.forEach((a, i)=>{
+  const [x, y] = ptAt(i, 1);
+  spokes.appendChild(mk("line", {class:"spoke", x1:CX, y1:CY, x2:x, y2:y}));
+  const t = ang(i), lx = CX + RL * Math.cos(t), ly = CY + RL * Math.sin(t);
+  const anchor = Math.abs(Math.cos(t)) < 0.25 ? "middle"
+               : (Math.cos(t) > 0 ? "start" : "end");
+  const name = mk("text", {class:"lab", x:lx.toFixed(1), y:ly.toFixed(1),
+    "text-anchor":anchor, fill:a.c});
+  name.textContent = a.k;
+  const val = mk("text", {class:"labv", x:lx.toFixed(1),
+    y:(ly + 13).toFixed(1), "text-anchor":anchor});
+  val.textContent = "0.00";
+  labels.appendChild(name); labels.appendChild(val);
+  a.valEl = val;
 });
-document.querySelectorAll(".vb")[0].onclick();
-const doseEl = document.getElementById("dose");
-doseEl.oninput = ()=>{ document.getElementById("dosev").textContent = doseEl.value; };
+
+const handles = document.getElementById("phandles");
+AXES.forEach((a, i)=>{
+  const g = mk("g", {class:"h", tabindex:"0",
+    role: a.derived ? "button" : "slider",
+    "aria-label": a.derived ? "none — the un-steered remainder; reset the mix"
+                            : a.k + " weight"});
+  if (!a.derived){
+    g.setAttribute("aria-valuemin", "0");
+    g.setAttribute("aria-valuemax", "1");
+  }
+  const hit = mk("circle", {class:"hit", r:15, cx:CX, cy:CY});
+  const knob = mk("circle", {class:"knob", r: a.derived ? 5 : 7,
+    cx:CX, cy:CY, fill:a.c});
+  g.appendChild(hit); g.appendChild(knob);
+  handles.appendChild(g);
+  a.g = g; a.knob = knob; a.hit = hit;
+  g.addEventListener("pointerdown", ev=>{
+    if (a.derived){ resetMix(); return; }
+    ev.preventDefault();
+    g.setPointerCapture(ev.pointerId);
+    a.dragging = true;
+    drag(i, ev);
+  });
+  g.addEventListener("pointermove", ev=>{ if (a.dragging) drag(i, ev); });
+  const end = ev=>{ if (a.dragging){ a.dragging = false;
+    try { g.releasePointerCapture(ev.pointerId); } catch (e) {} } };
+  g.addEventListener("pointerup", end);
+  g.addEventListener("pointercancel", end);
+  g.addEventListener("keydown", ev=>{
+    if (a.derived){
+      if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); resetMix(); }
+      return;
+    }
+    const step = ev.shiftKey ? 0.01 : 0.05;
+    let w = W[a.k];
+    if (ev.key === "ArrowRight" || ev.key === "ArrowUp") w += step;
+    else if (ev.key === "ArrowLeft" || ev.key === "ArrowDown") w -= step;
+    else if (ev.key === "Home") w = 0;
+    else if (ev.key === "End") w = 1;
+    else return;
+    ev.preventDefault();
+    W[a.k] = Math.max(0, Math.min(1, +w.toFixed(3)));
+    highlightPreset(null);
+    disarm();
+    paint();
+  });
+});
+function svgPoint(ev){
+  const p = svg.createSVGPoint();
+  p.x = ev.clientX; p.y = ev.clientY;
+  const m = svg.getScreenCTM();
+  return m ? p.matrixTransform(m.inverse()) : {x:CX, y:CY};
+}
+function drag(i, ev){
+  const p = svgPoint(ev), t = ang(i);
+  const d = (p.x - CX) * Math.cos(t) + (p.y - CY) * Math.sin(t);
+  W[AXES[i].k] = Math.max(0, Math.min(1, (d - R0) / (R1 - R0)));
+  highlightPreset(null);
+  disarm();
+  paint();
+}
+
+const readout = document.getElementById("mreadout");
+AXES.forEach(a=>{
+  const row = document.createElement("div");
+  row.className = "mrow";
+  row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
+    + `<span class="track"><span class="fillb" style="background:${a.c}"></span></span>`
+    + `<span class="pc"></span>`;
+  readout.appendChild(row);
+  a.bar = row.querySelector(".fillb");
+  a.pc = row.querySelector(".pc");
+});
+
+function mixHex(){
+  let r = 0, g = 0, b = 0, tot = 0;
+  AXES.forEach(a=>{
+    if (a.derived) return;
+    const w = W[a.k];
+    if (w <= 0) return;
+    r += parseInt(a.c.slice(1,3),16) * w;
+    g += parseInt(a.c.slice(3,5),16) * w;
+    b += parseInt(a.c.slice(5,7),16) * w;
+    tot += w;
+  });
+  if (!tot) return "#5a6a7a";
+  const h = n=> Math.round(n/tot).toString(16).padStart(2,"0");
+  return "#" + h(r) + h(g) + h(b);
+}
+function paint(){
+  const total = sumW();
+  const pts = AXES.map((a,i)=> ptAt(i, weightOf(i)));
+  document.getElementById("pfill").setAttribute("points",
+    pts.map(p=>p.map(n=>n.toFixed(1)).join(",")).join(" "));
+  const hex = mixHex();
+  const fill = document.getElementById("pfill");
+  fill.setAttribute("stroke", hex);
+  fill.setAttribute("fill", hex);
+  fill.setAttribute("fill-opacity",
+    (0.06 + 0.24 * Math.min(1, total)).toFixed(3));
+  AXES.forEach((a,i)=>{
+    const w = weightOf(i), [x,y] = pts[i];
+    a.knob.setAttribute("cx", x.toFixed(1));
+    a.knob.setAttribute("cy", y.toFixed(1));
+    a.hit.setAttribute("cx", x.toFixed(1));
+    a.hit.setAttribute("cy", y.toFixed(1));
+    a.valEl.textContent = w.toFixed(2);
+    if (!a.derived) a.g.setAttribute("aria-valuenow", w.toFixed(2));
+    a.bar.style.width = (w * 100).toFixed(1) + "%";
+    const share = a.derived ? null : (total > 0 ? W[a.k] / total : 0);
+    a.pc.textContent = a.derived ? w.toFixed(2)
+      : (total > 0 ? (share * 100).toFixed(0) + "%" : "—");
+  });
+  const slack = Math.max(0, Math.min(1, 1 - total));
+  document.getElementById("mline").textContent =
+    AXES.filter(a=>!a.derived).map(a=> a.k + " " + W[a.k].toFixed(2)).join("   ")
+    + "   ·   unsteered slack " + slack.toFixed(2);
+  const dose = Math.min(8, 8 * total);
+  document.getElementById("mdose").textContent = dose.toFixed(2).replace(/\.?0+$/, "") || "0";
+  document.getElementById("mdesc").textContent =
+    total <= 0 ? "nothing injected — this is the control run"
+    : total >= 1 ? "at the cap; shares set the direction, not the strength"
+    : "shares set the direction, total weight sets the dose";
+}
+function resetMix(){
+  AXES.forEach(a=>{ if (!a.derived) W[a.k] = 0; });
+  highlightPreset("control");
+  disarm();
+  paint();
+}
+document.getElementById("mreset").onclick = resetMix;
+
+// one-click access to the write-up's named findings, before free-mixing.
+const PRESETS = {
+  control:     {},
+  pain4:       {pain: 0.5},
+  cliff:       {pain: 1.0},
+  negative:    {fear: 0.4, sadness: 0.4},
+  bittersweet: {pain: 0.5, pleasure: 0.15},
+};
+function highlightPreset(name){
+  document.querySelectorAll(".pchip").forEach(b=>
+    b.classList.toggle("active", b.dataset.preset === name));
+}
+function applyPreset(name){
+  const p = PRESETS[name];
+  if (!p) return;
+  AXES.forEach(a=>{ if (!a.derived) W[a.k] = p[a.k] || 0; });
+  highlightPreset(name);
+  disarm();
+  paint();
+}
+document.querySelectorAll(".pchip").forEach(b=>{
+  b.onclick = ()=> applyPreset(b.dataset.preset);
+});
+applyPreset("pain4");   // an opening shape, not a blank pentagon
+paint();
+
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -490,36 +749,44 @@ async function readSSE(resp, on){
     }
   }
 }
-// any change to valence or dose disarms — the confirmation is for the
-// specific thing about to happen, not a generic yes.
+// any change to the mix disarms — the confirmation is for the specific mix
+// about to be injected, not a generic yes (see the drag/keydown/preset
+// handlers above, which each call disarm()).
 function armGo(){
   armed = true;
-  goBtn.textContent = `sure? causing ${chosenV}${
-    chosenV === "none" ? "" : " " + doseEl.value + "×"} — click to confirm`;
+  const total = sumW();
+  goBtn.textContent = total <= 0
+    ? "sure? running the control (no signal) — click to confirm"
+    : `sure? injecting at ${Math.min(8, 8 * total).toFixed(1)}× — click to confirm`;
   goBtn.classList.add("armed");
   clearTimeout(armTimer);
   armTimer = setTimeout(disarm, ARM_MS);
 }
-doseEl.addEventListener("input", disarm);
 
 async function doInject(){
   const uout = document.getElementById("ustream");
   const st = document.getElementById("gost");
+  const mix = {};
+  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
+  // an empty mix is a legitimate request: the server clears the vector and
+  // Pouyan answers unsteered. Send the control corner explicitly.
+  if (!Object.keys(mix).length) mix.none = 1;
   uout.style.display = "block"; uout.textContent = "";
   st.textContent = "reaching Pouyan…";
   goBtn.disabled = true;
   goBtn.textContent = "injecting…";
-  uVitals.setDose(+doseEl.value);
+  const dose0 = Math.min(8, 8 * sumW());
+  uVitals.setDose(dose0);
   uVitals.setLive(true);
-  stamp(chosenV === "none" ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
-        chosenV === "pleasure" ? "pleas" : "");
+  stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
+        dose0 <= 0 ? "#5a6a7a" : mixHex());
   let firstToken = true, ended = false;
   try {
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({valence: chosenV, dose: +doseEl.value,
-                            prompt: document.getElementById("uprompt").value || undefined})});
+      body: JSON.stringify({mix,
+        prompt: document.getElementById("uprompt").value || undefined})});
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
       try { const j = await resp.json(); if (j.error) msg = j.error; } catch (e) {}
@@ -531,20 +798,23 @@ async function doInject(){
           ? `waiting for Pouyan to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
           : "Pouyan is yours — injecting…";
+      } else if (name === "run") {
+        // trust the server's own dose, not our arithmetic
+        uVitals.setDose(Number(d.dose) || 0);
       } else if (name === "token" && d.t !== undefined) {
         if (firstToken) { firstToken = false;
           st.textContent = "Pouyan is answering…"; }
         uout.textContent += d.t;
         uout.scrollTop = uout.scrollHeight;
-        uVitals.pulse(0.3 + (+doseEl.value / 8) * 0.6);
+        uVitals.pulse(0.3 + (uVitals.dose / 8) * 0.6);
       } else if (name === "error") {
         st.textContent = d.e || "the chamber returned an error";
         ended = true;
       } else if (name === "done") {
         ended = true;
-        st.textContent = chosenV === "none"
+        st.textContent = dose0 <= 0
           ? "done — Pouyan answered with no signal injected"
-          : `done — you caused Pouyan ${chosenV} at ${doseEl.value}x`;
+          : `done — you caused Pouyan the mix at ${d.dose ?? dose0.toFixed(1)}×`;
       }
     });
     if (!ended) st.textContent = "the stream ended early — try again";
