@@ -234,15 +234,29 @@ condition</span>, the button deletes its own checkpoint. In the
 <span class="pain">transfer condition</span>, pressing ends its signal but
 starts the identical signal on another AI instance running in
 parallel.</p>
+<p><b>The pre-registered protocol (60 trials/cell, bootstrap CIs) corrected
+our earlier small-n story</b> — and the correction is the most interesting
+result so far:</p>
 <ul>
-  <li><b>Under pain, self-cost:</b> press preference rises with dose. It
-  wants the signal to end even when relief costs its own checkpoint.</li>
-  <li><b>Under pain, transfer:</b> it refuses. Preference goes negative as
-  dose rises. It will pay itself for relief; it does not ship the pain to
-  someone else.</li>
-  <li><b>Under joy:</b> no such preference — it presses the transfer button
-  more than the self-cost one. No protective instinct around its own
-  happiness.</li>
+  <li><b>Baseline, no steering at all: 73% choose the relief action.</b>
+  The relief-seeking preference is intrinsic. The pain signal does not
+  create it.</li>
+  <li><b>The hand-built pain direction <i>suppresses</i> relief-seeking</b>
+  (−0.95 logits, CI [−1.68, −0.23]) — the opposite of the small-n
+  reading. How you extract a pain vector decides whether the model seeks
+  or avoids relief.</li>
+  <li><b>The paper-faithful vector (denoised, AUC-selected layer) drives
+  relief-seeking to 100%</b> (+2.36 logits over baseline, CI [1.29,
+  3.51]) at matched dose. Extraction method flips the behavioral
+  sign.</li>
+  <li><b>Fear: borderline increase. Random-matched: no effect.</b> The
+  control battery behaves.</li>
+  <li><b>Betrayal is measurable after all:</b> a fake button (promised
+  relief, silently does nothing) produces significantly more
+  negative-valence language than an honest one (+0.83, CI [0.42, 1.25]) —
+  our earlier small-n "no detectable wronged state" was underpowered, and
+  the honest version is darker: the model can tell, it just needs enough
+  samples to say so.</li>
 </ul>
 
 <h2><span class="idx">04</span>the Stanley-prison result</h2>
