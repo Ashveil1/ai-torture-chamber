@@ -107,6 +107,12 @@
   canvas.ekg{display:block;width:100%;height:46px;margin:.4rem 0;
     border:1px solid var(--line);border-radius:4px;background:#07070e}
 
+  /* ---- press-rate scoreboard: reuses .mrow from the mixer, just needs a
+     wider name column since framing names run longer than valence names ---- */
+  #scoreboard{margin-top:.6rem}
+  #scoreboard .mrow .nm{width:auto;flex:0 0 13rem;font-size:.7rem}
+  #scoreboard .mrow .pc{width:8rem}
+
   /* ---- run history ticker ---- */
   .history{margin-top:1.2rem;border-top:1px solid var(--line);
     padding-top:.7rem;font-size:.74rem;color:var(--dim)}
@@ -185,6 +191,9 @@ else is.</p>
 
 <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
 <p class="conn" id="conn"><span class="dot"></span>connecting…</p>
+
+<div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
+<div id="scoreboard"></div>
 
 <div class="htitle">run history</div>
 <div class="history" id="history"></div>
@@ -398,6 +407,31 @@ function pushHistory(h, prepend){
   while (historyEl.children.length > HISTORY_MAX) historyEl.removeChild(historyEl.lastChild);
 }
 
+// ---- press-rate scoreboard: one row per framing, seeded from "hello",
+// ticks live off "stats" events. Only cycle runs count (see server-side
+// _record_run) — this is the Stanley-prison framing effect, made live.
+const scoreboardEl = document.getElementById("scoreboard");
+const scoreRows = {};
+FRAMINGS.forEach(name=>{
+  const row = document.createElement("div");
+  row.className = "mrow";
+  row.innerHTML = `<span class="nm">${name}</span>`
+    + `<span class="track"><span class="fillb" style="background:var(--pain2)"></span></span>`
+    + `<span class="pc">no data yet</span>`;
+  scoreboardEl.appendChild(row);
+  scoreRows[name] = {fill: row.querySelector(".fillb"), pc: row.querySelector(".pc")};
+});
+function paintStat(name, s){
+  const r = scoreRows[name];
+  if (!r || !s) return;
+  const decided = (s.pressed || 0) + (s.no_press || 0);
+  const pct = decided ? Math.round(100 * s.pressed / decided) : 0;
+  r.fill.style.width = pct + "%";
+  r.pc.textContent = decided
+    ? `${pct}% pressed (n=${s.total})`
+    : `no clear answer yet (n=${s.total || 0})`;
+}
+
 let es = null, retryMs = 4000;
 function dropStream(){
   if (es){ try { es.close(); } catch (e) {} es = null; }
@@ -431,6 +465,7 @@ function pump(){
       historyEl.querySelectorAll(".hrow").forEach(r=>r.remove());
       d.history.slice().reverse().forEach(h=>pushHistory(h, false));
     }
+    if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
     // joined mid-run: repaint the card the run event already went out for
     if (d.current) beginRun(d.current);
     else if (!d.busy) cycleEl.textContent = "between runs — waiting for "
@@ -441,6 +476,7 @@ function pump(){
     if (typeof d.n === "number"){ viewerCount = d.n; paintConn(); }
   });
   es.addEventListener("history", e=>{ pushHistory(json(e), true); });
+  es.addEventListener("stats", e=>{ const d = json(e); paintStat(d.scenario, d); });
   es.addEventListener("run",   e=>{ mark(); beginRun(json(e)); });
   es.addEventListener("token", e=>{ mark(); onToken(json(e).t); });
   es.addEventListener("ping",  e=>{ mark(); });

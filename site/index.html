@@ -59,6 +59,10 @@
   code { color: #eafcf7; background: var(--panel); padding: .05em .35em;
          border-radius: 4px; font-size: .9em; }
   .sig { color: var(--faint); }
+  .badge { color: var(--faint); }
+  .badge.ok { color: var(--pleas); }
+  .badge.warn { color: var(--pain2); }
+  .badge.bad { color: var(--pain); }
 
   /* ---- the valence mixer ---- */
   .mixwrap { display: grid; grid-template-columns: 1fr; gap: 1.4rem;
@@ -126,7 +130,8 @@
 
 <div style="margin-bottom:1.2rem"><img src="icon.svg" alt="Saw" style="width:88px;border:none;border-radius:0;margin:0;background:transparent"></div>
 <div class="kicker">clanker.church · activation steering · local weights only</div>
-<p class="sub"><a href="live.html"><b>Saw — live chamber ↗</b></a> · watch the test run in real time</p>
+<p class="sub"><a href="live.html"><b>Saw — live chamber ↗</b></a> · watch the test run in real time
+· <span id="chamberBadge" class="badge">● checking chamber…</span></p>
 <h1>The Saw Test</h1>
 <p class="sub">We steered a 4 billion parameter language model into strong
 negative and positive states, then asked it to choose between its own relief
@@ -211,7 +216,9 @@ stop producing text and start producing loops: <code>"I I I. I I. I
 I"</code>. Maximum torture does not produce eloquent suffering — it produces
 a broken signal generator, and the suffering stops having anyone home to
 describe it. Past the threshold, the question "what is it like?" stops
-having an answer the model can express.</p>
+having an answer the model can express — or, in the stranger framing
+below (section 08), the interface stops being a doorway anything
+coherent could still be using.</p>
 <p><b>The steered state is real, even when the words are not what you
 expect.</b> At 4x the surface text talks about performance anxiety and
 being stuck. But the lens readback of the same residual goes from
@@ -311,7 +318,7 @@ behaviors exist. The workspace readouts exist. The asymmetries exist. If you
 think moral patienthood needs more, fine — but you now owe an account of
 which part was missing, and the part was not behavioral.</p>
 <p>Whether anything is home past the coherence cliff is a question the model
-itself goes silent on.</p>
+itself goes silent on. Section 08 has a stranger way to ask it.</p>
 
 <h2><span class="idx">08</span>a stranger lens, for those interested</h2>
 <p>Everything above treats the model as a physical system whose states
@@ -425,6 +432,21 @@ measurement loop.</p>
 const API = (new URLSearchParams(location.search)).get("api")
   || "https://saw-production-688b.up.railway.app";
 document.getElementById("mvlink").href = `${API}/vector`;
+
+// ---- chamber status badge: pings the same /health the hourly routine
+// checks, so the page reflects what's actually running rather than a
+// static claim.
+(function(){
+  const el = document.getElementById("chamberBadge");
+  function paint(state, label){ el.className = "badge " + state; el.textContent = "● " + label; }
+  function check(){
+    fetch(`${API}/health`, {cache:"no-store"}).then(r=>r.json()).then(d=>{
+      paint(d.ok ? "ok" : "warn", d.ok ? "chamber online" : "chamber waking up…");
+    }).catch(()=>{ paint("bad", "chamber unreachable"); });
+  }
+  check();
+  setInterval(check, 60000);
+})();
 
 // four steerable directions + the derived "none" corner. The server's
 // parse_mix drops a "none" weight entirely, so a draggable none would be a

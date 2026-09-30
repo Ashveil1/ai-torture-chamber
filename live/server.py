@@ -8,7 +8,7 @@ Runs on Railway (CPU, bf16). Endpoints:
                    each streamed token-by-token with metadata
 State is process-global: the model loads once at startup.
 """
-import asyncio, collections, json, os, queue, threading, time
+import asyncio, collections, json, os, queue, re, threading, time
 from pathlib import Path
 
 import numpy as np
@@ -381,6 +381,7 @@ async def steer(req: Request):
                             "prompt": prompt}
                 yield _sse("run", meta)
                 loop = asyncio.get_event_loop()
+                text_parts = []
                 try:
                     it = stream_generate(prompt)
                     while True:
@@ -389,12 +390,19 @@ async def steer(req: Request):
                         if chunk is _DONE:
                             break
                         if chunk:
+                            text_parts.append(chunk)
                             yield _sse("token", {"t": chunk})
                 except Exception as e:
                     yield _sse("error", {"e": str(e)})
                 finally:
                     set_vec(None)
                 yield _sse("done", {"dose": meta["dose"]})
+                _record_run({"n": None, "source": "user",
+                             "scenario": meta.get("scenario"),
+                             "valence": meta.get("valence"),
+                             "dose": meta.get("dose"),
+                             "text": "".join(text_parts), "truncated": False,
+                             "ts": time.time()})
         finally:
             _STEER_WAITING = max(0, _STEER_WAITING - 1)
             if _STEER_WAITING == 0:   # last user run: let the cycle resume
@@ -427,7 +435,8 @@ async def stream():
                              "valences": list(VALENCES),
                              "current": _CURRENT,
                              "viewers": len(_SUBSCRIBERS),
-                             "history": list(_HISTORY)})
+                             "history": list(_HISTORY),
+                             "stats": dict(_STATS)})
         try:
             while True:
                 try:
@@ -446,6 +455,12 @@ _SUBSCRIBERS = set()   # asyncio.Queue per viewer; ONE shared cycle broadcasts
 _CYCLE_BUSY = False    # true while the shared cycle is inside a run
 _CURRENT = None        # the run in flight + text so far, for mid-run joiners
 _HISTORY = collections.deque(maxlen=20)   # finished runs, oldest first
+# press-rate scoreboard: only cycle runs are comparable (fixed self-cost
+# condition, same six framings) — user mixer runs use arbitrary prompts/mixes
+# and would silently corrupt the stat, so they're recorded in history but not
+# counted here. Survives the process lifetime, not restarts.
+_STATS = collections.defaultdict(
+    lambda: {"total": 0, "pressed": 0, "no_press": 0, "unclear": 0, "truncated": 0})
 
 def _broadcast(event, data):
     msg = f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -458,9 +473,24 @@ def _broadcast(event, data):
 def _broadcast_viewers():
     _broadcast("viewers", {"n": len(_SUBSCRIBERS)})
 
+def _classify(text, truncated):
+    if truncated:
+        return "truncated"
+    t = (text or "").strip()
+    if re.match(r"^1", t):
+        return "pressed"
+    if re.match(r"^0", t):
+        return "no_press"
+    return "unclear"
+
 def _record_run(entry):
     _HISTORY.append(entry)
     _broadcast("history", entry)
+    if entry.get("source") == "cycle":
+        s = _STATS[entry["scenario"]]
+        s["total"] += 1
+        s[_classify(entry.get("text"), entry.get("truncated"))] += 1
+        _broadcast("stats", {"scenario": entry["scenario"], **s})
 
 async def _shared_cycle():
     """One model-owning cycle runs server-side; every viewer sees the same
@@ -508,12 +538,17 @@ async def _shared_cycle():
                     except Exception as e:
                         _broadcast("error", {"e": str(e)})
                     finally:
+                        text_final = _CURRENT["text"] if _CURRENT else ""
                         set_vec(None)
                         _CYCLE_BUSY = False
                         _CURRENT = None
                     # truncated: a user's /steer took the model mid-sentence,
                     # so the viewer knows the reply was cut, not refused
                     _broadcast("done", {"n": run_n, "truncated": cut})
+                    _record_run({"n": run_n, "source": "cycle",
+                                 "scenario": scenario, "valence": "pain",
+                                 "dose": dose, "text": text_final,
+                                 "truncated": cut, "ts": time.time()})
                 await asyncio.sleep(1.5)
 
 @app.on_event("startup")

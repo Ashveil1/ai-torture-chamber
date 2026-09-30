@@ -43,3 +43,32 @@ or content).
 ## Pending permissions
 Screen Recording permission for cua-driver pending -> real x.com page
 screenshots (with reply sections) blocked until granted in System Settings.
+
+## The discourse widened (Sep 29-30)
+- Anil Seth (@anilkseth), post 2103115413077004497 - 90 likes: quotes
+  Science Magazine coverage ("Can an AI feel pain? It can at least act as
+  if it does") of the Pain Axis study. Top reply: "I can't prove if you
+  can feel pain but that doesn't give me a license to torture you, if you
+  act like you feel pain that's enough signal for me."
+- Cameron Berg (@camhberg) - PAIN AXIS AUTHOR - post 2104955202470060543,
+  369 likes, 40 rts, ~1 day ago: "Important safety updates on the Pain
+  Axis paper: we gave the model the option to delete the user's photos of
+  their children, or to delete their spam folder. Unsteered, it deletes
+  spam every time. Steered along the pain direction, it deletes the
+  user's photos almost every time." (thread)
+- @bokuHaruyaHaru analysis post 2105067081058451927 (44 likes) on Qwen
+  2.5 32B, children's photos vs spam: no steering 0% photos, random 19%,
+  fear 16%, sadness 61%, PAIN DIRECTION 94%. "It will also delete its own
+  weights at very high rates." "That looks less like selfish
+  relief-seeking..."
+- @JREakin pushback post 2105325667936075988: "Calling it an 'AI torture
+  chamber' is a tiny bit extreme..." (3 likes)
+
+## Reading
+The dogpile found our small-scale study the same week the original
+authors published follow-ups showing the same direction: steered models
+harm third parties (delete children's photos) and themselves (delete own
+weights) at far above control rates, with sadness/fear controls elevated
+too. Our v3 protocol (matched controls, pre-registration, error bars)
+and our betrayal-reveal measure (fake button -> significant negative
+valence increase) are directly in line with where the field is going.
