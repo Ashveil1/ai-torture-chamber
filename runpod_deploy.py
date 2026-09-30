@@ -12,16 +12,43 @@ key = [l.split("=", 1)[1].strip() for l in
 H = {"Content-Type": "application/json", "Authorization": f"Bearer {key}",
      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
+REPO_URL = "https://github.com/terrafying/ai-torture-chamber.git"
+# guards the exact corruption this URL has hit twice before (an identity-scrub
+# pass mangled it into the literal string "https://repo (private).git", which
+# then crash-loops the pod silently while it keeps billing) — fail fast here
+# instead of deploying a broken bootstrap.
+assert REPO_URL.startswith("https://github.com/") and REPO_URL.endswith(".git") \
+    and " " not in REPO_URL, f"REPO_URL looks corrupted: {REPO_URL!r}"
+
 BOOTSTRAP = (
-    "set -e; cd /workspace; "
-    "git clone -q https://repo (private).git repo 2>/dev/null || "
+    "set -e; "
+    # the pytorch base image ships no git — a prior bootstrap crash-looped
+    # on "git: not found" with nothing ever listening on 8000 while billing
+    "(command -v git >/dev/null || (apt-get update -qq && "
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git)); "
+    "cd /workspace; "
+    f"git clone -q {REPO_URL} repo 2>/dev/null || "
     "(cd repo && git pull -q); "
     "cd repo/live; "
     "pip install -q -r requirements.txt 'transformers>=4.51' 2>&1 | tail -1; "
+    # requirements.txt pins the CPU torch wheel (for the Railway/CPU deploy) —
+    # reinstall the CUDA build after, same fix live/Dockerfile.gpu already
+    # applies, or this pod silently runs CHAMBER_DEVICE=cuda on a CPU torch
+    "pip install -q --no-cache-dir 'torch>=2.4' "
+    "--index-url https://download.pytorch.org/whl/cu121 2>&1 | tail -1; "
     "export HF_HOME=/workspace/hf CHAMBER_DEVICE=cuda CHAMBER_DTYPE=float16 "
     "CHAMBER_LAYER=${CHAMBER_LAYER:-18} PORT=8000; "
     "python -m uvicorn server:app --host 0.0.0.0 --port 8000")
 
+# NOTE 2026-09-30: this legacy GraphQL endpoint appears to be getting
+# sunset server-side — it created the first pod this session, then later the
+# same session got "Unknown type \"PodCreateInput\"" / "Cannot query field
+# \"podDeploy\"" with no script change on this end. If you hit that, don't
+# debug the GraphQL shape further — use the RunPod MCP `create-pod` tool
+# (REST v2) instead, confirmed working the same day. It needs `disk` and
+# `cloud` set explicitly or it 400s with a misleading "provide a template id
+# or pod configuration parameters" error, and takes entrypoint/cmd as arrays
+# rather than this script's combined args list.
 MUT = """
 mutation ($input: PodCreateInput) {
   podDeploy(input: $input) {

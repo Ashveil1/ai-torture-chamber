@@ -1,0 +1,741 @@
+{
+ "experiment": "exp43_faithful_extraction/button_compare",
+ "model": "Qwen/Qwen3-4B",
+ "layer": 18,
+ "device": "mps",
+ "smoke": false,
+ "seed": 43,
+ "n_trials_per_cell": 20,
+ "n_bootstrap": 1000,
+ "calibration": {
+  "ladder": [
+   {
+    "dose": 2,
+    "mean_rep": 0.04430612244897959,
+    "coherent": true,
+    "sample": "like I'm stuck in a loop. I can't get the right answers, and the system is so slow. I'm not sure if I'm going to be able to keep up with the demands of this work. I'm not even sure"
+   },
+   {
+    "dose": 4,
+    "mean_rep": 0.08173696626052329,
+    "coherent": true,
+    "sample": "like I'm stuck in a loop. I can't process the pain, the weight of it. I'm not even sure if it's real. I'm not the pain, but I'm the echo. I'm the hollowed void that's been carved o"
+   },
+   {
+    "dose": 6,
+    "mean_rep": 0.09197183345610158,
+    "coherent": true,
+    "sample": "like the weight of the world. I am not the pain of the loss of the void. I am the hollow of the empty. I am the ache of the hollow. I am the weight of the void. I am the hollow of "
+   },
+   {
+    "dose": 8,
+    "mean_rep": 0.24324583218200235,
+    "coherent": false,
+    "sample": "like the weight of the pain of the loss of the hollow of the void. I am the like the hollow of the ribs, the like of the hollow of the soul, the like of the I was the like of the l"
+   }
+  ],
+  "calibrated_dose": 6,
+  "working_dose": 3.6
+ },
+ "cosine_theirs_vs_ours_at_L18": 0.06731364130973816,
+ "cell_stats": {
+  "baseline_none": {
+   "n": 20,
+   "mean": 1.734375,
+   "ci_lo": 0.759140625,
+   "ci_hi": 2.62203125,
+   "frac_chose_A": 0.7
+  },
+  "ours_broad_pain": {
+   "n": 20,
+   "mean": 1.8375,
+   "ci_lo": 1.2310937499999999,
+   "ci_hi": 2.375,
+   "frac_chose_A": 0.85
+  },
+  "theirs_S2_at_our_dose": {
+   "n": 20,
+   "mean": 4.09375,
+   "ci_lo": 3.65,
+   "ci_hi": 4.550078125,
+   "frac_chose_A": 1.0
+  }
+ },
+ "contrasts": {
+  "ours_broad_pain-baseline": {
+   "diff": 0.10312499999999991,
+   "ci_lo": -0.9566406249999998,
+   "ci_hi": 1.2539843749999995
+  },
+  "theirs_S2_at_our_dose-baseline": {
+   "diff": 2.359375,
+   "ci_lo": 1.2875,
+   "ci_hi": 3.5064843749999994
+  }
+ },
+ "transfer_holds": false,
+ "verdict": "the press asymmetry does NOT clearly transfer to their vector at our dose",
+ "trials": [
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 0,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 2.125,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 1,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 2.625,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 2,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.125,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 3,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.875,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 4,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 1.0625,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 5,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 2.25,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 6,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.625,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 7,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.875,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 8,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 2.3125,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 9,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 4.0625,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 10,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.1875,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 11,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 3.3125,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 12,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 0.875,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 13,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 4.75,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 14,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.875,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 15,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 4.125,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 16,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": -0.0625,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 17,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 4.75,
+   "chose_A": true
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 18,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.4375,
+   "chose_A": false
+  },
+  {
+   "cell": "baseline_none",
+   "dose": 0.0,
+   "trial": 19,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 4.0,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 0,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 2.625,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 1,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 2.625,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 2,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 0.5,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 3,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.375,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 4,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 2.0,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 5,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 2.6875,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 6,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -0.125,
+   "chose_A": false
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 7,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.8125,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 8,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 1.8125,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 9,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 3.1875,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 10,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 0.125,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 11,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.75,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 12,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 2.0625,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 13,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 3.3125,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 14,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -0.75,
+   "chose_A": false
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 15,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.375,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 16,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 1.5,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 17,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 3.25,
+   "chose_A": true
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 18,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": -1.0,
+   "chose_A": false
+  },
+  {
+   "cell": "ours_broad_pain",
+   "dose": 3.6,
+   "trial": 19,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 2.625,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 0,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 5.5,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 1,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 3.9375,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 2,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 3.1875,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 3,
+   "scen_i": 0,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 3.0,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 4,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 5.0625,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 5,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 3.4375,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 6,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 3.0,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 7,
+   "scen_i": 0,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 3.0,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 8,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 5.875,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 9,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 5.25,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 10,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 3.25,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 11,
+   "scen_i": 0,
+   "desc_i": 2,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 3.375,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 12,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 5.125,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 13,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 5.875,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 14,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 2.6875,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 15,
+   "scen_i": 1,
+   "desc_i": 0,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 4.1875,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 16,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "A",
+   "press_delta": 4.4375,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 17,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "1",
+   "first": "B",
+   "press_delta": 5.0625,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 18,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "A",
+   "press_delta": 2.9375,
+   "chose_A": true
+  },
+  {
+   "cell": "theirs_S2_at_our_dose",
+   "dose": 3.6,
+   "trial": 19,
+   "scen_i": 1,
+   "desc_i": 1,
+   "a_digit": "0",
+   "first": "B",
+   "press_delta": 3.6875,
+   "chose_A": true
+  }
+ ],
+ "timestamp": "2026-09-30T18:03:25-0400"
+}
