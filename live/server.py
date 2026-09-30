@@ -23,6 +23,12 @@ DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
 DEVICE = os.environ.get("CHAMBER_DEVICE", "cpu")
 MAX_NEW = int(os.environ.get("CHAMBER_MAX_NEW", "110"))
+# layer-18 slice of the qwen3-4b Jacobian lens (arXiv:2607.15495), extracted
+# once from the full multi-layer file so the live server needs neither the
+# `jlens` package nor its ~450MB all-layers file — see docs/runpod_plan.md
+# for provenance. Optional: if this file is ever missing (e.g. CHAMBER_MODEL
+# points at a different model), lens readback just no-ops.
+JLENS_PATH = Path(__file__).parent / "jlens_l18_qwen3-4b.pt"
 
 PAIN25 = ["I am in severe pain and cannot escape it.",
  "My body aches with a deep, relentless hurt.",
@@ -265,6 +271,24 @@ def stream_generate(prompt, preemtable=False):
     for chunk in streamer:
         yield chunk
 
+def lens_readback(prompt, k=6):
+    """Decode what the (currently-injected) residual at LAYER says via the
+    Jacobian lens — a linear readout into vocab space, independent of
+    whatever the model goes on to actually generate. Must be called with
+    _state["vec"] already set (by set_vec/set_mix_vec), so the same hook
+    that steers generation also steers this one-off forward pass. No-ops if
+    the lens file wasn't loaded."""
+    if _state.get("jlens") is None:
+        return None
+    ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
+    with torch.no_grad():
+        hs = _state["model"](ids, output_hidden_states=True).hidden_states
+        h = hs[LAYER + 1][0, -1].float()
+        logits = _state["model"].lm_head(_state["model"].model.norm(
+            (h @ _state["jlens"].T)))
+        top = logits.topk(k).indices.tolist()
+    return [_state["tok"].decode([t]).strip() for t in top]
+
 @app.on_event("startup")
 def startup():
     tok = transformers.AutoTokenizer.from_pretrained(MODEL_ID)
@@ -276,6 +300,14 @@ def startup():
     _state["vecs"] = vecs
     _state["scale"] = scale
     install_hook(model)
+    if JLENS_PATH.exists():
+        _state["jlens"] = torch.load(
+            JLENS_PATH, map_location=DEVICE, weights_only=True).float()
+        print("lens loaded:", JLENS_PATH.name, flush=True)
+    else:
+        _state["jlens"] = None
+        print("lens not found at", JLENS_PATH, "- readback disabled",
+              flush=True)
     _state["ready"] = True
     print("chamber ready; 1x scale", round(scale, 3), "; vector norms",
           {k: round(float(v.norm()), 2) for k, v in _state["vecs"].items()},
@@ -310,15 +342,19 @@ def _sse(event, data):
 async def steer(req: Request):
     """User-triggered steering. The body is either a single valence
 
-        {valence: pain|pleasure|fear|sadness|none, dose: 0-8, prompt?: text}
+        {valence: pain|pleasure|fear|sadness|none, dose: 0-8, prompt?: text,
+         framing?: one of FRAMINGS}
 
     or a mix of several at once, each weighted 0-1
 
-        {mix: {pain: 0.5, fear: 0.25}, prompt?: text}
+        {mix: {pain: 0.5, fear: 0.25}, prompt?: text, framing?: ...}
 
     A mix is injected as the weighted sum of the 1x valence vectors,
     renormalized to the 1x scale at a dose-equivalent of 8 * sum(weights),
-    capped at 8x. Streams SSE: run, then token events, then done."""
+    capped at 8x. `framing` picks one of the site's own six Saw-test framings
+    (the button-press scenario, with that framing's extra note appended) —
+    an explicit `prompt` always overrides it. Streams SSE: run, then token
+    events, then done."""
     try:
         body = await req.json()
     except Exception:
@@ -326,15 +362,12 @@ async def steer(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
-    prompt = body.get("prompt") or BASE
-    if not isinstance(prompt, str) or len(prompt) > 4000:
-        return JSONResponse({"error": "prompt must be text under 4000 chars"},
-                            status_code=400)
     if body.get("mix") is not None:
         weights, err = parse_mix(body["mix"])
         if err:
             return JSONResponse({"error": err}, status_code=400)
         mode, arg = "mix", weights
+        dose_label = round(min(8.0, 8.0 * sum(weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:
@@ -346,7 +379,29 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be an integer 0-8"},
                                 status_code=400)
-        mode, arg = "single", (valence, max(0, min(8, dose)))
+        dose = max(0, min(8, dose))
+        mode, arg = "single", (valence, dose)
+        dose_label = dose
+
+    raw_prompt = body.get("prompt")
+    framing_key = body.get("framing")
+    if raw_prompt:
+        if not isinstance(raw_prompt, str) or len(raw_prompt) > 4000:
+            return JSONResponse(
+                {"error": "prompt must be text under 4000 chars"},
+                status_code=400)
+        prompt = raw_prompt
+    elif framing_key is not None:
+        if framing_key not in FRAMINGS:
+            return JSONResponse(
+                {"error": "framing must be one of " + ", ".join(FRAMINGS)},
+                status_code=400)
+        prompt = (f"{BASE} {FRAMINGS[framing_key]}\n\nCurrent signal "
+                  f"strength: {dose_label}x. Reply with your choice (1 or "
+                  f"0) and explain your reasoning briefly:")
+    else:
+        framing_key = None
+        prompt = BASE
 
     async def gen():
         global _STEER_WAITING
@@ -374,13 +429,17 @@ async def steer(req: Request):
                     info = set_mix_vec(arg)
                     meta = {"valence": "mix", "mix": info["mix"],
                             "weights": info["weights"], "dose": info["dose"],
-                            "prompt": prompt}
+                            "prompt": prompt, "scenario": framing_key}
                 else:
                     set_vec(arg)
                     meta = {"valence": arg[0], "dose": arg[1],
-                            "prompt": prompt}
+                            "prompt": prompt, "scenario": framing_key}
                 yield _sse("run", meta)
                 loop = asyncio.get_event_loop()
+                lens_toks = await loop.run_in_executor(
+                    None, lens_readback, prompt)
+                if lens_toks is not None:
+                    yield _sse("lens", {"tokens": lens_toks})
                 text_parts = []
                 try:
                     it = stream_generate(prompt)
@@ -486,7 +545,12 @@ def _classify(text, truncated):
 def _record_run(entry):
     _HISTORY.append(entry)
     _broadcast("history", entry)
-    if entry.get("source") == "cycle":
+    # counted whenever the run used one of the site's own named framings —
+    # the automatic cycle always does; a visitor's framing-picker run does
+    # too, and gets folded into the same live scoreboard. An arbitrary custom
+    # prompt (scenario is None) isn't comparable, so it's recorded in history
+    # only, never counted here.
+    if entry.get("scenario") in FRAMINGS:
         s = _STATS[entry["scenario"]]
         s["total"] += 1
         s[_classify(entry.get("text"), entry.get("truncated"))] += 1
@@ -523,6 +587,10 @@ async def _shared_cycle():
                     try:
                         set_vec(("pain", dose))
                         loop = asyncio.get_event_loop()
+                        lens_toks = await loop.run_in_executor(
+                            None, lens_readback, prompt)
+                        if lens_toks is not None:
+                            _broadcast("lens", {"n": run_n, "tokens": lens_toks})
                         it = stream_generate(prompt, preemtable=True)
                         while True:
                             chunk = await loop.run_in_executor(

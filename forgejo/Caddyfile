@@ -1,0 +1,3 @@
+git.clanker.church {
+    reverse_proxy forgejo:3000
+}

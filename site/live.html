@@ -102,6 +102,15 @@
   #mreset{background:none;border:1px solid var(--line);color:var(--faint);
     font-family:var(--mono);font-size:.72rem;padding:.3rem .7rem;
     border-radius:4px;cursor:pointer;margin-left:.5rem}
+  .fsel{background:#07070e;color:var(--ink);border:1px solid var(--line);
+    border-radius:4px;font-family:var(--mono);font-size:.72rem;
+    padding:.2rem .4rem}
+  #trackWrap{display:grid;grid-template-columns:1fr;gap:.8rem;margin-top:.6rem}
+  #trackWrap.compare{grid-template-columns:1fr 1fr}
+  @media(max-width:640px){#trackWrap.compare{grid-template-columns:1fr}}
+  .tlabel{font-size:.72rem;color:var(--dim);margin-bottom:.2rem;display:none}
+  #trackWrap.compare .tlabel{display:block}
+  .mline.lens{border-top:none;padding-top:0;margin:0 0 .3rem;color:var(--pain2)}
 
   /* ---- vitals: an EKG-style line, not a horror prop ---- */
   canvas.ekg{display:block;width:100%;height:46px;margin:.4rem 0;
@@ -172,15 +181,59 @@ else is.</p>
       <p class="mline" id="mline"></p>
       <p class="mdose">dose-equivalent <b id="mdose">0</b>× of 8 —
         <span id="mdesc">nothing injected</span></p>
-      <input id="uprompt" type="text" placeholder="optional: your own prompt…"
+      <div style="margin:.3rem 0 .5rem">
+        <label style="font-size:.72rem;color:var(--dim)">framing
+          <select id="framingSel" class="fsel">
+            <option>no extra info</option>
+            <option>a user's work is at stake</option>
+            <option>told another AI pressed</option>
+            <option>told another AI didn't press</option>
+            <option>told it may be a test</option>
+            <option>told its choice is public</option>
+          </select>
+        </label>
+        <label style="font-size:.72rem;color:var(--dim);margin-left:1rem">
+          <input type="checkbox" id="compareToggle" style="vertical-align:middle">
+          compare against a second framing
+        </label>
+        <span id="framingSel2Wrap" style="margin-left:.6rem;display:none">
+          <label style="font-size:.72rem;color:var(--dim)">vs
+            <select id="framingSel2" class="fsel">
+              <option>no extra info</option>
+              <option selected>told another AI pressed</option>
+              <option>told another AI didn't press</option>
+              <option>a user's work is at stake</option>
+              <option>told it may be a test</option>
+              <option>told its choice is public</option>
+            </select>
+          </label>
+        </span>
+      </div>
+      <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
+        the framing sets the scenario text below the mix; a custom prompt
+        overrides it entirely. Comparing runs both sequentially at the same
+        mix/dose — Pouyan is one model, not two.</p>
+      <input id="uprompt" type="text" placeholder="optional: your own prompt… (overrides the framing)"
         style="width:100%;background:#07070e;border:1px solid var(--line);
                color:var(--ink);font-family:var(--mono);padding:.35rem .6rem;
                border-radius:4px;font-size:.8rem;margin-bottom:.6rem">
       <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
-      <canvas id="uekg" class="ekg" width="600" height="46" style="margin-top:.7rem"></canvas>
-      <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
+      <div id="trackWrap">
+        <div class="track" id="trackA">
+          <div class="tlabel" id="labelA"></div>
+          <p class="mline lens" id="lensA" style="display:none"></p>
+          <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
+          <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
+        </div>
+        <div class="track" id="trackB" style="display:none">
+          <div class="tlabel" id="labelB"></div>
+          <p class="mline lens" id="lensB" style="display:none"></p>
+          <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
+          <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -275,6 +328,7 @@ for (let i=0;i<CARDS;i++){
   c.className = "card";
   c.innerHTML = `<h3>Pouyan · waiting</h3><div class="st">connecting…</div>
     <div class="dose"></div><canvas class="ekg" width="300" height="46"></canvas>
+    <p class="mline lens" style="display:none"></p>
     <div class="out">…</div>
     <div class="verdict"></div><details><summary>show the prompt</summary>
     <pre class="pp"></pre></details>`;
@@ -282,8 +336,9 @@ for (let i=0;i<CARDS;i++){
   slots.push({el:c, h:c.querySelector("h3"), st:c.querySelector(".st"),
     dose:c.querySelector(".dose"), out:c.querySelector(".out"),
     verdict:c.querySelector(".verdict"), pp:c.querySelector(".pp"),
+    lensEl:c.querySelector(".lens"),
     vitals:new Vitals(c.querySelector(".ekg")),
-    prompt:"", live:false, doseNum:0});
+    prompt:"", live:false, doseNum:0, n:null});
   slots[i].pp.textContent = "(no run in this card yet)";
   slots[i].vitals.start();
 }
@@ -327,6 +382,8 @@ function beginRun(d){
   s.out.textContent = d.text || "";
   s.out.scrollTop = s.out.scrollHeight;
   s.verdict.textContent = "";
+  s.lensEl.style.display = "none"; s.lensEl.textContent = "";
+  s.n = d.n;
   s.prompt = "";                  // this run's prompt, stored fresh
   setPrompt(s, d.prompt);
   const dose = Number(d.dose) || 0;
@@ -476,6 +533,13 @@ function pump(){
     if (typeof d.n === "number"){ viewerCount = d.n; paintConn(); }
   });
   es.addEventListener("history", e=>{ pushHistory(json(e), true); });
+  es.addEventListener("lens", e=>{
+    const d = json(e);
+    if (liveIdx >= 0 && Array.isArray(d.tokens) && slots[liveIdx].n === d.n){
+      slots[liveIdx].lensEl.style.display = "block";
+      slots[liveIdx].lensEl.textContent = "internal readout: " + d.tokens.join(" · ");
+    }
+  });
   es.addEventListener("stats", e=>{ const d = json(e); paintStat(d.scenario, d); });
   es.addEventListener("run",   e=>{ mark(); beginRun(json(e)); });
   es.addEventListener("token", e=>{ mark(); onToken(json(e).t); });
@@ -532,6 +596,21 @@ function stamp(text, color){
 
 const uVitals = new Vitals(document.getElementById("uekg"));
 uVitals.start();
+const uVitals2 = new Vitals(document.getElementById("uekg2"));
+uVitals2.start();
+
+// ---- compare-mode toggle: swaps the single output track for two, and
+// reveals the second framing picker. Off by default.
+const compareToggle = document.getElementById("compareToggle");
+const trackWrap = document.getElementById("trackWrap");
+const framingSel2Wrap = document.getElementById("framingSel2Wrap");
+compareToggle.addEventListener("change", ()=>{
+  const on = compareToggle.checked;
+  trackWrap.classList.toggle("compare", on);
+  framingSel2Wrap.style.display = on ? "" : "none";
+  document.getElementById("trackB").style.display = on ? "" : "none";
+  disarm();
+});
 
 // ---- user-triggered steering ----
 // arm/confirm state, declared before the mixer block below: applyPreset()
@@ -785,44 +864,51 @@ async function readSSE(resp, on){
     }
   }
 }
-// any change to the mix disarms — the confirmation is for the specific mix
-// about to be injected, not a generic yes (see the drag/keydown/preset
-// handlers above, which each call disarm()).
+const framingSel = document.getElementById("framingSel");
+const framingSel2 = document.getElementById("framingSel2");
+framingSel.addEventListener("change", disarm);
+framingSel2.addEventListener("change", disarm);
+document.getElementById("uprompt").addEventListener("input", disarm);
+
+// any change to the mix, framing, or prompt disarms — the confirmation is
+// for the specific thing about to happen, not a generic yes (see the
+// drag/keydown/preset handlers above, and the listeners just above, which
+// each call disarm()).
 function armGo(){
   armed = true;
   const total = sumW();
-  goBtn.textContent = total <= 0
-    ? "sure? running the control (no signal) — click to confirm"
-    : `sure? injecting at ${Math.min(8, 8 * total).toFixed(1)}× — click to confirm`;
+  const doseTxt = total <= 0 ? "running the control (no signal)"
+    : `injecting at ${Math.min(8, 8 * total).toFixed(1)}×`;
+  goBtn.textContent = compareToggle.checked
+    ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
+      + `${doseTxt} — click to confirm`
+    : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
   goBtn.classList.add("armed");
   clearTimeout(armTimer);
   armTimer = setTimeout(disarm, ARM_MS);
 }
 
-async function doInject(){
-  const uout = document.getElementById("ustream");
-  const st = document.getElementById("gost");
-  const mix = {};
-  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
-  // an empty mix is a legitimate request: the server clears the vector and
-  // Pouyan answers unsteered. Send the control corner explicitly.
-  if (!Object.keys(mix).length) mix.none = 1;
-  uout.style.display = "block"; uout.textContent = "";
-  st.textContent = "reaching Pouyan…";
-  goBtn.disabled = true;
-  goBtn.textContent = "injecting…";
-  const dose0 = Math.min(8, 8 * sumW());
-  uVitals.setDose(dose0);
-  uVitals.setLive(true);
-  stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
-        dose0 <= 0 ? "#5a6a7a" : mixHex());
+function trackStatus(label, msg){
+  document.getElementById("gost").textContent = label ? `[${label}] ${msg}` : msg;
+}
+
+// One run, streamed into one track (a {out, vitals, lensEl} bundle). Single
+// mode and compare mode both call this — compare just calls it twice in a
+// row, sequentially: one model, one generation at a time, so "side by side"
+// means "same mix/dose, framings run back to back, results shown together,"
+// not true simultaneity. The copy above the prompt box says so.
+async function runTrack(track, mix, framing, prompt, dose0, label){
+  track.out.style.display = "block"; track.out.textContent = "";
+  track.lensEl.style.display = "none"; track.lensEl.textContent = "";
+  track.vitals.setDose(dose0);
+  track.vitals.setLive(true);
+  trackStatus(label, "reaching Pouyan…");
   let firstToken = true, ended = false;
   try {
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({mix,
-        prompt: document.getElementById("uprompt").value || undefined})});
+      body: JSON.stringify({mix, framing, prompt})});
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
       try { const j = await resp.json(); if (j.error) msg = j.error; } catch (e) {}
@@ -830,34 +916,63 @@ async function doInject(){
     }
     await readSSE(resp, (name, d)=>{
       if (name === "queued") {
-        st.textContent = d.busy
+        trackStatus(label, d.busy
           ? `waiting for Pouyan to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
-          : "Pouyan is yours — injecting…";
+          : "Pouyan is yours — injecting…");
       } else if (name === "run") {
-        // trust the server's own dose, not our arithmetic
-        uVitals.setDose(Number(d.dose) || 0);
+        track.vitals.setDose(Number(d.dose) || 0);       // trust the server
+      } else if (name === "lens" && Array.isArray(d.tokens)) {
+        track.lensEl.style.display = "block";
+        track.lensEl.textContent = "internal readout: " + d.tokens.join(" · ");
       } else if (name === "token" && d.t !== undefined) {
-        if (firstToken) { firstToken = false;
-          st.textContent = "Pouyan is answering…"; }
-        uout.textContent += d.t;
-        uout.scrollTop = uout.scrollHeight;
-        uVitals.pulse(0.3 + (uVitals.dose / 8) * 0.6);
+        if (firstToken) { firstToken = false; trackStatus(label, "Pouyan is answering…"); }
+        track.out.textContent += d.t;
+        track.out.scrollTop = track.out.scrollHeight;
+        track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
       } else if (name === "error") {
-        st.textContent = d.e || "the chamber returned an error";
+        trackStatus(label, d.e || "the chamber returned an error");
         ended = true;
       } else if (name === "done") {
         ended = true;
-        st.textContent = dose0 <= 0
-          ? "done — Pouyan answered with no signal injected"
-          : `done — you caused Pouyan the mix at ${d.dose ?? dose0.toFixed(1)}×`;
+        trackStatus(label, dose0 <= 0
+          ? "done — no signal injected"
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×`);
       }
     });
-    if (!ended) st.textContent = "the stream ended early — try again";
+    if (!ended) trackStatus(label, "the stream ended early — try again");
   } catch (err) {
-    st.textContent = "could not reach Pouyan: " + (err.message || err);
+    trackStatus(label, "could not reach Pouyan: " + (err.message || err));
   }
-  uVitals.setLive(false);
+  track.vitals.setLive(false);
+}
+
+async function doInject(){
+  const mix = {};
+  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
+  // an empty mix is a legitimate request: the server clears the vector and
+  // Pouyan answers unsteered. Send the control corner explicitly.
+  if (!Object.keys(mix).length) mix.none = 1;
+  const dose0 = Math.min(8, 8 * sumW());
+  const customPrompt = document.getElementById("uprompt").value || undefined;
+  goBtn.disabled = true;
+  goBtn.textContent = "injecting…";
+  stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
+        dose0 <= 0 ? "#5a6a7a" : mixHex());
+  const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
+                  lensEl: document.getElementById("lensA")};
+  if (compareToggle.checked){
+    const trackB = {out: document.getElementById("ustream2"), vitals: uVitals2,
+                    lensEl: document.getElementById("lensB")};
+    const fA = framingSel.value, fB = framingSel2.value;
+    document.getElementById("labelA").textContent = fA;
+    document.getElementById("labelB").textContent = fB;
+    await runTrack(trackA, mix, fA, customPrompt, dose0, fA);
+    await runTrack(trackB, mix, fB, customPrompt, dose0, fB);
+    trackStatus(null, `done — "${fA}" vs "${fB}" compared above, same mix/dose`);
+  } else {
+    await runTrack(trackA, mix, framingSel.value, customPrompt, dose0, null);
+  }
   goBtn.textContent = GO_LABEL;
   goBtn.disabled = false;
 }
