@@ -480,7 +480,7 @@ async def steer(req: Request):
             yield _sse("error", {"e": str(e)})
         finally:
             set_vec(None)
-        yield _sse("done", {"dose": meta["dose"]})
+        yield _sse("done", {"dose": meta["dose"], "press_logit": plogit})
         _record_run({"n": None, "source": "user",
                      "scenario": meta.get("scenario"),
                      "valence": meta.get("valence"), "dose": meta.get("dose"),
@@ -718,7 +718,7 @@ async def _shared_cycle():
                         _CURRENT = None
                     # truncated: a user's /steer took the model mid-sentence,
                     # so the viewer knows the reply was cut, not refused
-                    _broadcast("done", {"n": run_n, "truncated": cut})
+                    _broadcast("done", {"n": run_n, "truncated": cut, "press_logit": plogit})
                     _record_run({"n": run_n, "source": "cycle",
                                  "scenario": scenario, "valence": "pain",
                                  "dose": dose, "text": text_final,
