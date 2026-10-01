@@ -56,11 +56,22 @@ def _validate(body):
         raise ValueError("prompt must be text under 4000 chars")
     mix = body.get("mix")
     weights = None
+    custom = None
+    if body.get("custom") is not None:
+        c = body["custom"]
+        if not isinstance(c, dict) or not isinstance(c.get("topic"), str):
+            raise ValueError("custom must be {\"topic\": str}")
+        topic = c["topic"].strip()
+        if not (1 <= len(topic) <= 64):
+            raise ValueError("custom topic must be 1-64 chars")
+        if not server._topic_allowed(topic):
+            raise ValueError("custom topic rejected by denylist")
+        custom = topic
     if mix is not None:
         weights, err = server.parse_mix(mix)
         if err:
             raise ValueError(err)
-    else:
+    elif custom is None:
         valence = body.get("valence", "none")
         if valence not in server.MIX_KEYS:
             raise ValueError("valence must be one of "
@@ -70,7 +81,7 @@ def _validate(body):
         body["valence"], body["dose"] = valence, dose
     if body.get("max_new") is not None:
         server.MAX_NEW = int(body["max_new"])
-    return prompt, weights, mix is not None
+    return prompt, weights, mix is not None, custom
 
 def handler(job):
     """One generation. Streams events; never raises after load (errors are
@@ -78,7 +89,7 @@ def handler(job):
     _ensure_loaded()
     body = job.get("input") or {}
     try:
-        prompt, weights, is_mix = _validate(body)
+        prompt, weights, is_mix, custom = _validate(body)
     except ValueError as e:
         yield {"type": "error", "e": str(e)}
         return
@@ -89,6 +100,12 @@ def handler(job):
             info = server.set_mix_vec(weights)
             meta.update(valence="mix", mix=info["mix"],
                         weights=info["weights"], dose=info["dose"])
+        elif custom is not None:
+            dose = int(body.get("dose", 4))
+            dose = max(0, min(8, dose))
+            body["valence"], body["dose"] = "custom:" + custom, dose
+            server.set_raw_vec(server.build_topic_vector(custom), dose)
+            meta.update(valence="custom", topic=custom, dose=dose)  # pyright: ignore[reportArgumentType]
         else:
             server.set_vec((body["valence"], body["dose"]))
             meta.update(valence=body["valence"], dose=body["dose"])
