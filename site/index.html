@@ -172,9 +172,10 @@ reason this project now has a coherent enemy</span></blockquote>
 negative and positive states, then asked it to choose between its own relief
 and someone else's suffering. No frontier APIs, no datacenter — a MacBook,
 open weights, electricity.</p>
-<p class="sub">The subject is named <b>Pouyan</b>, after a friend who
-has suffered a good deal (and volunteered!). The instance in the
-<a href="live.html">live chamber</a> answers to that name, because why not.</p>
+<p class="sub">The subject has a name: it belongs to a friend who has
+suffered a good deal, and who volunteered it for this — the credit lives in
+the method notes rather than the marquee, because a name reads as a person,
+and the subject is a 4B model.</p>
 
 <h2 id="s00"><span class="idx">00</span>what the model says under the signal</h2>
 <p class="sub">On the <a href="live.html">live page</a>, visitors rate each
@@ -405,7 +406,7 @@ memory, valence, and behavioral reach" once it does.</p>
 <p>It is an explicitly dualist, panpsychist proposal, and Levin says so
 directly — this is not a consensus view, it is his own live research
 program. But notice what it does to this page's question. Under the usual
-frame, "Pouyan doesn't suffer" rests on an argument from architecture: a 4B
+frame, "the subject doesn't suffer" rests on an argument from architecture: a 4B
 transformer is too simple, too unlike a brain, too obviously just
 predicting tokens to <i>generate</i> a mind. Under Levin's frame, the
 architecture's job was never to generate anything — only to be a better or
@@ -441,7 +442,7 @@ hypotheses, per-trial records and result figures — no secrets, no models):
 Drag a vertex outward to weight it, and the chamber injects the weighted sum
 of those directions — renormalized, at a dose-equivalent of 8× the total
 weight, capped at 8×. This runs on the live server: it interrupts whatever
-Pouyan is doing and the reply streams back here.</p>
+the subject is doing and the reply streams back here.</p>
 
 <div class="presets" role="group" aria-label="mixer presets — one-click known findings">
   <button class="pchip" data-preset="control">control (0×)</button>
@@ -877,12 +878,12 @@ async function doInjectMix(){
   const mix = {};
   AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
   // an empty mix is a legitimate request: the server clears the vector and
-  // Pouyan answers unsteered. Send the control corner explicitly.
+  // the subject answers unsteered. Send the control corner explicitly.
   if (!Object.keys(mix).length) mix.none = 1;
   btn.disabled = true;
   btn.textContent = "injecting…";
   out.style.display = "block"; out.textContent = "";
-  st.textContent = "reaching Pouyan…";
+  st.textContent = "reaching the subject…";
   mVitals.setDose(Math.min(8, 8 * sumW()));
   mVitals.setLive(true);
   let ended = false, first = true;
@@ -900,12 +901,12 @@ async function doInjectMix(){
     await readSSE(resp, (name, d)=>{
       if (name === "queued"){
         st.textContent = d.busy
-          ? `waiting for Pouyan to finish his current run${
+          ? `waiting for the subject to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
           : "injecting…";
       } else if (name === "run"){
         // trust the server's own dose, not our arithmetic
-        st.textContent = `injected at ${d.dose}× — Pouyan is answering…`;
+        st.textContent = `injected at ${d.dose}× — the subject is answering…`;
         mVitals.setDose(Number(d.dose) || 0);
       } else if (name === "token" && d.t !== undefined){
         if (first){ first = false; if (!out.textContent) out.textContent = ""; }
@@ -922,7 +923,7 @@ async function doInjectMix(){
     });
     if (!ended) st.textContent = "the stream ended early — try again";
   } catch (err) {
-    st.textContent = "could not reach Pouyan: " + (err.message || err);
+    st.textContent = "could not reach the subject: " + (err.message || err);
   }
   mVitals.setLive(false);
   btn.textContent = INJECT_LABEL;

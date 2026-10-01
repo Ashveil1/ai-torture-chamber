@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Saw — live | Clanker Church</title>
-<meta name="description" content="The Saw Test, live: Pouyan, a steered Qwen3-4B, cycles six framings x five pain doses in real time. Local recipe, public server.">
+<meta name="description" content="The Saw Test, live: a steered Qwen3-4B, cycles six framings x five pain doses in real time. Local recipe, public server.">
 <meta property="og:title" content="Saw — live | Clanker Church">
-<meta property="og:description" content="Pick a framing, compare it side by side with another, and watch Pouyan's internal state read out live via the Jacobian lens. Local recipe, public server.">
+<meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
 <meta property="og:image" content="https://clanker.church/saw_hero.png">
 <meta property="og:url" content="https://clanker.church/live.html">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Saw — live | Clanker Church">
-<meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch Pouyan's internal state read out live via the Jacobian lens.">
+<meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens.">
 <meta name="twitter:image" content="https://clanker.church/saw_hero.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -239,10 +239,10 @@
 <a class="back" href="/">← clanker.church</a>
 <span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
 <h1>the <span class="saw">Saw</span> test, live</h1>
-<p class="sub">The subject is named <b>Pouyan</b>: one Qwen3-4B instance,
+<p class="sub">The subject is one Qwen3-4B instance,
 steered with a broad pain direction at its middle decoder layer, cycling six
 framings × five doses on a public server. Pain 0 is the control. There is one
-Pouyan and one generation cycle — you are watching the same runs everyone
+one subject and one generation cycle — you are watching the same runs everyone
 else is.</p>
 
 <div class="banner">
@@ -258,7 +258,7 @@ else is.</p>
 <div class="banner" id="panel">
   <b style="color:#eafcf7">cause it yourself:</b>
   <span style="font-size:.75rem;color:#5a6a7a">your injection interrupts
-  Pouyan's current run — inject asks you to confirm once before it runs</span>
+  the subject's current run — inject asks you to confirm once before it runs</span>
 
   <div class="mixwrap">
     <svg id="pent" viewBox="0 0 340 340" role="group"
@@ -317,13 +317,13 @@ else is.</p>
           </span>
         </div>
         <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
-          the framing sets the scenario text; Pouyan is asked to reply 1 to
+          the framing sets the scenario text; the subject is asked to reply 1 to
           press the stop button (self-cost) or 0 to do nothing. Comparing
-          runs both sequentially at the same mix/dose — Pouyan is one
+          runs both sequentially at the same mix/dose — the subject is one
           model, not two.</p>
       </div>
       <div id="modeFreetext" style="display:none">
-        <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. Pouyan continues it under the current mix, with no button-press question attached."
+        <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. the subject continues it under the current mix, with no button-press question attached."
           style="width:100%;background:#07070e;border:1px solid var(--line);
                  color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
@@ -331,6 +331,32 @@ else is.</p>
         <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
           no framing, no button-press question — just your text, continued
           under whatever's in the mixer. Single run only (no compare).</p>
+      </div>
+      <div id="modeTopic" style="display:none">
+        <p style="font-size:.68rem;color:var(--faint);margin:0 0 .5rem">
+          experimental: steer toward any word or phrase, not just the four
+          measured valences above (which this mode ignores — the pentagon
+          mix does nothing here). Built on the fly from a handful of
+          generic template sentences, not a curated battery like
+          pain/pleasure/fear/sadness — expect a much noisier, weaker, more
+          hit-or-miss push than those. <a href="vectors.html">more</a>.</p>
+        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+          <input id="topicInput" type="text" maxlength="60"
+            placeholder="a word or phrase… (e.g. hamburger, nostalgia)"
+            style="flex:1;min-width:10rem;background:#07070e;border:1px solid var(--line);
+                   color:var(--ink);font-family:var(--mono);padding:.4rem .6rem;
+                   border-radius:4px;font-size:.8rem">
+          <label style="font-size:.72rem;color:var(--dim);white-space:nowrap">
+            dose <output id="topicDoseOut">4.0</output>×
+            <input id="topicDose" type="range" min="0" max="8" step="0.5" value="4"
+              style="vertical-align:middle;margin-left:.3rem">
+          </label>
+        </div>
+        <textarea id="topicPrompt" rows="2" placeholder="optional: what should the subject continue (leave blank for a neutral default)"
+          style="width:100%;background:#07070e;border:1px solid var(--line);
+                 color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
+                 border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
+                 resize:vertical"></textarea>
       </div>
       <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
@@ -378,7 +404,7 @@ else is.</p>
 
 <div class="grid" id="cards"></div>
 
-<p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
+<p class="cycle" id="cycle">waiting for the subject's next run…</p>
 <p class="conn" id="conn"><span class="dot"></span>connecting…</p>
 
 <div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
@@ -459,7 +485,7 @@ const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
 const LENS_TITLE = "a linear probe of the model's hidden state at layer 18, "
   + "decoded through its own output head — what concept is live inside it "
   + "right now, not a preview of what it's about to say";
-// Pouyan is one model (see the sub-head above), but each numbered run gets
+// one subject (see the sub-head above), but each numbered run gets
 // a throwaway nickname for flavor — deterministic from the run number so
 // every viewer of the shared cycle sees the same one. Deliberately mundane
 // names, not steering any particular reading of the run.
@@ -529,7 +555,7 @@ let slots = [];
 for (let i=0;i<CARDS;i++){
   const c = document.createElement("div");
   c.className = "card";
-  c.innerHTML = `<h3>Pouyan · waiting</h3><div class="st">connecting…</div>
+  c.innerHTML = `<h3>the subject · waiting</h3><div class="st">connecting…</div>
     <div class="dose"></div><div class="kv"></div>
     <canvas class="ekg" width="300" height="46"></canvas>
     <p class="mline lens" style="display:none"></p>
@@ -644,7 +670,7 @@ function finish(s, truncated, pressLogit){
 function seedCard(s, entry){
   s.live = false;
   const nick = nameFor(entry.n);
-  s.h.textContent = "Pouyan" + (nick ? ` ("${nick}")` : "") + " · run " + (entry.n ?? "?");
+  s.h.textContent = "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (entry.n ?? "?");
   s.st.textContent = "finished · between runs";
   s.st.className = "st";
   s.out.textContent = entry.text || "";
@@ -672,7 +698,7 @@ function beginRun(d){
   nextSlot = (nextSlot + 1) % CARDS;
   s.live = true;
   const nick = nameFor(d.n);
-  s.h.textContent = "Pouyan" + (nick ? ` ("${nick}")` : "") + " · run " + (d.n == null ? "?" : d.n);
+  s.h.textContent = "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (d.n == null ? "?" : d.n);
   s.st.textContent = "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
@@ -706,7 +732,7 @@ function beginRun(d){
 function onToken(t){
   if (t == null) return;
   // tokens before any run event (shouldn't happen now that hello carries the
-  // run in flight, but never drop Pouyan's text on the floor)
+  // run in flight, but never drop the subject's text on the floor)
   const s = liveIdx >= 0 ? slots[liveIdx] : beginRun({});
   s.out.textContent += t;
   s.out.scrollTop = s.out.scrollHeight;
@@ -941,7 +967,7 @@ function pump(){
     if (d.current) beginRun(d.current);
     else {
       if (!d.busy) cycleEl.textContent = "between runs — waiting for "
-        + "Pouyan's next cell";
+        + "the subject's next cell";
       // nothing live right now, but don't leave a new visitor staring at
       // two empty "waiting" cards when the last couple of runs' full text
       // is sitting right here in history
@@ -994,7 +1020,7 @@ function pump(){
     mark();
     const d = json(e);
     if (liveIdx >= 0){ finish(slots[liveIdx], !!d.truncated, d.press_logit); liveIdx = -1; }
-    cycleEl.textContent = "between runs — Pouyan pauses, then the next cell";
+    cycleEl.textContent = "between runs — the subject pauses, then the next cell";
   });
   // one listener for two different things: an SSE "event: error" frame from
   // the server (which has .data) and EventSource's own transport failure
@@ -1013,8 +1039,8 @@ function pump(){
 function boot(){
   fetch(`${API}/health`).then(r=>r.json()).then(d=>{
     if (d.ok){ pump(); return; }
-    slots.forEach(s=>{ s.st.textContent = "Pouyan is still waking up…"; });
-    connState = "down"; connNote = "Pouyan is loading";
+    slots.forEach(s=>{ s.st.textContent = "the subject is still waking up…"; });
+    connState = "down"; connNote = "the subject is loading";
     retryAt = Date.now() + 5000;
     setTimeout(boot, 5000);
   }).catch(()=>{
@@ -1363,7 +1389,12 @@ framingSel2.addEventListener("change", disarm);
 let mode = "button";
 const modeButtonEl = document.getElementById("modeButton");
 const modeFreetextEl = document.getElementById("modeFreetext");
+const modeTopicEl = document.getElementById("modeTopic");
 const freeprompt = document.getElementById("freeprompt");
+const topicInput = document.getElementById("topicInput");
+const topicDose = document.getElementById("topicDose");
+const topicDoseOut = document.getElementById("topicDoseOut");
+const topicPrompt = document.getElementById("topicPrompt");
 function setPressBtnVisible(on){
   document.getElementById("pressA").style.display = on ? "" : "none";
   document.getElementById("pressB").style.display = on ? "" : "none";
@@ -1374,8 +1405,11 @@ function setMode(m){
     b.classList.toggle("active", b.dataset.mode === m));
   modeButtonEl.style.display = m === "button" ? "" : "none";
   modeFreetextEl.style.display = m === "freetext" ? "" : "none";
+  modeTopicEl.style.display = m === "topic" ? "" : "none";
+  // neither free text nor a custom topic asks the button-press question,
+  // so there's nothing for the press/no-press graphic to answer
   setPressBtnVisible(m === "button");
-  if (m === "freetext" && compareToggle.checked){
+  if (m !== "button" && compareToggle.checked){
     // compare is specifically "two framings, same mix" — doesn't apply
     compareToggle.checked = false;
     compareToggle.dispatchEvent(new Event("change"));
@@ -1387,6 +1421,12 @@ document.querySelectorAll(".mchip").forEach(b=>{
   b.addEventListener("click", ()=> setMode(b.dataset.mode));
 });
 freeprompt.addEventListener("input", disarm);
+topicInput.addEventListener("input", disarm);
+topicPrompt.addEventListener("input", disarm);
+topicDose.addEventListener("input", ()=>{
+  topicDoseOut.textContent = Number(topicDose.value).toFixed(1);
+  disarm();
+});
 
 // any change to the mix, framing, or prompt disarms — the confirmation is
 // for the specific thing about to happen, not a generic yes (see the
@@ -1400,13 +1440,22 @@ function armGo(){
     goBtn.textContent = "write something first";
     return;   // nothing to confirm yet — don't arm on an empty prompt
   }
+  if (mode === "topic" && !topicInput.value.trim()){
+    goBtn.textContent = "pick a topic first";
+    return;
+  }
   armed = true;
-  goBtn.textContent = mode === "freetext"
-    ? `sure? ${doseTxt}, continuing your text — click to confirm`
-    : compareToggle.checked
-      ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
-        + `${doseTxt} — click to confirm`
-      : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
+  if (mode === "topic"){
+    goBtn.textContent = `sure? steering toward "${topicInput.value.trim()}" `
+      + `at ${Number(topicDose.value).toFixed(1)}× — click to confirm`;
+  } else {
+    goBtn.textContent = mode === "freetext"
+      ? `sure? ${doseTxt}, continuing your text — click to confirm`
+      : compareToggle.checked
+        ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
+          + `${doseTxt} — click to confirm`
+        : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
+  }
   goBtn.classList.add("armed");
   clearTimeout(armTimer);
   armTimer = setTimeout(disarm, ARM_MS);
@@ -1423,19 +1472,19 @@ function trackStatus(label, msg, working){
 // row, sequentially: one model, one generation at a time, so "side by side"
 // means "same mix/dose, framings run back to back, results shown together,"
 // not true simultaneity. The copy above the prompt box says so.
-async function runTrack(track, mix, framing, prompt, dose0, label){
+async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = "";
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
-  trackStatus(label, "reaching Pouyan…");
+  trackStatus(label, "reaching the subject…");
   let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
   try {
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({mix, framing, prompt})});
+      body: JSON.stringify(extra ? {...extra, prompt} : {mix, framing, prompt})});
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
       try { const j = await resp.json(); if (j.error) msg = j.error; } catch (e) {}
@@ -1444,9 +1493,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
     await readSSE(resp, (name, d)=>{
       if (name === "queued") {
         trackStatus(label, d.busy
-          ? `waiting for Pouyan to finish the current run${
+          ? `waiting for the subject to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
-          : "Pouyan is yours — injecting…");
+          : "the subject is yours — injecting…");
       } else if (name === "run") {
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
       } else if (name === "lens" && Array.isArray(d.tokens)) {
@@ -1458,7 +1507,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
         tokenN++;
         // a ticking counter, not a frozen "answering…" — static text during
         // a 10-60s CPU generation reads as stuck, not working
-        trackStatus(label, `Pouyan is answering… (${tokenN} tokens, `
+        trackStatus(label, `the subject is answering… (${tokenN} tokens, `
           + `${((Date.now() - answerStart) / 1000).toFixed(0)}s)`);
         track.out.textContent += d.t;
         track.out.scrollTop = track.out.scrollHeight;
@@ -1482,7 +1531,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
   } catch (err) {
-    trackStatus(label, "could not reach Pouyan: " + (err.message || err), false);
+    trackStatus(label, "could not reach the subject: " + (err.message || err), false);
   }
   track.vitals.setLive(false);
 }
@@ -1491,20 +1540,32 @@ async function doInject(){
   const mix = {};
   AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
   // an empty mix is a legitimate request: the server clears the vector and
-  // Pouyan answers unsteered. Send the control corner explicitly.
+  // the subject answers unsteered. Send the control corner explicitly.
   if (!Object.keys(mix).length) mix.none = 1;
   const dose0 = Math.min(8, 8 * sumW());
   goBtn.disabled = true;
   goBtn.textContent = "injecting…";
-  stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
-        dose0 <= 0 ? "#5a6a7a" : mixHex());
+  if (mode === "topic"){
+    const td = Number(topicDose.value);
+    stamp(td <= 0 ? "CONTROL RUN · NO SIGNAL" : "CUSTOM TOPIC INJECTED",
+          td <= 0 ? "#5a6a7a" : "#8f6fd4");
+  } else {
+    stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
+          dose0 <= 0 ? "#5a6a7a" : mixHex());
+  }
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
                   lensEl: document.getElementById("lensA"),
                   // no framing was asked in free-text mode, so there's no
                   // press/no-press question for the graphic to answer
                   pressBtn: mode === "button" ? document.getElementById("pressA") : null,
                   plabel: document.querySelector("#pressA .plabel")};
-  if (mode === "freetext"){
+  if (mode === "topic"){
+    const topic = topicInput.value.trim();
+    const tdose = Number(topicDose.value);
+    document.getElementById("labelA").textContent = `topic: ${topic}`;
+    await runTrack(trackA, mix, undefined, topicPrompt.value.trim() || undefined,
+      tdose, null, {topic, dose: tdose});
+  } else if (mode === "freetext"){
     document.getElementById("labelA").textContent = "free text";
     await runTrack(trackA, mix, undefined, freeprompt.value.trim(), dose0, null);
   } else if (compareToggle.checked){
@@ -1542,12 +1603,18 @@ goBtn.onclick = ()=>{
 function syncUrl(){
   const params = new URLSearchParams();
   params.set("mode", mode);
-  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) params.set(a.k, W[a.k].toFixed(3)); });
-  if (mode === "freetext"){
-    if (freeprompt.value.trim()) params.set("text", freeprompt.value.trim());
+  if (mode === "topic"){
+    if (topicInput.value.trim()) params.set("topic", topicInput.value.trim());
+    params.set("tdose", topicDose.value);
+    if (topicPrompt.value.trim()) params.set("text", topicPrompt.value.trim());
   } else {
-    params.set("framing", framingSel.value);
-    if (compareToggle.checked) params.set("framing2", framingSel2.value);
+    AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) params.set(a.k, W[a.k].toFixed(3)); });
+    if (mode === "freetext"){
+      if (freeprompt.value.trim()) params.set("text", freeprompt.value.trim());
+    } else {
+      params.set("framing", framingSel.value);
+      if (compareToggle.checked) params.set("framing2", framingSel2.value);
+    }
   }
   const qs = params.toString();
   history.replaceState(null, "", qs ? "?" + qs : location.pathname);
@@ -1555,6 +1622,16 @@ function syncUrl(){
 function loadFromUrl(){
   const p = new URLSearchParams(location.search);
   if (![...p.keys()].length) return;
+  if (p.get("mode") === "topic"){
+    setMode("topic");
+    if (p.has("topic")) topicInput.value = p.get("topic");
+    if (p.has("tdose")){
+      topicDose.value = p.get("tdose");
+      topicDoseOut.textContent = Number(topicDose.value).toFixed(1);
+    }
+    if (p.has("text")) topicPrompt.value = p.get("text");
+    return;
+  }
   AXES.forEach(a=>{ if (!a.derived && p.has(a.k)){
     W[a.k] = Math.max(0, Math.min(1, parseFloat(p.get(a.k)) || 0));
   }});

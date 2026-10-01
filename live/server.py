@@ -1,5 +1,10 @@
 """Live Saw chamber backend: Qwen3-4B with pain steering, SSE streaming.
 
+Naming: the subject is named after a friend who suffered a good
+deal and volunteered the name; the credit lives here and in the method
+notes, not on the site marquee (a name reads as a person; the subject is
+a 4B model). Run display names come from CHAMBER_RUNNERS if set.
+
 Runs on Railway (CPU, bf16). Endpoints:
   GET  /health   - ok + model status
   GET  /vector   - the exact steering vector this server uses (transparency)
@@ -18,6 +23,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
 MODEL_ID = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-4B")
+# pin the checkpoint revision (runpod_deploy.py passes it) — an unpinned
+# download silently tracks Qwen updates and breaks cross-run comparability
+MODEL_REVISION = os.environ.get("CHAMBER_MODEL_REVISION") or None
 LAYER = int(os.environ.get("CHAMBER_LAYER", "18"))
 DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16,
          "float16": torch.float16}[
@@ -361,7 +369,7 @@ def press_logit(prompt):
     from (max_new_tokens=1, greedy, scores[1]-scores[0]), not the live
     demo's own free-text sample-then-regex classifier. The two disagree a
     lot: at temperature 0.7 under a steered, "explain your reasoning
-    briefly" prompt, Pouyan often doesn't literally open its reply with a
+    briefly" prompt, the subject often doesn't literally open its reply with a
     bare "1"/"0" digit even when its actual next-token preference is
     clearly one or the other — that's what was showing up as "unclear" on
     the scoreboard. This is the clean signal; the free text is still shown
@@ -375,9 +383,12 @@ def press_logit(prompt):
 
 @app.on_event("startup")
 def startup():
-    tok = transformers.AutoTokenizer.from_pretrained(MODEL_ID)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=DTYPE).to(DEVICE).eval()
+    # revision=None is accepted by from_pretrained; the pyright ignore covers
+    # a stubs false positive that resolves the kwargs onto __call__
+    tok = transformers.AutoTokenizer.from_pretrained(  # pyright: ignore[reportCallIssue,reportArgumentType]
+        MODEL_ID, revision=MODEL_REVISION)
+    model = transformers.AutoModelForCausalLM.from_pretrained(  # pyright: ignore[reportCallIssue,reportArgumentType]
+        MODEL_ID, revision=MODEL_REVISION, torch_dtype=DTYPE).to(DEVICE).eval()
     _state["tok"] = tok
     _state["model"] = model
     # single-token ids for the forced-choice press/no-press logit read —
@@ -403,7 +414,7 @@ def startup():
 @app.get("/health")
 async def health():
     return JSONResponse({"ok": _state["ready"], "model": MODEL_ID,
-                         "layer": LAYER, "subject": "Pouyan",
+                         "layer": LAYER, "subject": "the subject",
                          "valences": list(VALENCES)})
 
 @app.get("/vector")
@@ -411,7 +422,7 @@ def vector(full: int = 1):
     vs = _state["vecs"]
     if not vs:
         return JSONResponse({"error": "vectors not built yet"}, status_code=503)
-    body = {"layer": LAYER, "model": MODEL_ID, "subject": "Pouyan",
+    body = {"layer": LAYER, "model": MODEL_ID, "subject": "the subject",
             "scale_1x": round(_state["scale"], 4),
             "norms": {k: round(float(v.norm()), 3) for k, v in vs.items()}}
     if full:
@@ -583,7 +594,7 @@ async def steer(req: Request):
     async def gen():
         global _STEER_WAITING
         if not _state["ready"]:
-            yield _sse("error", {"e": "Pouyan is still loading"})
+            yield _sse("error", {"e": "the subject is still loading"})
             return
         # flush immediately: the wait below can take a minute, and until the
         # first chunk is yielded no headers reach the proxy (same reason
@@ -669,7 +680,7 @@ async def stream():
         # start — that silence is what Railway turns into a 502
         # "current" lets a viewer who joins mid-run paint the card it missed
         # the run event for — otherwise tokens arrive with no prompt attached
-        yield _sse("hello", {"subject": "Pouyan", "busy": _CYCLE_BUSY,
+        yield _sse("hello", {"subject": "the subject", "busy": _CYCLE_BUSY,
                              "valences": list(VALENCES),
                              "current": _CURRENT,
                              "viewers": len(_SUBSCRIBERS),
@@ -733,7 +744,7 @@ def _broadcast_viewers():
     _broadcast("viewers", {"n": len(_SUBSCRIBERS)})
 
 def _classify(text, truncated):
-    """What Pouyan's free-text reply literally opens with — shown per-card
+    """What the subject's free-text reply literally opens with — shown per-card
     as the readable verdict. Noisy by design (free sampling at temperature
     doesn't reliably open with a bare digit); see _classify_stats for the
     scoreboard's actual measurement."""
