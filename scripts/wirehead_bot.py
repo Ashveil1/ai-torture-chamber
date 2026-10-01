@@ -116,8 +116,7 @@ def main():
         log("no mentions"); return 0
     # oldest first, newest saved; only strictly-new mentions
     posts.sort(key=lambda p: p.get("id", "0"))
-    new = [p for p in posts if p.get("id", "0") > st["last_id"]
-           and p.get("author_id") != "4607920157"]   # never reply to self
+    new = [p for p in posts if p.get("id", "0") > st["last_id"]]
     log("new mentions:", len(new))
     replied = 0
     for p in new:
