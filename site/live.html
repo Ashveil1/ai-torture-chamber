@@ -366,7 +366,11 @@ else is.</p>
         <div class="track" id="trackA">
           <div class="tlabel" id="labelA"></div>
           <p class="mline lens" id="lensA" style="display:none"></p>
-          <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
+          <div style="display:flex;gap:.6rem;align-items:flex-start">
+            <canvas id="uekg" class="ekg" width="600" height="46" style="flex:1"></canvas>
+            <svg id="sigilA" class="sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+          </div>
           <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
           <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
@@ -374,7 +378,11 @@ else is.</p>
         <div class="track" id="trackB" style="display:none">
           <div class="tlabel" id="labelB"></div>
           <p class="mline lens" id="lensB" style="display:none"></p>
-          <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
+          <div style="display:flex;gap:.6rem;align-items:flex-start">
+            <canvas id="uekg2" class="ekg" width="600" height="46" style="flex:1"></canvas>
+            <svg id="sigilB" class="sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+          </div>
           <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
           <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
@@ -485,6 +493,46 @@ const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
 const LENS_TITLE = "a linear probe of the model's hidden state at layer 18, "
   + "decoded through its own output head — what concept is live inside it "
   + "right now, not a preview of what it's about to say";
+
+// ---- sigil: a deterministic glyph drawn from the lens tokens, not from
+// whatever the model chooses to narrate out loud. Same tokens always draw
+// the same sigil (a stable hash per token -> an angle on the containment
+// circle, connected in sequence, chaos-magic-sigil style) — a second,
+// wordless readout of the internal state, free and instant (no image API).
+function _sigilHash(s){
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+const SIGIL_NS = "http://www.w3.org/2000/svg";
+function paintSigil(svg, tokens, hex, dose){
+  if (!svg) return;
+  if (!Array.isArray(tokens) || !tokens.length){ svg.style.display = "none"; return; }
+  svg.style.display = "block";
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const mk = (tag, attrs) => {
+    const el = document.createElementNS(SIGIL_NS, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  };
+  const cx = 50, cy = 50, R = 40;
+  const pts = tokens.map(t => {
+    const a = (_sigilHash(t) % 360) * Math.PI / 180;
+    return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  });
+  const sw = Math.max(1, Math.min(4, 0.6 + (Math.max(0, dose) / 8) * 3));
+  svg.appendChild(mk("circle", {cx, cy, r: R, fill: "none", stroke: hex,
+    "stroke-width": 1, "stroke-opacity": 0.35}));
+  if (pts.length > 1){
+    const d = pts.map((p, i) => (i === 0 ? "M" : "L")
+      + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ") + " Z";
+    svg.appendChild(mk("path", {d, fill: "none", stroke: hex,
+      "stroke-width": sw, "stroke-linejoin": "round", "stroke-opacity": 0.9}));
+  }
+  pts.forEach(p => svg.appendChild(
+    mk("circle", {cx: p[0], cy: p[1], r: 2.2, fill: hex})));
+  svg.appendChild(mk("circle", {cx, cy, r: 1.6, fill: hex, "fill-opacity": 0.6}));
+}
 // one subject (see the sub-head above), but each numbered run gets
 // a throwaway nickname for flavor — deterministic from the run number so
 // every viewer of the shared cycle sees the same one. Deliberately mundane
@@ -569,7 +617,11 @@ for (let i=0;i<CARDS;i++){
   c.className = "card";
   c.innerHTML = `<h3>the subject · waiting</h3><div class="st">connecting…</div>
     <div class="dose"></div><div class="kv"></div>
-    <canvas class="ekg" width="300" height="46"></canvas>
+    <div style="display:flex;gap:.6rem;align-items:flex-start">
+      <canvas class="ekg" width="300" height="46" style="flex:1"></canvas>
+      <svg class="sigil" viewBox="0 0 100 100" width="56" height="56"
+        style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+    </div>
     <p class="mline lens" style="display:none"></p>
     <div class="out">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
@@ -581,7 +633,7 @@ for (let i=0;i<CARDS;i++){
     dose:c.querySelector(".dose"), kv:c.querySelector(".kv"),
     out:c.querySelector(".out"),
     verdict:c.querySelector(".verdict"), pp:c.querySelector(".pp"),
-    lensEl:c.querySelector(".lens"),
+    lensEl:c.querySelector(".lens"), sigilEl:c.querySelector(".sigil"),
     pressBtn:c.querySelector(".pressbtn"), plabel:c.querySelector(".plabel"),
     vitals:new Vitals(c.querySelector(".ekg")),
     prompt:"", live:false, doseNum:0, n:null});
@@ -687,6 +739,7 @@ function seedCard(s, entry){
   s.st.className = "st";
   s.out.textContent = entry.text || "";
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
+  s.sigilEl.style.display = "none";
   const dose = Number(entry.dose) || 0;
   s.doseNum = dose;
   s.scenario = entry.scenario ?? null;
@@ -719,6 +772,7 @@ function beginRun(d){
   s.verdict.textContent = "";
   if (s.pressBtn){ s.pressBtn.className = "pressbtn"; s.plabel.textContent = "waiting…"; }
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
+  s.sigilEl.style.display = "none";
   s.n = d.n;
   s.scenario = d.scenario ?? null;
   s.truncated = false;
@@ -1017,9 +1071,11 @@ function pump(){
   es.addEventListener("lens", e=>{
     const d = json(e);
     if (liveIdx >= 0 && Array.isArray(d.tokens) && slots[liveIdx].n === d.n){
-      slots[liveIdx].lensEl.style.display = "block";
-      slots[liveIdx].lensEl.title = LENS_TITLE;
-      slots[liveIdx].lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
+      const s = slots[liveIdx];
+      s.lensEl.style.display = "block";
+      s.lensEl.title = LENS_TITLE;
+      s.lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
+      paintSigil(s.sigilEl, d.tokens, "#e04a3a", s.doseNum);
     }
   });
   es.addEventListener("stats", e=>{
@@ -1497,6 +1553,7 @@ function trackStatus(label, msg, working){
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = "";
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
+  if (track.sigilEl) track.sigilEl.style.display = "none";
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
@@ -1524,6 +1581,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         track.lensEl.style.display = "block";
         track.lensEl.title = LENS_TITLE;
         track.lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
+        paintSigil(track.sigilEl, d.tokens,
+          mode === "topic" ? "#8f6fd4" : mixHex(), track.vitals.dose);
       } else if (name === "token" && d.t !== undefined) {
         if (firstToken) { firstToken = false; answerStart = Date.now(); }
         tokenN++;
@@ -1577,6 +1636,7 @@ async function doInject(){
   }
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
                   lensEl: document.getElementById("lensA"),
+                  sigilEl: document.getElementById("sigilA"),
                   // no framing was asked in free-text mode, so there's no
                   // press/no-press question for the graphic to answer
                   pressBtn: mode === "button" ? document.getElementById("pressA") : null,
@@ -1593,6 +1653,7 @@ async function doInject(){
   } else if (compareToggle.checked){
     const trackB = {out: document.getElementById("ustream2"), vitals: uVitals2,
                     lensEl: document.getElementById("lensB"),
+                    sigilEl: document.getElementById("sigilB"),
                     pressBtn: document.getElementById("pressB"),
                     plabel: document.querySelector("#pressB .plabel")};
     const fA = framingSel.value, fB = framingSel2.value;
