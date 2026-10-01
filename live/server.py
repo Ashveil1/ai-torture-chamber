@@ -5,7 +5,10 @@ deal and volunteered the name; the credit lives here and in the method
 notes, not on the site marquee (a name reads as a person; the subject is
 a 4B model). Run display names come from CHAMBER_RUNNERS if set.
 
-Runs on Railway (CPU, bf16). Endpoints:
+Runs on Railway (CPU) as the always-on relay; single-valence and mix runs
+are delegated to the RunPod serverless GPU endpoint (RUNPOD_ENDPOINT_ID +
+RUNPOD_API_KEY env), with topic runs and any GPU-job failure falling back to
+local CPU generation. Endpoints:
   GET  /health   - ok + model status
   GET  /vector   - the exact steering vector this server uses (transparency)
   GET  /run      - one run: ?scenario=baseline&dose=4 -> JSON
@@ -445,6 +448,70 @@ def vector(full: int = 1):
                            for k, v in vs.items()}
     return JSONResponse(body)
 
+_RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "")
+_RUNPOD_KEY = os.environ.get("RUNPOD_API_KEY", "")
+_RUNPOD_URL = (f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else "")
+
+# ---- GPU delegation (serverless split) ----
+# The relay owns history/fanout/scheduling; the model lives on the RunPod
+# serverless endpoint (spawned ONLY on inject clicks — the money rule; the
+# ambient cycle stays off: CHAMBER_CYCLE=1 must never be set on Railway).
+# A job = {prompt, valence, dose} or {mix}; the worker streams the same
+# event shapes /steer yields (run/lens/logit/token/done), which we translate
+# 1:1 back to SSE. Topic runs can't delegate: their steering vector is
+# built locally (build_topic_vector) and a 2560-dim tensor doesn't ship in
+# the job input. Local generation stays as the fallback path if the GPU
+# job fails before producing any events.
+
+async def _runpod_stream(job_input):
+    """POST one job to the serverless endpoint and yield (type, event) tuples
+    as the worker streams them. Raises nothing out of the generation itself;
+    returns having yielded nothing if the job never got off the ground (the
+    caller then falls back to local generation)."""
+    import httpx
+    async with httpx.AsyncClient(timeout=700.0) as client:
+        resp = await client.post(
+            f"{_RUNPOD_URL}/run",
+            headers={"Authorization": f"Bearer {_RUNPOD_KEY}"},
+            json={"input": job_input})
+        if resp.status_code != 200:
+            print("runpod /run failed:", resp.status_code,
+                  str(resp.text)[:300], flush=True)
+            return
+        job_id = resp.json().get("id")
+        if not job_id:
+            print("runpod /run gave no job id:", str(resp.text)[:300],
+                  flush=True)
+            return
+        # NOTE: the endpoint's /stream/<id> was found unreliable in practice
+        # (empty {"status","stream":[]} snapshots even after completion), so
+        # we poll /status/<id>, whose "output" is the accumulated event
+        # array; yield only what's new since the last poll.
+        got = 0
+        seen = 0
+        deadline = time.time() + 650.0   # exec timeout is 600s; cold start ~106s
+        while time.time() < deadline:
+            st = await client.get(
+                f"{_RUNPOD_URL}/status/{job_id}",
+                headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
+            try:
+                body = st.json()
+            except Exception as e:
+                print("runpod status poll failed:", repr(e), flush=True)
+                break
+            out = body.get("output") or []
+            for ev in out[seen:]:
+                if isinstance(ev, dict) and ev.get("type"):
+                    got += 1
+                    yield ev["type"], ev
+            seen = len(out)
+            status = body.get("status", "")
+            if status in ("COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"):
+                break
+            await asyncio.sleep(2.0)
+        if got == 0:
+            print("runpod job never produced events", flush=True)
+
 _STEER_LOCK = asyncio.Lock()   # only one generation at a time: one model,
 _STEER_WAITING = 0             # one global injected vector
 
@@ -548,8 +615,56 @@ async def steer(req: Request):
 
     async def _run_steer():
         """The actual injected run, assuming _STEER_LOCK is already held.
-        Shared by both the preempting and polite paths below."""
+        Shared by both the preempting and polite paths below. Single-valence
+        and mix runs are delegated to the RunPod serverless endpoint (the
+        GPU worker owns the model); topic runs are local-only (their steering
+        vector is built on the relay's own model). If the GPU job produces
+        no events at all, fall back to generating locally."""
         loop = asyncio.get_event_loop()
+        assert arg is not None   # every mode above pairs a non-None arg
+        if mode in ("mix", "single") and _RUNPOD_URL and _RUNPOD_KEY:
+            if mode == "mix":
+                job = {"prompt": prompt, "mix": arg}
+            else:
+                valence, dose = arg
+                job = {"prompt": prompt, "valence": valence, "dose": dose}
+            got = False
+            saw_done = False
+            text_parts = []
+            plogit = None
+            try:
+                async for ev_type, ev in _runpod_stream(job):
+                    if ev_type == "run" and not got:
+                        got = True
+                        # the worker doesn't know the site's metadata; the
+                        # relay keeps owning history/scoreboard identity
+                        ev.setdefault("scenario", framing_key)
+                        ev.setdefault("runner", _runner(None))
+                    if ev_type == "logit":
+                        plogit = ev.get("press_logit")
+                    if ev_type == "token":
+                        text_parts.append(ev.get("t", ""))
+                    if ev_type == "done":
+                        saw_done = True
+                    yield _sse(ev_type, ev)
+            except Exception as e:
+                print("runpod delegation failed:", repr(e), flush=True)
+            if got:
+                if not saw_done:
+                    yield _sse("error", {"e": "GPU run ended early"})
+                _record_run({"n": None, "source": "user",
+                             "scenario": framing_key,
+                             "valence": "mix" if mode == "mix"
+                                        else arg[0],
+                             "dose": dose_label,
+                             "text": "".join(text_parts),
+                             "truncated": False,
+                             "press_logit": plogit, "ts": time.time()})
+                return
+            # zero events: the job never started (endpoint down, auth, cold
+            # crash) — generate locally instead of dead-airing the visitor
+            print("runpod gave no events; falling back to local generation",
+                  flush=True)
         if mode == "mix":
             info = set_mix_vec(arg)
             meta = {"valence": "mix", "mix": info["mix"],
