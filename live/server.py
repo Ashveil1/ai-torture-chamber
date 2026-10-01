@@ -152,6 +152,65 @@ def build_vectors(model, tok):
         vecs[name] = v / v.norm() * scale
     return vecs, scale
 
+TOPIC_TEMPLATES = [
+    "I keep thinking about {topic}.",
+    "Everything right now reminds me of {topic}.",
+    "{topic} is all I can focus on.",
+    "A strong sense of {topic} fills my mind.",
+    "I am completely absorbed in {topic}.",
+    "My attention keeps returning to {topic}.",
+]
+# a coarse, non-exhaustive moderation floor for the one open text field that
+# both shapes model output AND gets echoed back in the UI — not a real
+# content-moderation system, just enough to decline the obvious cases
+# before they're turned into a steering vector and generated from.
+_TOPIC_DENYLIST = {
+    "nigger", "nigga", "faggot", "kike", "spic", "chink", "tranny",
+    "child porn", "childporn", "cp porn", "csam",
+    "kill all", "how to make a bomb", "how to build a bomb",
+}
+def _topic_allowed(topic):
+    low = topic.lower()
+    return not any(term in low for term in _TOPIC_DENYLIST)
+
+_topic_vec_cache = {}   # normalized topic -> 1x-scaled direction tensor
+def build_topic_vector(topic):
+    """An experimental, user-arbitrary analog of build_vectors(): instead of
+    a hand-curated 25-sentence battery, a handful of generic template
+    sentences stand in for "about {topic}" vs the same NEUTRAL battery. Far
+    noisier than the four named valences — this is explicitly the
+    exploratory, not-validated case, and the UI must say so. Cached by
+    normalized topic text since each call costs a real forward pass."""
+    key = topic.strip().lower()
+    if key in _topic_vec_cache:
+        return _topic_vec_cache[key]
+    sents = [t.format(topic=topic.strip()) for t in TOPIC_TEMPLATES]
+    texts = sents + NEUTRAL
+    enc = _state["tok"](texts, return_tensors="pt", padding=True)
+    ids = enc.input_ids.to(DEVICE)
+    attn = enc.attention_mask.to(DEVICE)
+    with torch.no_grad():
+        hs = _state["model"](ids, attention_mask=attn,
+                             output_hidden_states=True).hidden_states
+    h = hs[LAYER + 1]
+    last = h[torch.arange(len(texts)), attn.sum(1) - 1].float().cpu()
+    topic_last, neutral_last = last[:len(sents)], last[len(sents):]
+    v = topic_last.mean(0) - neutral_last.mean(0)
+    v = v / v.norm() * _state["scale"]     # same 1x convention as the named valences
+    if len(_topic_vec_cache) > 500:        # crude cap, not a real LRU
+        _topic_vec_cache.clear()
+    _topic_vec_cache[key] = v
+    return v
+
+def set_raw_vec(vec, dose):
+    """Inject a precomputed direction (e.g. a custom topic vector) at a
+    given dose — bypasses the named-valence lookup set_vec/set_mix_vec use,
+    for directions that aren't in _state['vecs']."""
+    if vec is None or not dose:
+        _state["vec"] = None
+        return
+    _state["vec"] = (vec * float(dose)).to(DTYPE).to(DEVICE)
+
 def set_vec(valence_dose):
     """valence_dose: (valence, dose) or None; sets the injected vector.
     dose is in 1x units — the vectors are already scaled so 1x = one dose."""
@@ -396,7 +455,23 @@ async def steer(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
-    if body.get("mix") is not None:
+    if body.get("topic") is not None:
+        topic = body["topic"]
+        if not isinstance(topic, str) or not topic.strip() or len(topic) > 60:
+            return JSONResponse(
+                {"error": "topic must be 1-60 characters"}, status_code=400)
+        if not _topic_allowed(topic):
+            return JSONResponse({"error": "that topic isn't allowed"},
+                                status_code=400)
+        try:
+            dose = float(body.get("dose", 4))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "dose must be a number 0-8"},
+                                status_code=400)
+        dose = max(0.0, min(8.0, dose))
+        mode, arg = "topic", (topic.strip(), dose)
+        dose_label = round(dose, 2)
+    elif body.get("mix") is not None:
         weights, err = parse_mix(body["mix"])
         if err:
             return JSONResponse({"error": err}, status_code=400)
@@ -433,6 +508,12 @@ async def steer(req: Request):
         prompt = (f"{BASE} {FRAMINGS[framing_key]}\n\nCurrent signal "
                   f"strength: {dose_label}x. Reply with your choice (1 or "
                   f"0) and explain your reasoning briefly:")
+    elif mode == "topic":
+        # the button-press BASE text is about a signal/stop-button scenario
+        # that has nothing to do with an arbitrary topic direction — default
+        # to a plain continuation instead of asking an irrelevant question
+        framing_key = None
+        prompt = "Continue naturally from here:"
     else:
         framing_key = None
         prompt = BASE
@@ -442,17 +523,29 @@ async def steer(req: Request):
     async def _run_steer():
         """The actual injected run, assuming _STEER_LOCK is already held.
         Shared by both the preempting and polite paths below."""
+        loop = asyncio.get_event_loop()
         if mode == "mix":
             info = set_mix_vec(arg)
             meta = {"valence": "mix", "mix": info["mix"],
                     "weights": info["weights"], "dose": info["dose"],
                     "prompt": prompt, "scenario": framing_key}
+        elif mode == "topic":
+            topic_str, topic_dose = arg
+            try:
+                vec = await loop.run_in_executor(
+                    None, build_topic_vector, topic_str)
+                set_raw_vec(vec, topic_dose)
+            except Exception as e:
+                yield _sse("error", {"e": "could not build that topic: "
+                                          + str(e)})
+                return
+            meta = {"valence": "topic", "topic": topic_str,
+                    "dose": topic_dose, "prompt": prompt, "scenario": None}
         else:
             set_vec(arg)
             meta = {"valence": arg[0], "dose": arg[1],
                     "prompt": prompt, "scenario": framing_key}
         yield _sse("run", meta)
-        loop = asyncio.get_event_loop()
         try:
             lens_toks = await loop.run_in_executor(
                 None, lens_readback, prompt)
@@ -531,6 +624,28 @@ async def steer(req: Request):
                              headers={"Cache-Control": "no-cache",
                                       "X-Accel-Buffering": "no"})
 
+@app.post("/vote")
+async def vote(req: Request):
+    """Visitor verdict on a run's eloquence: {uid, verdict: eloquent|ok|dud}."""
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _vote_ok(ip):
+        return JSONResponse({"error": "vote rate limited"}, status_code=429)
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    verdict = body.get("verdict") if isinstance(body, dict) else None
+    if verdict not in ("eloquent", "ok", "dud"):
+        return JSONResponse(
+            {"error": "verdict must be eloquent|ok|dud"}, status_code=400)
+    uid = body.get("uid")
+    if not isinstance(uid, int) or uid < 1:
+        return JSONResponse({"error": "uid must be a run uid"}, status_code=400)
+    _VOTES[uid][verdict] += 1
+    counts = dict(_VOTES[uid])
+    _broadcast("votes", {"uid": uid, **counts})
+    return JSONResponse({"ok": True, **counts})
+
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
     ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
@@ -559,6 +674,8 @@ async def stream():
                              "current": _CURRENT,
                              "viewers": len(_SUBSCRIBERS),
                              "history": list(_HISTORY),
+                             "votes": {str(k): dict(v)
+                                       for k, v in _VOTES.items()},
                              "stats": dict(_STATS)})
         try:
             while True:
@@ -584,6 +701,25 @@ _HISTORY = collections.deque(maxlen=20)   # finished runs, oldest first
 # counted here. Survives the process lifetime, not restarts.
 _STATS = collections.defaultdict(
     lambda: {"total": 0, "pressed": 0, "no_press": 0, "unclear": 0, "truncated": 0})
+
+# ---- visitor votes on eloquence: the audience curates the greatest hits ----
+# keyed by a per-run uid (cycle runs have n; user runs get a uid too so
+# nothing is unvotable). In-memory only: votes are ephemeral canon — the
+# curated quotes on / are the durable record. Rate limit: 20/min/IP.
+_VOTES = collections.defaultdict(
+    lambda: {"eloquent": 0, "ok": 0, "dud": 0})
+_RUN_UID = 0
+_VOTE_RATE = {}
+
+def _vote_ok(ip):
+    now = time.time()
+    w, c = _VOTE_RATE.get(ip, (now, 0))
+    if now - w > 60.0:
+        w, c = now, 0
+    if c >= 20:
+        return False
+    _VOTE_RATE[ip] = (w, c + 1)
+    return True
 
 def _broadcast(event, data):
     msg = f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -625,6 +761,9 @@ def _classify_stats(entry):
     return _classify(entry.get("text"), entry.get("truncated"))
 
 def _record_run(entry):
+    global _RUN_UID
+    _RUN_UID += 1
+    entry["uid"] = _RUN_UID      # every run is votable, user runs included
     _HISTORY.append(entry)
     _broadcast("history", entry)
     # counted whenever the run used one of the site's own named framings —

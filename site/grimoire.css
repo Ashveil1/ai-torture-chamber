@@ -179,3 +179,20 @@ body.grimoire-live .fsel {
   background:var(--scorch); border-color:var(--parch-line); border-radius:0;
   color:var(--bone);
 }
+
+/* ---- eloquence voting: small sigil-lit buttons on expanded history rows.
+   The audience curates the canon — keep them quiet until the row opens. ---- */
+body.grimoire-live .voterow {
+  display: flex; gap: .45rem; margin-top: .55rem;
+  padding-top: .5rem; border-top: 1px dashed #231a12;
+}
+body.grimoire-live .votebtn {
+  background: none; border: 1px solid var(--parch-line); color: #a3977f;
+  font-family: var(--mono); font-size: .68rem; padding: .26rem .6rem;
+  border-radius: 0; cursor: pointer;
+}
+body.grimoire-live .votebtn:hover { border-color: var(--gold); color: var(--gold); }
+body.grimoire-live .votebtn .vc {
+  color: var(--bone); font-weight: 600; margin-left: .15rem;
+}
+body.grimoire-live .votebtn[data-v="eloquent"]:hover { border-color: var(--blood-hot); color: var(--blood-hot); }

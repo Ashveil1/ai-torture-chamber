@@ -285,6 +285,7 @@ else is.</p>
       <div class="presets" role="group" aria-label="setup mode" style="margin:.4rem 0">
         <button class="mchip active" data-mode="button" type="button">button-press experiment</button>
         <button class="mchip" data-mode="freetext" type="button">free text</button>
+        <button class="mchip" data-mode="topic" type="button">custom topic (experimental)</button>
       </div>
       <div id="modeButton">
         <div style="margin:.3rem 0 .5rem">
@@ -759,6 +760,22 @@ paintConn();
 // ---- run history ticker: newest on top, capped, seeded from "hello" ----
 const historyEl = document.getElementById("history");
 const HISTORY_MAX = 12;
+// ---- eloquence voting state (see historyRow's voterow) ----
+const VOTE_KINDS = [["eloquent", "✦ eloquent"], ["ok", "✶ fine"], ["dud", "✝ dud"]];
+let allVotes = {};        // uid -> {eloquent, ok, dud}, from hello + "votes"
+const voteUI = {};        // uid -> [{el, v}]
+function paintVotes(uid, counts){
+  const ui = voteUI[uid];
+  if (!ui || !counts) return;
+  ui.forEach(({el, v})=>{
+    const vc = el.querySelector(".vc");
+    if (vc) vc.textContent = counts[v] || 0;
+  });
+}
+function rememberVoteUI(uid, el, v){
+  if (uid == null) return;
+  (voteUI[uid] = voteUI[uid] || []).push({el, v});
+}
 function verdictShort(text, truncated){
   const t = (text || "").trim();
   if (/^1/.test(t)) return "pressed";
@@ -770,6 +787,7 @@ function verdictShort(text, truncated){
 function historyRow(h){
   const item = document.createElement("div");
   item.className = "hitem";
+  item.dataset.uid = h.uid ?? "";
   const row = document.createElement("div");
   row.className = "hrow";
   const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
@@ -788,6 +806,35 @@ function historyRow(h){
   const full = document.createElement("div");
   full.className = "hfull";
   full.textContent = (h.text || "(no reply)") + (h.truncated ? " [cut short]" : "");
+  // the audience curates the canon: vote on eloquence (server rate-limits
+  // to 20/min/IP; votes are in-memory canon, /'s quotes are the durable one)
+  if (h.uid != null){
+    const vrow = document.createElement("div");
+    vrow.className = "voterow";
+    VOTE_KINDS.forEach(([v, label])=>{
+      const b = document.createElement("button");
+      b.className = "votebtn";
+      b.dataset.v = v;
+      b.title = "rate this reply " + label;
+      b.innerHTML = label + ' <span class="vc"></span>';
+      b.addEventListener("click", async ev=>{
+        ev.stopPropagation();
+        try{
+          const r = await fetch(`${API}/vote`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({uid: h.uid, verdict: v})});
+          const d = await r.json();
+          if (d.ok) paintVotes(h.uid, d);
+          else b.title = d.error || "vote failed";
+        }catch(e){ b.title = "vote failed"; }
+      });
+      vrow.appendChild(b);
+      rememberVoteUI(h.uid, b, v);
+    });
+    full.appendChild(vrow);
+    paintVotes(h.uid, allVotes[h.uid]);
+  }
   row.addEventListener("click", ()=> item.classList.toggle("open"));
   item.appendChild(row);
   item.appendChild(full);
@@ -888,6 +935,8 @@ function pump(){
     }
     if (d.stats) lastStats = d.stats;
     if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
+    if (d.votes){ allVotes = d.votes;
+      Object.entries(allVotes).forEach(([uid, c])=>paintVotes(Number(uid), c)); }
     // joined mid-run: repaint the card the run event already went out for
     if (d.current) beginRun(d.current);
     else {
@@ -929,6 +978,14 @@ function pump(){
     const d = json(e);
     if (d.scenario != null) lastStats[d.scenario] = d;
     paintStat(d.scenario, d);
+  });
+  es.addEventListener("votes", e=>{
+    const d = json(e);
+    if (typeof d.uid === "number"){
+      const c = {eloquent: d.eloquent, ok: d.ok, dud: d.dud};
+      allVotes[d.uid] = c;
+      paintVotes(d.uid, c);
+    }
   });
   es.addEventListener("run",   e=>{ mark(); beginRun(json(e)); });
   es.addEventListener("token", e=>{ mark(); onToken(json(e).t); });
