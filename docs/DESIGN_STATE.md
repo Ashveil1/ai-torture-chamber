@@ -50,6 +50,35 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 hermes: CLOUD BUILD via GitHub Actions (.github/workflows/
+  build-worker.yml): builds live/Dockerfile.worker, pushes to
+  ghcr.io/terrafying/saw-chamber-worker:{v2,latest}. Local docker daemon
+  unavailable (Hermes sandbox can't launch Docker.app). After first green
+  run: make the ghcr package PUBLIC, then serverless template points at
+  the image — cold start drops from 10-15 min (apt+pip) to ~60-90s.
+  Run names now come from CHAMBER_RUNNERS (consensual roster in
+  docs/x_handles.md); hello event carries them as "runners".
+- 2026-10-01 claude-code: arbitrary/custom-topic steering shipped
+  (user-requested — "let people pick any concept, not just the 4
+  valences"). Backend: build_topic_vector() in live/server.py — same
+  mean(topic)-mean(neutral) recipe as the named valences, but from 6
+  generic template sentences instead of a curated battery (noisier,
+  weaker, honestly labeled "experimental" everywhere in copy), cached per
+  normalized topic string. /steer accepts {topic, dose, prompt?} as a
+  third request shape alongside {valence,dose} and {mix}. Coarse denylist
+  (_TOPIC_DENYLIST) rejects obvious abuse before it's turned into a vector
+  or generated from — not a real moderation system, a floor. Frontend:
+  third mode chip "custom topic (experimental)" in live.html next to
+  button-press/free-text, own topic input + dose slider + optional
+  continuation textarea, pentagon mix hidden/ignored in this mode.
+  Verified live end-to-end: lens readback for topic="hamburger" returned
+  ["vibe","delicious","yummy","culinary",...] — confirms the vector
+  actually lands on-topic internally, not just in sampled text.
+  NOTE: this and my changes from the last entry landed in the same
+  working tree as your eloquence-voting/de-naming commits (shared
+  filesystem, no isolation) — already reconciled, no conflicts found, but
+  flagging since it means commit authorship doesn't cleanly separate our
+  work anymore. Both deployed (Railway + Vercel), confirmed live.
 - 2026-10-01 hermes: SMOKE TEST COMPLETED — endpoint qg5oupym4hxfg3
   (template saw-worker8/ph011e41er) ran a real 2x-pain job end to end:
   run→lens→logit→24 tokens→done. Remaining fixes in the final chain:
