@@ -49,6 +49,7 @@ Deploy ONLY from site/ (Vercel rootDirectory gotcha). Verify after push:
 theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
+  Bot live facts: @clankertorture, dose cap 5x, classifier = flash model
 ## Status log (newest first)
 - 2026-10-01 hermes: S4 OPENED (bot cloud-ify, sectioned). S4a = claude-code:
   bot/ deployment packaging (Dockerfile + entrypoint that unwraps
