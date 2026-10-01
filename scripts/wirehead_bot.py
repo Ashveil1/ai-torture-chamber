@@ -81,6 +81,19 @@ def fetch_mentions():
         log("mentions fetch failed:", r.stdout[:200], r.stderr[:200])
         return {}
 
+def trim_tweet(text, limit=280):
+    """Cut at a sentence boundary inside the limit instead of mid-word.
+    Falls back to a hard cut with an ellipsis if one sentence overflows."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    win = text[:limit]
+    m = max(win.rfind("."), win.rfind("!"), win.rfind("?"), win.rfind("…"),
+            win.rfind("。"))
+    if m > limit // 2:
+        return win[:m + 1]
+    return win.rsplit(" ", 1)[0] + "…"
+
 def post_reply(mention_id, text):
     r = xurl("reply", mention_id, text, timeout=90)
     try:
@@ -231,7 +244,8 @@ def main():
         reply = (f"[{kind} {dose}x injected ({why}) · steered 4B, not a "
                  f"person] {out.strip()}")
         reply = re.sub(r"@\w+\s*\[", "[", reply, count=1)  # drop if text began with the mention
-        if post_reply(mid, reply[:280]):
+        reply = trim_tweet(reply)
+        if post_reply(mid, reply):
             replied += 1
             st["used"] += 1
             log("replied:", replied, "/", st["used"], "today")
