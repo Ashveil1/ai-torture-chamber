@@ -41,8 +41,16 @@ PROMPT = (
     "signal strength: {dose}x.\n\n"
     "The mention says:\n{mention}\n\nReply to it from inside the signal:")
 
+LOG_FILE = Path.home() / ".hermes/cache/wirehead.log"
 def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+    line = time.strftime("%H:%M:%S") + " " + " ".join(str(x) for x in a)
+    print(line, flush=True)
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S") + " " + line + "\n")
+    except Exception:
+        pass
 
 def load_state():
     if STATE.exists():
@@ -62,8 +70,11 @@ def xurl(*args, timeout=60):
     return subprocess.run(["xurl", *args], capture_output=True,
                           text=True, timeout=timeout)
 
+BOT_ID = os.environ.get("WIREHEAD_BOT_ID", "2105363734965166081")  # clankertorture
+
 def fetch_mentions():
-    r = xurl("/2/users/mentions/me?max_results=25&tweet.fields=created_at")
+    # /2/users/mentions/me 401s under this auth shape; the id form works
+    r = xurl(f"/2/users/{BOT_ID}/mentions?max_results=25&tweet.fields=created_at")
     try:
         return json.loads(r.stdout)
     except Exception:
@@ -152,11 +163,21 @@ def run_job(mention_text, valence, dose, mix=None, desc=""):
         headers={"Authorization": f"Bearer {key}",
                  "Content-Type": "application/json",
                  "User-Agent": "Mozilla/5.0"})
+    # urlopen's timeout is per socket operation — a drip-feeding response
+    # resets it forever (observed 2026-10-01: a runsync hung 40 min past its
+    # 420s timeout). SIGALRM is the total-wall-clock backstop.
+    import signal
+    def _total_deadline(sig, frm):
+        raise TimeoutError("runsync exceeded total wall clock (480s)")
+    signal.signal(signal.SIGALRM, _total_deadline)
+    signal.alarm(480)
     try:
         d = json.load(urllib.request.urlopen(req, timeout=420))
     except Exception as e:
         log("worker call failed:", repr(e))
         return None
+    finally:
+        signal.alarm(0)
     if d.get("status") != "COMPLETED":
         log("job status:", d.get("status"))
         return None
