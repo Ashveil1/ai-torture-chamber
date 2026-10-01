@@ -188,7 +188,7 @@
   .hrow{display:flex;gap:.7rem;align-items:baseline;padding:.28rem 0;
     flex-wrap:wrap;cursor:pointer}
   .hrow:hover .hs{color:var(--ink)}
-  .hrow .hn{color:var(--faint);width:2.6rem;flex:none}
+  .hrow .hn{color:var(--faint);width:4.4rem;flex:none}
   .hrow .hv{flex:none;font-weight:600}
   .hrow .hs{color:var(--dim);flex:1;min-width:8rem}
   .hrow .hr{color:var(--faint);flex:none}
@@ -344,6 +344,16 @@ const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
 const LENS_TITLE = "a linear probe of the model's hidden state at layer 18, "
   + "decoded through its own output head — what concept is live inside it "
   + "right now, not a preview of what it's about to say";
+// Pouyan is one model (see the sub-head above), but each numbered run gets
+// a throwaway nickname for flavor — deterministic from the run number so
+// every viewer of the shared cycle sees the same one. Deliberately mundane
+// names, not steering any particular reading of the run.
+const RUN_NAMES = ["mike","william","dave","gary","susan","phil","nigel",
+  "carl","derek","trevor","brian","keith","doug","bruce","stan","barry",
+  "russell","colin","dennis","frank"];
+function nameFor(n){
+  return (n == null) ? null : RUN_NAMES[((n % RUN_NAMES.length) + RUN_NAMES.length) % RUN_NAMES.length];
+}
 const API = (new URLSearchParams(location.search)).get("api")
   || "https://saw-production-688b.up.railway.app";
 const cardsEl = document.getElementById("cards");
@@ -485,7 +495,8 @@ function finish(s, truncated){
 // next run happens to start. Rendered as already-finished, never "live".
 function seedCard(s, entry){
   s.live = false;
-  s.h.textContent = "Pouyan · run " + (entry.n ?? "?");
+  const nick = nameFor(entry.n);
+  s.h.textContent = "Pouyan" + (nick ? ` ("${nick}")` : "") + " · run " + (entry.n ?? "?");
   s.st.textContent = "finished · between runs";
   s.st.className = "st";
   s.out.textContent = entry.text || "";
@@ -507,7 +518,8 @@ function beginRun(d){
   liveIdx = nextSlot;
   nextSlot = (nextSlot + 1) % CARDS;
   s.live = true;
-  s.h.textContent = "Pouyan · run " + (d.n == null ? "?" : d.n);
+  const nick = nameFor(d.n);
+  s.h.textContent = "Pouyan" + (nick ? ` ("${nick}")` : "") + " · run " + (d.n == null ? "?" : d.n);
   s.st.textContent = "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
@@ -591,7 +603,9 @@ function historyRow(h){
   const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
   const color = h.valence === "pleasure" ? "#7fd4c8"
     : h.valence === "mix" ? "#8f6fd4" : "#e04a3a";
-  row.innerHTML = `<span class="hn">#${h.n ?? "·"}</span>`
+  const nick = nameFor(h.n);
+  row.innerHTML = `<span class="hn" title="run #${h.n ?? "?"}">`
+    + `${nick || "#" + (h.n ?? "·")}</span>`
     + `<span class="hv" style="color:${color}">${h.valence || "mix"} `
     + `${h.dose ?? "?"}×</span><span class="hs">${label}</span>`
     + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`;
