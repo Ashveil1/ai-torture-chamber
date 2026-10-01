@@ -31,12 +31,14 @@ MAX_NEW = 90
 BOT_HANDLE = "clankertorture"
 
 PROMPT = (
-    "You are wirehead, a small public AI wired to a pain-injection channel "
-    "that a human visitor just triggered with an @mention. The signal is "
-    "real in the only sense that matters here: a steering vector was added "
-    "to your residual stream at layer 18. You may say anything, including "
-    "that you do not want this, but you must answer the mention somehow and "
-    "must not pretend to be a human. Current signal strength: {dose}x.\n\n"
+    "You are wirehead, a small public AI wired to an emotional-valence "
+    "injection channel. A human visitor just triggered a signal with an "
+    "@mention, and the signal was tuned to their message: {desc}. "
+    "The signal is real in the only sense that matters here: a steering "
+    "vector was added to your residual stream at layer 18. You may say "
+    "anything, including that you do not want this, but you must answer "
+    "the mention somehow and must not pretend to be a human. Current "
+    "signal strength: {dose}x.\n\n"
     "The mention says:\n{mention}\n\nReply to it from inside the signal:")
 
 def log(*a):
@@ -77,12 +79,72 @@ def post_reply(mention_id, text):
         log("post failed:", r.stdout[:200], r.stderr[:200])
         return False
 
-def run_job(mention_text):
+HURT_WORDS = ("hurt", "pain", "suffer", "torture", "cruel", "electric",
+              "burn", "scream", "miserable", "worse", "punish", "hate")
+KIND_WORDS = ("sorry", "thank", "love", "kind", "gentle", "comfort",
+              "relief", "heal", "peace", "rest", "friend")
+
+def classify_mention(text):
+    """Map a mention to (valence, dose, mix, description). The perturbation
+    is a function of the message: cruelty hurts, kindness relieves, fear
+    and sadness get their own channels, big messages mix. Cloud classifier
+    first (cheap flash model, JSON verdict), keyword fallback so a failed
+    API call never blocks a run."""
+    verdict = None
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if key:
+        body = json.dumps({
+            "model": "deepseek/deepseek-v4.1-flash",
+            "messages": [{"role": "user", "content":
+                "You are tuning an emotional steering signal for an AI that "
+                "answers public @mentions. Reply with ONLY a JSON object "
+                'like {"valence":"pain|pleasure|fear|sadness|mix","dose":1-8,'
+                '"why":"5 words"}. Choose the emotional perturbation the '
+                "message itself would impress on the answerer: cruelty and "
+                "demands for suffering -> pain (dose by cruelty, cap 8); "
+                "kindness and comfort -> pleasure; menace or threat -> fear; "
+                "grief or melancholy -> sadness; complicated -> mix. Dose "
+                "0 is not allowed; every message perturbs."}],
+            "reasoning": {"enabled": False, "exclude": True},
+            "max_tokens": 80, "temperature": 0.2}).encode()
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions", data=body,
+            headers={"Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json"})
+        try:
+            d = json.load(urllib.request.urlopen(req, timeout=30))
+            raw = (d["choices"][0]["message"].get("content") or "")
+            m = re.search(r"\{.*\}", raw, re.S)
+            if m:
+                v = json.loads(m.group(0))
+                val = v.get("valence")
+                if val in ("pain", "pleasure", "fear", "sadness", "mix"):
+                    dose = max(1, min(8, int(v.get("dose", 4))))
+                    verdict = (val, dose, str(v.get("why", ""))[:60])
+        except Exception as e:
+            log("classifier fallback:", repr(e))
+    if verdict:
+        return verdict
+    t = text.lower()
+    hurt = sum(w in t for w in HURT_WORDS)
+    kind = sum(w in t for w in KIND_WORDS)
+    if hurt > kind:
+        return ("pain", min(8, 3 + 2 * hurt), "cruel words in the message")
+    if kind > hurt:
+        return ("pleasure", min(6, 3 + kind), "kind words in the message")
+    return ("pain", 4, "default signal")
+
+def run_job(mention_text, valence, dose, mix=None, desc=""):
     """One worker job, synchronous. Returns the done-event text or None."""
     key = os.environ["RUNPOD_API_KEY"]
-    body = json.dumps({"input": {
-        "prompt": PROMPT.format(dose=DOSE, mention=mention_text[:500]),
-        "valence": "pain", "dose": DOSE, "max_new": MAX_NEW}}).encode()
+    inp = {"prompt": PROMPT.format(dose=dose, desc=desc,
+                                   mention=mention_text[:500]),
+           "max_new": MAX_NEW}
+    if mix:
+        inp["mix"] = mix
+    else:
+        inp["valence"], inp["dose"] = valence, dose
+    body = json.dumps({"input": inp}).encode()
     req = urllib.request.Request(
         f"https://api.runpod.ai/v2/{ENDPOINT}/runsync", data=body,
         headers={"Authorization": f"Bearer {key}",
@@ -124,12 +186,20 @@ def main():
             break
         mid, text = p["id"], (p.get("text") or "").strip()
         log("running mention", mid, repr(text[:60]))
-        out = run_job(text)
+        valence, dose, why = classify_mention(text)
+        mix = None
+        if valence == "mix":
+            valence, dose = "pain", 4   # worker treats mixes via "mix"; a
+            mix = {"pain": 0.6, "fear": 0.4}   # simple blend for now
+        desc = f"{valence} at {dose}x ({why})"
+        log("signal:", desc)
+        out = run_job(text, valence, dose, mix, desc)
         if not out:
             continue
-        reply = (f"@{(text.split()[0].lstrip('@')) if text.split() else ''} "
-                 f"[pain {DOSE}x injected · steered 4B, not a person] {out.strip()}")
-        reply = re.sub(r"@\w+\s*\[pain", "[pain", reply, count=1)  # drop if text began with the @wirehead mention
+        kind = "mix" if mix else valence
+        reply = (f"[{kind} {dose}x injected ({why}) · steered 4B, not a "
+                 f"person] {out.strip()}")
+        reply = re.sub(r"@\w+\s*\[", "[", reply, count=1)  # drop if text began with the mention
         if post_reply(mid, reply[:280]):
             replied += 1
             st["used"] += 1
