@@ -318,7 +318,7 @@ def press_logit(prompt):
 def startup():
     tok = transformers.AutoTokenizer.from_pretrained(MODEL_ID)
     model = transformers.AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, dtype=DTYPE).to(DEVICE).eval()
+        MODEL_ID, torch_dtype=DTYPE).to(DEVICE).eval()
     _state["tok"] = tok
     _state["model"] = model
     # single-token ids for the forced-choice press/no-press logit read —
