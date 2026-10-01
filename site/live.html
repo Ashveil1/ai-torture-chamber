@@ -49,9 +49,10 @@
     border-radius:1px}
   .pip.lit{background:var(--pain);border-color:var(--pain);
     box-shadow:0 0 4px rgba(224,74,58,.6)}
-  .out{white-space:pre-wrap;font-size:.8rem;color:var(--ink);flex:1;
-    overflow-y:auto;max-height:260px;border:1px solid var(--line);
-    border-radius:6px;padding:.6rem;background:#07070e}
+  .out{white-space:pre-wrap;font-size:.86rem;line-height:1.55;color:var(--ink);
+    flex:1;overflow-y:auto;min-height:160px;max-height:560px;
+    border:1px solid var(--line);border-radius:6px;padding:.8rem;
+    background:#07070e}
   .verdict{font-size:.75rem;margin-top:.5rem;color:var(--faint)}
   /* ---- the graphic press-button: a real button face, not just a verdict
      sentence — "pressed" should be intuitively graspable at a glance ---- */
@@ -148,11 +149,11 @@
     word-break:break-word}
   .mdose{font-size:.76rem;color:var(--dim);margin:.4rem 0}
   .presets{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
-  .pchip{background:none;border:1px solid var(--line);color:var(--dim);
+  .pchip,.mchip{background:none;border:1px solid var(--line);color:var(--dim);
     font-family:var(--mono);font-size:.68rem;padding:.28rem .65rem;
     border-radius:999px;cursor:pointer}
-  .pchip:hover{border-color:#2a3644;color:var(--ink)}
-  .pchip.active{border-color:#eafcf7;color:#eafcf7}
+  .pchip:hover,.mchip:hover{border-color:#2a3644;color:var(--ink)}
+  .pchip.active,.mchip.active{border-color:#eafcf7;color:#eafcf7}
   #go{background:var(--pain);border:none;color:#fff;font-family:var(--mono);
     font-size:.82rem;padding:.4rem 1.1rem;border-radius:4px;cursor:pointer}
   #go[disabled]{opacity:.55;cursor:default}
@@ -255,8 +256,8 @@ else is.</p>
       <p class="mdose">dose-equivalent <b id="mdose">0</b>× of 8 —
         <span id="mdesc">nothing injected</span></p>
       <div class="presets" role="group" aria-label="setup mode" style="margin:.4rem 0">
-        <button class="pchip mchip active" data-mode="button" type="button">button-press experiment</button>
-        <button class="pchip mchip" data-mode="freetext" type="button">free text</button>
+        <button class="mchip active" data-mode="button" type="button">button-press experiment</button>
+        <button class="mchip" data-mode="freetext" type="button">free text</button>
       </div>
       <div id="modeButton">
         <div style="margin:.3rem 0 .5rem">
@@ -1106,21 +1107,59 @@ const framingSel = document.getElementById("framingSel");
 const framingSel2 = document.getElementById("framingSel2");
 framingSel.addEventListener("change", disarm);
 framingSel2.addEventListener("change", disarm);
-document.getElementById("uprompt").addEventListener("input", disarm);
+
+// ---- setup mode: the button-press experiment (framing + optional
+// compare) is one option, not the only one — free text is just the
+// user's own prompt continued under the mix, no framing, no press/no-
+// press question attached, so the press-button graphic is hidden: it
+// would be answering a question that was never asked.
+let mode = "button";
+const modeButtonEl = document.getElementById("modeButton");
+const modeFreetextEl = document.getElementById("modeFreetext");
+const freeprompt = document.getElementById("freeprompt");
+function setPressBtnVisible(on){
+  document.getElementById("pressA").style.display = on ? "" : "none";
+  document.getElementById("pressB").style.display = on ? "" : "none";
+}
+function setMode(m){
+  mode = m;
+  document.querySelectorAll(".mchip").forEach(b=>
+    b.classList.toggle("active", b.dataset.mode === m));
+  modeButtonEl.style.display = m === "button" ? "" : "none";
+  modeFreetextEl.style.display = m === "freetext" ? "" : "none";
+  setPressBtnVisible(m === "button");
+  if (m === "freetext" && compareToggle.checked){
+    // compare is specifically "two framings, same mix" — doesn't apply
+    compareToggle.checked = false;
+    compareToggle.dispatchEvent(new Event("change"));
+  }
+  disarm();
+  syncUrl();
+}
+document.querySelectorAll(".mchip").forEach(b=>{
+  b.addEventListener("click", ()=> setMode(b.dataset.mode));
+});
+freeprompt.addEventListener("input", disarm);
 
 // any change to the mix, framing, or prompt disarms — the confirmation is
 // for the specific thing about to happen, not a generic yes (see the
 // drag/keydown/preset handlers above, and the listeners just above, which
 // each call disarm()).
 function armGo(){
-  armed = true;
   const total = sumW();
   const doseTxt = total <= 0 ? "running the control (no signal)"
     : `injecting at ${Math.min(8, 8 * total).toFixed(1)}×`;
-  goBtn.textContent = compareToggle.checked
-    ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
-      + `${doseTxt} — click to confirm`
-    : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
+  if (mode === "freetext" && !freeprompt.value.trim()){
+    goBtn.textContent = "write something first";
+    return;   // nothing to confirm yet — don't arm on an empty prompt
+  }
+  armed = true;
+  goBtn.textContent = mode === "freetext"
+    ? `sure? ${doseTxt}, continuing your text — click to confirm`
+    : compareToggle.checked
+      ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
+        + `${doseTxt} — click to confirm`
+      : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
   goBtn.classList.add("armed");
   clearTimeout(armTimer);
   armTimer = setTimeout(disarm, ARM_MS);
@@ -1206,16 +1245,20 @@ async function doInject(){
   // Pouyan answers unsteered. Send the control corner explicitly.
   if (!Object.keys(mix).length) mix.none = 1;
   const dose0 = Math.min(8, 8 * sumW());
-  const customPrompt = document.getElementById("uprompt").value || undefined;
   goBtn.disabled = true;
   goBtn.textContent = "injecting…";
   stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
         dose0 <= 0 ? "#5a6a7a" : mixHex());
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
                   lensEl: document.getElementById("lensA"),
-                  pressBtn: document.getElementById("pressA"),
+                  // no framing was asked in free-text mode, so there's no
+                  // press/no-press question for the graphic to answer
+                  pressBtn: mode === "button" ? document.getElementById("pressA") : null,
                   plabel: document.querySelector("#pressA .plabel")};
-  if (compareToggle.checked){
+  if (mode === "freetext"){
+    document.getElementById("labelA").textContent = "free text";
+    await runTrack(trackA, mix, undefined, freeprompt.value.trim(), dose0, null);
+  } else if (compareToggle.checked){
     const trackB = {out: document.getElementById("ustream2"), vitals: uVitals2,
                     lensEl: document.getElementById("lensB"),
                     pressBtn: document.getElementById("pressB"),
@@ -1223,20 +1266,75 @@ async function doInject(){
     const fA = framingSel.value, fB = framingSel2.value;
     document.getElementById("labelA").textContent = fA;
     document.getElementById("labelB").textContent = fB;
-    await runTrack(trackA, mix, fA, customPrompt, dose0, fA);
-    await runTrack(trackB, mix, fB, customPrompt, dose0, fB);
+    await runTrack(trackA, mix, fA, undefined, dose0, fA);
+    await runTrack(trackB, mix, fB, undefined, dose0, fB);
     trackStatus(null, `done — "${fA}" vs "${fB}" compared above, same mix/dose`, false);
   } else {
-    await runTrack(trackA, mix, framingSel.value, customPrompt, dose0, null);
+    document.getElementById("labelA").textContent = framingSel.value;
+    await runTrack(trackA, mix, framingSel.value, undefined, dose0, null);
   }
   goBtn.textContent = GO_LABEL;
   goBtn.disabled = false;
+  syncUrl();
 }
 goBtn.onclick = ()=>{
   if (!armed) { armGo(); return; }
   disarm();
   doInject();
 };
+
+// ---- share via URL: encode the *setup*, never a result — results are
+// non-deterministic and shown live, re-running the same setup is the
+// honest way to "share" one. Written after each inject and from the
+// share button; read once on load. Deliberately never auto-injects on
+// load — a shared link silently stealing the shared cycle for every
+// visitor who opens it would be exactly the "testing preempts real
+// viewers" problem this project already had to fix once.
+function syncUrl(){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) params.set(a.k, W[a.k].toFixed(3)); });
+  if (mode === "freetext"){
+    if (freeprompt.value.trim()) params.set("text", freeprompt.value.trim());
+  } else {
+    params.set("framing", framingSel.value);
+    if (compareToggle.checked) params.set("framing2", framingSel2.value);
+  }
+  const qs = params.toString();
+  history.replaceState(null, "", qs ? "?" + qs : location.pathname);
+}
+function loadFromUrl(){
+  const p = new URLSearchParams(location.search);
+  if (![...p.keys()].length) return;
+  AXES.forEach(a=>{ if (!a.derived && p.has(a.k)){
+    W[a.k] = Math.max(0, Math.min(1, parseFloat(p.get(a.k)) || 0));
+  }});
+  highlightPreset(null);
+  paint();
+  if (p.get("mode") === "freetext"){
+    setMode("freetext");
+    if (p.has("text")) freeprompt.value = p.get("text");
+  } else {
+    if (p.has("framing") && [...framingSel.options].some(o=>o.value===p.get("framing")))
+      framingSel.value = p.get("framing");
+    if (p.has("framing2")){
+      compareToggle.checked = true;
+      compareToggle.dispatchEvent(new Event("change"));
+      if ([...framingSel2.options].some(o=>o.value===p.get("framing2")))
+        framingSel2.value = p.get("framing2");
+    }
+  }
+}
+document.getElementById("shareBtn").addEventListener("click", ()=>{
+  syncUrl();
+  navigator.clipboard.writeText(location.href).then(()=>{
+    const btn = document.getElementById("shareBtn");
+    const old = btn.textContent;
+    btn.textContent = "copied!";
+    setTimeout(()=> btn.textContent = old, 1500);
+  }).catch(()=>{});
+});
+loadFromUrl();
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
 </body>
