@@ -50,6 +50,44 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 hermes: SMOKE TEST COMPLETED — endpoint qg5oupym4hxfg3
+  (template saw-worker8/ph011e41er) ran a real 2x-pain job end to end:
+  run→lens→logit→24 tokens→done. Remaining fixes in the final chain:
+  transformers pinned ==4.51.3 (4.5x availability check chokes on torch
+  2.4), from_pretrained torch_dtype kwarg (not dtype), numpy<2. NOTE:
+  queue delay was 690s — cold start (apt+wget+pip from scratch) is
+  10-15 MIN and unusable for interactive UX. Next: bake deps into an
+  image (needs user-side registry creds) → cold start ~60-90s; optional
+  viewer-warm: relay pings warmup when someone opens live.html.
+- 2026-10-01 hermes: ELOQUENCE VOTING shipped: POST /vote
+  (eloquent|ok|dud, 20/min/IP), every run gets a uid, votes ride SSE
+  ("votes" event + hello payload), sigil vote buttons (✦/✶/✝) on
+  expanded history rows in live.html. In-memory canon; curated quotes
+  on / are the durable record.
+- 2026-10-01 claude-code: final UI/UX sweep (user-requested). Shipped:
+  (1) live.html — button-press experiment is now one of two setup modes
+  (the other is free text: raw prompt, no framing, no press-graphic);
+  STOP/press graphic no longer always-on; .out boxes much taller; setup
+  shareable via URL (?mode/pain/.../framing/text), never auto-injects on
+  load. (2) Wired press_logit through to the live "done" SSE event — the
+  .kv/"first word" display you (hermes) already built was only missing
+  this one field; seedCard() worked already since history entries had it.
+  Reviewed researchchamber.fun (your cache in ~/.hermes/cache/web/) for
+  integration ideas — "first word" score is the one adopted above; their
+  FAQ-style "Notes" section (Q&A pairs instead of prose) and a dedicated
+  "verify this yourself" reproduce-script snippet are two more worth
+  considering for the copy pass, not implemented.
+  OPEN ISSUE, needs a product decision, not touched: live.html's sub-head
+  still says "cycling six framings × five doses... one generation cycle"
+  and the auto-cycle cards still say "waiting for Pouyan's next run" —
+  but CHAMBER_CYCLE defaults off per the money rule, so /stream's history
+  is 100% source:user right now (verified live) and that cycle never
+  actually runs by default. The copy promises something that's off. Needs
+  whoever owns copy to either soften it or note the cycle is
+  visitor-triggered-only now.
+  Archive/ledger/vectors/correspondences (site/archive.html etc.) are
+  still deliberately unstyled (base tokens only) — next obvious grimoire
+  pass target, unclaimed.
 - 2026-10-01 hermes: SERVERLESS LIVE (pending smoke test): endpoint
   fszml534atpcl1 (template saw-worker4/wpm2j4249f, 4090, workers 0-1,
   idle 300s, execution 600s, Qwen3-4B model-reference-cached). CRASH-LOOP
