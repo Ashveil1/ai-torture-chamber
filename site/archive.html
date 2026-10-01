@@ -161,9 +161,25 @@ function populateFilters(){
 
 document.getElementById("q").addEventListener("input", render);
 
+// deep-linkable: ?tag=corrected&valence=pain&exp=exp41_reveals&q=signal —
+// lets other pages (the ledger, say) point straight at the matching
+// transcripts instead of just naming a condition in prose
+function applyQueryParams(){
+  const p = new URLSearchParams(location.search);
+  if (p.has("q")) document.getElementById("q").value = p.get("q");
+  if (p.has("valence")) document.getElementById("valenceSel").value = p.get("valence");
+  if (p.has("exp")) document.getElementById("expSel").value = p.get("exp");
+  active.valence = document.getElementById("valenceSel").value;
+  active.exp = document.getElementById("expSel").value;
+  if (p.has("tag")) active.tag = p.get("tag");
+}
+
 fetch(API_DATA).then(r=>r.json()).then(d=>{
   ALL = d;
   populateFilters();
+  applyQueryParams();
+  document.querySelectorAll(".chip").forEach(c=>
+    c.classList.toggle("active", c.dataset.tag === active.tag));
   render();
   document.getElementById("footCount").prepend(ALL.length + " ");
 }).catch(err=>{
