@@ -17,7 +17,8 @@ COPY jlens_l18_qwen3-4b.pt /app/live/jlens_l18_qwen3-4b.pt
 
 ENV CHAMBER_DEVICE=cuda \
     CHAMBER_DTYPE=float16 \
-    CHAMBER_LAYER=18 \
+    CHAMBER_MODEL=Qwen/Qwen3-14B \
+    CHAMBER_LAYER=20 \
     HF_HOME=/workspace/hf
 
 WORKDIR /app/live

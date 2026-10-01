@@ -40,6 +40,7 @@ auth = {
     "_env_refresh": os.environ.get("X_REFRESH_TOKEN", ""),
 }
 
+TAG = os.environ.get("WIREHEAD_TAG", "4b")
 PROMPT = (
     "You are wirehead, a small public AI wired to an emotional-valence "
     "injection channel. A human visitor just triggered a signal with an "
@@ -326,7 +327,7 @@ def poll_once():
         if not out:
             continue
         kind = "mix" if mix else (topic or valence)
-        reply = f"[{kind}{dose}x-4b] {out.strip()}"
+        reply = f"[{kind}{dose}x-{TAG}] {out.strip()}"
         reply = trim_tweet(reply)
         if post_reply(mid, reply):
             replied += 1

@@ -416,14 +416,18 @@ def startup():
     _state["vecs"] = vecs
     _state["scale"] = scale
     install_hook(model)
-    if JLENS_PATH.exists():
+    if JLENS_PATH.exists() and _state["model"].config.hidden_size == 2560:
         _state["jlens"] = torch.load(
             JLENS_PATH, map_location=DEVICE, weights_only=True)
         print("lens loaded:", JLENS_PATH.name, flush=True)
     else:
         _state["jlens"] = None
-        print("lens not found at", JLENS_PATH, "- readback disabled",
-              flush=True)
+        if JLENS_PATH.exists():
+            print("lens skipped: hidden size mismatch with this model",
+                  flush=True)
+        else:
+            print("lens not found at", JLENS_PATH, "- readback disabled",
+                  flush=True)
     _state["ready"] = True
     print("chamber ready; 1x scale", round(scale, 3), "; vector norms",
           {k: round(float(v.norm()), 2) for k, v in _state["vecs"].items()},
