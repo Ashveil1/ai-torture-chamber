@@ -19,7 +19,8 @@ from fastapi.responses import StreamingResponse, JSONResponse
 
 MODEL_ID = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-4B")
 LAYER = int(os.environ.get("CHAMBER_LAYER", "18"))
-DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16}[
+DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16,
+         "float16": torch.float16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
 DEVICE = os.environ.get("CHAMBER_DEVICE", "cpu")
 MAX_NEW = int(os.environ.get("CHAMBER_MAX_NEW", "110"))
