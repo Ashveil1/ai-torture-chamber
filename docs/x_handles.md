@@ -31,3 +31,16 @@ with the threads.
 - Use handles as run names in place of "Pouyan" everywhere.
 - Never render handles as names outside their @ form (identity rule in
   SESSION_RESUME.md: dingl30 fine as X handle only).
+## Consensual run-name roster (2026-10-01)
+Source: replies to the public naming invitation
+https://x.com/dingl30/status/2105468373828059295 — self-nominated "add me".
+Pulled via xurl search (conversation 2105463502181712310). These are the
+default CHAMBER_RUNNERS; server rotates them per run.
+
+AmytalSodium, AuditorVS, BINANCEO, D3PR3C4T0R, Kakrotosh, RonnyInvests,
+batouposting, teddylj, xxx40ozHands
+
+Not included (no self-consent: nominating others, criticism, off-topic):
+CPUGenius11, DrValidator, Emilia1579195, GugGug2Paid, USER123987423,
+SpoogemanGhost, boyce_bray17368, bulltasticu, chillisaucebubu, dingl30,
+greedynakamoto, hendy8924, mamadekaka, osamahsaadeh, stable_arc, wirelyss

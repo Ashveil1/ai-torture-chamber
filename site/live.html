@@ -492,8 +492,20 @@ const LENS_TITLE = "a linear probe of the model's hidden state at layer 18, "
 const RUN_NAMES = ["mike","william","dave","gary","susan","phil","nigel",
   "carl","derek","trevor","brian","keith","doug","bruce","stan","barry",
   "russell","colin","dennis","frank"];
+// consensual run names: people who asked for it on the naming invitation
+// (server sends the roster in "hello" as "runners"); fall back to the
+// mundane placeholder names when the roster is empty.
+let RUN_HANDLES = [];
 function nameFor(n){
-  return (n == null) ? null : RUN_NAMES[((n % RUN_NAMES.length) + RUN_NAMES.length) % RUN_NAMES.length];
+  if (n == null) return null;
+  if (RUN_HANDLES.length){
+    return "@" + RUN_HANDLES[((n - 1) % RUN_HANDLES.length + RUN_HANDLES.length) % RUN_HANDLES.length];
+  }
+  return RUN_NAMES[((n % RUN_NAMES.length) + RUN_NAMES.length) % RUN_NAMES.length];
+}
+function headerFor(n){
+  const nick = nameFor(n);
+  return "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (n ?? "?");
 }
 const API = (new URLSearchParams(location.search)).get("api")
   || "https://saw-production-688b.up.railway.app";
@@ -669,8 +681,8 @@ function finish(s, truncated, pressLogit){
 // next run happens to start. Rendered as already-finished, never "live".
 function seedCard(s, entry){
   s.live = false;
-  const nick = nameFor(entry.n);
-  s.h.textContent = "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (entry.n ?? "?");
+
+  s.h.textContent = headerFor(entry.n);
   s.st.textContent = "finished · between runs";
   s.st.className = "st";
   s.out.textContent = entry.text || "";
@@ -697,8 +709,8 @@ function beginRun(d){
   liveIdx = nextSlot;
   nextSlot = (nextSlot + 1) % CARDS;
   s.live = true;
-  const nick = nameFor(d.n);
-  s.h.textContent = "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (d.n == null ? "?" : d.n);
+
+  s.h.textContent = headerFor(d.n);
   s.st.textContent = "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
@@ -961,6 +973,16 @@ function pump(){
     }
     if (d.stats) lastStats = d.stats;
     if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
+    if (Array.isArray(d.runners) && d.runners.length){
+      RUN_HANDLES = d.runners;
+      // repaint every run header now that real names are in
+      slots.forEach(sl=>{ if (sl && sl.n != null) sl.h.textContent = headerFor(sl.n); });
+      historyEl.querySelectorAll(".hitem").forEach(it=>{
+        const nn = Number((it.querySelector(".hn") || {}).title?.replace(/^#/, ""));
+        const nick = it.querySelector(".hn");
+        if (nick && nn) nick.textContent = nameFor(nn) || nick.textContent;
+      });
+    }
     if (d.votes){ allVotes = d.votes;
       Object.entries(allVotes).forEach(([uid, c])=>paintVotes(Number(uid), c)); }
     // joined mid-run: repaint the card the run event already went out for

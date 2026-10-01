@@ -127,6 +127,21 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
 VALENCES = ("pain", "pleasure", "fear", "sadness")
 MIX_KEYS = VALENCES + ("none",)
 
+# run display names: the subject answers to a rotating name per run.
+# Default list = people who replied "me/add mine" to the public naming
+# invitation (https://x.com/dingl30/status/2105468373828059295) — consented,
+# self-nominated. Override with CHAMBER_RUNNERS="a,b,c".
+RUNNERS = [h.strip().lstrip("@") for h in os.environ.get(
+    "CHAMBER_RUNNERS",
+    "AmytalSodium,AuditorVS,BINANCEO,D3PR3C4T0R,Kakrotosh,"
+    "RonnyInvests,batouposting,teddylj,xxx40ozHands").split(",") if h.strip()]
+
+def _runner(n):
+    """Display name for run n (1-based), cycling through RUNNERS."""
+    if not RUNNERS or n is None:
+        return None
+    return "@" + RUNNERS[((n - 1) % len(RUNNERS) + len(RUNNERS)) % len(RUNNERS)]
+
 # "vec" starts present-and-None: the forward hook reads it on every token.
 _state = {"model": None, "tok": None, "vecs": None, "hook": None,
           "ready": False, "vec": None, "scale": 1.0}
@@ -539,7 +554,8 @@ async def steer(req: Request):
             info = set_mix_vec(arg)
             meta = {"valence": "mix", "mix": info["mix"],
                     "weights": info["weights"], "dose": info["dose"],
-                    "prompt": prompt, "scenario": framing_key}
+                    "prompt": prompt, "scenario": framing_key,
+                    "runner": _runner(None)}
         elif mode == "topic":
             topic_str, topic_dose = arg
             try:
@@ -555,7 +571,8 @@ async def steer(req: Request):
         else:
             set_vec(arg)
             meta = {"valence": arg[0], "dose": arg[1],
-                    "prompt": prompt, "scenario": framing_key}
+                    "prompt": prompt, "scenario": framing_key,
+                    "runner": _runner(None)}
         yield _sse("run", meta)
         try:
             lens_toks = await loop.run_in_executor(
@@ -680,7 +697,8 @@ async def stream():
         # start — that silence is what Railway turns into a 502
         # "current" lets a viewer who joins mid-run paint the card it missed
         # the run event for — otherwise tokens arrive with no prompt attached
-        yield _sse("hello", {"subject": "the subject", "busy": _CYCLE_BUSY,
+        yield _sse("hello", {"subject": "the subject", "runners": RUNNERS,
+                             "busy": _CYCLE_BUSY,
                              "valences": list(VALENCES),
                              "current": _CURRENT,
                              "viewers": len(_SUBSCRIBERS),
@@ -811,7 +829,8 @@ async def _shared_cycle():
                         continue
                     run_n += 1
                     _CYCLE_BUSY = True
-                    meta = {"n": run_n, "scenario": scenario,
+                    meta = {"n": run_n, "runner": _runner(run_n),
+                            "scenario": scenario,
                             "valence": "pain", "dose": dose, "prompt": prompt}
                     _CURRENT = dict(meta, text="")
                     _broadcast("run", meta)
