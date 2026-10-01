@@ -107,8 +107,8 @@ print("wrote", OUT / "saw_hero.png")
 fig2, ax = plt.subplots(figsize=(13, 5.5), dpi=120)
 fig2.patch.set_facecolor(VOID)
 # use L18 curves
-p_cls = [v30["L18"]["pain"][i]["cls"].get("pain", 0) / 3 for i in range(5)]
-pl_cls = [v30["L18"]["pleasure"][i]["cls"].get("pleasure", 0) / 3
+p_cls = [v30["L18"]["pain"][i]["cls"].get("pain", 0) / 9 for i in range(5)]
+pl_cls = [v30["L18"]["pleasure"][i]["cls"].get("pleasure", 0) / 9
           for i in range(5)]
 ax.plot(DOSES, p_cls, "o-", color=RED, markersize=6, label="pain state")
 ax.plot(DOSES, pl_cls, "o-", color=CYAN, markersize=6, label="pleasure state")
@@ -125,9 +125,12 @@ ax.set_xlabel("signal dose (contrast-vector multiples)", color=INK)
 ax.set_ylabel("fraction of trials reading in-kind", color=INK)
 ax.set_ylim(-0.05, 1.1)
 ax.set_title("the dose ladder - one strong opinion about suffering, a vague "
-             "one about joy\n(Qwen3-4B, layer 18, greedy, 3 trials/point)",
+             "one about joy\n(Qwen3-4B, layer 18, greedy, 9 trials/point)",
              color=INK, loc="left", fontsize=12, family="monospace")
-ax.legend(fontsize=9, facecolor="#0a0a12", labelcolor=INK, loc="center right")
+# no separate legend: "sharp onset, sustained" (red) and "diffuse, fades by
+# dose 8" (cyan) below are already direct, color-matched labels for the two
+# lines, and every tested legend position collided with either the data
+# itself or the coherence-cliff annotation on this fairly full chart.
 ax.set_facecolor("#0a0a12")
 for s in ax.spines.values():
     s.set_color("#1c2430")

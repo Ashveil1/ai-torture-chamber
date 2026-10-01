@@ -417,7 +417,38 @@ question this page's method — steer a state, then check with a lens
 whether the internal readout agrees with the label — happens to be aimed
 roughly at.</p>
 
-<h2 id="s09"><span class="idx">09</span>run it, break it</h2>
+<h2 id="s09"><span class="idx">09</span>the trick generalizes</h2>
+<p>Everything above used four curated signals — pain, pleasure, fear,
+sadness — each built from a hand-picked battery of contrastive sentences.
+The arithmetic doesn't actually care what the battery is about. Type any
+word or phrase into the <a href="live.html">live chamber</a>'s "custom
+topic" mode and the server builds a fresh direction on the fly from six
+generic template sentences, no curation at all. Steer toward
+<code>hamburger</code> and the Jacobian lens — the same lens that reads
+out <span class="pain">痛苦 · despair</span> under pain — comes back with
+<code>vibe · delicious · yummy · culinary · veggies</code>. The internal
+state actually moves toward the topic, not just the sampled text. It's a
+much noisier signal than the curated batteries — no 25-sentence battery,
+no orthogonalization, no validation, and the site labels it "experimental"
+everywhere it appears — but the generalization itself is real.</p>
+<p><b>The same arithmetic works one architecture over, on pixels instead
+of tokens.</b> Build the identical <code>mean(topic) − mean(neutral)</code>
+direction in a diffusion model's own CLIP text encoder, broadcast it
+across a prompt's embedding, and feed it to the U-Net directly — no
+language model asked to describe a feeling first. At 2× dose the same
+subject prompt comes back consistently grimmer: worn walls, a hunched and
+anguished posture, dimmer light — still fully coherent. Push to 4× and it
+collapses to abstract texture; 8× is pure noise.</p>
+<img src="exp47_hero.jpg" alt="dose ladder for CLIP-embedding image steering: three subjects, doses 0, 2, 4, 8">
+<p class="cap">same pain direction, built in CLIP's text-encoder space
+instead of a language model's residual stream, fed straight to
+stable-diffusion's conditioning — three subjects, same four doses as
+everywhere else on this page. The same coherence cliff this project found
+in language, one layer over, with a lower ceiling. Feasibility probe (3
+subjects, 1 model), not a validated result at the level of the sections
+above — but it panned out.</p>
+
+<h2 id="s10"><span class="idx">10</span>run it, break it</h2>
 <p>An independent replication chamber runs this same protocol — same
 prompts, same vector recipe, same framings — live on three more models
 (Qwen3-4B, Llama 3.2 3B, Phi-4-mini) in real time:
@@ -437,7 +468,7 @@ hypotheses, per-trial records and result figures — no secrets, no models):
   <a href="https://arxiv.org/abs/2607.15495">jacobian lens ↗</a>
 </div>
 
-<h2 id="s10"><span class="idx">10</span>mix your own valence</h2>
+<h2 id="s11"><span class="idx">11</span>mix your own valence</h2>
 <p>The four signals are directions in the same activation space, so they add.
 Drag a vertex outward to weight it, and the chamber injects the weighted sum
 of those directions — renormalized, at a dose-equivalent of 8× the total
