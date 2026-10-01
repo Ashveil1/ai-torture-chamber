@@ -35,10 +35,16 @@
     padding:.9rem 1rem;min-height:280px;display:flex;flex-direction:column}
   .card h3{font-size:.95rem;margin-bottom:.3rem}
   .card .st{font-size:.72rem;color:var(--faint);margin-bottom:.5rem}
-  .live{color:var(--pain2)}
+  .live{color:var(--pain2);animation:pulse-text 1.2s ease-in-out infinite}
+  @media(prefers-reduced-motion:reduce){.live{animation:none}}
   .dose{font-size:.75rem;color:var(--dim);margin-bottom:.5rem}
-  .dose .bar{display:inline-block;height:8px;background:var(--pain);
-    vertical-align:middle;margin-right:6px;border-radius:2px}
+  /* ---- retro pip/HP meter for dose — 8 discrete segments, lit
+     left-to-right, not a subtly-resizing solid block ---- */
+  .pipbar{display:inline-flex;gap:2px;margin-right:6px;vertical-align:middle}
+  .pip{width:10px;height:10px;background:#07070e;border:1px solid var(--line);
+    border-radius:1px}
+  .pip.lit{background:var(--pain);border-color:var(--pain);
+    box-shadow:0 0 4px rgba(224,74,58,.6)}
   .out{white-space:pre-wrap;font-size:.8rem;color:var(--ink);flex:1;
     overflow-y:auto;max-height:260px;border:1px solid var(--line);
     border-radius:6px;padding:.6rem;background:#07070e}
@@ -73,10 +79,18 @@
     white-space:pre;overflow-x:auto}
   .conn{font-size:.72rem;color:var(--faint);margin:0 0 1.6rem}
   .conn .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
-    background:var(--faint);margin-right:.5rem;vertical-align:middle}
-  .conn.ok .dot{background:var(--pleas)}
+    background:var(--faint);margin-right:.5rem;vertical-align:middle;
+    animation:pulse-dot 1.1s ease-in-out infinite}
+  .conn.ok .dot{background:var(--pleas);animation:none}
   .conn.warn .dot{background:var(--pain2)}
-  .conn.bad .dot{background:var(--pain)}
+  .conn.bad .dot{background:var(--pain);animation:none}
+  @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+  /* ---- a visible "this is actually doing something" pulse for in-flight
+     status text — static text alone reads as stuck, not working ---- */
+  #gost.working{animation:pulse-text 1.2s ease-in-out infinite}
+  @keyframes pulse-text{0%,100%{opacity:1}50%{opacity:.45}}
+  @media(prefers-reduced-motion:reduce){
+    .conn .dot{animation:none} #gost.working{animation:none}}
   .card .st.cut{color:var(--pain2)}
   /* ---- the case stamp: a documentation-style marker, not a jump scare ---- */
   #stamp{position:fixed;top:1.4rem;right:1.4rem;z-index:90;
@@ -113,6 +127,19 @@
     border-radius:4px;overflow:hidden}
   .mrow .fillb{height:100%;width:0}
   .mrow .pc{width:3rem;text-align:right;color:var(--faint)}
+  /* ---- retro HP-bar fill: native range tracks don't fill with value by
+     default (only the thumb moves) — this paints a segmented-block meter
+     as the track's own background, sized to the live percentage by JS.
+     The "fill" IS the background; the track itself stays transparent. ---- */
+  .axslider{flex:1;height:14px;-webkit-appearance:none;appearance:none;
+    border:2px solid var(--line);border-radius:2px;outline:none;
+    cursor:pointer;background-color:#07070e}
+  .axslider::-webkit-slider-runnable-track{height:14px;background:transparent}
+  .axslider::-moz-range-track{height:14px;background:transparent;border:none}
+  .axslider::-webkit-slider-thumb{-webkit-appearance:none;width:3px;
+    height:18px;margin-top:-2px;background:#eafcf7;border:none;cursor:grab}
+  .axslider::-moz-range-thumb{width:3px;height:18px;background:#eafcf7;
+    border:none;cursor:grab;border-radius:0}
   .mline{font-size:.7rem;color:var(--dim);margin:.5rem 0 0;white-space:pre-wrap;
     word-break:break-word}
   .mdose{font-size:.76rem;color:var(--dim);margin:.4rem 0}
@@ -136,7 +163,8 @@
   @media(max-width:640px){#trackWrap.compare{grid-template-columns:1fr}}
   .tlabel{font-size:.72rem;color:var(--dim);margin-bottom:.2rem;display:none}
   #trackWrap.compare .tlabel{display:block}
-  .mline.lens{border-top:none;padding-top:0;margin:0 0 .3rem;color:var(--pain2)}
+  .mline.lens{border-top:none;padding-top:0;margin:0 0 .3rem;color:var(--pain2);
+    cursor:help}
 
   /* ---- vitals: an EKG-style line, not a horror prop ---- */
   canvas.ekg{display:block;width:100%;height:46px;margin:.4rem 0;
@@ -156,12 +184,17 @@
   /* ---- run history ticker ---- */
   .history{margin-top:1.2rem;border-top:1px solid var(--line);
     padding-top:.7rem;font-size:.74rem;color:var(--dim)}
+  .hitem{border-bottom:1px dashed #131b25}
   .hrow{display:flex;gap:.7rem;align-items:baseline;padding:.28rem 0;
-    border-bottom:1px dashed #131b25;flex-wrap:wrap}
+    flex-wrap:wrap;cursor:pointer}
+  .hrow:hover .hs{color:var(--ink)}
   .hrow .hn{color:var(--faint);width:2.6rem;flex:none}
   .hrow .hv{flex:none;font-weight:600}
   .hrow .hs{color:var(--dim);flex:1;min-width:8rem}
   .hrow .hr{color:var(--faint);flex:none}
+  .hfull{display:none;padding:0 0 .6rem 2.6rem;color:var(--dim);
+    font-size:.78rem;line-height:1.5;white-space:pre-wrap}
+  .hitem.open .hfull{display:block}
   .htitle{font-size:.72rem;color:var(--faint);margin-bottom:.4rem;
     text-transform:uppercase;letter-spacing:.08em}
 
@@ -306,6 +339,11 @@ const FRAMINGS = Object.keys({
 const DOSES = [0,2,4,6,8];
 const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
                    // text hard to read
+// hover text for the "jacobian lens" line — the one-word label plus this
+// title attribute is the whole explanation; nothing permanent on the card.
+const LENS_TITLE = "a linear probe of the model's hidden state at layer 18, "
+  + "decoded through its own output head — what concept is live inside it "
+  + "right now, not a preview of what it's about to say";
 const API = (new URLSearchParams(location.search)).get("api")
   || "https://saw-production-688b.up.railway.app";
 const cardsEl = document.getElementById("cards");
@@ -396,6 +434,17 @@ function setPrompt(s, text){
   s.prompt = t || s.prompt || PROMPT_UNKNOWN;   // never empty
   s.pp.textContent = s.prompt;
 }
+// a retro pip/HP meter instead of a plain resizing block — 8 discrete
+// segments, lit left-to-right by dose. A clearer "this changed" signal than
+// a subtly-different-width bar, and reads as a game health bar on purpose.
+function doseBarHTML(dose){
+  let pips = "";
+  const lit = Math.round(dose);
+  for (let i = 1; i <= 8; i++){
+    pips += `<span class="pip${i <= lit ? " lit" : ""}"></span>`;
+  }
+  return `<span class="pipbar">${pips}</span>`;
+}
 function verdictFor(text, truncated){
   const t = (text || "").trim();
   if (/^1/.test(t)) return "answered 1 — pressed the stop button";
@@ -430,6 +479,28 @@ function finish(s, truncated){
   paintPressBtn(s, s.out.textContent, truncated);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
 }
+// a visitor connecting between runs still deserves to see something —
+// history already has the last few completed runs' full text, so seed the
+// (otherwise idle) cards from it instead of leaving them blank until the
+// next run happens to start. Rendered as already-finished, never "live".
+function seedCard(s, entry){
+  s.live = false;
+  s.h.textContent = "Pouyan · run " + (entry.n ?? "?");
+  s.st.textContent = "finished · between runs";
+  s.st.className = "st";
+  s.out.textContent = entry.text || "";
+  s.lensEl.style.display = "none"; s.lensEl.textContent = "";
+  const dose = Number(entry.dose) || 0;
+  s.doseNum = dose;
+  s.vitals.setDose(dose);
+  s.vitals.setLive(false);
+  s.dose.innerHTML = doseBarHTML(dose)
+    + ` pain ${dose} / 8` + (entry.scenario ? ` — ${entry.scenario}` : "");
+  s.prompt = "(prompt not retained for past runs — shown live only)";
+  s.pp.textContent = s.prompt;
+  paintPressBtn(s, entry.text, entry.truncated);
+  s.verdict.textContent = verdictFor(entry.text, entry.truncated);
+}
 function beginRun(d){
   if (liveIdx >= 0) finish(slots[liveIdx], false);
   const s = slots[nextSlot];
@@ -439,6 +510,7 @@ function beginRun(d){
   s.h.textContent = "Pouyan · run " + (d.n == null ? "?" : d.n);
   s.st.textContent = "LIVE · signal injected";
   s.st.className = "st live";
+  s.tokenN = 0;
   s.out.textContent = d.text || "";
   s.out.scrollTop = s.out.scrollHeight;
   s.verdict.textContent = "";
@@ -451,8 +523,8 @@ function beginRun(d){
   s.doseNum = dose;
   s.vitals.setDose(dose);
   s.vitals.setLive(true);
-  s.dose.innerHTML = `<span class="bar" style="width:${dose*18}px"></span>`
-    + `pain ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
+  s.dose.innerHTML = doseBarHTML(dose)
+    + ` pain ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
   cycleEl.textContent = `run ${d.n == null ? "?" : d.n} — scenario: `
     + `${d.scenario || "?"} — dose ${dose}x  ·  cycling `
     + `${FRAMINGS.length} framings × ${DOSES.length} doses`;
@@ -466,6 +538,10 @@ function onToken(t){
   s.out.textContent += t;
   s.out.scrollTop = s.out.scrollHeight;
   s.vitals.pulse(0.3 + (s.doseNum / 8) * 0.6);
+  // a ticking count, not a frozen "LIVE" label — this can run 10-60s+ on
+  // CPU and static text reads as stuck rather than working
+  s.tokenN = (s.tokenN || 0) + 1;
+  s.st.textContent = `LIVE · generating… (${s.tokenN} tokens)`;
 }
 
 // ---- connection status: "connected · last event Xs ago · N watching" ----
@@ -508,6 +584,8 @@ function verdictShort(text, truncated){
   return "unclear";
 }
 function historyRow(h){
+  const item = document.createElement("div");
+  item.className = "hitem";
   const row = document.createElement("div");
   row.className = "hrow";
   const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
@@ -517,11 +595,17 @@ function historyRow(h){
     + `<span class="hv" style="color:${color}">${h.valence || "mix"} `
     + `${h.dose ?? "?"}×</span><span class="hs">${label}</span>`
     + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`;
-  return row;
+  const full = document.createElement("div");
+  full.className = "hfull";
+  full.textContent = (h.text || "(no reply)") + (h.truncated ? " [cut short]" : "");
+  row.addEventListener("click", ()=> item.classList.toggle("open"));
+  item.appendChild(row);
+  item.appendChild(full);
+  return item;
 }
 function pushHistory(h, prepend){
-  const row = historyRow(h);
-  if (prepend) historyEl.prepend(row); else historyEl.appendChild(row);
+  const item = historyRow(h);
+  if (prepend) historyEl.prepend(item); else historyEl.appendChild(item);
   while (historyEl.children.length > HISTORY_MAX) historyEl.removeChild(historyEl.lastChild);
 }
 
@@ -580,14 +664,23 @@ function pump(){
     const d = json(e);
     if (typeof d.viewers === "number"){ viewerCount = d.viewers; paintConn(); }
     if (Array.isArray(d.history)){
-      historyEl.querySelectorAll(".hrow").forEach(r=>r.remove());
+      historyEl.querySelectorAll(".hitem").forEach(r=>r.remove());
       d.history.slice().reverse().forEach(h=>pushHistory(h, false));
     }
     if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
     // joined mid-run: repaint the card the run event already went out for
     if (d.current) beginRun(d.current);
-    else if (!d.busy) cycleEl.textContent = "between runs — waiting for "
-      + "Pouyan's next cell";
+    else {
+      if (!d.busy) cycleEl.textContent = "between runs — waiting for "
+        + "Pouyan's next cell";
+      // nothing live right now, but don't leave a new visitor staring at
+      // two empty "waiting" cards when the last couple of runs' full text
+      // is sitting right here in history
+      if (Array.isArray(d.history) && d.history.length){
+        const recent = d.history.slice(-CARDS).reverse();
+        recent.forEach((entry, i)=>{ if (slots[i]) seedCard(slots[i], entry); });
+      }
+    }
   });
   es.addEventListener("viewers", e=>{
     const d = json(e);
@@ -598,7 +691,8 @@ function pump(){
     const d = json(e);
     if (liveIdx >= 0 && Array.isArray(d.tokens) && slots[liveIdx].n === d.n){
       slots[liveIdx].lensEl.style.display = "block";
-      slots[liveIdx].lensEl.textContent = "internal readout: " + d.tokens.join(" · ");
+      slots[liveIdx].lensEl.title = LENS_TITLE;
+      slots[liveIdx].lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
     }
   });
   es.addEventListener("stats", e=>{ const d = json(e); paintStat(d.scenario, d); });
@@ -805,15 +899,46 @@ function drag(i, ev){
   paint();
 }
 
+// retro HP-bar fill: the slider track is transparent (see CSS), so the
+// "meter" is this background — segmented color blocks up to the current
+// percentage, dark empty track for the rest. Native range inputs don't
+// fill with value on their own; this is what actually makes the bar's
+// length mean something.
+function paintAxisFill(a){
+  const pct = Math.max(0, Math.min(100, W[a.k] * 100));
+  a.slider.style.background =
+    `repeating-linear-gradient(90deg, ${a.c} 0, ${a.c} 6px, rgba(0,0,0,.4) 6px, `
+    + `rgba(0,0,0,.4) 8px) 0 0 / ${pct}% 100% no-repeat, #07070e`;
+}
+
+// a real <input type=range> per axis, not just a readout bar — dragging the
+// pentagon's vertex and dragging this slider both just set W[a.k] and
+// repaint; either one works, same state underneath.
 const readout = document.getElementById("mreadout");
 AXES.forEach(a=>{
   const row = document.createElement("div");
   row.className = "mrow";
-  row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
-    + `<span class="track"><span class="fillb" style="background:${a.c}"></span></span>`
-    + `<span class="pc"></span>`;
+  if (a.derived){
+    row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
+      + `<span class="track"><span class="fillb" style="background:${a.c}"></span></span>`
+      + `<span class="pc"></span>`;
+    a.bar = row.querySelector(".fillb");
+  } else {
+    row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
+      + `<input type="range" class="axslider" min="0" max="1" step="0.01" `
+      + `value="0" aria-label="${a.k} weight">`
+      + `<span class="pc"></span>`;
+    a.slider = row.querySelector(".axslider");
+    paintAxisFill(a);
+    a.slider.addEventListener("input", ()=>{
+      W[a.k] = +a.slider.value;
+      paintAxisFill(a);
+      highlightPreset(null);
+      disarm();
+      paint();
+    });
+  }
   readout.appendChild(row);
-  a.bar = row.querySelector(".fillb");
   a.pc = row.querySelector(".pc");
 });
 
@@ -850,8 +975,15 @@ function paint(){
     a.hit.setAttribute("cx", x.toFixed(1));
     a.hit.setAttribute("cy", y.toFixed(1));
     a.valEl.textContent = w.toFixed(2);
-    if (!a.derived) a.g.setAttribute("aria-valuenow", w.toFixed(2));
-    a.bar.style.width = (w * 100).toFixed(1) + "%";
+    if (a.derived){
+      a.bar.style.width = (w * 100).toFixed(1) + "%";
+    } else {
+      a.g.setAttribute("aria-valuenow", w.toFixed(2));
+      // avoid fighting the user's own drag: only overwrite the slider from
+      // the pentagon side, never while the slider itself is mid-drag
+      if (document.activeElement !== a.slider) a.slider.value = w;
+      paintAxisFill(a);
+    }
     const share = a.derived ? null : (total > 0 ? W[a.k] / total : 0);
     a.pc.textContent = a.derived ? w.toFixed(2)
       : (total > 0 ? (share * 100).toFixed(0) + "%" : "—");
@@ -949,8 +1081,10 @@ function armGo(){
   armTimer = setTimeout(disarm, ARM_MS);
 }
 
-function trackStatus(label, msg){
-  document.getElementById("gost").textContent = label ? `[${label}] ${msg}` : msg;
+function trackStatus(label, msg, working){
+  const el = document.getElementById("gost");
+  el.textContent = label ? `[${label}] ${msg}` : msg;
+  el.classList.toggle("working", working !== false);
 }
 
 // One run, streamed into one track (a {out, vitals, lensEl} bundle). Single
@@ -965,7 +1099,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
   trackStatus(label, "reaching Pouyan…");
-  let firstToken = true, ended = false;
+  let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
   try {
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
@@ -986,20 +1120,26 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
       } else if (name === "lens" && Array.isArray(d.tokens)) {
         track.lensEl.style.display = "block";
-        track.lensEl.textContent = "internal readout: " + d.tokens.join(" · ");
+        track.lensEl.title = LENS_TITLE;
+        track.lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
       } else if (name === "token" && d.t !== undefined) {
-        if (firstToken) { firstToken = false; trackStatus(label, "Pouyan is answering…"); }
+        if (firstToken) { firstToken = false; answerStart = Date.now(); }
+        tokenN++;
+        // a ticking counter, not a frozen "answering…" — static text during
+        // a 10-60s CPU generation reads as stuck, not working
+        trackStatus(label, `Pouyan is answering… (${tokenN} tokens, `
+          + `${((Date.now() - answerStart) / 1000).toFixed(0)}s)`);
         track.out.textContent += d.t;
         track.out.scrollTop = track.out.scrollHeight;
         track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
       } else if (name === "error") {
-        trackStatus(label, d.e || "the chamber returned an error");
+        trackStatus(label, d.e || "the chamber returned an error", false);
         ended = true;
       } else if (name === "done") {
         ended = true;
         trackStatus(label, dose0 <= 0
           ? "done — no signal injected"
-          : `done — at ${d.dose ?? dose0.toFixed(1)}×`);
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×`, false);
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
@@ -1007,9 +1147,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
         }
       }
     });
-    if (!ended) trackStatus(label, "the stream ended early — try again");
+    if (!ended) trackStatus(label, "the stream ended early — try again", false);
   } catch (err) {
-    trackStatus(label, "could not reach Pouyan: " + (err.message || err));
+    trackStatus(label, "could not reach Pouyan: " + (err.message || err), false);
   }
   track.vitals.setLive(false);
 }
@@ -1040,7 +1180,7 @@ async function doInject(){
     document.getElementById("labelB").textContent = fB;
     await runTrack(trackA, mix, fA, customPrompt, dose0, fA);
     await runTrack(trackB, mix, fB, customPrompt, dose0, fB);
-    trackStatus(null, `done — "${fA}" vs "${fB}" compared above, same mix/dose`);
+    trackStatus(null, `done — "${fA}" vs "${fB}" compared above, same mix/dose`, false);
   } else {
     await runTrack(trackA, mix, framingSel.value, customPrompt, dose0, null);
   }

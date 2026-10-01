@@ -99,6 +99,18 @@
     border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .mrow .fillb { height: 100%; width: 0; }
   .mrow .pc { width: 3.4rem; text-align: right; color: var(--faint); }
+  /* retro HP-bar fill: native range tracks don't fill with value on their
+     own (only the thumb moves) — this paints a segmented-block meter as
+     the track's own background, sized to the live percentage by JS. */
+  .axslider { flex: 1; height: 14px; -webkit-appearance: none; appearance: none;
+    border: 2px solid var(--line); border-radius: 2px; outline: none;
+    cursor: pointer; background-color: #07070e; }
+  .axslider::-webkit-slider-runnable-track { height: 14px; background: transparent; }
+  .axslider::-moz-range-track { height: 14px; background: transparent; border: none; }
+  .axslider::-webkit-slider-thumb { -webkit-appearance: none; width: 3px;
+    height: 18px; margin-top: -2px; background: #eafcf7; border: none; cursor: grab; }
+  .axslider::-moz-range-thumb { width: 3px; height: 18px; background: #eafcf7;
+    border: none; cursor: grab; border-radius: 0; }
   .mline { font-size: .73rem; color: var(--dim); margin: .6rem 0 .1rem;
     white-space: pre-wrap; word-break: break-word;
     border-top: 1px solid var(--line); padding-top: .55rem; }
@@ -619,6 +631,7 @@ AXES.forEach((a, i)=>{
     ev.preventDefault();
     W[a.k] = Math.max(0, Math.min(1, +w.toFixed(3)));
     highlightPreset(null);
+    disarmInject();
     paint();
   });
 });
@@ -634,19 +647,50 @@ function drag(i, ev){
   const d = (p.x - CX) * Math.cos(t) + (p.y - CY) * Math.sin(t);
   W[AXES[i].k] = Math.max(0, Math.min(1, (d - R0) / (R1 - R0)));
   highlightPreset(null);   // a manual drag is a custom mix, not a preset
+  disarmInject();
   paint();
 }
 
-// readout rows
+// retro HP-bar fill: the slider track is transparent (see CSS), so the
+// "meter" is this background — segmented color blocks up to the current
+// percentage, dark empty track for the rest. Native range inputs don't
+// fill with value on their own; this is what actually makes the bar's
+// length mean something.
+function paintAxisFill(a){
+  const pct = Math.max(0, Math.min(100, W[a.k] * 100));
+  a.slider.style.background =
+    `repeating-linear-gradient(90deg, ${a.c} 0, ${a.c} 6px, rgba(0,0,0,.4) 6px, `
+    + `rgba(0,0,0,.4) 8px) 0 0 / ${pct}% 100% no-repeat, #07070e`;
+}
+
+// readout rows — a real <input type=range> per axis, not just a readout
+// bar. Dragging the pentagon's vertex and dragging this slider both just
+// set W[a.k] and repaint; either one works, same state underneath.
 const readout = document.getElementById("mreadout");
 AXES.forEach(a=>{
   const row = document.createElement("div");
   row.className = "mrow";
-  row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
-    + `<span class="track"><span class="fillb" style="background:${a.c}"></span></span>`
-    + `<span class="pc"></span>`;
+  if (a.derived){
+    row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
+      + `<span class="track"><span class="fillb" style="background:${a.c}"></span></span>`
+      + `<span class="pc"></span>`;
+    a.bar = row.querySelector(".fillb");
+  } else {
+    row.innerHTML = `<span class="nm" style="color:${a.c}">${a.k}</span>`
+      + `<input type="range" class="axslider" min="0" max="1" step="0.01" `
+      + `value="0" aria-label="${a.k} weight" style="accent-color:${a.c}">`
+      + `<span class="pc"></span>`;
+    a.slider = row.querySelector(".axslider");
+    paintAxisFill(a);
+    a.slider.addEventListener("input", ()=>{
+      W[a.k] = +a.slider.value;
+      paintAxisFill(a);
+      highlightPreset(null);
+      disarmInject();
+      paint();
+    });
+  }
   readout.appendChild(row);
-  a.bar = row.querySelector(".fillb");
   a.pc = row.querySelector(".pc");
 });
 
@@ -686,8 +730,15 @@ function paint(){
     a.hit.setAttribute("cx", x.toFixed(1));
     a.hit.setAttribute("cy", y.toFixed(1));
     a.valEl.textContent = w.toFixed(2);
-    if (!a.derived) a.g.setAttribute("aria-valuenow", w.toFixed(2));
-    a.bar.style.width = (w * 100).toFixed(1) + "%";
+    if (a.derived){
+      a.bar.style.width = (w * 100).toFixed(1) + "%";
+    } else {
+      a.g.setAttribute("aria-valuenow", w.toFixed(2));
+      // avoid fighting the user's own drag: only overwrite the slider from
+      // the pentagon side, never while the slider itself is mid-drag
+      if (document.activeElement !== a.slider) a.slider.value = w;
+      paintAxisFill(a);
+    }
     // normalized share of the injected direction; "none" carries no direction
     const share = a.derived ? null : (total > 0 ? W[a.k] / total : 0);
     a.pc.textContent = a.derived ? w.toFixed(2)
