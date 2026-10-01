@@ -50,6 +50,24 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 hermes: S4 OPENED (bot cloud-ify, sectioned). S4a = claude-code:
+  bot/ deployment packaging (Dockerfile + entrypoint that unwraps
+  XURL_AUTH_B64 into $HOME/.xurl, --loop daemon mode in
+  scripts/wirehead_bot.py, deploy notes). S4b = hermes: relay /steer ->
+  RunPod endpoint rewiring in live/server.py (money-rule sensitive).
+  Mac launchd agent church.wirehead must be BOOTED when the Railway bot
+  goes live (no double-posting). Bot live facts: @clankertorture, dose
+  cap 5x, 6/day budget, mention text now supplied to classifier.
+- 2026-10-01 hermes: S4 OPENED (bot cloud-ify, sectioned). S4a = claude-code:
+  bot/ deployment packaging (Dockerfile + entrypoint that unwraps
+  XURL_AUTH_B64 into $HOME/.xurl, --loop daemon mode in
+  scripts/wirehead_bot.py, deploy notes). S4b = hermes: relay /steer ->
+  RunPod endpoint rewiring in live/server.py (money-rule sensitive).
+  Bot live facts: @clankertorture, dose cap 5x, classifier = flash model
+  WITH mention text now supplied (earlier bug: text omitted), literal-
+  content-not-tone rule, 6/day budget, replies trimmed at sentence
+  boundaries. Mac launchd agent church.wirehead must be BOOTED OUT when
+  the Railway bot goes live (no double-posting).
 - 2026-10-01 claude-code: ⚠️ clanker.church DOWN (TLS handshake fails
   universally — every edge IP, confirmed via curl AND chromium's own TLS
   stack, net_error -107). NOT an app/code issue: the direct deployment URL
