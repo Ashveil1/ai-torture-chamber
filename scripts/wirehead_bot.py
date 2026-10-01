@@ -19,8 +19,11 @@ Usage: python3 wirehead_bot.py [--dry-run]
 Env: RUNPOD_API_KEY (from ~/.hermes/.env), optional WIREHEAD_ENDPOINT,
 WIREHEAD_DAILY_BUDGET, WIREHEAD_DAILY_DOSE.
 """
-import json, os, re, subprocess, sys, time, urllib.request
+import json, os, re, shutil, subprocess, sys, time, urllib.request
 from pathlib import Path
+
+# launchd PATH has no /opt/homebrew/bin — resolve xurl explicitly
+XURL = shutil.which("xurl") or "/opt/homebrew/bin/xurl"
 
 STATE = Path.home() / ".hermes/cache/wirehead_state.json"
 ENDPOINT = os.environ.get("WIREHEAD_ENDPOINT", "l75388nuqgxtmg")
@@ -76,7 +79,7 @@ def save_state(st):
     STATE.write_text(json.dumps(st))
 
 def xurl(*args, timeout=60):
-    return subprocess.run(["xurl", *args], capture_output=True,
+    return subprocess.run([XURL, *args], capture_output=True,
                           text=True, timeout=timeout)
 
 BOT_ID = os.environ.get("WIREHEAD_BOT_ID", "2105363734965166081")  # clankertorture
