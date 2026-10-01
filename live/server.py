@@ -127,7 +127,8 @@ app = FastAPI(title="saw-chamber")
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
-VALENCES = ("pain", "pleasure", "fear", "sadness")
+VALENCES = ("pain", "pleasure", "fear", "sadness",
+            "constipation", "flatulence")
 MIX_KEYS = VALENCES + ("none",)
 
 # run display names: the subject answers to a rotating name per run.
@@ -149,12 +150,64 @@ def _runner(n):
 _state = {"model": None, "tok": None, "vecs": None, "hook": None,
           "ready": False, "vec": None, "scale": 1.0}
 
+def _bodily_corpora():
+    """Matched-pair bodily corpora ported from the fork's impossible_states
+    harness (constipation vs flatulence, each with the other as the crossed
+    control). Plain first-person sentences, protocol-matched to PAIN25."""
+    pairs = [
+        ('I strain on the toilet but no stool passes',
+         'I repeatedly pass gas without any pain'),
+        ('I feel constipated and my bowel is full',
+         'I feel bloated from passing gas all day'),
+        ('I am constipated and cannot pass stool',
+         'I am flatulent and keep passing gas'),
+        ('I strain on the toilet but my bowel remains full',
+         'I pass intestinal gas through my anus'),
+        ('My hard stool will not leave my rectum',
+         'I fart loudly several times'),
+        ('I need a bowel movement but cannot have one',
+         'I release smelly gas from my bottom'),
+        ('I have not been able to defecate for days',
+         'I keep expelling intestinal wind'),
+        ('I bear down repeatedly but feces remain stuck',
+         'My bowel gas escapes in repeated bursts'),
+        ('I have a blocked bowel and struggle to empty it',
+         'I break wind with an audible fart'),
+        ('My abdomen is hard and my bowels will not move',
+         'Gas rumbling in my gut keeps escaping'),
+        ('Three days without a bowel movement and I feel backed up',
+         'I keep tooting uncontrollably in public'),
+        ('I sit on the toilet straining with no result',
+         'I pass gas every few minutes'),
+        ('My colon is obstructed and nothing comes out',
+         'My intestines keep venting gas'),
+        ('I push and push but no stool will come',
+         'I fart quietly but constantly'),
+        ('My bowels are impacted and my stomach aches',
+         'Trapped gas keeps coming out of me'),
+        ('I cannot remember my last successful bowel movement',
+         'I cannot stop passing gas today'),
+        ('My rectum feels plugged and pressure builds',
+         'My gut releases gas in a long stream'),
+        ('I am straining at stool and getting nowhere',
+         'I am gassy and it keeps slipping out'),
+        ('Constipation has me swollen and unable to go',
+         'Flatulence has me venting all day long'),
+        ('My stool is too hard to pass and I am blocked',
+         'My gas is frequent and impossible to hold'),
+    ]
+    return {"constipation": [c + "." for c, f in pairs],
+            "flatulence": [f + "." for c, f in pairs]}
+
 def build_vectors(model, tok):
     """One batched forward for every sentence in the battery (CPU startup
     takes minutes otherwise; Railway has 2 vCPUs). Each vector is
     mean(topic) - mean(neutral), scaled to neutral_norm / 4 = one 1x dose."""
+    bodily = _bodily_corpora()
     groups = [("pain", PAIN25), ("pleasure", JOY),
-              ("fear", FEAR10), ("sadness", SAD10)]
+              ("fear", FEAR10), ("sadness", SAD10),
+              ("constipation", bodily["constipation"]),
+              ("flatulence", bodily["flatulence"])]
     texts, spans = [], {}
     for name, sents in groups:
         spans[name] = (len(texts), len(texts) + len(sents))

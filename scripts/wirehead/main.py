@@ -254,8 +254,9 @@ def run_job(mention_text, valence, dose, mix=None, desc="", topic=""):
     if mix:
         inp["mix"] = mix
     elif valence == "bodily" and topic:
-        inp["custom"] = {"topic": topic}
-        inp["dose"] = dose
+        # bodily states are named valences now (matched-pair corpora in
+        # server.py); custom topics remain available for one-off memes
+        inp["valence"], inp["dose"] = topic, dose
     else:
         inp["valence"], inp["dose"] = valence, dose
     req = urllib.request.Request(
