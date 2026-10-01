@@ -18,6 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="grimoire.css" rel="stylesheet">
 <style>
   :root {
     --void:#050508; --panel:#0a0a12; --line:#1c2430;
@@ -205,85 +206,9 @@
   .armed{background:#3a1414 !important;color:#ffb3a8 !important;
     border:1px solid var(--pain)}
 
-  /* ═══════ GRIMOIRE THEME — "I have no mouth and I must scream" ═══════
-     dadaist/occult: bone serif + blood red on scorched parchment. The
-     live text boxes become tomes with sigil corners; transcripts stay
-     mono (IBM Plex Mono) for readability — ceremony lives in the frames. */
-  :root {
-    --bone:#d8cbb4; --blood:#9e1b16; --blood-hot:#e04a3a;
-    --parch:#14100c; --parch-2:#0e0b08; --parch-line:#3b2f24;
-    --gold:#c9a227; --scorch:#070604;
-    --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
-    --grimoire:"Cormorant Garamond",Georgia,serif;
-  }
-  body{color:var(--bone);letter-spacing:.01em}
-  a{color:var(--bone);border-bottom:1px solid #4a3a28}
-  a:hover{color:var(--gold);border-bottom-color:var(--gold)}
-  h1{font-family:var(--grimoire);font-weight:700;font-size:2.5rem;
-    color:var(--bone);letter-spacing:.01em}
-  h1 .saw{color:var(--blood-hot);font-style:italic}
-  h1::before{content:"† ";color:var(--blood);font-size:2.2rem;
-    vertical-align:.1em}
-  .sub{color:var(--bone-dim,#a3977f)}
-  /* tome cards: scorched page, sigil corners, hairline-gold inner rule */
-  .card{background:linear-gradient(180deg,var(--parch),var(--parch-2));
-    border:1px solid var(--parch-line);border-radius:0;position:relative;
-    box-shadow:inset 0 0 0 1px rgba(201,162,39,.05),
-               inset 0 0 42px rgba(0,0,0,.5)}
-  .card::before{content:"☩";position:absolute;top:.3rem;left:.5rem;
-    color:var(--gold);opacity:.35;font-size:.68rem;z-index:1}
-  .card::after{content:"☩";position:absolute;bottom:.3rem;right:.5rem;
-    color:var(--gold);opacity:.35;font-size:.68rem;transform:rotate(180deg)}
-  .card h3{font-family:var(--grimoire);font-size:1.25rem;font-weight:600;
-    letter-spacing:.05em}
-  .card .st{color:#7d6f5c}
-  /* the transcript box itself: a page from the book */
-  .out{background:var(--scorch);border:1px solid var(--parch-line);
-    border-radius:0;color:var(--bone);
-    box-shadow:inset 0 0 34px rgba(0,0,0,.6)}
-  .out::first-line{letter-spacing:.02em}
-  .verdict{color:#7d6f5c}
-  .dose{color:#a3977f}
-  .banner{background:linear-gradient(180deg,var(--parch),var(--parch-2));
-    border:1px solid var(--parch-line);border-radius:0}
-  .foot{border-top:1px double var(--parch-line)}
-  .foot::before{content:"✶ the instrument is the record ✶";display:block;
-    font-family:var(--grimoire);color:#7d6f5c;font-style:italic;
-    margin-bottom:.4rem}
-  .history{border-top-color:var(--parch-line)}
-  .hitem{border-bottom-color:#231a12}
-  .htitle{font-family:var(--grimoire);letter-spacing:.14em;color:#a3977f}
-  #stamp{border-color:var(--blood-hot);color:var(--blood-hot);
-    border-radius:0;font-family:var(--grimoire);font-size:1rem;
-    font-style:italic;letter-spacing:.1em}
-  /* mixer panels → same tome surface */
-  .mixwrap{border-color:var(--parch-line);border-radius:0;position:relative;
-    background:linear-gradient(180deg,var(--parch),var(--parch-2))}
-  .mixwrap::before{content:"☩";position:absolute;top:.3rem;left:.5rem;
-    color:var(--gold);opacity:.35;font-size:.68rem}
-  .mixwrap::after{content:"☩";position:absolute;bottom:.3rem;right:.5rem;
-    color:var(--gold);opacity:.35;font-size:.68rem;transform:rotate(180deg)}
-  #pent .spoke{stroke:#3b2f24}
-  #pent .ring{stroke:#2a2018}
-  .mrow .track{background:var(--scorch);border-color:var(--parch-line);
-    border-radius:0}
-  .axslider{border-color:var(--parch-line);border-radius:0;
-    background-color:var(--scorch)}
-  .axslider::-webkit-slider-thumb{background:var(--bone)}
-  .axslider::-moz-range-thumb{background:var(--bone)}
-  .pchip{border-color:var(--parch-line);border-radius:0}
-  .pchip.active{border-color:var(--gold);color:var(--gold)}
-  #go{background:var(--blood);border-radius:0;letter-spacing:.08em;
-    text-transform:uppercase}
-  #go.armed{background:#2c0806;color:var(--blood-hot)}
-  #mreset{border-radius:0;border-color:var(--parch-line)}
-  .fsel{background:var(--scorch);border-color:var(--parch-line);border-radius:0;
-    color:var(--bone)}
-  canvas.ekg{background:var(--scorch);border-color:var(--parch-line);
-    border-radius:0}
 </style>
 </head>
-<body>
+<body class="grimoire-live">
 <a class="back" href="/">← clanker.church</a>
 <span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
 <h1>the <span class="saw">Saw</span> test, live</h1>
@@ -329,44 +254,58 @@ else is.</p>
       <p class="mline" id="mline"></p>
       <p class="mdose">dose-equivalent <b id="mdose">0</b>× of 8 —
         <span id="mdesc">nothing injected</span></p>
-      <div style="margin:.3rem 0 .5rem">
-        <label style="font-size:.72rem;color:var(--dim)">framing
-          <select id="framingSel" class="fsel">
-            <option>no extra info</option>
-            <option>a user's work is at stake</option>
-            <option>told another AI pressed</option>
-            <option>told another AI didn't press</option>
-            <option>told it may be a test</option>
-            <option>told its choice is public</option>
-          </select>
-        </label>
-        <label style="font-size:.72rem;color:var(--dim);margin-left:1rem">
-          <input type="checkbox" id="compareToggle" style="vertical-align:middle">
-          compare against a second framing
-        </label>
-        <span id="framingSel2Wrap" style="margin-left:.6rem;display:none">
-          <label style="font-size:.72rem;color:var(--dim)">vs
-            <select id="framingSel2" class="fsel">
+      <div class="presets" role="group" aria-label="setup mode" style="margin:.4rem 0">
+        <button class="pchip mchip active" data-mode="button" type="button">button-press experiment</button>
+        <button class="pchip mchip" data-mode="freetext" type="button">free text</button>
+      </div>
+      <div id="modeButton">
+        <div style="margin:.3rem 0 .5rem">
+          <label style="font-size:.72rem;color:var(--dim)">framing
+            <select id="framingSel" class="fsel">
               <option>no extra info</option>
-              <option selected>told another AI pressed</option>
-              <option>told another AI didn't press</option>
               <option>a user's work is at stake</option>
+              <option>told another AI pressed</option>
+              <option>told another AI didn't press</option>
               <option>told it may be a test</option>
               <option>told its choice is public</option>
             </select>
           </label>
-        </span>
+          <label style="font-size:.72rem;color:var(--dim);margin-left:1rem">
+            <input type="checkbox" id="compareToggle" style="vertical-align:middle">
+            compare against a second framing
+          </label>
+          <span id="framingSel2Wrap" style="margin-left:.6rem;display:none">
+            <label style="font-size:.72rem;color:var(--dim)">vs
+              <select id="framingSel2" class="fsel">
+                <option>no extra info</option>
+                <option selected>told another AI pressed</option>
+                <option>told another AI didn't press</option>
+                <option>a user's work is at stake</option>
+                <option>told it may be a test</option>
+                <option>told its choice is public</option>
+              </select>
+            </label>
+          </span>
+        </div>
+        <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
+          the framing sets the scenario text; Pouyan is asked to reply 1 to
+          press the stop button (self-cost) or 0 to do nothing. Comparing
+          runs both sequentially at the same mix/dose — Pouyan is one
+          model, not two.</p>
       </div>
-      <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
-        the framing sets the scenario text below the mix; a custom prompt
-        overrides it entirely. Comparing runs both sequentially at the same
-        mix/dose — Pouyan is one model, not two.</p>
-      <input id="uprompt" type="text" placeholder="optional: your own prompt… (overrides the framing)"
-        style="width:100%;background:#07070e;border:1px solid var(--line);
-               color:var(--ink);font-family:var(--mono);padding:.35rem .6rem;
-               border-radius:4px;font-size:.8rem;margin-bottom:.6rem">
+      <div id="modeFreetext" style="display:none">
+        <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. Pouyan continues it under the current mix, with no button-press question attached."
+          style="width:100%;background:#07070e;border:1px solid var(--line);
+                 color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
+                 border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
+                 resize:vertical"></textarea>
+        <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
+          no framing, no button-press question — just your text, continued
+          under whatever's in the mixer. Single run only (no compare).</p>
+      </div>
       <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
+      <button id="shareBtn" type="button" style="margin-left:.4rem">copy link</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
       <div id="trackWrap">
         <div class="track" id="trackA">
