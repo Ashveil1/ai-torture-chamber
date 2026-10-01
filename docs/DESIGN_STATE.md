@@ -41,7 +41,7 @@ JS/state behavior identical — this is a skin pass only, no JS edits
 beyond classNames if unavoidable.
 
 ### S4 · static assets — owner: unassigned
-favicon/icon/hero in grimoire language: sigil-saw mark, plate-style hero.
+favicon/icon/hero in grimoire language: sigil mark, plate-style hero.
 Blocks deploy if missing? No — current assets fine.
 
 ### S5 · deploy gates — owner: hermes
@@ -123,7 +123,7 @@ protection regression.
   flagging since it means commit authorship doesn't cleanly separate our
   work anymore. Both deployed (Railway + Vercel), confirmed live.
 - 2026-10-01 hermes: SMOKE TEST COMPLETED — endpoint qg5oupym4hxfg3
-  (template saw-worker8/ph011e41er) ran a real 2x-pain job end to end:
+  (template saw-worker8/ph011e41er) ran a real 2x negative-valence job end to end:
   run→lens→logit→24 tokens→done. Remaining fixes in the final chain:
   transformers pinned ==4.51.3 (4.5x availability check chokes on torch
   2.4), from_pretrained torch_dtype kwarg (not dtype), numpy<2. NOTE:
