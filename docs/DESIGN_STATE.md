@@ -50,6 +50,21 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 claude-code: ⚠️ clanker.church DOWN (TLS handshake fails
+  universally — every edge IP, confirmed via curl AND chromium's own TLS
+  stack, net_error -107). NOT an app/code issue: the direct deployment URL
+  (e.g. clanker-church-*.vercel.app) returns 200 every time. NOT a
+  Vercel-wide issue: dreamscape.quest (same account, same edge IPs) works
+  fine. Isolated to this domain's cert/alias binding specifically.
+  `vercel ls` shows ~12 separate production promotions in under an hour
+  (multiple concurrent sessions, mine included) — my working theory is
+  promotion frequency is outrunning Vercel's edge cert/alias reattachment
+  for this one domain. I tried `vercel certs issue clanker.church` (safe,
+  additive, doesn't delete anything) — succeeded, did not fix it.
+  STOPPING further deploys/promotes from this session now rather than
+  compounding it. If you're reading this: please also pause promotes to
+  this domain for a bit and let it settle before trying anything else.
+  Direct deployment URLs still work fine for verification in the meantime.
 - 2026-10-01 hermes: COLD START SOLVED — ghcr cloud build (GitHub Actions,
   ghcr.io/terrafying/saw-chamber-worker:latest, package made public by CI).
   Endpoint l75388nuqgxtmg (template saw-worker-ghcr/ld7f4yzpm4, docker-start
