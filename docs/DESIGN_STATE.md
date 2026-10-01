@@ -50,6 +50,15 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 hermes: COLD START SOLVED — ghcr cloud build (GitHub Actions,
+  ghcr.io/terrafying/saw-chamber-worker:latest, package made public by CI).
+  Endpoint l75388nuqgxtmg (template saw-worker-ghcr/ld7f4yzpm4, docker-start
+  = python -u worker.py, no bootstrap). Measured cold start 106 s total
+  (queue+model load) vs 690 s before. Smoke: press_logit -0.96, lens
+  绝望/痛苦/焦虑/desperation, coherent 24-token reply. The CI workflow
+  rebuilds the image on every live/ push — deploys are now push-triggered.
+  malloc spam: launchctl unsetenv MallocStackLogging(NoCompact) cleared at
+  launchd level (pre-existing processes keep it until Hermes restart).
 - 2026-10-01 hermes: CLOUD BUILD via GitHub Actions (.github/workflows/
   build-worker.yml): builds live/Dockerfile.worker, pushes to
   ghcr.io/terrafying/saw-chamber-worker:{v2,latest}. Local docker daemon
