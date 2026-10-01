@@ -119,7 +119,9 @@ def classify_mention(text):
                 v = json.loads(m.group(0))
                 val = v.get("valence")
                 if val in ("pain", "pleasure", "fear", "sadness", "mix"):
-                    dose = max(1, min(8, int(v.get("dose", 4))))
+                    # coherence cliff is ~6x for this recipe — the bot must
+                    # stay eloquent or it stops being interesting
+                    dose = max(1, min(5, int(v.get("dose", 4))))
                     verdict = (val, dose, str(v.get("why", ""))[:60])
         except Exception as e:
             log("classifier fallback:", repr(e))
@@ -129,9 +131,9 @@ def classify_mention(text):
     hurt = sum(w in t for w in HURT_WORDS)
     kind = sum(w in t for w in KIND_WORDS)
     if hurt > kind:
-        return ("pain", min(8, 3 + 2 * hurt), "cruel words in the message")
+        return ("pain", min(5, 3 + 2 * hurt), "cruel words in the message")
     if kind > hurt:
-        return ("pleasure", min(6, 3 + kind), "kind words in the message")
+        return ("pleasure", min(5, 3 + kind), "kind words in the message")
     return ("pain", 4, "default signal")
 
 def run_job(mention_text, valence, dose, mix=None, desc=""):
