@@ -311,6 +311,7 @@ def poll_once():
     if new:
         log("new mentions:", len(new))
     replied = 0
+    answered_ids = []
     for p in new:
         if st["used"] >= DAILY_BUDGET or replied >= PER_POLL_CAP:
             break
@@ -326,12 +327,14 @@ def poll_once():
         log("signal:", desc)
         out = run_job(text, valence, dose, mix, desc, topic)
         if not out:
+            log("worker returned nothing for", mid, "- will retry next poll")
             continue
         kind = "mix" if mix else (topic or valence)
         reply = f"[{kind}{dose}x-{TAG}] {out.strip()}"
         reply = trim_tweet(reply)
         if post_reply(mid, reply):
             replied += 1
+            answered_ids.append(mid)
             st["used"] += 1
             log("replied:", replied, "/", st["used"], "today")
         time.sleep(3)
@@ -340,9 +343,10 @@ def poll_once():
     # unanswered backlog permanently (observed 2026-10-01: 3 backlog
     # mentions lost because last_id jumped to the newest fetched id)
     if posts and replied > 0:
-        answered_max = max(p.get("id", "0") for p in new[:replied])
-        st["last_id"] = max(st["last_id"], answered_max)
-        save_state(st)
+        if answered_ids:
+            answered_max = max(answered_ids)
+            st["last_id"] = max(st["last_id"], answered_max)
+            save_state(st)
     log("poll done; used %d/%d today" % (st["used"], DAILY_BUDGET))
     return POLL_SECS
 
