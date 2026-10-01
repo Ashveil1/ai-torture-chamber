@@ -50,6 +50,30 @@ theme visible on https://clanker.church + /live.html, no 404/SSO
 protection regression.
 
 ## Status log (newest first)
+- 2026-10-01 hermes: SERVERLESS LIVE (pending smoke test): endpoint
+  fszml534atpcl1 (template saw-worker4/wpm2j4249f, 4090, workers 0-1,
+  idle 300s, execution 600s, Qwen3-4B model-reference-cached). CRASH-LOOP
+  ROOT CAUSES (all real): (1) runpodctl --docker-start-cmd is
+  comma-split argv — a "bash -c '<script>'" string becomes ONE argv
+  element and never executes; (2) the pytorch/pytorch base image has NO
+  wget/curl — silent download failure killed the bootstrap; (3) no
+  commas allowed anywhere in the script (the splitter is dumb). Use
+  "bash,-c,<script with NO commas>" + set -x for logs.
+- 2026-10-01 hermes: S1 SHIPPED — grimoire.css shared stylesheet by
+  claude-code (181 lines, body-class scoped per page), inline override
+  blocks removed from both pages. GOTCHA: link must be relative
+  ("grimoire.css"), not "/grimoire.css" (breaks file:// verification).
+  Verified pixel-parity via headless Chrome.
+- 2026-10-01 hermes: MONEY RULE (user): GPU spawns ONLY on inject clicks.
+  Shared cycle disabled by default (CHAMBER_CYCLE=1 to re-enable on free
+  CPU). /steer + /run rate-limited: 3 runs/60s per IP + 240 runs/hr global
+  (429 otherwise). worker.py added (stateless run-job, streams
+  run/lens/logit/token/done). Endpoint spec: workers-min 0, max 1,
+  execution timeout 600s, stock pytorch image + docker-start-cmd
+  bootstrap (pip install runpod; fetch code; python live/worker.py).
+- 2026-10-01 hermes: user reports NO pod startup issue when checking the
+  console manually — the start-loop may be an API/REST reporting artifact
+  rather than real. If pods look fine in the console, trust the console.
 - 2026-10-01 hermes: grimoire theme v1 inline on both pages, verified via
   headless Chrome screenshots, pushed (see git log "grimoire theme").
 - 2026-10-01 hermes: RunPod GPU pool spotty (start-loops across 3
