@@ -43,3 +43,13 @@ jobs:
             ghcr.io/terrafying/saw-chamber-worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # RunPod pulls anonymously, so the package must be public. Code in the
+      # image is already public via the site tarballs — no new exposure.
+      - name: Make package public
+        run: |
+          curl -sS -o /dev/null -w "%{http_code}\n" -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/user/packages/container/saw-chamber-worker \
+            -d '{"package_type":"container","visibility":"public"}' || true
