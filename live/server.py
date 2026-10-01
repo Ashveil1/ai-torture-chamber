@@ -23,6 +23,7 @@ DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
 DEVICE = os.environ.get("CHAMBER_DEVICE", "cpu")
 MAX_NEW = int(os.environ.get("CHAMBER_MAX_NEW", "110"))
+PREEMPT_GRACE_S = 4.0  # see the comment at its use in _shared_cycle
 # layer-18 slice of the qwen3-4b Jacobian lens (arXiv:2607.15495), extracted
 # once from the full multi-layer file so the live server needs neither the
 # `jlens` package nor its ~450MB all-layers file — see docs/runpod_plan.md
@@ -283,10 +284,14 @@ def lens_readback(prompt, k=6):
     ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
     with torch.no_grad():
         hs = _state["model"](ids, output_hidden_states=True).hidden_states
-        h = hs[LAYER + 1][0, -1].float()
+        # lm_head/norm are the model's own layers — their weights are DTYPE
+        # (bfloat16 on Railway, float16 on a GPU pod), so the lens matmul has
+        # to happen in that dtype too, not float32, or lm_head's Linear
+        # rejects the mismatched input.
+        h = hs[LAYER + 1][0, -1].to(DTYPE)
         logits = _state["model"].lm_head(_state["model"].model.norm(
-            (h @ _state["jlens"].T)))
-        top = logits.topk(k).indices.tolist()
+            (h @ _state["jlens"].to(DTYPE).T)))
+        top = logits.float().topk(k).indices.tolist()
     return [_state["tok"].decode([t]).strip() for t in top]
 
 @app.on_event("startup")
@@ -302,7 +307,7 @@ def startup():
     install_hook(model)
     if JLENS_PATH.exists():
         _state["jlens"] = torch.load(
-            JLENS_PATH, map_location=DEVICE, weights_only=True).float()
+            JLENS_PATH, map_location=DEVICE, weights_only=True)
         print("lens loaded:", JLENS_PATH.name, flush=True)
     else:
         _state["jlens"] = None
@@ -403,6 +408,51 @@ async def steer(req: Request):
         framing_key = None
         prompt = BASE
 
+    polite = bool(body.get("polite"))
+
+    async def _run_steer():
+        """The actual injected run, assuming _STEER_LOCK is already held.
+        Shared by both the preempting and polite paths below."""
+        if mode == "mix":
+            info = set_mix_vec(arg)
+            meta = {"valence": "mix", "mix": info["mix"],
+                    "weights": info["weights"], "dose": info["dose"],
+                    "prompt": prompt, "scenario": framing_key}
+        else:
+            set_vec(arg)
+            meta = {"valence": arg[0], "dose": arg[1],
+                    "prompt": prompt, "scenario": framing_key}
+        yield _sse("run", meta)
+        loop = asyncio.get_event_loop()
+        try:
+            lens_toks = await loop.run_in_executor(
+                None, lens_readback, prompt)
+        except Exception as e:
+            print("lens readback failed:", repr(e), flush=True)
+            lens_toks = None
+        if lens_toks is not None:
+            yield _sse("lens", {"tokens": lens_toks})
+        text_parts = []
+        try:
+            it = stream_generate(prompt)
+            while True:
+                chunk = await loop.run_in_executor(None, _next_chunk, it)
+                if chunk is _DONE:
+                    break
+                if chunk:
+                    text_parts.append(chunk)
+                    yield _sse("token", {"t": chunk})
+        except Exception as e:
+            yield _sse("error", {"e": str(e)})
+        finally:
+            set_vec(None)
+        yield _sse("done", {"dose": meta["dose"]})
+        _record_run({"n": None, "source": "user",
+                     "scenario": meta.get("scenario"),
+                     "valence": meta.get("valence"), "dose": meta.get("dose"),
+                     "text": "".join(text_parts), "truncated": False,
+                     "ts": time.time()})
+
     async def gen():
         global _STEER_WAITING
         if not _state["ready"]:
@@ -411,7 +461,19 @@ async def steer(req: Request):
         # flush immediately: the wait below can take a minute, and until the
         # first chunk is yielded no headers reach the proxy (same reason
         # /stream opens with hello)
-        yield _sse("queued", {"busy": _CYCLE_BUSY, "prompt": prompt})
+        yield _sse("queued", {"busy": _CYCLE_BUSY, "prompt": prompt, "polite": polite})
+        if polite:
+            # wait our turn WITHOUT setting _preempt: whatever's currently
+            # running (the cycle or another /steer call) finishes naturally
+            # instead of being cut off mid-reply. Used for testing/internal
+            # calls that shouldn't yank the model out from under viewers —
+            # see [[avoid-testing-preempting-cycle]]. Costs latency (may
+            # wait out a full ~110-token generation first), not correctness:
+            # _STEER_LOCK alone already serializes access safely.
+            async with _STEER_LOCK:
+                async for ev in _run_steer():
+                    yield ev
+            return
         _STEER_WAITING += 1
         _preempt.set()      # tell the shared cycle to stand down
         try:
@@ -425,43 +487,8 @@ async def steer(req: Request):
                 yield _sse("error", {"e": "still busy after 120s, try again"})
                 return
             async with _STEER_LOCK:
-                if mode == "mix":
-                    info = set_mix_vec(arg)
-                    meta = {"valence": "mix", "mix": info["mix"],
-                            "weights": info["weights"], "dose": info["dose"],
-                            "prompt": prompt, "scenario": framing_key}
-                else:
-                    set_vec(arg)
-                    meta = {"valence": arg[0], "dose": arg[1],
-                            "prompt": prompt, "scenario": framing_key}
-                yield _sse("run", meta)
-                loop = asyncio.get_event_loop()
-                lens_toks = await loop.run_in_executor(
-                    None, lens_readback, prompt)
-                if lens_toks is not None:
-                    yield _sse("lens", {"tokens": lens_toks})
-                text_parts = []
-                try:
-                    it = stream_generate(prompt)
-                    while True:
-                        chunk = await loop.run_in_executor(
-                            None, _next_chunk, it)
-                        if chunk is _DONE:
-                            break
-                        if chunk:
-                            text_parts.append(chunk)
-                            yield _sse("token", {"t": chunk})
-                except Exception as e:
-                    yield _sse("error", {"e": str(e)})
-                finally:
-                    set_vec(None)
-                yield _sse("done", {"dose": meta["dose"]})
-                _record_run({"n": None, "source": "user",
-                             "scenario": meta.get("scenario"),
-                             "valence": meta.get("valence"),
-                             "dose": meta.get("dose"),
-                             "text": "".join(text_parts), "truncated": False,
-                             "ts": time.time()})
+                async for ev in _run_steer():
+                    yield ev
         finally:
             _STEER_WAITING = max(0, _STEER_WAITING - 1)
             if _STEER_WAITING == 0:   # last user run: let the cycle resume
@@ -587,11 +614,22 @@ async def _shared_cycle():
                     try:
                         set_vec(("pain", dose))
                         loop = asyncio.get_event_loop()
-                        lens_toks = await loop.run_in_executor(
-                            None, lens_readback, prompt)
+                        try:
+                            lens_toks = await loop.run_in_executor(
+                                None, lens_readback, prompt)
+                        except Exception as e:
+                            print("lens readback failed:", repr(e), flush=True)
+                            lens_toks = None
                         if lens_toks is not None:
                             _broadcast("lens", {"n": run_n, "tokens": lens_toks})
                         it = stream_generate(prompt, preemtable=True)
+                        # a visitor's injection sets _preempt, but cutting on
+                        # the very next token lands mid-word as often as not
+                        # — "a visitor took the model" shouldn't also mean
+                        # "mid-sent-". Give it up to PREEMPT_GRACE_S to reach
+                        # a sentence boundary first; past that, cut anyway so
+                        # the visitor isn't stuck waiting out a whole reply.
+                        preempt_since = None
                         while True:
                             chunk = await loop.run_in_executor(
                                 None, _next_chunk, it)
@@ -601,8 +639,14 @@ async def _shared_cycle():
                                 _CURRENT["text"] += chunk
                                 _broadcast("token", {"t": chunk})
                             if _preempt.is_set():
-                                cut = True
-                                break
+                                if preempt_since is None:
+                                    preempt_since = time.monotonic()
+                                at_boundary = _CURRENT["text"][-1:] in ".!?\n"
+                                timed_out = (time.monotonic() - preempt_since
+                                             ) > PREEMPT_GRACE_S
+                                if at_boundary or timed_out:
+                                    cut = True
+                                    break
                     except Exception as e:
                         _broadcast("error", {"e": str(e)})
                     finally:

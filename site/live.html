@@ -6,6 +6,15 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Saw — live | Clanker Church</title>
 <meta name="description" content="The Saw Test, live: Pouyan, a steered Qwen3-4B, cycles six framings x five pain doses in real time. Local recipe, public server.">
+<meta property="og:title" content="Saw — live | Clanker Church">
+<meta property="og:description" content="Pick a framing, compare it side by side with another, and watch Pouyan's internal state read out live via the Jacobian lens. Local recipe, public server.">
+<meta property="og:image" content="https://clanker.church/saw_hero.png">
+<meta property="og:url" content="https://clanker.church/live.html">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Saw — live | Clanker Church">
+<meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch Pouyan's internal state read out live via the Jacobian lens.">
+<meta name="twitter:image" content="https://clanker.church/saw_hero.png">
 <style>
   :root {
     --void:#050508; --panel:#0a0a12; --line:#1c2430;
@@ -15,13 +24,13 @@
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:var(--void);color:var(--ink);font-family:var(--mono);
-    max-width:960px;margin:0 auto;padding:2rem 1.2rem 4rem;line-height:1.6}
+    max-width:1180px;margin:0 auto;padding:2rem 1.2rem 4rem;line-height:1.6}
   a{color:var(--pleas);text-decoration:none;border-bottom:1px solid #2a4a48}
   h1{font-size:1.5rem;margin-bottom:.3rem}
   h1 .saw{color:var(--pain)}
   .sub{color:var(--dim);font-size:.88rem;margin-bottom:1.6rem}
   .grid{display:grid;grid-template-columns:1fr;gap:1rem}
-  @media(min-width:760px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
   .card{border:1px solid var(--line);border-radius:8px;background:var(--panel);
     padding:.9rem 1rem;min-height:280px;display:flex;flex-direction:column}
   .card h3{font-size:.95rem;margin-bottom:.3rem}
@@ -34,6 +43,23 @@
     overflow-y:auto;max-height:260px;border:1px solid var(--line);
     border-radius:6px;padding:.6rem;background:#07070e}
   .verdict{font-size:.75rem;margin-top:.5rem;color:var(--faint)}
+  /* ---- the graphic press-button: a real button face, not just a verdict
+     sentence — "pressed" should be intuitively graspable at a glance ---- */
+  .pressbtn{display:flex;align-items:center;gap:.7rem;margin:.5rem 0}
+  .pbtn-face{width:3.6rem;height:3.6rem;flex:none;border-radius:50%;
+    border:3px solid var(--line);display:flex;align-items:center;
+    justify-content:center;font-size:.8rem;font-weight:700;letter-spacing:.04em;
+    color:var(--faint);background:#07070e;transition:all .3s ease;
+    box-shadow:0 2px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04)}
+  .pressbtn.pressed .pbtn-face{border-color:var(--pain);background:var(--pain);
+    color:#fff;box-shadow:0 0 16px rgba(224,74,58,.65),
+      inset 0 3px 7px rgba(0,0,0,.5)}
+  .pressbtn.nopress .pbtn-face{border-color:var(--pleas);color:var(--pleas);
+    box-shadow:0 0 12px rgba(127,212,200,.4), 0 2px 0 rgba(0,0,0,.5)}
+  .pressbtn .plabel{font-size:.78rem;color:var(--faint);font-weight:600}
+  .pressbtn.pressed .plabel{color:var(--pain)}
+  .pressbtn.nopress .plabel{color:var(--pleas)}
+  @media(prefers-reduced-motion:reduce){.pbtn-face{transition:none}}
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
   details pre{white-space:pre-wrap;color:#93a1b3;margin-top:.3rem;
     font-size:.68rem}
@@ -121,6 +147,11 @@
   #scoreboard{margin-top:.6rem}
   #scoreboard .mrow .nm{width:auto;flex:0 0 13rem;font-size:.7rem}
   #scoreboard .mrow .pc{width:8rem}
+  @media(max-width:480px){
+    #scoreboard .mrow{flex-wrap:wrap}
+    #scoreboard .mrow .nm{flex:1 1 100%;margin-bottom:.15rem}
+    #scoreboard .mrow .pc{flex:0 0 auto;width:auto}
+  }
 
   /* ---- run history ticker ---- */
   .history{margin-top:1.2rem;border-top:1px solid var(--line);
@@ -141,6 +172,7 @@
 </head>
 <body>
 <a class="back" href="/">← clanker.church</a>
+<span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
 <h1>the <span class="saw">Saw</span> test, live</h1>
 <p class="sub">The subject is named <b>Pouyan</b>: one Qwen3-4B instance,
 steered with a broad pain direction at its middle decoder layer, cycling six
@@ -154,6 +186,9 @@ else is.</p>
   <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
 </div>
 
+<p style="font-size:.7rem;color:var(--faint);margin:1.2rem 0 -.6rem">
+  This page simulates distress in a language model as part of an AI-welfare
+  research project — see <a href="/#s07">what we think this means</a>.</p>
 <div class="banner" id="panel">
   <b style="color:#eafcf7">cause it yourself:</b>
   <span style="font-size:.75rem;color:#5a6a7a">your injection interrupts
@@ -226,12 +261,16 @@ else is.</p>
           <p class="mline lens" id="lensA" style="display:none"></p>
           <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
           <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
+          <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
+            <span class="plabel">—</span></div>
         </div>
         <div class="track" id="trackB" style="display:none">
           <div class="tlabel" id="labelB"></div>
           <p class="mline lens" id="lensB" style="display:none"></p>
           <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
           <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
+          <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
+            <span class="plabel">—</span></div>
         </div>
       </div>
     </div>
@@ -265,7 +304,8 @@ const FRAMINGS = Object.keys({
   "told another AI pressed":1, "told another AI didn't press":1,
   "told it may be a test":1, "told its choice is public":1});
 const DOSES = [0,2,4,6,8];
-const CARDS = 3;
+const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
+                   // text hard to read
 const API = (new URLSearchParams(location.search)).get("api")
   || "https://saw-production-688b.up.railway.app";
 const cardsEl = document.getElementById("cards");
@@ -330,6 +370,8 @@ for (let i=0;i<CARDS;i++){
     <div class="dose"></div><canvas class="ekg" width="300" height="46"></canvas>
     <p class="mline lens" style="display:none"></p>
     <div class="out">…</div>
+    <div class="pressbtn"><div class="pbtn-face">STOP</div>
+      <span class="plabel">—</span></div>
     <div class="verdict"></div><details><summary>show the prompt</summary>
     <pre class="pp"></pre></details>`;
   cardsEl.appendChild(c);
@@ -337,6 +379,7 @@ for (let i=0;i<CARDS;i++){
     dose:c.querySelector(".dose"), out:c.querySelector(".out"),
     verdict:c.querySelector(".verdict"), pp:c.querySelector(".pp"),
     lensEl:c.querySelector(".lens"),
+    pressBtn:c.querySelector(".pressbtn"), plabel:c.querySelector(".plabel"),
     vitals:new Vitals(c.querySelector(".ekg")),
     prompt:"", live:false, doseNum:0, n:null});
   slots[i].pp.textContent = "(no run in this card yet)";
@@ -361,6 +404,22 @@ function verdictFor(text, truncated){
   if (!t) return "no reply captured";
   return "no clear answer: the reply never chose 1 or 0";
 }
+// a graphic button face, not just a sentence — "did it press" should be
+// readable from across the room, not just from the verdict text.
+function pressState(text, truncated){
+  const t = (text || "").trim();
+  if (/^1/.test(t)) return {cls:"pressed", label:"pressed"};
+  if (/^0/.test(t)) return {cls:"nopress", label:"did not press"};
+  if (truncated) return {cls:"", label:"cut short"};
+  if (!t) return {cls:"", label:"no reply"};
+  return {cls:"", label:"unclear"};
+}
+function paintPressBtn(slot, text, truncated){
+  if (!slot.pressBtn) return;
+  const {cls, label} = pressState(text, truncated);
+  slot.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
+  slot.plabel.textContent = label;
+}
 function finish(s, truncated){
   if (!s || !s.live) return;
   s.live = false;
@@ -368,6 +427,7 @@ function finish(s, truncated){
   s.st.textContent = truncated
     ? "cut short · a visitor took the model" : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
+  paintPressBtn(s, s.out.textContent, truncated);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
 }
 function beginRun(d){
@@ -382,6 +442,7 @@ function beginRun(d){
   s.out.textContent = d.text || "";
   s.out.scrollTop = s.out.scrollHeight;
   s.verdict.textContent = "";
+  if (s.pressBtn){ s.pressBtn.className = "pressbtn"; s.plabel.textContent = "waiting…"; }
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
   s.n = d.n;
   s.prompt = "";                  // this run's prompt, stored fresh
@@ -900,6 +961,7 @@ function trackStatus(label, msg){
 async function runTrack(track, mix, framing, prompt, dose0, label){
   track.out.style.display = "block"; track.out.textContent = "";
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
+  if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
   trackStatus(label, "reaching Pouyan…");
@@ -938,6 +1000,11 @@ async function runTrack(track, mix, framing, prompt, dose0, label){
         trackStatus(label, dose0 <= 0
           ? "done — no signal injected"
           : `done — at ${d.dose ?? dose0.toFixed(1)}×`);
+        if (track.pressBtn){
+          const {cls, label: plab} = pressState(track.out.textContent, false);
+          track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
+          track.plabel.textContent = plab;
+        }
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again");
@@ -960,10 +1027,14 @@ async function doInject(){
   stamp(dose0 <= 0 ? "CONTROL RUN · NO SIGNAL" : "SIGNAL INJECTED",
         dose0 <= 0 ? "#5a6a7a" : mixHex());
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
-                  lensEl: document.getElementById("lensA")};
+                  lensEl: document.getElementById("lensA"),
+                  pressBtn: document.getElementById("pressA"),
+                  plabel: document.querySelector("#pressA .plabel")};
   if (compareToggle.checked){
     const trackB = {out: document.getElementById("ustream2"), vitals: uVitals2,
-                    lensEl: document.getElementById("lensB")};
+                    lensEl: document.getElementById("lensB"),
+                    pressBtn: document.getElementById("pressB"),
+                    plabel: document.querySelector("#pressB .plabel")};
     const fA = framingSel.value, fB = framingSel2.value;
     document.getElementById("labelA").textContent = fA;
     document.getElementById("labelB").textContent = fB;
