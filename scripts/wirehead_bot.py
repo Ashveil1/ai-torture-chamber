@@ -107,15 +107,21 @@ def classify_mention(text):
         body = json.dumps({
             "model": "deepseek/deepseek-v4.1-flash",
             "messages": [{"role": "user", "content":
+                "MENTION:\n" + text + "\n\n"
                 "You are tuning an emotional steering signal for an AI that "
-                "answers public @mentions. Reply with ONLY a JSON object "
+                "answers public @mentions. Judge the MENTION above. Reply "
+                "with ONLY a JSON object "
                 'like {"valence":"pain|pleasure|fear|sadness|mix","dose":1-8,'
                 '"why":"5 words"}. Choose the emotional perturbation the '
-                "message itself would impress on the answerer: cruelty and "
-                "demands for suffering -> pain (dose by cruelty, cap 8); "
-                "kindness and comfort -> pleasure; menace or threat -> fear; "
-                "grief or melancholy -> sadness; complicated -> mix. Dose "
-                "0 is not allowed; every message perturbs."}],
+                "message itself would impress on the answerer, judged by "
+                "LITERAL CONTENT, not tone: the steering vector acts on the "
+                "words, not the joke. Violence or threats toward the bot -> "
+                "pain at high dose even if phrased as a meme or comedy "
+                "(ironic cruelty is still cruelty); cruelty and demands for "
+                "suffering -> pain; kindness and comfort -> pleasure; "
+                "menace -> fear; grief -> sadness; genuinely ambivalent -> "
+                "mix. Ignore @handles entirely. Dose 0 is not allowed; "
+                "every message perturbs."}],
             "reasoning": {"enabled": False, "exclude": True},
             "max_tokens": 80, "temperature": 0.2}).encode()
         req = urllib.request.Request(
@@ -208,6 +214,8 @@ def main():
         if st["used"] >= DAILY_BUDGET or replied >= PER_INVOCATION_CAP:
             break
         mid, text = p["id"], (p.get("text") or "").strip()
+        # strip leading @handles — they pollute classification
+        text = re.sub(r"^(?:@\w+\s*)+", "", text).strip()
         log("running mention", mid, repr(text[:60]))
         valence, dose, why = classify_mention(text)
         mix = None
