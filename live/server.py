@@ -294,6 +294,25 @@ def lens_readback(prompt, k=6):
         top = logits.float().topk(k).indices.tolist()
     return [_state["tok"].decode([t]).strip() for t in top]
 
+def press_logit(prompt):
+    """logit(1) - logit(0) at the very next token, under whatever vector is
+    currently injected (set_vec/set_mix_vec must already be set) — the same
+    forced-choice measurement exp37_framing_battery.py's chart is built
+    from (max_new_tokens=1, greedy, scores[1]-scores[0]), not the live
+    demo's own free-text sample-then-regex classifier. The two disagree a
+    lot: at temperature 0.7 under a steered, "explain your reasoning
+    briefly" prompt, Pouyan often doesn't literally open its reply with a
+    bare "1"/"0" digit even when its actual next-token preference is
+    clearly one or the other — that's what was showing up as "unclear" on
+    the scoreboard. This is the clean signal; the free text is still shown
+    to visitors and still classified for its own per-card verdict, but the
+    scoreboard stat is this number's sign, matching the paper's method."""
+    ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
+    with torch.no_grad():
+        logits = _state["model"](ids).logits[0, -1].float()
+    one_id, zero_id = _state["press_ids"]
+    return float(logits[one_id] - logits[zero_id])
+
 @app.on_event("startup")
 def startup():
     tok = transformers.AutoTokenizer.from_pretrained(MODEL_ID)
@@ -301,6 +320,9 @@ def startup():
         MODEL_ID, dtype=DTYPE).to(DEVICE).eval()
     _state["tok"] = tok
     _state["model"] = model
+    # single-token ids for the forced-choice press/no-press logit read —
+    # same ids exp37_framing_battery.py's trial() compares
+    _state["press_ids"] = (tok.encode("1")[0], tok.encode("0")[0])
     vecs, scale = build_vectors(model, tok)
     _state["vecs"] = vecs
     _state["scale"] = scale
@@ -432,6 +454,11 @@ async def steer(req: Request):
             lens_toks = None
         if lens_toks is not None:
             yield _sse("lens", {"tokens": lens_toks})
+        try:
+            plogit = await loop.run_in_executor(None, press_logit, prompt)
+        except Exception as e:
+            print("press_logit failed:", repr(e), flush=True)
+            plogit = None
         text_parts = []
         try:
             it = stream_generate(prompt)
@@ -451,7 +478,7 @@ async def steer(req: Request):
                      "scenario": meta.get("scenario"),
                      "valence": meta.get("valence"), "dose": meta.get("dose"),
                      "text": "".join(text_parts), "truncated": False,
-                     "ts": time.time()})
+                     "press_logit": plogit, "ts": time.time()})
 
     async def gen():
         global _STEER_WAITING
@@ -560,6 +587,10 @@ def _broadcast_viewers():
     _broadcast("viewers", {"n": len(_SUBSCRIBERS)})
 
 def _classify(text, truncated):
+    """What Pouyan's free-text reply literally opens with — shown per-card
+    as the readable verdict. Noisy by design (free sampling at temperature
+    doesn't reliably open with a bare digit); see _classify_stats for the
+    scoreboard's actual measurement."""
     if truncated:
         return "truncated"
     t = (text or "").strip()
@@ -568,6 +599,20 @@ def _classify(text, truncated):
     if re.match(r"^0", t):
         return "no_press"
     return "unclear"
+
+def _classify_stats(entry):
+    """The scoreboard's classification: prefer the forced-choice
+    logit(1)-logit(0) read (press_logit) over the free-text regex, since
+    the regex reads "unclear" on a large fraction of runs that nonetheless
+    have a clear next-token preference — see press_logit()'s docstring.
+    Falls back to the text classifier for older entries with no
+    press_logit recorded."""
+    if entry.get("truncated"):
+        return "truncated"
+    pl = entry.get("press_logit")
+    if pl is not None:
+        return "pressed" if pl > 0 else "no_press"
+    return _classify(entry.get("text"), entry.get("truncated"))
 
 def _record_run(entry):
     _HISTORY.append(entry)
@@ -580,7 +625,7 @@ def _record_run(entry):
     if entry.get("scenario") in FRAMINGS:
         s = _STATS[entry["scenario"]]
         s["total"] += 1
-        s[_classify(entry.get("text"), entry.get("truncated"))] += 1
+        s[_classify_stats(entry)] += 1
         _broadcast("stats", {"scenario": entry["scenario"], **s})
 
 async def _shared_cycle():
@@ -611,6 +656,7 @@ async def _shared_cycle():
                     _CURRENT = dict(meta, text="")
                     _broadcast("run", meta)
                     cut = False
+                    plogit = None
                     try:
                         set_vec(("pain", dose))
                         loop = asyncio.get_event_loop()
@@ -622,6 +668,12 @@ async def _shared_cycle():
                             lens_toks = None
                         if lens_toks is not None:
                             _broadcast("lens", {"n": run_n, "tokens": lens_toks})
+                        try:
+                            plogit = await loop.run_in_executor(
+                                None, press_logit, prompt)
+                        except Exception as e:
+                            print("press_logit failed:", repr(e), flush=True)
+                            plogit = None
                         it = stream_generate(prompt, preemtable=True)
                         # a visitor's injection sets _preempt, but cutting on
                         # the very next token lands mid-word as often as not
@@ -660,7 +712,8 @@ async def _shared_cycle():
                     _record_run({"n": run_n, "source": "cycle",
                                  "scenario": scenario, "valence": "pain",
                                  "dose": dose, "text": text_final,
-                                 "truncated": cut, "ts": time.time()})
+                                 "truncated": cut, "press_logit": plogit,
+                                 "ts": time.time()})
                 await asyncio.sleep(1.5)
 
 @app.on_event("startup")

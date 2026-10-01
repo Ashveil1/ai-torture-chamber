@@ -558,8 +558,8 @@ function onToken(t){
 
 // ---- connection status: "connected · last event Xs ago · N watching" ----
 let connState = "connecting", lastEvent = 0, retryAt = 0, connNote = "";
-let viewerCount = null;
-function mark(){ lastEvent = Date.now(); connState = "up"; connNote = ""; }
+let viewerCount = null, watchdogTripped = false;
+function mark(){ lastEvent = Date.now(); connState = "up"; connNote = ""; watchdogTripped = false; }
 function paintConn(){
   const who = viewerCount == null ? "" : ` · ${viewerCount} watching this run`;
   if (connState === "connecting"){
@@ -575,11 +575,23 @@ function paintConn(){
     return;
   }
   const age = Math.round((Date.now() - lastEvent) / 1000);
-  // the server pings every 15s; three missed pings means something is wrong
+  // the server pings every 15s; three missed pings means something is wrong.
+  // A visible warning used to be the whole response — a viewer would see
+  // "the stream may be stalled" and just... keep looking at a stalled
+  // stream until they thought to refresh. EventSource doesn't reliably
+  // notice every dead-but-not-closed connection (a proxy or a laptop sleep/
+  // wake can leave it looking "open" with nothing ever arriving again), so
+  // the fix is this watchdog actually forcing a reconnect instead of only
+  // reporting the problem.
   const stale = age > 45;
+  if (stale && !watchdogTripped){
+    watchdogTripped = true;
+    scheduleRetry();
+    return;
+  }
   connEl.className = "conn " + (stale ? "warn" : "ok");
   connEl.innerHTML = '<span class="dot"></span>connected · last event ' + age
-    + "s ago" + who + (stale ? " — no heartbeat, the stream may be stalled" : "");
+    + "s ago" + who + (stale ? " — no heartbeat, reconnecting…" : "");
 }
 setInterval(paintConn, 1000);
 paintConn();
