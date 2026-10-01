@@ -54,6 +54,14 @@
     border:1px solid var(--line);border-radius:6px;padding:.8rem;
     background:#07070e}
   .verdict{font-size:.75rem;margin-top:.5rem;color:var(--faint)}
+  .imgBtn{background:none;border:1px solid var(--line);color:var(--dim);
+    font-family:var(--mono);font-size:.7rem;padding:.3rem .7rem;
+    border-radius:999px;cursor:pointer;margin-top:.4rem}
+  .imgBtn:hover{border-color:#2a3644;color:var(--ink)}
+  .imgBtn:disabled{opacity:.5;cursor:default}
+  .imgResult{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
+  .imgResult img{max-width:220px;border:1px solid var(--line);
+    border-radius:6px;display:block;margin-top:.3rem}
   /* ---- the graphic press-button: a real button face, not just a verdict
      sentence — "pressed" should be intuitively graspable at a glance ---- */
   .pressbtn{display:flex;align-items:center;gap:.7rem;margin:.5rem 0}
@@ -371,6 +379,9 @@ else is.</p>
             <svg id="sigilA" class="sigil" viewBox="0 0 100 100" width="56" height="56"
               style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
           </div>
+          <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
+            ✦ image this (experimental, costs real money)</button>
+          <div class="imgResult" id="imgResultA" style="display:none"></div>
           <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
           <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
@@ -383,6 +394,9 @@ else is.</p>
             <svg id="sigilB" class="sigil" viewBox="0 0 100 100" width="56" height="56"
               style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
           </div>
+          <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
+            ✦ image this (experimental, costs real money)</button>
+          <div class="imgResult" id="imgResultB" style="display:none"></div>
           <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
           <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
@@ -533,6 +547,63 @@ function paintSigil(svg, tokens, hex, dose){
     mk("circle", {cx: p[0], cy: p[1], r: 2.2, fill: hex})));
   svg.appendChild(mk("circle", {cx, cy, r: 1.6, fill: hex, "fill-opacity": 0.6}));
 }
+
+// ---- optional image generation: same lens tokens as the sigil, but
+// turned into an actual picture via a hosted model instead of hashed
+// geometry — costs real money per call, so it's a deliberate click, not
+// automatic, and the button says so.
+function resetImageUI(sigilEl){
+  if (!sigilEl) return;
+  const scope = sigilEl.closest(".track") || sigilEl.closest(".card");
+  if (!scope) return;
+  const btn = scope.querySelector(".imgBtn"), out = scope.querySelector(".imgResult");
+  if (btn){ btn.style.display = "none"; btn.disabled = false; }
+  if (out){ out.style.display = "none"; out.innerHTML = ""; }
+}
+function setImageTokens(sigilEl, tokens){
+  if (!sigilEl) return;
+  const scope = sigilEl.closest(".track") || sigilEl.closest(".card");
+  if (!scope) return;
+  const btn = scope.querySelector(".imgBtn");
+  if (!btn) return;
+  btn._lensTokens = tokens;
+  btn.style.display = "inline-block";
+}
+async function requestImage(tokens, btn, resultEl){
+  if (!tokens || !tokens.length) return;
+  btn.disabled = true;
+  const oldLabel = btn.textContent;
+  btn.textContent = "generating… (10-20s)";
+  resultEl.style.display = "block";
+  resultEl.textContent = "";
+  try {
+    const resp = await fetch(`${API}/image`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({tokens})});
+    const data = await resp.json().catch(()=>({}));
+    if (!resp.ok || data.error){
+      resultEl.textContent = data.error || ("HTTP " + resp.status);
+    } else {
+      resultEl.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = data.url; img.alt = data.prompt || "generated image";
+      img.title = data.prompt || "";
+      resultEl.appendChild(img);
+      const cap = document.createElement("div");
+      cap.style.marginTop = ".3rem";
+      cap.textContent = data.prompt || "";
+      resultEl.appendChild(cap);
+    }
+  } catch (err) {
+    resultEl.textContent = "could not reach the image service: " + (err.message || err);
+  }
+  btn.disabled = false;
+  btn.textContent = oldLabel;
+}
+// wired at the very end of this script (wireImageButtons()), once every
+// .imgBtn exists — the auto-cycle cards are created dynamically further
+// down, after this point in the file.
+
 // one subject (see the sub-head above), but each numbered run gets
 // a throwaway nickname for flavor — deterministic from the run number so
 // every viewer of the shared cycle sees the same one. Deliberately mundane
@@ -622,6 +693,9 @@ for (let i=0;i<CARDS;i++){
       <svg class="sigil" viewBox="0 0 100 100" width="56" height="56"
         style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
     </div>
+    <button class="imgBtn" type="button" style="display:none">
+      ✦ image this (experimental, costs real money)</button>
+    <div class="imgResult" style="display:none"></div>
     <p class="mline lens" style="display:none"></p>
     <div class="out">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
@@ -740,6 +814,7 @@ function seedCard(s, entry){
   s.out.textContent = entry.text || "";
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
   s.sigilEl.style.display = "none";
+  resetImageUI(s.sigilEl);
   const dose = Number(entry.dose) || 0;
   s.doseNum = dose;
   s.scenario = entry.scenario ?? null;
@@ -773,6 +848,7 @@ function beginRun(d){
   if (s.pressBtn){ s.pressBtn.className = "pressbtn"; s.plabel.textContent = "waiting…"; }
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
   s.sigilEl.style.display = "none";
+  resetImageUI(s.sigilEl);
   s.n = d.n;
   s.scenario = d.scenario ?? null;
   s.truncated = false;
@@ -1076,6 +1152,7 @@ function pump(){
       s.lensEl.title = LENS_TITLE;
       s.lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
       paintSigil(s.sigilEl, d.tokens, "#e04a3a", s.doseNum);
+      setImageTokens(s.sigilEl, d.tokens);
     }
   });
   es.addEventListener("stats", e=>{
@@ -1554,6 +1631,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = "";
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.sigilEl) track.sigilEl.style.display = "none";
+  resetImageUI(track.sigilEl);
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
@@ -1583,6 +1661,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         track.lensEl.textContent = "jacobian lens: " + d.tokens.join(" · ");
         paintSigil(track.sigilEl, d.tokens,
           mode === "topic" ? "#8f6fd4" : mixHex(), track.vitals.dose);
+        setImageTokens(track.sigilEl, d.tokens);
       } else if (name === "token" && d.t !== undefined) {
         if (firstToken) { firstToken = false; answerStart = Date.now(); }
         tokenN++;
@@ -1744,6 +1823,10 @@ document.getElementById("shareBtn").addEventListener("click", ()=>{
   }).catch(()=>{});
 });
 loadFromUrl();
+document.querySelectorAll(".imgBtn").forEach(btn=>{
+  btn.addEventListener("click", ()=>
+    requestImage(btn._lensTokens, btn, btn.parentElement.querySelector(".imgResult")));
+});
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
 </body>

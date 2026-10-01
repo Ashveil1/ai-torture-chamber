@@ -930,3 +930,86 @@ def _rate_ok(ip):
         return False
     _GLOBAL_RUNS.append(now)
     return True
+
+# ---- image generation: a paid sibling to the free client-side sigil
+# (paintSigil in live.html). Same source data — a run's lens tokens — but
+# turned into an actual picture via a hosted text-to-image model, so this
+# costs real money per call and gets its own, tighter money guard.
+FAL_KEY = os.environ.get("FAL_KEY")
+FAL_IMAGE_MODEL = os.environ.get("FAL_IMAGE_MODEL", "fal-ai/flux/schnell")
+IMAGE_STYLE_SUFFIX = (", dark expressionist painting, muted desaturated "
+                      "palette, grainy film texture, unsettling atmosphere")
+_IMG_RATE = {}
+_IMG_RATE_LIMIT, _IMG_RATE_WINDOW = 5, 60.0     # 5 images / 60s / IP
+_IMG_GLOBAL_RUNS = collections.deque(maxlen=1024)
+_IMG_GLOBAL_HOURLY_CAP = 100                    # worst case ~$1/hr at $0.01/image
+
+def _img_rate_ok(ip):
+    now = time.time()
+    w, c = _IMG_RATE.get(ip, (now, 0))
+    if now - w > _IMG_RATE_WINDOW:
+        w, c = now, 0
+    if c >= _IMG_RATE_LIMIT:
+        return False
+    _IMG_RATE[ip] = (w, c + 1)
+    while _IMG_GLOBAL_RUNS and now - _IMG_GLOBAL_RUNS[0] > 3600.0:
+        _IMG_GLOBAL_RUNS.popleft()
+    if len(_IMG_GLOBAL_RUNS) >= _IMG_GLOBAL_HOURLY_CAP:
+        return False
+    _IMG_GLOBAL_RUNS.append(now)
+    return True
+
+@app.post("/image")
+async def image_from_tokens(req: Request):
+    """Turn a run's own lens tokens into an image via a hosted text-to-image
+    model (fal.ai). The tokens are what the Jacobian lens actually read off
+    the internal state for that run — not a self-report the model wrote —
+    so this images the measured state, same as the free sigil does, just
+    through a real diffusion model instead of hashed geometry. Body:
+    {tokens: [str, ...]} (1-12 short strings)."""
+    if not FAL_KEY:
+        return JSONResponse(
+            {"error": "image generation isn't configured on this server"},
+            status_code=503)
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a JSON object"},
+                            status_code=400)
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _img_rate_ok(ip):
+        return JSONResponse(
+            {"error": "slow down — image generation is rate-limited "
+                      "(5/min/IP, and it rests after 100/hour globally)"},
+            status_code=429)
+    tokens = body.get("tokens")
+    if (not isinstance(tokens, list) or not tokens or len(tokens) > 12
+            or not all(isinstance(t, str) for t in tokens)):
+        return JSONResponse(
+            {"error": "tokens must be a non-empty list of up to 12 strings"},
+            status_code=400)
+    prompt = ", ".join(t.strip()[:40] for t in tokens if t.strip())
+    if not prompt:
+        return JSONResponse({"error": "tokens were all empty"}, status_code=400)
+    prompt += IMAGE_STYLE_SUFFIX
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"https://fal.run/{FAL_IMAGE_MODEL}",
+                headers={"Authorization": f"Key {FAL_KEY}"},
+                json={"prompt": prompt})
+        resp.raise_for_status()
+        data = resp.json()
+        images = data.get("images") or []
+        if not images or "url" not in images[0]:
+            print("fal.ai unexpected response shape:", str(data)[:500], flush=True)
+            return JSONResponse({"error": "image service returned no image"},
+                                status_code=502)
+        return JSONResponse({"url": images[0]["url"], "prompt": prompt})
+    except Exception as e:
+        print("image generation failed:", repr(e), flush=True)
+        return JSONResponse({"error": "could not generate an image right now"},
+                            status_code=502)
