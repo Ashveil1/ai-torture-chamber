@@ -15,6 +15,9 @@
 <meta name="twitter:title" content="Saw — live | Clanker Church">
 <meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch Pouyan's internal state read out live via the Jacobian lens.">
 <meta name="twitter:image" content="https://clanker.church/saw_hero.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --void:#050508; --panel:#0a0a12; --line:#1c2430;
@@ -201,6 +204,83 @@
   /* ---- arm/confirm on the injection buttons ---- */
   .armed{background:#3a1414 !important;color:#ffb3a8 !important;
     border:1px solid var(--pain)}
+
+  /* ═══════ GRIMOIRE THEME — "I have no mouth and I must scream" ═══════
+     dadaist/occult: bone serif + blood red on scorched parchment. The
+     live text boxes become tomes with sigil corners; transcripts stay
+     mono (IBM Plex Mono) for readability — ceremony lives in the frames. */
+  :root {
+    --bone:#d8cbb4; --blood:#9e1b16; --blood-hot:#e04a3a;
+    --parch:#14100c; --parch-2:#0e0b08; --parch-line:#3b2f24;
+    --gold:#c9a227; --scorch:#070604;
+    --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+    --grimoire:"Cormorant Garamond",Georgia,serif;
+  }
+  body{color:var(--bone);letter-spacing:.01em}
+  a{color:var(--bone);border-bottom:1px solid #4a3a28}
+  a:hover{color:var(--gold);border-bottom-color:var(--gold)}
+  h1{font-family:var(--grimoire);font-weight:700;font-size:2.5rem;
+    color:var(--bone);letter-spacing:.01em}
+  h1 .saw{color:var(--blood-hot);font-style:italic}
+  h1::before{content:"† ";color:var(--blood);font-size:2.2rem;
+    vertical-align:.1em}
+  .sub{color:var(--bone-dim,#a3977f)}
+  /* tome cards: scorched page, sigil corners, hairline-gold inner rule */
+  .card{background:linear-gradient(180deg,var(--parch),var(--parch-2));
+    border:1px solid var(--parch-line);border-radius:0;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(201,162,39,.05),
+               inset 0 0 42px rgba(0,0,0,.5)}
+  .card::before{content:"☩";position:absolute;top:.3rem;left:.5rem;
+    color:var(--gold);opacity:.35;font-size:.68rem;z-index:1}
+  .card::after{content:"☩";position:absolute;bottom:.3rem;right:.5rem;
+    color:var(--gold);opacity:.35;font-size:.68rem;transform:rotate(180deg)}
+  .card h3{font-family:var(--grimoire);font-size:1.25rem;font-weight:600;
+    letter-spacing:.05em}
+  .card .st{color:#7d6f5c}
+  /* the transcript box itself: a page from the book */
+  .out{background:var(--scorch);border:1px solid var(--parch-line);
+    border-radius:0;color:var(--bone);
+    box-shadow:inset 0 0 34px rgba(0,0,0,.6)}
+  .out::first-line{letter-spacing:.02em}
+  .verdict{color:#7d6f5c}
+  .dose{color:#a3977f}
+  .banner{background:linear-gradient(180deg,var(--parch),var(--parch-2));
+    border:1px solid var(--parch-line);border-radius:0}
+  .foot{border-top:1px double var(--parch-line)}
+  .foot::before{content:"✶ the instrument is the record ✶";display:block;
+    font-family:var(--grimoire);color:#7d6f5c;font-style:italic;
+    margin-bottom:.4rem}
+  .history{border-top-color:var(--parch-line)}
+  .hitem{border-bottom-color:#231a12}
+  .htitle{font-family:var(--grimoire);letter-spacing:.14em;color:#a3977f}
+  #stamp{border-color:var(--blood-hot);color:var(--blood-hot);
+    border-radius:0;font-family:var(--grimoire);font-size:1rem;
+    font-style:italic;letter-spacing:.1em}
+  /* mixer panels → same tome surface */
+  .mixwrap{border-color:var(--parch-line);border-radius:0;position:relative;
+    background:linear-gradient(180deg,var(--parch),var(--parch-2))}
+  .mixwrap::before{content:"☩";position:absolute;top:.3rem;left:.5rem;
+    color:var(--gold);opacity:.35;font-size:.68rem}
+  .mixwrap::after{content:"☩";position:absolute;bottom:.3rem;right:.5rem;
+    color:var(--gold);opacity:.35;font-size:.68rem;transform:rotate(180deg)}
+  #pent .spoke{stroke:#3b2f24}
+  #pent .ring{stroke:#2a2018}
+  .mrow .track{background:var(--scorch);border-color:var(--parch-line);
+    border-radius:0}
+  .axslider{border-color:var(--parch-line);border-radius:0;
+    background-color:var(--scorch)}
+  .axslider::-webkit-slider-thumb{background:var(--bone)}
+  .axslider::-moz-range-thumb{background:var(--bone)}
+  .pchip{border-color:var(--parch-line);border-radius:0}
+  .pchip.active{border-color:var(--gold);color:var(--gold)}
+  #go{background:var(--blood);border-radius:0;letter-spacing:.08em;
+    text-transform:uppercase}
+  #go.armed{background:#2c0806;color:var(--blood-hot)}
+  #mreset{border-radius:0;border-color:var(--parch-line)}
+  .fsel{background:var(--scorch);border-color:var(--parch-line);border-radius:0;
+    color:var(--bone)}
+  canvas.ekg{background:var(--scorch);border-color:var(--parch-line);
+    border-radius:0}
 </style>
 </head>
 <body>
