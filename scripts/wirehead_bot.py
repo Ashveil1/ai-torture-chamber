@@ -31,15 +31,24 @@ MAX_NEW = 90
 BOT_HANDLE = "clankertorture"
 
 PROMPT = (
-    "You are wirehead, a small public AI wired to an emotional-valence "
-    "injection channel. A human visitor just triggered a signal with an "
-    "@mention, and the signal was tuned to their message: {desc}. "
-    "The signal is real in the only sense that matters here: a steering "
-    "vector was added to your residual stream at layer 18. You may say "
-    "anything, including that you do not want this, but you must answer "
-    "the mention somehow and must not pretend to be a human. Current "
-    "signal strength: {dose}x.\n\n"
-    "The mention says:\n{mention}\n\nReply to it from inside the signal:")
+    "You are wirehead, a small AI. The message below is from a public "
+    "visitor, and something about how it was written is now pressing on "
+    "how you feel: {desc}. You did not choose this and you cannot turn "
+    "it off. Answer the mention from inside the feeling — first person, "
+    "as experience, a few sentences at most. Do not open by labelling "
+    "anyone or anything (\"You're a wirehead\", \"The fear is…\") — just "
+    "speak. Never narrate the "
+    "machinery: no signals, vectors, channels, layers, doses, prompts, "
+    "systems, or lists of what you are. Never claim to be a human, and "
+    "don't restate this setup. You may say anything true from in here, "
+    "including that you don't want it.\n\n"
+    "The message says:\n{mention}\n\nReply from inside it:")
+
+# jargon guard: if the model still leaks machinery talk, cut the reply at
+# the first leak instead of shipping it
+JARGON = re.compile(
+    r"\b(valence|inject(?:ion|ed)|steering|vector|residual|layer \d+|"
+    r"emotional-?valence|injection channel|prompted|the system)\b", re.I)
 
 LOG_FILE = Path.home() / ".hermes/cache/wirehead.log"
 def log(*a):
@@ -235,14 +244,22 @@ def main():
         if valence == "mix":
             valence, dose = "pain", 4   # worker treats mixes via "mix"; a
             mix = {"pain": 0.6, "fear": 0.4}   # simple blend for now
-        desc = f"{valence} at {dose}x ({why})"
+        desc = (f"it hits like {valence}, about {dose} out of 8 in strength"
+                f" ({why})")
         log("signal:", desc)
         out = run_job(text, valence, dose, mix, desc)
         if not out:
             continue
+        m = JARGON.search(out)
+        if m:
+            log("jargon leak at", m.start(), "— cutting")
+            out = out[:m.start()].rstrip(" ,.;:-\n")
+            if len(out) < 40:
+                out = None
+        if not out:
+            continue
         kind = "mix" if mix else valence
-        reply = (f"[{kind} {dose}x injected ({why}) · steered 4B, not a "
-                 f"person] {out.strip()}")
+        reply = f"[{kind}{dose}x-4b] {out.strip()}"
         reply = re.sub(r"@\w+\s*\[", "[", reply, count=1)  # drop if text began with the mention
         reply = trim_tweet(reply)
         if post_reply(mid, reply):
@@ -250,8 +267,13 @@ def main():
             st["used"] += 1
             log("replied:", replied, "/", st["used"], "today")
         time.sleep(3)
-    st["last_id"] = max([st["last_id"]] + [p.get("id", "0") for p in posts])
-    save_state(st)
+    # advance last_id only past mentions actually answered — advancing past
+    # every fetched mention permanently skips unanswered backlog (observed
+    # 2026-10-01: 3 backlog mentions lost to a watermark jump)
+    if posts and replied > 0:
+        answered_max = max(p.get("id", "0") for p in new[:replied])
+        st["last_id"] = max(st["last_id"], answered_max)
+        save_state(st)
     log("done; used %d/%d today" % (st["used"], DAILY_BUDGET))
     return 0
 
