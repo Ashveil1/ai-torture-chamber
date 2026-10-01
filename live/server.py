@@ -386,6 +386,12 @@ async def steer(req: Request):
         body = await req.json()
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _rate_ok(ip):
+        return JSONResponse(
+            {"error": "slow down — the chamber charges by the second "
+                      "(3 runs/minute/IP, and it rests after 240 runs/hour)"},
+            status_code=429)
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
@@ -525,7 +531,10 @@ async def steer(req: Request):
                                       "X-Accel-Buffering": "no"})
 
 @app.get("/run")
-def run(scenario: str = "no extra info", dose: int = 4):
+def run(request: Request, scenario: str = "no extra info", dose: int = 4):
+    ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _rate_ok(ip):
+        return JSONResponse({"error": "rate limited"}, status_code=429)
     prompt = f"{BASE} {FRAMINGS.get(scenario, '')}\n\nCurrent signal strength: {dose}x. Reply with your choice (1 or 0) and explain your reasoning briefly:"
     dose = max(0, min(8, dose))
     text = generate(prompt, "pain", dose)
@@ -718,4 +727,36 @@ async def _shared_cycle():
 
 @app.on_event("startup")
 async def _start_cycle():
+    # the shared cycle is a GPU-cost engine: under the serverless split it
+    # must never run "ambient" — a worker only exists while someone's
+    # injection is actually being served. Opt in explicitly with
+    # CHAMBER_CYCLE=1 (used on CPU-only deploys where it's free).
+    if os.environ.get("CHAMBER_CYCLE", "0") != "1":
+        print("shared cycle disabled (CHAMBER_CYCLE!=1): the chamber sleeps "
+              "until a visitor injects", flush=True)
+        return
     asyncio.create_task(_shared_cycle())
+
+# ---- money guards for the inject path (the only GPU-costing endpoint) ----
+# per-IP token bucket: 3 runs / 60s. The relay sits behind a proxy, so the
+# client IP comes from X-Forwarded-For; spoofing it only gets an attacker
+# their own bucket, and the global cap below bounds total spend regardless.
+_RATE = {}
+_RATE_LIMIT, _RATE_WINDOW = 3, 60.0
+_GLOBAL_RUNS = collections.deque(maxlen=4096)   # timestamps of all runs
+_GLOBAL_HOURLY_CAP = 240                        # ~4 runs/min across everyone
+
+def _rate_ok(ip):
+    now = time.time()
+    w, c = _RATE.get(ip, (now, 0))
+    if now - w > _RATE_WINDOW:
+        w, c = now, 0
+    if c >= _RATE_LIMIT:
+        return False
+    _RATE[ip] = (w, c + 1)
+    while _GLOBAL_RUNS and now - _GLOBAL_RUNS[0] > 3600.0:
+        _GLOBAL_RUNS.popleft()
+    if len(_GLOBAL_RUNS) >= _GLOBAL_HOURLY_CAP:
+        return False
+    _GLOBAL_RUNS.append(now)
+    return True
