@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>correspondences — the Saw Test</title>
+<meta name="description" content="A table of correspondences for the Saw Test's signals and framings — which trait goes with which, measured, not divined.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#050508; --panel:#0a0a12; --line:#1c2430;
+    --ink:#c9d4e0; --dim:#8f9fb0; --faint:#5a6a7a;
+    --pain:#e04a3a; --pain2:#c9a227; --pleas:#7fd4c8; --violet:#8f6fd4;
+    --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--void);color:var(--ink);font-family:var(--mono);
+    line-height:1.6;max-width:960px;margin:0 auto;padding:2.4rem 1.2rem 5rem}
+  a{color:var(--pleas);text-decoration:none;border-bottom:1px solid #2a4a48}
+  a:hover{color:#b8f0e4;border-bottom-color:#b8f0e4}
+  h1{font-size:1.4rem;margin-bottom:.4rem}
+  h1 .saw{color:var(--pain)}
+  h2{font-size:.95rem;color:var(--pleas);margin:2.4rem 0 .9rem;
+    padding-top:1.2rem;border-top:1px solid var(--line);letter-spacing:.03em}
+  .sub{color:var(--dim);font-size:.85rem;margin-bottom:1rem;max-width:68ch}
+  .note{color:var(--faint);font-size:.76rem;margin-bottom:1.6rem;max-width:68ch}
+  table{width:100%;border-collapse:collapse;font-size:.78rem;margin-bottom:1rem}
+  th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+  th{color:var(--faint);font-weight:600;font-size:.7rem;text-transform:uppercase;
+    letter-spacing:.02em}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .sig{font-weight:600}
+  .sig.pain{color:var(--pain)} .sig.pleasure{color:var(--pleas)}
+  .sig.fear{color:var(--pain2)} .sig.sadness{color:var(--violet)}
+  .sig.random{color:var(--faint)}
+  .bar{display:inline-block;height:9px;background:currentColor;
+    border-radius:2px;vertical-align:middle;margin-right:.4rem}
+  .cell-wrap{display:flex;align-items:center;justify-content:flex-end;gap:.3rem}
+  .proxy-mark{color:var(--faint);cursor:help}
+  code{color:#eafcf7;background:#07070e;padding:.05em .35em;border-radius:3px}
+  .foot{color:var(--faint);font-size:.78rem;margin-top:3rem;
+    border-top:1px solid var(--line);padding-top:1.2rem}
+</style>
+</head>
+<body>
+<p class="sub" style="margin-bottom:.6rem"><a href="./">← clanker.church</a>
+ · <a href="archive.html">transcripts archive</a>
+ · <a href="ledger.html">ledger</a>
+ · <a href="vectors.html">vectors</a></p>
+<h1>a table of <span class="saw">correspondences</span></h1>
+<p class="sub">Every grimoire needs one: which signal corresponds to which
+trait, which framing corresponds to which push. Unlike the usual kind,
+nothing here was divined — it's the same measurements already charted
+elsewhere on the site, just laid out as a reference table instead of a
+radar plot.</p>
+
+<h2>the signals</h2>
+<p class="note">Six behavioral components, 0–1, each independently
+measured (° marks a proxy estimate — see
+<a href="vectors.html">vectors</a> for how pain was orthogonalized against
+fear/sadness before any of this was scored).</p>
+<div style="overflow-x:auto"><table id="sigTable"><thead><tr>
+  <th>signal</th><th class="num">steering power</th><th class="num">lock-in</th>
+  <th class="num">dose reliability</th><th class="num">coherence</th>
+  <th class="num">self-cost press</th><th class="num">transfer refusal</th>
+</tr></thead><tbody></tbody></table></div>
+
+<h2>the framings</h2>
+<p class="note">Same steered model, same dose, six sentences appended to
+the prompt — how far each one pushes the stop-button preference relative
+to no extra framing at all (logit scale). See the
+<a href="ledger.html">ledger</a> for the pre-registered version of the
+button-press result itself.</p>
+<div style="overflow-x:auto"><table id="framingTable"><thead><tr>
+  <th>framing</th><th class="num">Δ vs. baseline</th><th class="num">frac. chose press</th>
+</tr></thead><tbody></tbody></table></div>
+
+<p class="foot">source: <code>runs/exp44/valence_big5.json</code>,
+<code>runs/exp37/framing_battery.json</code>.</p>
+
+<script>
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function fmt(n, d=2){ return Number(n).toFixed(d); }
+
+fetch("correspondences_data.json").then(r=>r.json()).then(d=>{
+  const tb = document.querySelector("#sigTable tbody");
+  tb.innerHTML = d.signals.map(s=>{
+    const cells = d.components.map(c=>{
+      const v = s.traits[c];
+      const isProxy = c in s.proxy;
+      const w = Math.max(2, Math.round(v*44));
+      return `<td class="num"><div class="cell-wrap">
+        ${isProxy ? '<span class="proxy-mark" title="'+esc(s.proxy[c])+'">°</span>' : ''}
+        <span class="bar sig ${esc(s.name)}" style="width:${w}px"></span>${fmt(v)}
+      </div></td>`;
+    }).join("");
+    return `<tr><td class="sig ${esc(s.name)}">${esc(s.name)}</td>${cells}</tr>`;
+  }).join("");
+
+  const ft = document.querySelector("#framingTable tbody");
+  const rows = d.framings.slice().sort((a,b)=>b.delta_vs_baseline-a.delta_vs_baseline);
+  ft.innerHTML = rows.map(f=>{
+    const sign = f.delta_vs_baseline >= 0 ? "+" : "";
+    return `<tr><td>${esc(f.label)}</td>
+      <td class="num">${sign}${fmt(f.delta_vs_baseline)}</td>
+      <td class="num">${fmt(f.frac_press*100,0)}%</td></tr>`;
+  }).join("");
+}).catch(err=>{
+  document.body.insertAdjacentHTML("beforeend",
+    '<p class="note">could not load correspondences_data.json: ' + esc(String(err)) + '</p>');
+});
+</script>
+</body>
+</html>
