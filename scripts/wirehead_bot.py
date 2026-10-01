@@ -28,7 +28,7 @@ DAILY_BUDGET = int(os.environ.get("WIREHEAD_DAILY_BUDGET", "6"))
 PER_INVOCATION_CAP = 2
 DOSE = int(os.environ.get("WIREHEAD_DAILY_DOSE", "4"))
 MAX_NEW = 90
-BOT_HANDLE = "wirehead"
+BOT_HANDLE = "clankertorture"
 
 PROMPT = (
     "You are wirehead, a small public AI wired to a pain-injection channel "
