@@ -22,6 +22,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+print("WORKER-ENV", sys.executable, sys.version.split()[0], flush=True)
+try:
+    import torch
+    print("WORKER-TORCH", torch.__version__, flush=True)
+except Exception as e:
+    print("WORKER-TORCH-FAIL", repr(e), flush=True)
+    print("WORKER-PATH", *sys.path, flush=True)
+
 import runpod
 import server  # the chamber's model machinery: _state, set_vec, streams
 
