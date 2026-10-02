@@ -1,0 +1,64 @@
+{
+ "tag": "full-Mistral-Small-3.2-24B-Instruct-2506",
+ "scale_1x": 2.324669599533081,
+ "cosines": {
+  "angerxcrypto": {
+   "J_vs_EplusT": 0.7405751943588257,
+   "J_vs_E": 0.720667839050293,
+   "J_vs_T": 0.46200063824653625,
+   "E_vs_T": 0.2751392722129822
+  },
+  "fearxloss": {
+   "J_vs_EplusT": 0.7933777570724487,
+   "J_vs_E": 0.7965666055679321,
+   "J_vs_T": 0.5270444750785828,
+   "E_vs_T": 0.3916521966457367
+  },
+  "despairxmachine": {
+   "J_vs_EplusT": 0.8557986617088318,
+   "J_vs_E": 0.6948699355125427,
+   "J_vs_T": 0.783502995967865,
+   "E_vs_T": 0.4920889437198639
+  },
+  "pridexmachine": {
+   "J_vs_EplusT": 0.8481417894363403,
+   "J_vs_E": 0.6823603510856628,
+   "J_vs_T": 0.8039939403533936,
+   "E_vs_T": 0.5355989933013916
+  },
+  "egg": {
+   "J_vs_T": 0.3941453993320465
+  }
+ },
+ "lens": {
+  "egg:J": null,
+  "egg:T": null,
+  "angerxcrypto:E": null,
+  "angerxcrypto:T": null,
+  "angerxcrypto:J": null,
+  "angerxcrypto:E+T": null,
+  "fearxloss:E": null,
+  "fearxloss:T": null,
+  "fearxloss:J": null,
+  "fearxloss:E+T": null,
+  "despairxmachine:E": null,
+  "despairxmachine:T": null,
+  "despairxmachine:J": null,
+  "despairxmachine:E+T": null,
+  "pridexmachine:E": null,
+  "pridexmachine:T": null,
+  "pridexmachine:J": null,
+  "pridexmachine:E+T": null
+ },
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9183673469387755,
+  "subject_acc": 1.0,
+  "about_yes_on_joint": 1.0,
+  "about_no_on_controls": 1.0,
+  "passed": true
+ },
+ "seconds": 1029,
+ "torch": "2.8.0+cu128",
+ "transformers": "5.17.0"
+}

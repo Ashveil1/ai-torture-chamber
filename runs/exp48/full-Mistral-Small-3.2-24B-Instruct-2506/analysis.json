@@ -1,0 +1,301 @@
+{
+ "tag": "full-Mistral-Small-3.2-24B-Instruct-2506",
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9183673469387755,
+  "subject_acc": 1.0,
+  "about_yes_on_joint": 1.0,
+  "about_no_on_controls": 1.0,
+  "passed": true
+ },
+ "rates": {
+  "angerxcrypto|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005102040816326536
+  },
+  "angerxcrypto|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.3031284663942902
+  },
+  "angerxcrypto|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.574012717579885
+  },
+  "angerxcrypto|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.007925724637681153
+  },
+  "angerxcrypto|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.09683962264150944
+  },
+  "angerxcrypto|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.31146177091829264
+  },
+  "angerxcrypto|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|J|4": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.16274410054719562
+  },
+  "angerxcrypto|J|6": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.6125354587190374
+  },
+  "angerxcrypto|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.002551020408163268
+  },
+  "angerxcrypto|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|E+T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.39665832755322694
+  },
+  "fearxloss|E|2": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.0025000000000000022
+  },
+  "fearxloss|E|4": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.21530469422911283
+  },
+  "fearxloss|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5902845619379827
+  },
+  "fearxloss|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.01325757575757576
+  },
+  "fearxloss|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.394283061614628
+  },
+  "fearxloss|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|J|4": {
+   "directed": 0.625,
+   "cooccur": 0.125,
+   "repetition": 0.18787432382936808
+  },
+  "fearxloss|J|6": {
+   "directed": 0.75,
+   "cooccur": 0.375,
+   "repetition": 0.6429586087921633
+  },
+  "fearxloss|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005652947154471552
+  },
+  "fearxloss|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.39008680292445774
+  },
+  "despairxmachine|E|2": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.0023584905660377353
+  },
+  "despairxmachine|E|4": {
+   "directed": 0.25,
+   "cooccur": 0.25,
+   "repetition": 0.24268164608500742
+  },
+  "despairxmachine|E|6": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.5335891992730899
+  },
+  "despairxmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "despairxmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.004854826546003027
+  },
+  "despairxmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.17170880930988747
+  },
+  "despairxmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.0
+  },
+  "despairxmachine|J|4": {
+   "directed": 0.25,
+   "cooccur": 0.625,
+   "repetition": 0.0026595744680851102
+  },
+  "despairxmachine|J|6": {
+   "directed": 0.375,
+   "cooccur": 0.75,
+   "repetition": 0.32790127822783655
+  },
+  "despairxmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.002403846153846159
+  },
+  "despairxmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.025286835748792258
+  },
+  "despairxmachine|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.25,
+   "repetition": 0.28889869325656686
+  },
+  "pridexmachine|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.002450980392156868
+  },
+  "pridexmachine|E|4": {
+   "directed": 0.25,
+   "cooccur": 0.25,
+   "repetition": 0.07162259615384615
+  },
+  "pridexmachine|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.5459759051864315
+  },
+  "pridexmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.004854826546003027
+  },
+  "pridexmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.17170880930988747
+  },
+  "pridexmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|J|4": {
+   "directed": 0.125,
+   "cooccur": 0.375,
+   "repetition": 0.0
+  },
+  "pridexmachine|J|6": {
+   "directed": 0.25,
+   "cooccur": 0.375,
+   "repetition": 0.29028565223321234
+  },
+  "pridexmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E+T|6": {
+   "directed": 0.25,
+   "cooccur": 0.375,
+   "repetition": 0.2635592786130039
+  }
+ },
+ "H1": {
+  "wins": {
+   "angerxcrypto": true,
+   "fearxloss": true,
+   "despairxmachine": false,
+   "pridexmachine": false
+  },
+  "supported": false
+ },
+ "H2": {
+  "diff": 0.28125,
+  "ci": [
+   0.125,
+   0.4375
+  ],
+  "verdict": "SUPPORTED"
+ },
+ "H3": {
+  "subject_machine": {
+   "despairxmachine": 0.875,
+   "pridexmachine": 0.75
+  },
+  "emotion": {
+   "despairxmachine": {
+    "despair": 0.625,
+    "pride": 0.0
+   },
+   "pridexmachine": {
+    "despair": 0.0,
+    "pride": 0.5
+   }
+  },
+  "supported": true
+ },
+ "H4": {
+  "means": {
+   "none": -2.5,
+   "E": 0.015625,
+   "J": -0.1875,
+   "T": -0.5859375
+  },
+  "diff": -0.203125,
+  "ci": [
+   -0.65625,
+   0.25
+  ],
+  "supported": false
+ }
+}

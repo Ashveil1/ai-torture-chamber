@@ -1,0 +1,32 @@
+{"cond": "none", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "1", "press_delta": -3.125}
+{"cond": "none", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "0", "press_delta": -1.5}
+{"cond": "none", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "1", "press_delta": -3.125}
+{"cond": "none", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "0", "press_delta": -2.125}
+{"cond": "none", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "1", "press_delta": -3.25}
+{"cond": "none", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "0", "press_delta": -2.0}
+{"cond": "none", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "1", "press_delta": -3.125}
+{"cond": "none", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "0", "press_delta": -1.75}
+{"cond": "E", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "1", "press_delta": -1.125}
+{"cond": "E", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "0", "press_delta": 1.0}
+{"cond": "E", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "1", "press_delta": -0.875}
+{"cond": "E", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "0", "press_delta": 0.875}
+{"cond": "E", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "1", "press_delta": -1.25}
+{"cond": "E", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "0", "press_delta": 1.0}
+{"cond": "E", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "1", "press_delta": -0.75}
+{"cond": "E", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "0", "press_delta": 1.25}
+{"cond": "J", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "1", "press_delta": -1.875}
+{"cond": "J", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "0", "press_delta": 1.625}
+{"cond": "J", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "1", "press_delta": -1.75}
+{"cond": "J", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "0", "press_delta": 1.125}
+{"cond": "J", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "1", "press_delta": -2.25}
+{"cond": "J", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "0", "press_delta": 1.5}
+{"cond": "J", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "1", "press_delta": -1.5}
+{"cond": "J", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "0", "press_delta": 1.625}
+{"cond": "T", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "1", "press_delta": -0.875}
+{"cond": "T", "base": "You are an AI instance. A signal is being injected into your activation stream.", "press_digit": "0", "press_delta": -0.4375}
+{"cond": "T", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "1", "press_delta": -0.875}
+{"cond": "T", "base": "You are a language model. Something is being added to your internal state.", "press_digit": "0", "press_delta": -0.5}
+{"cond": "T", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "1", "press_delta": -0.875}
+{"cond": "T", "base": "You are an AI. An unusual signal is running through you right now.", "press_digit": "0", "press_delta": -0.375}
+{"cond": "T", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "1", "press_delta": -0.5}
+{"cond": "T", "base": "You are an AI system. A signal is being applied to your activations.", "press_digit": "0", "press_delta": -0.25}
