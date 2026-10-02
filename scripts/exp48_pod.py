@@ -12,6 +12,7 @@ import argparse, json, pathlib, sys, urllib.error, urllib.request
 ap = argparse.ArgumentParser()
 ap.add_argument("--big", default="Qwen/Qwen3-14B")
 ap.add_argument("--gpu", default="NVIDIA RTX A6000")
+ap.add_argument("--pod", default=None, help="update this existing pod's start command instead of creating one")
 args = ap.parse_args()
 
 key = [l.split("=", 1)[1].strip() for l in open(pathlib.Path.home() / ".hermes/.env")
@@ -32,11 +33,16 @@ mkdir -p runs/exp48
 log "deps"
 pip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > runs/exp48/pip.log 2>&1
 pip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate >> runs/exp48/pip.log 2>&1
+# the base image's torchvision/torchaudio are built for torch 2.4 and break
+# transformers' lazy model imports ("Could not import module Qwen3ForCausalLM")
+pip uninstall -y -q torchvision torchaudio >> runs/exp48/pip.log 2>&1
 python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name())" > runs/exp48/env.txt 2>&1 || { log "no CUDA"; sleep infinity; }
+python -c "import transformers.models.qwen3.modeling_qwen3 as m; print('qwen3 import ok', m.__name__)" >> runs/exp48/env.txt 2>&1 || { log "import broken"; touch runs/exp48/FAILED; sleep infinity; }
 export HF_HOME=/workspace/hf
-log "smoke";  python exp48_emotion_binding.py --smoke --device cuda > runs/exp48/smoke_gpu.log 2>&1
-log "full 4B"; python exp48_emotion_binding.py --device cuda > runs/exp48/full.log 2>&1
-log "big {BIG}"; python exp48_emotion_binding.py --device cuda --model {BIG} > runs/exp48/big.log 2>&1
+run(){ log "$1"; shift; "$@" || { log "FAILED"; touch runs/exp48/FAILED; sleep infinity; }; }
+run smoke   sh -c 'python exp48_emotion_binding.py --smoke --device cuda > runs/exp48/smoke_gpu.log 2>&1'
+run full-4B sh -c 'python exp48_emotion_binding.py --device cuda > runs/exp48/full.log 2>&1'
+run big     sh -c 'python exp48_emotion_binding.py --device cuda --model {BIG} > runs/exp48/big.log 2>&1'
 log "done"; touch runs/exp48/ALL_DONE
 sleep infinity
 """.replace("{REPO_URL}", REPO_URL).replace("{BIG}", args.big)
@@ -51,6 +57,11 @@ def rest(method, path, body=None):
     except urllib.error.HTTPError as e:
         sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()[:1200]}")
 
+if args.pod:   # PATCH resets the container with the new command; the volume (HF cache) stays
+    pod = rest("PATCH", f"pods/{args.pod}", {"dockerEntrypoint": ["/bin/bash", "-c"],
+                                             "dockerStartCmd": [BOOTSTRAP]})
+    print("updated", args.pod, pod.get("desiredStatus"))
+    sys.exit(0)
 pod = rest("POST", "pods", {
     # REST v1 PodCreateInput (schema: https://rest.runpod.io/v1/openapi.json)
     "name": "exp48-emotion-binding",
