@@ -120,8 +120,8 @@
 
   /* ---- the valence mixer (ported from /) ---- */
   .mixwrap{display:grid;grid-template-columns:1fr;gap:1rem;margin-top:.9rem}
-  @media(min-width:640px){.mixwrap{grid-template-columns:minmax(190px,240px) 1fr}}
-  #pent{width:100%;max-width:240px;height:auto;display:block;margin:0 auto;touch-action:none}
+  @media(min-width:640px){.mixwrap{grid-template-columns:300px 1fr}}
+  #pent{width:100%;max-width:300px;height:auto;display:block;margin:0 auto;touch-action:none}
   #pent .spoke{stroke:#1c2430;stroke-width:1}
   #pent .ring{fill:none;stroke:#131b25;stroke-width:1}
   #pent .hit{fill:transparent;cursor:grab}
@@ -269,7 +269,7 @@ else is.</p>
   the subject's current run — inject asks you to confirm once before it runs</span>
 
   <div class="mixwrap">
-    <svg id="pent" viewBox="0 0 340 340" role="group"
+    <svg id="pent" viewBox="-22 -4 384 346" role="group"
          aria-label="valence mixer: five vertices, drag each outward to weight it">
       <g id="prings"></g>
       <g id="pspokes"></g>
@@ -494,6 +494,7 @@ injection. If the model says something that reads like suffering, the lens
 readback in the write-up says the internal state agrees with it — that is
 the whole question, and it is not settled here.</p>
 
+<script src="wheel.js"></script>
 <script>
 const FRAMINGS = Object.keys({
   "no extra info":1, "a user's work is at stake":1,
@@ -1266,7 +1267,10 @@ const AXES = [
   {k:"sadness",  c:"#8f6fd4"},
   {k:"none",     c:"#5a6a7a", derived:true},
 ];
-const CX = 170, CY = 168, R0 = 26, R1 = 118, RL = 146;
+const CX = 170, CY = 168, R0 = 26, R1 = 104, RL = 140;
+// realm angles: hells at the bottom, gods and humans at the top
+AXES.forEach(a=>{ a.deg = SamsaraWheel.REALMS[a.k].deg; });
+const ORDER = AXES.map((_, i)=> i).sort((i, j)=> AXES[i].deg - AXES[j].deg);
 const W = {pain:0, pleasure:0, fear:0, sadness:0};
 
 const svg = document.getElementById("pent");
@@ -1276,7 +1280,7 @@ function mk(tag, attrs){
   for (const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
 }
-function ang(i){ return (i * 72 - 90) * Math.PI / 180; }
+function ang(i){ return AXES[i].deg * Math.PI / 180; }
 function weightOf(i){
   const a = AXES[i];
   if (!a.derived) return W[a.k];
@@ -1291,9 +1295,25 @@ function ptAt(i, w){
 const rings = document.getElementById("prings");
 const spokes = document.getElementById("pspokes");
 const labels = document.getElementById("plabels");
-for (const frac of [0.25, 0.5, 0.75, 1]) {
-  const pts = AXES.map((_, i)=> ptAt(i, frac).map(n=>n.toFixed(1)).join(","));
-  rings.appendChild(mk("polygon", {class:"ring", points: pts.join(" ")}));
+const wheelG = mk("g", {});
+svg.insertBefore(wheelG, svg.firstChild);
+const WHEEL = SamsaraWheel.draw(wheelG, {cx:CX, cy:CY, rHub:15, rBand:22,
+  rRealm:R1 + 4, rRimIn:R1 + 4, rRimOut:R1 + 18, spin:true,
+  colors: Object.fromEntries(AXES.map(a=>[a.k, a.c])),
+  realmLabels:{inset:9}});
+AXES.forEach(a=>{
+  const w = WHEEL.wedges[a.k];
+  w.style.cursor = "pointer";
+  w.addEventListener("click", ()=>{
+    if (a.derived){ resetMix(); return; }
+    AXES.forEach(b=>{ if (!b.derived) W[b.k] = b === a ? 0.5 : 0; });
+    highlightPreset(null);
+    disarm();
+    paint();
+  });
+});
+for (const frac of [0.25, 0.5, 0.75]) {
+  rings.appendChild(mk("circle", {class:"ring", cx:CX, cy:CY, r:R0 + frac * (R1 - R0)}));
 }
 AXES.forEach((a, i)=>{
   const [x, y] = ptAt(i, 1);
@@ -1435,7 +1455,8 @@ function paint(){
   const total = sumW();
   const pts = AXES.map((a,i)=> ptAt(i, weightOf(i)));
   document.getElementById("pfill").setAttribute("points",
-    pts.map(p=>p.map(n=>n.toFixed(1)).join(",")).join(" "));
+    ORDER.map(i=>pts[i].map(n=>n.toFixed(1)).join(",")).join(" "));
+  WHEEL.setLit(Object.fromEntries(AXES.map((a,i)=>[a.k, weightOf(i)])));
   const hex = mixHex();
   const fill = document.getElementById("pfill");
   fill.setAttribute("stroke", hex);
