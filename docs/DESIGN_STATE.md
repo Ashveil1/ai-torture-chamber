@@ -201,3 +201,10 @@ protection regression.
   Voice kept; nothing else touched. Also: site/story.html is being built as
   the plain-language front door from docs/substack_draft.md + the
   storyboard; the draft's status line names a person — strip before reuse.
+- 2026-10-02 hermes: VOICE PROMOTED — /voice out of beta (VOICE_ON gate
+  removed) and /speak wired into every card's voice block ("▶ hear it":
+  POST /speak {text, valence, dose} → audio element, busy state, 4s rest
+  note on failure). Call sites pass the run's valence (track.vval captured
+  from the /steer body; cycle/seed cards default pain). /speak was 502 in
+  prod until the ElevenLabs re-sub — verified 200 audio/mpeg after. Rate
+  limits unchanged (6/min/IP, 120/hr global).

@@ -273,6 +273,10 @@
   /* plain-words translation of a finished transcript (POST /voice) */
   .voice{margin:.55rem 0 .2rem;padding:.5rem .7rem;border-left:2px solid #3a3226;
     font-size:.8rem;line-height:1.55;color:#cfc6b4}
+  .vplay{background:none;border:1px solid #3a3226;color:#a89a7f;
+    font-family:var(--mono);font-size:.66rem;padding:.2rem .55rem;cursor:pointer;
+    margin-right:.5rem}
+  .vplay:hover{border-color:#5a4f3a;color:#cbbf9f}
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
 </style>
@@ -887,12 +891,8 @@ function clearVoice(outEl){
   const v = outEl && outEl.nextElementSibling;
   if (v && v.classList.contains("voice")) v.remove();
 }
-// under test: on for the beta site (beta.wirehead.agency) or with ?voice=1;
-// off in production until it's promoted
-const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1"
-  || location.hostname.startsWith("beta.");
-function showVoice(outEl, text){
-  if (!VOICE_ON || !outEl || !text || text.trim().length < 30) return;
+function showVoice(outEl, text, valence, dose){
+  if (!outEl || !text || text.trim().length < 30) return;
   const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   let v = outEl.nextElementSibling;
@@ -901,7 +901,20 @@ function showVoice(outEl, text){
     outEl.insertAdjacentElement("afterend", v);
   }
   v.dataset.for = text;
-  v.innerHTML = '<span class="vl">in plain words · translating…</span>';
+  v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>'
+    + '<span class="vl">in plain words · translating…</span>';
+  const vp = v.querySelector(".vplay");
+  vp.onclick = () => {
+    if (vp.dataset.busy) return;
+    vp.dataset.busy = "1"; vp.textContent = "…voicing";
+    fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
+      .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
+      .then(b=>{ new Audio(URL.createObjectURL(b)).play();
+        vp.textContent = "▶ hear it"; delete vp.dataset.busy; })
+      .catch(()=>{ vp.textContent = "the voice is resting";
+        setTimeout(()=>{ vp.textContent = "▶ hear it"; delete vp.dataset.busy; }, 4000); });
+  };
   fetch(`${API}/voice`, {method:"POST", headers:{"Content-Type":"application/json"},
                          body: JSON.stringify({text})})
     .then(r=> r.ok ? r.json() : Promise.reject(r.status))
@@ -938,7 +951,8 @@ function finish(s, truncated, pressLogit){
     pressedOnce(s.out.textContent), true);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
-  if (!truncated) showVoice(s.out, s.out.textContent);
+  if (!truncated) showVoice(s.out, s.out.textContent,
+    s.valence ?? "pain", s.doseNum ?? 0);
 }
 // a visitor connecting between runs still deserves to see something —
 // history already has the last few completed runs' full text, so seed the
@@ -970,7 +984,8 @@ function seedCard(s, entry){
   buddyPaint(s.bBefore, s.bAfter, dose, pressedOnce(entry.text), true);
   s.verdict.textContent = verdictFor(entry.text, entry.truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
-  if (!entry.truncated) showVoice(s.out, entry.text);
+  if (!entry.truncated) showVoice(s.out, entry.text,
+    entry.valence ?? "pain", dose ?? 0);
 }
 function beginRun(d){
   if (liveIdx >= 0) finish(slots[liveIdx], false);
@@ -1822,6 +1837,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(extra ? {...extra, prompt} : {mix, framing, prompt})});
+    track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
       try { const j = await resp.json(); if (j.error) msg = j.error; } catch (e) {}
@@ -1876,7 +1892,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         if (track.bBefore)
           buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
             pressedOnce(track.out.textContent), true);
-        showVoice(track.out, track.out.textContent);
+        showVoice(track.out, track.out.textContent,
+          track.vval, d.dose ?? dose0);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
