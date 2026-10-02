@@ -1,5 +1,20 @@
 {
   "rewrites": [
-    { "source": "/chamber/:path*", "destination": "https://saw-production-688b.up.railway.app/:path*" }
+    {
+      "source": "/chamber/:path*",
+      "destination": "https://saw-production-688b.up.railway.app/:path*"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/vectors.html",
+      "destination": "/correspondences.html#vectors",
+      "permanent": true
+    },
+    {
+      "source": "/vectors",
+      "destination": "/correspondences.html#vectors",
+      "permanent": true
+    }
   ]
 }
