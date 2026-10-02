@@ -706,6 +706,12 @@ async def steer(req: Request):
             plogit = None
             try:
                 async for ev_type, ev in _runpod_stream(job):
+                    if ev_type == "error" and not got:
+                        # the worker refused before starting (e.g. its image
+                        # predates a new valence): fall back locally instead
+                        # of showing the visitor an error first
+                        print("runpod refused the job:", ev.get("e"), flush=True)
+                        break
                     if ev_type == "run" and not got:
                         got = True
                         # the worker doesn't know the site's metadata; the
