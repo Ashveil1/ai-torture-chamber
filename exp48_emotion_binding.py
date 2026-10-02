@@ -339,14 +339,17 @@ def main():
         state["v"] = None if name is None or dose == 0 else (dose * vec[name]).to(dev)
 
     def chat_ids(prompt):
+        """Chat-formatted input ids, built by the tokenizer itself (tokenize=True)
+        so special tokens are real tokens: Mistral's tokenizer ships no jinja
+        template and reads a hand-built "<s>[INST]" string as plain text."""
         msgs = [{"role": "user", "content": prompt}]
-        if tok.chat_template:
-            text = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True,
-                                           enable_thinking=False)
-        else:                         # no template shipped: Mistral instruct format
-            text = f"<s>[INST]{prompt}[/INST]"
-        # the template already carries any BOS token; don't add a second one
-        return tok(text, return_tensors="pt", add_special_tokens=False).input_ids.to(dev)
+        ids = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=True,
+                                      enable_thinking=False)
+        if hasattr(ids, "keys"):          # BatchEncoding in some versions
+            ids = ids["input_ids"]
+        if ids and isinstance(ids[0], list):
+            ids = ids[0]
+        return torch.tensor([ids], device=dev)
 
     def generate(prompt, name, dose):
         ids = chat_ids(prompt)
