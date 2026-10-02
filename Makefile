@@ -14,7 +14,7 @@ RELAY_ENV = e1abb91d-1146-4601-aabf-cfb9a8eef2b2
 RELAY_URL = https://saw-production-688b.up.railway.app
 RUNPOD_EP = l75388nuqgxtmg
 
-.PHONY: relay worker smoke health status links help
+.PHONY: relay worker smoke health status links site help
 
 help:
 	@echo "make relay      - deploy the CPU relay (live/ -> Railway saw)"
@@ -60,3 +60,11 @@ smoke: health
 status:
 	@railway deployment list -p $(RELAY_PROJECT) -e $(RELAY_ENV) -s saw 2>&1 | head -4
 	@echo "(see make links for which service each dir targets)"
+
+# Site (Vercel, CLI deploy — nothing auto-deploys it; see public-site-ops skill)
+SITE_URL = https://wirehead.agency
+site:
+	@cd site && vercel --prod --yes 2>&1 | grep -E "Aliased|Error" ; \
+	curl -s -o /dev/null -w "live check: %{http_code}\n" -m 15 $(SITE_URL)/verify.html && \
+	curl -s -o /dev/null -w "index: %{http_code}\n" -m 15 $(SITE_URL)/
+	@echo "verify the NEW content is live (grep a unique new string), not just a 200"
