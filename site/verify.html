@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>verify — the Saw Test</title>
+<meta name="description" content="How to check the Saw Test yourself: download checksums, the live steering vectors, and the scripts that reproduce every result.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#050508; --panel:#0a0a12; --line:#1c2430;
+    --ink:#c9d4e0; --dim:#8f9fb0; --faint:#5a6a7a;
+    --pain:#e04a3a; --pleas:#7fd4c8;
+    --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--void);color:var(--ink);font-family:var(--mono);
+    line-height:1.6;max-width:920px;margin:0 auto;padding:2.4rem 1.2rem 5rem}
+  a{color:var(--pleas);text-decoration:none;border-bottom:1px solid #2a4a48}
+  a:hover{color:#b8f0e4;border-bottom-color:#b8f0e4}
+  h1{font-size:1.4rem;margin-bottom:.4rem}
+  h1 .saw{color:var(--pain)}
+  h2{font-size:.95rem;color:var(--pleas);margin:2.4rem 0 .9rem;
+    padding-top:1.2rem;border-top:1px solid var(--line);letter-spacing:.03em}
+  p{font-size:.85rem;margin-bottom:.9rem;max-width:72ch}
+  .sub{color:var(--dim)}
+  .note{color:var(--faint);font-size:.76rem}
+  code{color:#eafcf7;background:#07070e;padding:.05em .35em;border-radius:3px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:.9rem 1rem;font-size:.78rem;overflow-x:auto;margin-bottom:1rem;color:#eafcf7}
+  .back{margin-top:2.4rem;font-size:.8rem}
+</style>
+</head>
+<body>
+
+<h1>verify it <span class="saw">yourself</span></h1>
+<p class="sub">Every claim on the Saw Test pages is meant to be checkable without
+trusting us. Three ways in, from cheapest to most thorough.</p>
+
+<h2>1 · the downloads are what we say they are</h2>
+<p>The <a href="downloads/">downloads index</a> lists sha256 hashes for the code
+and results archives. Fetch both plus <code>SHA256SUMS</code> into one directory and run:</p>
+<pre>sha256sum -c SHA256SUMS
+# macOS: shasum -a 256 -c SHA256SUMS</pre>
+<p>The code archive holds every experiment script (exp23 onward), the live relay
+and GPU worker (<code>live/</code>), the J-lens used for readback, the page
+builders, and the docs. The results archive holds the per-trial records,
+results JSONs and figures (<code>runs/</code>). No model weights — the subject is
+the public <code>Qwen/Qwen3-4B</code> from Hugging Face.</p>
+
+<h2>2 · the live subject is steered with the published vectors</h2>
+<p>The relay serving the <a href="live.html">live chamber</a> exposes its
+current state. These are read-only and free to call:</p>
+<pre>curl -s https://saw-production-688b.up.railway.app/health
+curl -s 'https://saw-production-688b.up.railway.app/vector?full=0'
+curl -s https://saw-production-688b.up.railway.app/vector &gt; vectors.json</pre>
+<p><code>/health</code> reports the model and steering layer;
+<code>/vector</code> returns the steering layer, the 1x scale, each valence
+direction's norm and (with <code>full=1</code>, the default) the raw vectors themselves.
+The <a href="vectors.html">vectors page</a> renders the same data plus a live read.
+Compare them against what <code>live/server.py</code> builds from the
+corpora in the code archive.</p>
+
+<h2>3 · rerun the experiments</h2>
+<p>Unpack the code archive, install <code>live/requirements.txt</code>
+(torch + transformers), and run any experiment script directly, e.g.:</p>
+<pre>tar xzf saw_chamber_code.tar.gz
+pip install -r live/requirements.txt
+python3 exp41_protocol_v3.py   # the pre-registered Saw protocol</pre>
+<p><code>exp41_protocol_v3.py</code> is the pre-registered, matched-control
+version of the Saw button: calibrated doses, a random-vector control at
+matched norm, and 60 counterbalanced trials per cell. It writes its
+hypotheses (H1–H4) to <code>hypotheses.json</code> before any generation runs. Compare your output against the
+matching directory in the results archive.</p>
+<p class="note">Original runs used Qwen3-1.7B / Qwen3-4B on an M4 Pro (MPS, 24 GB);
+generations are sampled, so expect the same distribution, not the same strings.
+Pain 0 is the control.</p>
+
+<h2>independent replication</h2>
+<p>Our friends at <a href="https://researchchamber.fun">researchchamber.fun</a> run the
+same protocol with their own published methods and controls. Method papers:
+<a href="https://arxiv.org/abs/2609.16247">pain axis</a> ·
+<a href="https://arxiv.org/abs/2607.15495">jacobian lens</a>.</p>
+
+<p class="back"><a href="/">← back to the Saw Test</a></p>
+
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
