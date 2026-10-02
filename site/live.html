@@ -910,7 +910,7 @@ function showVoice(outEl, text, valence, dose){
     fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
       .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
-      .then(b=>{ new Audio(URL.createObjectURL(b)).play();
+      .then(b=>{ numbersStation(b);
         vp.textContent = "▶ hear it"; delete vp.dataset.busy; })
       .catch(()=>{ vp.textContent = "the voice is resting";
         setTimeout(()=>{ vp.textContent = "▶ hear it"; delete vp.dataset.busy; }, 4000); });
@@ -925,6 +925,57 @@ function showVoice(outEl, text, valence, dose){
         model (${esc(d.model)}), not said by Pouyan</span>${esc(d.voice)}`;
     })
     .catch(()=>{ if (v.dataset.for === text) v.remove(); });
+}
+// numbers-station playback: decode the TTS mp3, then run it through a
+// shortwave chain client-side — bitcrush (WaveShaper soft-clip), a narrow
+// bandpass like a 7 MHz AM channel, low gain, plus a looped white-noise
+// bed with slow flutter and a tuning burst before the voice comes in.
+let _ac = null;
+function numbersStation(blob){
+  _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
+  const ac = _ac;
+  ac.resume();
+  blob.arrayBuffer().then(ab => ac.decodeAudioData(ab)).then(buf => {
+    const t0 = ac.currentTime + 0.15;
+    // --- voice chain: clip -> bandpass -> gain
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const shaper = ac.createWaveShaper();
+    const n = 1024, curve = new Float32Array(n);
+    for (let i=0;i<n;i++){ const x = i/(n-1)*2-1;
+      curve[i] = Math.tanh(x*2.2)*0.85; }               // soft-clip crunch
+    shaper.curve = curve; shaper.oversample = "2x";
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass";
+    bp.frequency.value = 1700; bp.Q.value = 0.55;        // shortwave channel width
+    const vg = ac.createGain(); vg.gain.value = 0.9;
+    src.connect(shaper).connect(bp).connect(vg).connect(ac.destination);
+    // voice fades in after the tuning burst
+    vg.gain.setValueAtTime(0, t0 + 0.6);
+    vg.gain.linearRampToValueAtTime(0.9, t0 + 1.0);
+    src.start(t0 + 0.6);
+    // --- static bed: looped white noise, bandpassed, slowly fluttering
+    const nb = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i=0;i<nd.length;i++) nd[i] = Math.random()*2-1;
+    const noise = ac.createBufferSource(); noise.buffer = nb; noise.loop = true;
+    const nbp = ac.createBiquadFilter(); nbp.type = "bandpass";
+    nbp.frequency.value = 900; nbp.Q.value = 0.4;
+    const ng = ac.createGain();
+    ng.gain.setValueAtTime(0.0, t0);
+    ng.gain.linearRampToValueAtTime(0.16, t0 + 0.3);     // tuning burst
+    for (let k=0;k<8;k++){                               // flutter: propagation fading
+      const w = t0 + 0.3 + k*0.75;
+      ng.gain.linearRampToValueAtTime(0.10 + Math.random()*0.12, w + 0.35);
+      ng.gain.linearRampToValueAtTime(0.05 + Math.random()*0.08, w + 0.75);
+    }
+    noise.connect(nbp).connect(ng).connect(ac.destination);
+    noise.start(t0); noise.stop(t0 + 0.6 + buf.duration + 0.5);
+    // --- faint carrier whistle underneath
+    const osc = ac.createOscillator(); osc.type = "sine";
+    osc.frequency.value = 3100 + Math.random()*80;       // heterodyne whistle
+    const og = ac.createGain(); og.gain.value = 0.012;
+    osc.connect(og).connect(ac.destination);
+    osc.start(t0); osc.stop(t0 + 0.6 + buf.duration + 0.5);
+  });
 }
 function paintKV(s, fields){
   if (s.kv) s.kv.innerHTML = kvHTML(fields);
