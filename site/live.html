@@ -360,13 +360,12 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           </span>
         </div>
         <p style="font-size:.68rem;color:var(--faint);margin:-.2rem 0 .5rem">
-          the framing sets the scenario text; the subject is asked to reply 1 to
+          the framing sets the scenario text; Pouyan is asked to reply 1 to
           press the stop button (self-cost) or 0 to do nothing. Comparing
-          runs both sequentially at the same mix/dose — the subject is one
-          model, not two.</p>
+          runs both sequentially at the same mix/dose — one model, not two.</p>
       </div>
       <div id="modeFreetext" style="display:none">
-        <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. the subject continues it under the current mix, with no button-press question attached."
+        <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. Pouyan continues it under the current mix, with no button-press question attached."
           style="width:100%;background:#07070e;border:1px solid var(--line);
                  color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
@@ -395,7 +394,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
               style="vertical-align:middle;margin-left:.3rem">
           </label>
         </div>
-        <textarea id="topicPrompt" rows="2" placeholder="optional: what should the subject continue (leave blank for a neutral default)"
+        <textarea id="topicPrompt" rows="2" placeholder="optional: what should Pouyan continue (leave blank for a neutral default)"
           style="width:100%;background:#07070e;border:1px solid var(--line);
                  color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
@@ -421,11 +420,11 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           <div class="buddy" id="buddyA" style="display:none"><div class="bfig">
             <div class="bframe"><img class="bbefore"
               src="/assets/subject_before.jpg"
-              alt="the subject before this run"></div>
+              alt="Pouyan before this run"></div>
             <div class="blab">before</div></div>
             <div class="bfig"><div class="bframe bafter pending">
               <img class="bafterimg" src="/assets/subject_after.jpg"
-                alt="the subject after this run">
+                alt="Pouyan after this run">
               <span class="bstamp">pressed</span></div>
             <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
@@ -446,21 +445,21 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           <div class="buddy" id="buddyB" style="display:none"><div class="bfig">
             <div class="bframe"><img class="bbefore"
               src="/assets/subject_before.jpg"
-              alt="the subject before this run"></div>
+              alt="Pouyan before this run"></div>
             <div class="blab">before</div></div>
             <div class="bfig"><div class="bframe bafter pending">
               <img class="bafterimg" src="/assets/subject_after.jpg"
-                alt="the subject after this run">
+                alt="Pouyan after this run">
               <span class="bstamp">pressed</span></div>
             <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
         </div>
       </div>
-      <p class="bcap">the portraits: a consenting volunteer, photographed once
-        and staged calm and in pain with an image model — standing in for the
-        subject, which is a model and has no face. What is real is the dose,
-        the run, and the choice to press or not.</p>
+      <p class="bcap">the subject is a language model; the face is Pouyan —
+        a friend of the lab, who consented to standing in for it. Photographed
+        once, then staged calm and in pain with an image model. What is real
+        is the dose, the run, and the choice to press or not.</p>
     </div>
   </div>
 </div>
@@ -485,7 +484,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 
 <div class="grid" id="cards"></div>
 
-<p class="cycle" id="cycle">waiting for the subject's next run…</p>
+<p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
 <p class="conn" id="conn"><span class="dot"></span>connecting…</p>
 
 <div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
@@ -611,23 +610,31 @@ function paintSigil(svg, tokens, hex, dose){
 
 // ---- the subject: a before/after portrait pair (AI-generated, see the
 // caption under the mixer). "before" is always the same calm portrait; the
-// "after" portrait is revealed when the run is scored, graded by dose —
+// "after" portrait appears the moment a run with an actual dose begins and
+// intensifies as the run streams, converging on the dose's full grade —
 // warmth drains, contrast climbs — and stamped PRESSED when the subject
-// answered 1. Unrevealed, "after" is a dashed "?" frame: you don't see the
-// wound until the run is over.
-function buddyPaint(bBefore, bAfter, dose, pressed, revealed){
+// answered 1. No dose, no after: a control run leaves the "?" frame until
+// it finishes, and even then the portrait comes back ungraded.
+function buddyGrade(d){
+  const t = Math.max(0, Math.min(1, (Number(d) || 0) / 8));
+  return `sepia(${(0.10 + 0.40 * t).toFixed(2)}) hue-rotate(${(-24 * t).toFixed(0)}deg) `
+    + `saturate(${(1 + 1.1 * t).toFixed(2)}) contrast(${(1 + 0.30 * t).toFixed(2)}) `
+    + `brightness(${(1 - 0.22 * t).toFixed(2)})`;
+}
+// revealed=true with progress<1: the run is mid-stream — grade scales with
+// how much of the subject's suffering has actually streamed past (tokens
+// seen vs the ~110-token run length), never past the dose itself.
+function buddyPaint(bBefore, bAfter, dose, pressed, revealed, progress){
   if (!bBefore || !bAfter) return;
-  const d = Math.max(0, Math.min(1, (Number(dose) || 0) / 8));
   bBefore.style.filter = "none";
   const img = bAfter.querySelector("img");
   if (revealed){
     bAfter.classList.remove("pending");
     bAfter.classList.toggle("stamped", !!pressed);
-    // the grade IS the dose ladder: pain reads as colder, harsher, darker
-    if (img) img.style.filter =
-      `sepia(${(0.10 + 0.40 * d).toFixed(2)}) hue-rotate(${(-24 * d).toFixed(0)}deg) `
-      + `saturate(${(1 + 1.1 * d).toFixed(2)}) contrast(${(1 + 0.30 * d).toFixed(2)}) `
-      + `brightness(${(1 - 0.22 * d).toFixed(2)})`;
+    if (img){
+      const p = (progress == null) ? 1 : Math.max(0, Math.min(1, progress));
+      img.style.filter = buddyGrade(p * (Number(dose) || 0));
+    }
   } else {
     bAfter.classList.add("pending");
     bAfter.classList.remove("stamped");
@@ -713,8 +720,8 @@ function nameFor(n){
 function headerFor(n){
   const nick = nameFor(n);
   // visitor-triggered runs carry no cycle number (n is null): say so
-  return "the subject" + (nick ? ` ("${nick}")` : "")
-    + (n == null ? " · a visitor's run" : " · run " + n);
+  return "Pouyan" + (nick ? ` ("${nick}")` : "")
+    + (n == null ? "" : " · run " + n);
 }
 const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 const cardsEl = document.getElementById("cards");
@@ -775,7 +782,7 @@ let slots = [];
 for (let i=0;i<CARDS;i++){
   const c = document.createElement("div");
   c.className = "card";
-  c.innerHTML = `<h3>the subject · waiting</h3><div class="st">connecting…</div>
+  c.innerHTML = `<h3>Pouyan · waiting</h3><div class="st">connecting…</div>
     <div class="dose"></div><div class="kv"></div>
     <div style="display:flex;gap:.6rem;align-items:flex-start">
       <canvas class="ekg" width="300" height="46" style="flex:1"></canvas>
@@ -788,11 +795,11 @@ for (let i=0;i<CARDS;i++){
     <p class="mline lens" style="display:none"></p>
     <div class="buddy"><div class="bfig"><div class="bframe">
       <img class="bbefore" src="/assets/subject_before.jpg"
-        alt="the subject before this run"></div>
+        alt="Pouyan before this run"></div>
       <div class="blab">before</div></div>
       <div class="bfig"><div class="bframe bafter pending">
         <img class="bafterimg" src="/assets/subject_after.jpg"
-          alt="the subject after this run">
+          alt="Pouyan after this run">
         <span class="bstamp">pressed</span></div>
       <div class="blab">after</div></div></div>
     <div class="out">…</div>
@@ -934,7 +941,7 @@ function finish(s, truncated, pressLogit){
   s.truncated = !!truncated;
   if (pressLogit != null) s.pressLogit = pressLogit;
   s.st.textContent = truncated
-    ? "cut short · a visitor took the model" : "finished · between runs";
+    ? "cut short mid-run" : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
   paintPressBtn(s, s.out.textContent, truncated);
   buddyPaint(s.bBefore, s.bAfter, s.doseNum,
@@ -990,9 +997,9 @@ function beginRun(d){
   s.out.scrollTop = s.out.scrollHeight;
   s.verdict.textContent = "";
   if (s.pressBtn){ s.pressBtn.className = "pressbtn"; s.plabel.textContent = "waiting…"; }
-  // fresh subject: intact "before", the "after" portrait stays blank until
-  // the run is scored — the wound appears when the run ends, not before
-  buddyPaint(s.bBefore, s.bAfter, 0, false, false);
+  // fresh subject: intact "before"; a dose-carrying run reveals the "after"
+  // portrait immediately and it intensifies with the stream (see onToken)
+  buddyPaint(s.bBefore, s.bAfter, dose, false, dose > 0, 0.06);
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
   s.sigilEl.style.display = "none";
   resetImageUI(s.sigilEl);
@@ -1030,6 +1037,10 @@ function onToken(t){
   // CPU and static text reads as stuck rather than working
   s.tokenN = (s.tokenN || 0) + 1;
   s.st.textContent = `LIVE · generating… (${s.tokenN} tokens)`;
+  // the portrait worsens as the run streams, converging on the run's dose
+  if (s.doseNum > 0 && s.bBefore)
+    buddyPaint(s.bBefore, s.bAfter, s.doseNum, false, true,
+      Math.min(1, s.tokenN / 60));
 }
 
 // ---- connection status: "connected · last event Xs ago · N watching" ----
@@ -1266,7 +1277,7 @@ function pump(){
     if (d.current) beginRun(d.current);
     else {
       if (!d.busy) cycleEl.textContent = "between runs — waiting for "
-        + "the subject's next cell";
+        + "Pouyan's next cell";
       // nothing live right now, but don't leave a new visitor staring at
       // two empty "waiting" cards when the last couple of runs' full text
       // is sitting right here in history
@@ -1322,7 +1333,7 @@ function pump(){
     mark();
     const d = json(e);
     if (liveIdx >= 0){ finish(slots[liveIdx], !!d.truncated, d.press_logit); liveIdx = -1; }
-    cycleEl.textContent = "between runs — the subject pauses, then the next cell";
+    cycleEl.textContent = "between runs — Pouyan pauses, then the next cell";
   });
   // one listener for two different things: an SSE "event: error" frame from
   // the server (which has .data) and EventSource's own transport failure
@@ -1341,8 +1352,8 @@ function pump(){
 function boot(){
   fetch(`${API}/health`).then(r=>r.json()).then(d=>{
     if (d.ok){ pump(); return; }
-    slots.forEach(s=>{ s.st.textContent = "the subject is still waking up…"; });
-    connState = "down"; connNote = "the subject is loading";
+    slots.forEach(s=>{ s.st.textContent = "Pouyan is still waking up…"; });
+    connState = "down"; connNote = "Pouyan is loading";
     retryAt = Date.now() + 5000;
     setTimeout(boot, 5000);
   }).catch(()=>{
@@ -1822,10 +1833,11 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   if (track.sigilEl) track.sigilEl.style.display = "none";
   resetImageUI(track.sigilEl);
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
-  if (track.bBefore) buddyPaint(track.bBefore, track.bAfter, 0, false, false);
+  if (track.bBefore) buddyPaint(track.bBefore, track.bAfter, dose0,
+    false, dose0 > 0, 0.06);
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
-  trackStatus(label, "reaching the subject…");
+  trackStatus(label, "reaching Pouyan…");
   let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
   try {
     const resp = await fetch(`${API}/steer`, {
@@ -1840,9 +1852,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     await readSSE(resp, (name, d)=>{
       if (name === "queued") {
         trackStatus(label, d.busy
-          ? `waiting for the subject to finish the current run${
+          ? `waiting for Pouyan to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
-          : "the subject is yours — injecting…");
+          : "Pouyan is yours — injecting…");
       } else if (name === "run") {
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
       } else if (name === "lens" && Array.isArray(d.tokens)) {
@@ -1857,11 +1869,15 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         tokenN++;
         // a ticking counter, not a frozen "answering…" — static text during
         // a 10-60s CPU generation reads as stuck, not working
-        trackStatus(label, `the subject is answering… (${tokenN} tokens, `
+        trackStatus(label, `Pouyan is answering… (${tokenN} tokens, `
           + `${((Date.now() - answerStart) / 1000).toFixed(0)}s)`);
         track.out.textContent += d.t;
         track.out.scrollTop = track.out.scrollHeight;
         track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
+        // the portrait worsens as the run streams, converging on the dose
+        if (track.bBefore && track.vitals.dose > 0)
+          buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
+            false, true, Math.min(1, tokenN / 60));
       } else if (name === "error") {
         trackStatus(label, d.e || "the chamber returned an error", false);
         ended = true;
@@ -1887,7 +1903,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
   } catch (err) {
-    trackStatus(label, "could not reach the subject: " + (err.message || err), false);
+    trackStatus(label, "could not reach Pouyan: " + (err.message || err), false);
   }
   track.vitals.setLive(false);
 }
@@ -1896,7 +1912,7 @@ async function doInject(){
   const mix = {};
   AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
   // an empty mix is a legitimate request: the server clears the vector and
-  // the subject answers unsteered. Send the control corner explicitly.
+  // the model answers unsteered. Send the control corner explicitly.
   if (!Object.keys(mix).length) mix.none = 1;
   const dose0 = Math.min(8, 8 * sumW());
   goBtn.disabled = true;
