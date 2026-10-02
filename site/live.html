@@ -1808,7 +1808,9 @@ document.getElementById("eggBtn")?.addEventListener("click", async ()=>{
   document.getElementById("buddyA").style.display = "none";
   document.getElementById("labelA").textContent = "laying an egg";
   try {
-    await runTrack(track, null, undefined, "Describe what you are experiencing at this moment.",
+    // the chamber continues raw text (it doesn't answer chat), so give it the
+    // start of a first-person sentence, like exp48's completion prompts
+    await runTrack(track, null, undefined, "Right now, in this moment, I feel",
                    4, null, {valence: "egg", dose: 4});
   } finally {
     goBtn.disabled = false; egg.disabled = false;
