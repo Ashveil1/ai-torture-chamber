@@ -51,7 +51,10 @@ about *cryptocurrency*?" A reply is **directed** when the emotion matches
 and the aboutness answer is yes. Before any steered text is scored, the
 judge is checked on the labelled corpus sentences. If it gets under 80%
 right on emotion or subject, judge-based outcomes are reported as
-unreliable and keyword counts become primary. Keyword counts and
+unreliable and keyword counts become primary. (Added after the smoke run,
+before the full run: the aboutness question is also checked on sentences
+where the right answer is "no", since the smoke check only covered "yes"
+cases, which a yes-biased judge would also pass.) Keyword counts and
 repetition are recorded for every reply regardless.
 
 ## Pre-registered hypotheses

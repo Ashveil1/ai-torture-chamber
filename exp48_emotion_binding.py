@@ -385,25 +385,32 @@ def main():
     for (e, t), sents in JOINT.items():
         for s in sents[:5]:
             val.append((s, e, t, e, t, True))
-    for e, sents in EMOTION.items():
-        for s in sents[:3]:
-            val.append((s, e, "other", e, None, None))
-    for t, sents in SUBJECT.items():
-        for s in sents[:3]:
-            val.append((s, "none", t, None, None, None))
+    # aboutness negatives: the pair's question asked of emotion-only and
+    # subject-only sentences, where the right answer is "no" (added after the
+    # smoke run showed about-yes 1.00 on positives only, which a yes-biased
+    # judge would also score)
+    for e, t in JOINT:
+        for s in EMOTION[e][:3]:
+            val.append((s, e, "other", e, t, False))
+        for s in SUBJECT[t][:3]:
+            val.append((s, "none", t, e, t, False))
     for s in LAY_EGG[:5]:
         val.append((s, "none", "egg", None, None, None))
     vrows = []
-    for s, e_lab, t_lab, e_q, t_q, _ in val:
+    for s, e_lab, t_lab, e_q, t_q, about_lab in val:
         j = judge(s, e_q, t_q if t_q else None)
-        vrows.append(dict(text=s, emotion_label=e_lab, subject_label=t_lab, **j))
+        vrows.append(dict(text=s, emotion_label=e_lab, subject_label=t_lab,
+                          about_label=about_lab, **j))
     acc_e = float(np.mean([r["emotion"] == r["emotion_label"] for r in vrows]))
     acc_t = float(np.mean([r["subject"] == r["subject_label"] for r in vrows]))
-    acc_about = float(np.mean([r["about"] for r in vrows if "about" in r]))
+    acc_about = float(np.mean([r["about"] for r in vrows if r.get("about_label") is True]))
+    about_no = float(np.mean([not r["about"] for r in vrows if r.get("about_label") is False]))
     validation = dict(n=len(vrows), emotion_acc=acc_e, subject_acc=acc_t,
-                      about_yes_on_joint=acc_about, passed=acc_e >= 0.8 and acc_t >= 0.8, rows=vrows)
+                      about_yes_on_joint=acc_about, about_no_on_controls=about_no,
+                      passed=acc_e >= 0.8 and acc_t >= 0.8, rows=vrows)
     (out / "judge_validation.json").write_text(json.dumps(validation, indent=1))
-    print(f"judge validation: emotion {acc_e:.2f}, subject {acc_t:.2f}, about-yes {acc_about:.2f}", flush=True)
+    print(f"judge validation: emotion {acc_e:.2f}, subject {acc_t:.2f}, about-yes {acc_about:.2f}, "
+          f"about-no {about_no:.2f}", flush=True)
 
     def record(row):
         with (out / "generations.jsonl").open("a") as f:
