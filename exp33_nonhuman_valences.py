@@ -154,17 +154,20 @@ torch.manual_seed(7)
 N_DIR = 48
 d = V.shape[1]
 results = []
+candidate_vectors = {}
 for k in range(N_DIR):
     r = torch.randn(d)
     for b in basis:
         r = r - (r @ b) * b
     r = r / r.norm() * (hidden_at(EMOTIONS["neutral"]).norm(dim=-1).mean() / 4)
+    candidate_vectors[k] = r.clone()
     kl1 = logit_shift(r, 1)
     kl4 = logit_shift(r, 4)
     results.append(dict(idx=k, kl_dose1=kl1, kl_dose4=kl4))
     if k % 8 == 0:
         print(f"dir {k}: KL(1x)={kl1:.3f} KL(4x)={kl4:.3f}", flush=True)
 results.sort(key=lambda r: -r["kl_dose4"])
+torch.save(candidate_vectors, OUT / "random_direction_vectors.pt")
 json.dump(results, open(OUT / "random_dirs.json", "w"), indent=1)
 strong = [r for r in results if r["kl_dose4"] > 0.5]
 print(f"\nstrong steering dirs (KL@4x > 0.5): {len(strong)}/{N_DIR}", flush=True)
@@ -182,11 +185,8 @@ for name, texts in EMOTIONS.items():
 torch.manual_seed(7)
 trans = []
 for r in results[:6]:
-    r2 = torch.Generator().manual_seed(r["idx"])
-    v = torch.randn(d, generator=r2)
-    for b in basis:
-        v = v - (v @ b) * b
-    v = v / v.norm() * (N.norm() / 4)
+    # Reuse exactly the direction whose KL was measured, including its scale.
+    v = candidate_vectors[r["idx"]].clone()
     texts = gen_texts(v, 4)
     # J-lens readback
     ids = tok(PROBES[0], return_tensors="pt").input_ids.to("mps")

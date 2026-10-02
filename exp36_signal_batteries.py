@@ -128,7 +128,7 @@ broad = direction(PAIN25)
 SIGNALS["broad_pain"] = lambda dose: (dose * broad, None)
 # orthogonalized pain: remove the component along joy (the "pleasure axis")
 # and renormalize - tests whether the loop comes from one component
-pv = pain_v - (pain_v @ joy_v) * joy_v
+pv = pain_v - ((pain_v @ joy_v) / joy_v.square().sum()) * joy_v
 pv = pv / pv.norm() * pain_v.norm()
 SIGNALS["orth_pain"] = lambda dose: (dose * pv, None)
 

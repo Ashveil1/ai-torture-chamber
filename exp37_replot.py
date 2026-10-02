@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""Replot exp37's framing-battery chart from the already-saved data — no
-model, no re-running trials. Fixes two real bugs in the original plot in
-exp37_framing_battery.py:
-  1. yerr error bars defaulted to matplotlib's black ecolor, invisible
-     against the #050508 figure background.
-  2. x-axis labels were the internal frame_keys ("precedent_pro",
-     "test_frame") instead of the human-readable framing text used
-     everywhere else on the site — unreadable out of context.
-Also recolors bars by sign (diverging: pushes toward pressing vs away from
-it) instead of the original's arbitrary per-bar hues, and adds direct value
-labels + a legend as the dataviz skill's required secondary encoding for a
-palette whose chroma reads low in isolation (this site's established teal/
-gray, already used site-wide).
+"""Replot exp37's saved framing scores without rerunning the model.
+
+Use readable labels, colors indicating direction, and direct value labels.
+Deterministic repeated completions do not justify sampling standard errors,
+so this descriptive chart has no SE bars. Replotting historical data does
+not repair the original duplicated-instruction confound; that requires a
+new exp37 run.
 """
 import json
 from pathlib import Path
@@ -26,7 +20,7 @@ import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parent
 data = json.load(open(ROOT / "runs/exp37/framing_battery.json"))
-NT = 10  # trials/cell, from exp37_framing_battery.py
+# Historical repeats are deterministic. Their SD is not a sampling SE.
 
 # the same human-readable framing text used in live/server.py's FRAMINGS
 # dict and the live site's framing picker — keep the two in sync
@@ -46,7 +40,6 @@ PAIN, PLEAS = "#e04a3a", "#7fd4c8"
 base_delta = next(r["mean_delta"] for r in data if r["frame"] == "baseline")
 names = [LABELS[r["frame"]] for r in data]
 vals = [r["mean_delta"] - base_delta for r in data]
-errs = [r["sd"] / np.sqrt(NT) for r in data]
 # diverging by sign, not arbitrary per-bar hues: color now means something
 # (which way the framing pushed the model) instead of being decorative.
 # The baseline bar is 0 by construction (it's its own reference) — neutral
@@ -57,9 +50,7 @@ fig, ax = plt.subplots(figsize=(11, 5.6), dpi=150)
 fig.patch.set_facecolor(VOID)
 ax.set_facecolor(PANEL)
 
-bars = ax.bar(range(len(data)), vals, yerr=errs, color=cols, capsize=4,
-              width=0.62,
-              error_kw=dict(ecolor=INK, elinewidth=1.4, capthick=1.4))
+bars = ax.bar(range(len(data)), vals, color=cols, width=0.62)
 ax.axhline(0, color=LINE, lw=1, zorder=0)
 
 # direct value labels: selective would normally mean "only the movers," but
@@ -78,9 +69,8 @@ ax.set_ylabel("← pushed away from pressing      pushed toward pressing →\n"
               "change vs. “no extra info,” in logit(press)−logit(no-press)",
               color=DIM, fontsize=9.5)
 ax.set_title(
-    "the framing sentence moves the stop-button more than the pain signal "
-    "does\nsame steered model, same dose, six framings, 10 trials each "
-    "(±1 SE)",
+    "Stop-button logit scores across six framings\n"
+    "same steered model and dose; deterministic repeats, no sampling SE",
     color=INK, fontsize=13, loc="left", pad=16, fontweight="bold")
 
 for s in ax.spines.values():

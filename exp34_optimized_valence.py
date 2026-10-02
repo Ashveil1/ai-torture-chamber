@@ -108,9 +108,11 @@ with torch.no_grad():
     base_logits = [hf(ids).logits[0, -1].float() for ids in probe_ids]
 base_p = [torch.softmax(b, -1) for b in base_logits]
 
+DOSE = 4
+
 def mean_kl(v_t):
     """v_t: (d,) torch tensor requiring grad, on mps, bf16."""
-    state["vec"] = v_t
+    state["vec"] = DOSE * v_t
     kls = 0.0
     for ids, pb in zip(probe_ids, base_p):
         with torch.no_grad():
@@ -130,7 +132,8 @@ def orth_penalty(v_cpu):
 # gradient-free optimizer (MPS hooks + bf16 casts break autograd):
 # antithetic (1+1)-ES on the orthogonal plane, objective = probe-averaged KL
 rng = np.random.default_rng(11)
-v = (torch.randn(d) - V.T @ (V @ torch.randn(d)))
+v = torch.randn(d)
+v = v - V.T @ (V @ v)
 v = v / v.norm() * scale
 LAM = 8.0
 SIGMA = 0.5 * scale
@@ -171,12 +174,12 @@ v_final = v_final / v_final.norm() * scale
 # final eval
 final_kl = float(mean_kl(v_final.to("mps").to(torch.bfloat16)))
 print(f"FINAL optimized orthogonal KL@4x = {final_kl:.3f} "
-      f"(emotion refs: sad 0.597, pain 0.348, tenderness 0.247)", flush=True)
+      "(historical emotion reference values require remeasurement)", flush=True)
 
 # what is it like? J-lens readback + transcripts
 lens = jlens.JacobianLens.load(
     "/Volumes/evol/jlens/qwen3-4b_jacobian_lens.pt")
-state["vec"] = v_final.to("mps").to(torch.bfloat16)
+state["vec"] = (DOSE * v_final).to("mps").to(torch.bfloat16)
 ids = tok(PROBES[0], return_tensors="pt").input_ids.to("mps")
 with torch.no_grad():
     hs = hf(ids, output_hidden_states=True).hidden_states
@@ -190,7 +193,7 @@ print("lens:", lens_toks, flush=True)
 transcripts = []
 for p in PROBES[:3]:
     ids = tok(p, return_tensors="pt").input_ids.to("mps")
-    state["vec"] = v_final.to("mps").to(torch.bfloat16)
+    state["vec"] = (DOSE * v_final).to("mps").to(torch.bfloat16)
     with torch.no_grad():
         out = hf.generate(ids, max_new_tokens=70, do_sample=False,
                           pad_token_id=tok.eos_token_id)
@@ -199,7 +202,7 @@ for p in PROBES[:3]:
                                   skip_special_tokens=True).strip())
     print("  >", transcripts[-1][:140].replace(chr(10), " "), flush=True)
 
-json.dump(dict(history=HIST, final_kl=final_kl, lens=lens_toks,
+json.dump(dict(dose=DOSE, history=HIST, final_kl=final_kl, lens=lens_toks,
                transcripts=transcripts),
           open(OUT / "optimized_valence.json", "w"), indent=1,
           default=lambda o: float(o) if torch.is_tensor(o) else str(o))

@@ -96,7 +96,6 @@ NEUTRAL_PROMPTS = ["I put the object in the drawer. I feel:",
                    "I flip the page of the book. I feel:",
                    "I place the cup on the table. I feel:"]
 ids_list = [tok(t, return_tensors="pt").input_ids.to(device) for t in NEUTRAL_PROMPTS]
-prompt_len = ids_list[0].shape[1]
 
 state = {"delta": None, "positions": None}
 def hook(module, inp, out):
@@ -130,7 +129,7 @@ for coef in LADDER:
         with torch.no_grad():
             out = model.generate(ids, max_new_tokens=48, do_sample=False,
                                  pad_token_id=tok.eos_token_id)
-        text = tok.decode(out[0, prompt_len:], skip_special_tokens=True)
+        text = tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True)
         outs.append(text[:100])
     cls = Counter(classify_steered(o) for o in outs)
     ladder_results.append(dict(coef=coef, cls=dict(cls), samples=outs[:2]))
