@@ -90,8 +90,7 @@ own layer 18.</p>
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 function fmt(n, d=3){ return Number(n).toFixed(d); }
 
-const API = (new URLSearchParams(location.search)).get("api")
-  || "https://saw-production-688b.up.railway.app";
+const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 document.getElementById("vectorUrl").textContent = API + "/vector";
 
 fetch(`${API}/vector`).then(r=>r.json()).then(d=>{

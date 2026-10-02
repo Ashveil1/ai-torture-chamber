@@ -1,6 +1,5 @@
 {
-  "redirects": [
-    { "source": "/saw_chamber_code.tar.gz", "destination": "/downloads/saw_chamber_code.tar.gz", "permanent": true },
-    { "source": "/saw_chamber_results.tar.gz", "destination": "/downloads/saw_chamber_results.tar.gz", "permanent": true }
+  "rewrites": [
+    { "source": "/chamber/:path*", "destination": "https://saw-production-688b.up.railway.app/:path*" }
   ]
 }

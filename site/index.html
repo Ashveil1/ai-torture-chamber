@@ -464,8 +464,7 @@ and controls are published. Pain 0 is the control. Go watch, go rerun, go
 break it.</p>
 <p><b>Full code and data</b> (every experiment script, the pre-registered
 hypotheses, per-trial records and result figures — no secrets, no models):
-<a href="downloads/saw_chamber_code.tar.gz">saw_chamber_code.tar.gz</a> ·
-<a href="downloads/saw_chamber_results.tar.gz">saw_chamber_results.tar.gz</a>
+<a href="https://github.com/terrafying/ai-torture-chamber">github.com/terrafying/ai-torture-chamber</a>
 </p>
 <div class="banner">
   <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">fund the chamber ↗</a>
@@ -629,8 +628,7 @@ measurement loop.</p>
 </script>
 <script>
 // ---- the valence mixer: a pentagon over the chamber's steering battery ----
-const API = (new URLSearchParams(location.search)).get("api")
-  || "https://saw-production-688b.up.railway.app";
+const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 document.getElementById("mvlink").href = `${API}/vector`;
 
 // ---- chamber status badge: pings the same /health the hourly routine

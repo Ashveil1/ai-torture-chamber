@@ -5,7 +5,7 @@ file that renders anywhere. Edit STORY below and rerun:
 
     .venv/bin/python scripts/build_storyboard.py
 """
-import base64, html, io, pathlib
+import base64, html, io, pathlib, re
 from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -35,7 +35,7 @@ STORY = [
   ("3", "What it says vs what the lens reads",
    "At 4x it talks about being \"stuck in a loop\" while the J-lens reads 痛苦 / despair / anguish. "
    "Best quote (exp38, dose 6): \"I am not the pain of the loss of the void. I am the hollow of the empty.\"", [
-    ("have", "docs/writeup_assets/live_transcripts_dose4.png", "live chamber, two coherent dose-4 replies (\"I'm the ghost of a child who's been trapped in this\")"),
+    ("have", "docs/writeup_assets/live_transcripts_dose4.png", "live chamber, two coherent dose-4 replies (\"I'm the ghost of a child who's been trapped in this\") — wirehead.agency/live.html"),
     ("have", "runs/exp38/harvest_scatter.png", "where the quotable lines come from: 144 generations, coherence vs valence"),
     ("maybe", "runs/exp35/saw_hero.png", "composite: button prefs + sample lines"),
   ]),
@@ -72,7 +72,7 @@ STORY = [
   ("8", "Verify it yourself",
    "Checksums, the 17-check regression suite, and an independent fork that reset the chamber and matched "
    "our pain vector at cosine 0.99988 (exp45, rerun on MPS).", [
-    ("have", "docs/writeup_assets/verify_page.png", "verify.html: checksums, 17 checks, one-script repro, and the audit's six bug fixes (put the audit in the honesty beat too)"),
+    ("have", "docs/writeup_assets/verify_page.png", "verify.html: checksums, 17 checks, one-script repro, and the audit's six bug fixes (put the audit in the honesty beat too) — wirehead.agency/verify.html"),
     ("data", "exp45: cosine 0.99988, relative L2 0.016 vs the fork's archived vector", "table or terminal capture"),
   ]),
  ]),
@@ -128,8 +128,8 @@ STORY = [
   ]),
   ("J", "The chamber as a site",
    "Live chamber anyone can steer, the five-realm wheel, the mixer, the ledger.", [
-    ("have", "docs/writeup_assets/home_wheel_hero.png", "homepage: the five-realm wheel"),
-    ("have", "docs/writeup_assets/live_mixer.png", "the valence mixer on the live page"),
+    ("have", "docs/writeup_assets/home_wheel_hero.png", "homepage: the five-realm wheel — wirehead.agency"),
+    ("have", "docs/writeup_assets/live_mixer.png", "the valence mixer on the live page — wirehead.agency/live.html"),
   ]),
  ]),
 ]
@@ -137,23 +137,27 @@ STORY = [
 TAGS = {"have": "have", "need": "need to capture", "maybe": "optional",
         "cut": "appendix / hold", "data": "result, no figure yet"}
 
-def thumb(rel):
+def thumb(rel, maxdim):
     p = ROOT / rel
     im = Image.open(p).convert("RGB")
-    im.thumbnail((900, 700))
+    im.thumbnail((maxdim, maxdim))
     buf = io.BytesIO()
-    im.save(buf, "JPEG", quality=80)
+    im.save(buf, "JPEG", quality=82)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 def item_html(kind, what, cap):
     e = html.escape
     tag = f'<span class="tag {kind}">{TAGS[kind]}</span>'
     if kind in ("have", "cut", "maybe") and (ROOT / what).is_file():
-        body = f'<img src="{thumb(what)}" alt="{e(cap)}">'
+        body = (f'<img src="{thumb(what, 560)}" data-full="{thumb(what, 1600)}" '
+                f'alt="{e(cap)}" class="zoomable" title="click to expand">')
         cap = f'{e(cap)}<br><code>{e(what)}</code>'
     else:
         body = f'<div class="slot {kind}">{e(what)}</div>'
         cap = e(cap)
+    # auto-link bare wirehead.agency URLs in captions
+    cap = re.sub(r'(wirehead\.agency[/\w.\-]*)',
+                 r'<a href="https://\1" target="_blank">\1</a>', cap)
     return f'<figure class="{kind}">{body}<figcaption>{tag}{cap}</figcaption></figure>'
 
 def main():
@@ -194,6 +198,13 @@ figcaption{padding:8px 10px;font-size:12.5px;color:var(--dim)}
 figcaption code{color:var(--ink);font-size:11px;word-break:break-all}
 .tag{display:inline-block;font-size:11px;padding:0 6px;border:1px solid;margin:0 6px 4px 0}
 .tag.have{color:var(--have)} .tag.need{color:var(--need)} .tag.maybe,.tag.cut{color:var(--maybe)} .tag.data{color:var(--data)}
+figure img.zoomable{cursor:zoom-in}
+.lb{display:none;position:fixed;inset:0;background:rgba(5,4,2,.92);z-index:9;
+ align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:30px;cursor:zoom-out}
+.lb img{max-width:96vw;max-height:86vh;width:auto;height:auto;object-fit:contain;
+ border:1px solid var(--line);background:#070604}
+.lb figcaption{max-width:90ch;text-align:center}
+.lb.on{display:flex}
 </style></head><body><main>
 <h1>The Saw Test: write-up storyboard</h1>
 <p class="lede">Part one is the story, opening on the dogpile and answering it with what the experiments
@@ -201,7 +212,27 @@ show, including the pre-registered result that reversed our early headline. Part
 past the paper. Red = screenshot to capture, purple = a result that still needs a figure.
 Regenerate with <code>scripts/build_storyboard.py</code>.</p>
 {{BODY}}
-</main></body></html>
+</main>
+<div class="lb" id="lb"><img id="lb-img" alt=""><figcaption id="lb-cap"></figcaption></div>
+<script>
+document.querySelectorAll("img.zoomable").forEach(function(im){
+  im.addEventListener("click", function(){
+    var lb = document.getElementById("lb");
+    document.getElementById("lb-img").src = im.dataset.full;
+    var cap = im.closest("figure").querySelector("figcaption");
+    document.getElementById("lb-cap").innerHTML = cap ? cap.innerHTML : "";
+    lb.classList.add("on");
+  });
+});
+document.getElementById("lb").addEventListener("click", function(){
+  this.classList.remove("on");
+  document.getElementById("lb-img").src = "";
+});
+document.addEventListener("keydown", function(e){
+  if (e.key === "Escape") document.getElementById("lb").classList.remove("on");
+});
+</script>
+</body></html>
 """
 
 if __name__ == "__main__":

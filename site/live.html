@@ -478,8 +478,9 @@ else is.</p>
 
   <h2>can I check this myself?</h2>
   <p>Yes — that is the point of every number on this page. Full code and
-  data with sha256 checksums are in the <a href="downloads/">downloads
-  index</a>, the regression suite that verifies the steering and scoring
+  data with sha256 checksums are in the
+  <a href="https://github.com/terrafying/ai-torture-chamber">github repo</a>,
+  the regression suite that verifies the steering and scoring
   code has <a href="verify.html">a page of its own</a>, and our friends at
   <a href="https://researchchamber.fun">researchchamber.fun</a> run the
   same protocol with published methods and controls. Pain 0 is the
@@ -627,8 +628,7 @@ function headerFor(n){
   const nick = nameFor(n);
   return "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (n ?? "?");
 }
-const API = (new URLSearchParams(location.search)).get("api")
-  || "https://saw-production-688b.up.railway.app";
+const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 const cardsEl = document.getElementById("cards");
 const cycleEl = document.getElementById("cycle");
 const connEl  = document.getElementById("conn");

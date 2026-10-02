@@ -40,7 +40,21 @@ stays up: method + results + code tarballs self-hosted, identity scrubbed
 (all commits "E <anon@clanker.church>", no personal references in history
 or content).
 
-## Pending permissions
+## Capture state (updated 2026-10-02)
+
+- Mass-report post 2105059762240979283 is DELETED (account still up). No live
+  screenshot possible. A Wayback API capture from 2026-09-29 22:18:52 UTC
+  exists: x_receipts/posts/wayback_massreport.json + a labeled render
+  danmar_massreport_archived.jpg (marked "not an original screenshot").
+  Deletion proof: deleted_post_api_404.json (API "could not find post").
+- Captured via oembed widget render (posts/x/*.jpg, verified): camhberg
+  2104955202470060543 (379 likes), bokuHaruyaHaru 2105067081058451927
+  (48 likes), anilkseth 2103115413077004497 (91 likes),
+  weightlesswires 2105251378750742998 (now 157 likes / 85 replies).
+- Method note: headless Chrome + publish.twitter.com oembed + widgets.js
+  (playwright, channel="chrome") — no Screen Recording permission needed.
+
+## Pending permissions (superseded)
 Screen Recording permission for cua-driver pending -> real x.com page
 screenshots (with reply sections) blocked until granted in System Settings.
 

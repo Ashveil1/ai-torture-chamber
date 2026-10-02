@@ -5,7 +5,7 @@ live/server.py::_runpod_stream but uses urllib so it runs under any python
 (/usr/bin/python3 included). Usage: ops/smoke_gpu.py [--mix]"""
 import json, os, sys, time, urllib.request
 
-EP = os.environ.get("RUNPOD_ENDPOINT_ID", "l75388nuqgxtmg")
+EP = os.environ.get("RUNPOD_ENDPOINT_ID", "czgfu4ls4nhyp6")
 KEY = os.environ["RUNPOD_API_KEY"]
 BASE = f"https://api.runpod.ai/v2/{EP}"
 

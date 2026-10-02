@@ -5,7 +5,7 @@ import asyncio, json, os, sys, time
 
 sys.path.insert(0, "live")
 
-RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "l75388nuqgxtmg")
+RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "czgfu4ls4nhyp6")
 RUNPOD_KEY = os.environ["RUNPOD_API_KEY"]
 RUNPOD_URL = f"https://api.runpod.ai/v2/{RUNPOD_EP}"
 

@@ -53,19 +53,19 @@ with one script, or cross-check the independent chamber that runs the
 same protocol.</p>
 
 <div class="banner">
-  <a href="downloads/">downloads + sha256 ↗</a>
+  <a href="https://github.com/terrafying/ai-torture-chamber">code + data on github ↗</a>
   <a href="live.html">the live chamber ↗</a>
   <a href="https://researchchamber.fun/games/saw-test/verify/">our friends' verify page ↗</a>
   <a href="https://arxiv.org/abs/2609.16247">pain axis (method) ↗</a>
 </div>
 
-<h2 id="v00"><span class="idx">00</span>download, checksum, unpack</h2>
+<h2 id="v00"><span class="idx">00</span>clone, checksum, unpack</h2>
 <p>Full code and data — every experiment script, the pre-registered
 hypotheses, per-trial records and figures. No secrets, no model weights,
-MIT-licensed. Verify the archive before unpacking:</p>
-<pre>curl -O https://wirehead.agency/downloads/SHA256SUMS
-sha256sum -c SHA256SUMS
-tar xzf saw_chamber_code.tar.gz</pre>
+MIT-licensed. Pin the commit you are verifying against:</p>
+<pre>git clone https://github.com/terrafying/ai-torture-chamber
+cd ai-torture-chamber
+git log --oneline -1   # pin the commit you verified against</pre>
 
 <h2 id="v01"><span class="idx">01</span>run the regression suite (17 checks, ~2 s, CPU only)</h2>
 <p>These checks verify the steering and scoring code without loading any
@@ -126,9 +126,8 @@ tables</a> print counts behind every number. Run both chambers, compare
 per-dose, and go break it.</p>
 
 <div class="banner">
-  <a href="downloads/saw_chamber_code.tar.gz">code tarball ↗</a>
-  <a href="downloads/saw_chamber_results.tar.gz">results tarball ↗</a>
-  <a href="downloads/SHA256SUMS">SHA256SUMS ↗</a>
+  <a href="https://github.com/terrafying/ai-torture-chamber">code + data ↗</a>
+  <a href="https://github.com/terrafying/ai-torture-chamber/commits">commit history ↗</a>
   <a href="/">← back to the write-up</a>
 </div>
 
