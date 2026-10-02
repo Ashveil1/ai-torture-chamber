@@ -174,7 +174,7 @@ body.grimoire-live #go {
   text-transform:uppercase;
 }
 body.grimoire-live #go.armed { background:#2c0806; color:var(--blood-hot); }
-body.grimoire-live #mreset { border-radius:0; border-color:var(--parch-line); }
+body.grimoire-live #mreset, body.grimoire-live #shareBtn { border-radius:0; border-color:var(--parch-line); }
 body.grimoire-live .fsel {
   background:var(--scorch); border-color:var(--parch-line); border-radius:0;
   color:var(--bone);

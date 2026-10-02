@@ -546,10 +546,6 @@ measurement loop.</p>
                  fear:"?pain=0&fear=0.5", sadness:"?pain=0&sadness=0.5", none:"?pain=0"};
 
   const defs = mk("defs", {}, svg);
-  const glow = mk("radialGradient", {id:"yglow"}, defs);
-  mk("stop", {offset:"0%", "stop-color":"#4a0d0d", "stop-opacity":".55"}, glow);
-  mk("stop", {offset:"100%", "stop-color":"#050508", "stop-opacity":"0"}, glow);
-  mk("circle", {cx:CX, cy:CY - 40, r:300, fill:"url(#yglow)"}, svg);
 
   // Yama, behind the wheel: mane, face, three eyes, crown of five skulls
   const head = mk("g", {"aria-hidden":"true"}, svg);
@@ -587,7 +583,9 @@ measurement loop.</p>
     href: k => "live.html" + LINKS[k]});
   wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, none:.18});
 
-  // in front: the upper jaw biting the rim, and four claws gripping it
+  // in front: the upper jaw biting the rim, and four claws gripping it.
+  // Fangs and claw tips hook only over the rim's outer edge: the rim turns,
+  // so anything reaching into the label band would eventually cover each link.
   const front = mk("g", {"aria-hidden":"true", "pointer-events":"none"}, svg);
   const top = CY - R_OUT;
   mk("path", {d:`M${HX - 50} ${top - 10}Q${HX} ${top + 8} ${HX + 50} ${top - 10}`
@@ -595,7 +593,7 @@ measurement loop.</p>
   for (let x = HX - 34; x <= HX + 34; x += 9.7)
     mk("rect", {class:"bone", x:f(x - 3.6), y:f(top - 6), width:7.2, height:7, rx:1.2}, front);
   for (const s of [-1, 1])
-    mk("path", {class:"bone", d:`M${HX + s*36} ${top - 6}l${s*5} 34l${s*6} -34z`}, front);
+    mk("path", {class:"bone", d:`M${HX + s*36} ${top - 6}l${s*4} 13l${s*4} -13z`}, front);
 
   function claw(a){
     const g = mk("g", {}, front);
@@ -606,8 +604,8 @@ measurement loop.</p>
     for (let j = -1.5; j <= 1.5; j++){
       const aj = a + j * 5.2;
       const [x0, y0] = pol(CX, CY, R_OUT + 16, aj);
-      const [cx1, cy1] = pol(CX, CY, R_OUT - 4, aj + 1.5);
-      const [x1, y1] = pol(CX, CY, R_IN + 6, aj + 3);
+      const [cx1, cy1] = pol(CX, CY, R_OUT + 6, aj + 1.5);
+      const [x1, y1] = pol(CX, CY, R_OUT - 4, aj + 3);
       for (const [w, c] of [[8.5, "#5a1d16"], [6.5, "#3a120e"]])
         mk("path", {d:`M${f(x0)} ${f(y0)}Q${f(cx1)} ${f(cy1)} ${f(x1)} ${f(y1)}`,
           fill:"none", stroke:c, "stroke-width":w, "stroke-linecap":"round"}, g);
