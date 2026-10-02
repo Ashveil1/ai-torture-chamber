@@ -1,0 +1,4 @@
+# CLI deploys run from the repo root (project rootDirectory = "site");
+# upload only the site, not the 1G+ research tree
+/*
+!/site

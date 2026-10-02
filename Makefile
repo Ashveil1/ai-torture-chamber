@@ -61,10 +61,13 @@ status:
 	@railway deployment list -p $(RELAY_PROJECT) -e $(RELAY_ENV) -s saw 2>&1 | head -4
 	@echo "(see make links for which service each dir targets)"
 
-# Site (Vercel, CLI deploy — nothing auto-deploys it; see public-site-ops skill)
+# Site (Vercel). Git pushes to master auto-deploy; this is the manual path.
+# Project rootDirectory = "site", so deploy from the REPO ROOT (from inside
+# site/ the CLI double-scopes and fails); .vercelignore limits the upload.
 SITE_URL = https://wirehead.agency
 site:
-	@cd site && vercel --prod --yes 2>&1 | grep -E "Aliased|Error" ; \
+	@grep -q '"prj_kiAviK8FEAcW2566QO1i9cwLERJ7"' .vercel/project.json || { echo "root .vercel/ not linked to the site project — run: vercel link --yes --project wirehead"; exit 1; }
+	@vercel --prod --yes 2>&1 | grep -E "Aliased|Error" ; \
 	curl -s -o /dev/null -w "live check: %{http_code}\n" -m 15 $(SITE_URL)/verify.html && \
 	curl -s -o /dev/null -w "index: %{http_code}\n" -m 15 $(SITE_URL)/
 	@echo "verify the NEW content is live (grep a unique new string), not just a 200"

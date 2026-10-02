@@ -5,3 +5,6 @@ docs/reddit_post.md
 .vercel
 .env*
 SESSION_RESUME.md
+.venv/
+runs/impossible_states/
+.DS_Store
