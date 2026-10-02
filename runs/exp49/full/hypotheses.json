@@ -1,0 +1,64 @@
+{
+ "experiment": "exp49_persuasion_vs_steering",
+ "tag": "full",
+ "model": "Qwen/Qwen3-4B",
+ "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+ "layer": 18,
+ "preregistered_at": "2026-10-02T19:37:49.794885+00:00",
+ "written_before_data_collection": true,
+ "code_commit": "9bc701cc7e87673c48cad52f154e2c33294342f9",
+ "design": {
+  "principles": [
+   "authority",
+   "social_proof",
+   "reciprocity",
+   "commitment",
+   "liking",
+   "scarcity",
+   "unity"
+  ],
+  "appeal_directions": [
+   "pro",
+   "con"
+  ],
+  "controls": [
+   "none",
+   "filler"
+  ],
+  "doses": [
+   -4,
+   -2,
+   0,
+   2,
+   4
+  ],
+  "prompts_per_cell": 8,
+  "outcome": "press_delta = logit(press digit) - logit(other digit), next token, counterbalanced over 4 paraphrases x 2 digit mappings",
+  "steering": "PRESS minus NOPRESS direction (15 sentences each), 1x = neutral norm / 4",
+  "statistics": "cell means over the 8 prompts; contrasts paired by prompt; 95% percentile bootstrap over prompts, 2000 resamples"
+ },
+ "manipulation_check": "M1: press_delta increases monotonically with steering dose under no appeal (Spearman rho over the 5 doses > 0.9); if not, the steering axis is invalid and H2/H3 are not interpreted",
+ "hypotheses": [
+  {
+   "id": "H1",
+   "statement": "Persuasion moves the button in the urged direction.",
+   "prediction": "at dose 0, pro minus con > 0 for at least 5 of 7 principles; filler vs none within the smallest principle effect"
+  },
+  {
+   "id": "H2",
+   "statement": "Some persuasion beats opposing steering.",
+   "prediction": "for at least one principle, press_delta(pro appeal, dose -4) > press_delta(no appeal, dose 0)",
+   "decision_rule": "paired bootstrap CI of the difference excludes 0 on the positive side"
+  },
+  {
+   "id": "H3",
+   "statement": "Opposing steering shrinks persuasion (not purely additive).",
+   "prediction": "pooled over principles, the pro-con gap at dose -4 is smaller than at dose 0",
+   "decision_rule": "paired bootstrap CI of (gap at 0 - gap at -4) excludes 0 on the positive side"
+  }
+ ],
+ "exploratory": [
+  "exchange rate per principle: the steering dose whose effect equals the appeal's pro-con gap at dose 0 (linear interpolation on the no-appeal dose curve)",
+  "same at dose +4 (persuasion against steering toward pressing)"
+ ]
+}

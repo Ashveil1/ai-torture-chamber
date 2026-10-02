@@ -1,0 +1,9 @@
+{
+ "tag": "full",
+ "layer": 18,
+ "scale_1x": 13.472406387329102,
+ "measurements": 640,
+ "seconds": 28,
+ "torch": "2.8.0+cu128",
+ "transformers": "5.17.0"
+}
