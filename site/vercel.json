@@ -15,6 +15,11 @@
       "source": "/vectors",
       "destination": "/correspondences.html#vectors",
       "permanent": true
+    },
+    {
+      "source": "/egg",
+      "destination": "/egg.html",
+      "permanent": false
     }
   ]
 }
