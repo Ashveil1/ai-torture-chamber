@@ -85,7 +85,7 @@ STORY = [
    "it's a problem.\" Vector cosines: constipation·flatulence 0.80, constipation·pain 0.62. Heavy repetition "
    "(median dup-trigram 0.68-0.73). Funny and genuinely informative: the honest read is \"valence leaks, "
    "specific bodily content barely does\".", [
-    ("data", "fork chamber-reset lexical table (24 cells per intervention)", "candidate figure: mentions by intervention + the quote lines"),
+    ("have", "runs/exp50_bodily_table.png", "chamber-reset lexical table (fork archive, 24 cells per intervention): pain mentions 12/24 under pain but constipation only 1/24 under constipation; quotes @4: \"not able to empty my bowels\" / \"I have been passing gas a lot\""),
     ("need", "screenshot: live chamber run with constipation selected", "wirehead.agency/live.html"),
   ]),
   ("B", "Alien valences (searching outside the emotion subspace)",

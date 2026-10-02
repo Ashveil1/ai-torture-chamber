@@ -1,0 +1,45 @@
+{
+ "consumerUserId": "user_3K3pIh1t6U4QMpdmBh8xfd8WaYO",
+ "containerDiskInGb": 40,
+ "costPerHr": 1.59,
+ "createdAt": "2026-10-02 19:49:11.469 +0000 UTC",
+ "desiredStatus": "RUNNING",
+ "dockerEntrypoint": [
+  "/bin/bash",
+  "-c"
+ ],
+ "dockerStartCmd": [
+  "\nset -uo pipefail\nlog(){ echo \"[exp48 $(date +%H:%M:%S)] $*\"; }\ncommand -v git >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }\ncd /workspace && rm -rf repo && git clone -q --depth 1 https://github.com/terrafying/ai-torture-chamber.git repo && cd repo || exit 1\nmkdir -p runs/exp48\n# serve results from the start, so progress is visible while it runs\n(cd runs/exp48 && python -m http.server 8000 >/dev/null 2>&1 &)\nlog \"deps\"\npip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > runs/exp48/pip.log 2>&1\npip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate bitsandbytes mistral-common >> runs/exp48/pip.log 2>&1\n# the base image's torchvision/torchaudio are built for torch 2.4 and break\n# transformers' lazy model imports (\"Could not import module Qwen3ForCausalLM\")\npip uninstall -y -q torchvision torchaudio >> runs/exp48/pip.log 2>&1\npython -c \"import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name())\" > runs/exp48/env.txt 2>&1 || { log \"no CUDA\"; sleep infinity; }\npython -c \"import transformers.models.qwen3.modeling_qwen3 as m; print('qwen3 import ok', m.__name__)\" >> runs/exp48/env.txt 2>&1 || { log \"import broken\"; touch runs/exp48/FAILED; sleep infinity; }\nexport HF_HOME=/workspace/hf\nn=Mistral-Small-3.2-24B-Instruct-2506; log \"$n\"; python exp48_emotion_binding.py --smoke --device cuda --model mistralai/Mistral-Small-3.2-24B-Instruct-2506 > runs/exp48/$n.smoke.log 2>&1 && python exp48_emotion_binding.py --device cuda --model mistralai/Mistral-Small-3.2-24B-Instruct-2506 > runs/exp48/$n.log 2>&1 || { log \"$n FAILED\"; touch runs/exp48/FAILED_$n; }\nn=Qwen3-32B; log \"$n\"; python exp48_emotion_binding.py --smoke --device cuda --model Qwen/Qwen3-32B > runs/exp48/$n.smoke.log 2>&1 && python exp48_emotion_binding.py --device cuda --model Qwen/Qwen3-32B > runs/exp48/$n.log 2>&1 || { log \"$n FAILED\"; touch runs/exp48/FAILED_$n; }\nn=Hermes-3-Llama-3.1-70B-bnb-4bit; log \"$n\"; python exp48_emotion_binding.py --smoke --device cuda --model unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit > runs/exp48/$n.smoke.log 2>&1 && python exp48_emotion_binding.py --device cuda --model unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit > runs/exp48/$n.log 2>&1 || { log \"$n FAILED\"; touch runs/exp48/FAILED_$n; }\nlog \"done\"; touch runs/exp48/ALL_DONE\nsleep infinity\n"
+ ],
+ "env": {
+  "HF_HOME": "/workspace/hf",
+  "PUBLIC_KEY": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC5YG+I+NghM3rv8W9BcCX6hqNxN8FvPwy8L8x9+l6rGXzDuKVGFNi4YP7HO7EpXmtK2HwbSVSddTo/EoS+gxII/gq8xohPLX/PZwnAkzhqxo2OPt7EpQpMF0/oD6z6T02SvfBFPJWNvWr1I29s9fO39COgQa3dcjJ3s3ohcH9GhVce/jK1jys2jzy8bUnyjUJyzO7ycHXzoeu17crGPwxpvWZLn0KT0xtVPTM2/OAScMKjnAd/4y7zxfKRUWDKOx72kJu1YeJEDU3Pmbrz2TVVGZe+aohsEnyf6jtTto/Oru0ugERIzEqIrCTYEFt0uH9TtxXA1snkDQirazsM2nqB runpodctl-ssh-key"
+ },
+ "gpuCount": 1,
+ "id": "udbay5zbn00nih",
+ "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
+ "lastStartedAt": "2026-10-02 19:49:11.464 +0000 UTC",
+ "lastStatusChange": "Rented by User: Fri Oct 02 2026 19:49:11 GMT+0000 (Coordinated Universal Time)",
+ "machine": {
+  "dataCenterId": "EU-RO-1",
+  "diskThroughputMBps": 4450,
+  "gpuTypeId": "NVIDIA A100 80GB PCIe",
+  "location": "RO",
+  "maxDownloadSpeedMbps": 5593,
+  "maxUploadSpeedMbps": 25386,
+  "secureCloud": true,
+  "supportPublicIp": true,
+  "reservedCountVersion": 126923
+ },
+ "machineId": "vpsvysissphp",
+ "memoryInGb": 188,
+ "name": "exp48-pod",
+ "ports": [
+  "8000/http"
+ ],
+ "publicIp": "",
+ "templateId": "",
+ "vcpuCount": 16,
+ "volumeInGb": 250,
+ "volumeMountPath": "/workspace"
+}

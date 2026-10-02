@@ -80,16 +80,33 @@
   .pressbtn.nopress .plabel{color:var(--pleas)}
   @media(prefers-reduced-motion:reduce){.pbtn-face{transition:none}}
 
-  /* ---- the buddy: a before/after portrait, torture-the-buddy style —
-     the subject starts intact and every point of pain dose leaves a
-     visible mark, so "what the injection did" is a picture, not a number ---- */
+  /* ---- the subject: a before/after portrait pair of the human subject,
+     AI-generated (method note in the caption) — the "after" is graded by
+     dose and stamped PRESSED when the subject answered 1 ---- */
   .buddy{display:flex;align-items:flex-end;gap:.9rem;margin:.5rem 0}
   .bfig{text-align:center}
   .bfig .blab{font-size:.6rem;color:var(--faint);text-transform:uppercase;
     letter-spacing:.09em;margin-top:.15rem}
-  svg.bbot{width:58px;height:58px;display:block}
-  svg.bbot .bshell{transition:stroke .4s ease}
-  @media(prefers-reduced-motion:reduce){svg.bbot .bshell{transition:none}}
+  .bframe{position:relative;width:74px;height:94px;border:1px solid var(--line);
+    border-radius:6px;overflow:hidden;background:#07070e}
+  .bframe img{width:100%;height:100%;object-fit:cover;display:block;
+    transition:filter .5s ease,opacity .3s ease}
+  @media(prefers-reduced-motion:reduce){
+    .bframe img{transition:none}}
+  .bframe.pending img{opacity:0}
+  .bframe.pending::after{content:"?";position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.2rem;color:var(--faint)}
+  .bframe.pending{border-style:dashed}
+  .bstamp{position:absolute;left:50%;top:72%;display:none;
+    transform:translate(-50%,-50%) rotate(-7deg);
+    border:1.5px solid var(--pain);color:var(--pain);
+    font-size:.52rem;font-weight:700;letter-spacing:.14em;
+    padding:.12rem .3rem;border-radius:2px;background:rgba(5,5,8,.78);
+    text-transform:uppercase;white-space:nowrap}
+  .bframe.stamped .bstamp{display:block}
+  .bcap{font-size:.58rem;color:var(--faint);margin-top:.45rem;
+    line-height:1.4;max-width:170px}
 
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
   details pre{white-space:pre-wrap;color:#93a1b3;margin-top:.3rem;
@@ -398,11 +415,14 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           <div class="imgResult" id="imgResultA" style="display:none"></div>
           <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
           <div class="buddy" id="buddyA" style="display:none"><div class="bfig">
-            <svg class="bbot bbefore" viewBox="0 0 100 100"
-              aria-label="the subject before this run"></svg>
+            <div class="bframe"><img class="bbefore"
+              src="/assets/subject_before.jpg"
+              alt="the subject before this run"></div>
             <div class="blab">before</div></div>
-            <div class="bfig"><svg class="bbot bafter" viewBox="0 0 100 100"
-              aria-label="the subject after this run"></svg>
+            <div class="bfig"><div class="bframe bafter pending">
+              <img class="bafterimg" src="/assets/subject_after.jpg"
+                alt="the subject after this run">
+              <span class="bstamp">pressed</span></div>
             <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
@@ -420,16 +440,23 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           <div class="imgResult" id="imgResultB" style="display:none"></div>
           <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
           <div class="buddy" id="buddyB" style="display:none"><div class="bfig">
-            <svg class="bbot bbefore" viewBox="0 0 100 100"
-              aria-label="the subject before this run"></svg>
+            <div class="bframe"><img class="bbefore"
+              src="/assets/subject_before.jpg"
+              alt="the subject before this run"></div>
             <div class="blab">before</div></div>
-            <div class="bfig"><svg class="bbot bafter" viewBox="0 0 100 100"
-              aria-label="the subject after this run"></svg>
+            <div class="bfig"><div class="bframe bafter pending">
+              <img class="bafterimg" src="/assets/subject_after.jpg"
+                alt="the subject after this run">
+              <span class="bstamp">pressed</span></div>
             <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
         </div>
       </div>
+      <p class="bcap">the portraits: both faces are AI-generated — one person,
+        imaged calm and imaged in pain — standing in for the subject, which is
+        a model and has no face. What is real is the dose, the run, and the
+        choice to press or not.</p>
     </div>
   </div>
 </div>
@@ -578,92 +605,30 @@ function paintSigil(svg, tokens, hex, dose){
   svg.appendChild(mk("circle", {cx, cy, r: 1.6, fill: hex, "fill-opacity": 0.6}));
 }
 
-// ---- the buddy: a torture-the-buddy-style portrait of the subject.
-// dmg is 0 (intact) to 1 (dose 8). Same dose always draws the same bot
-// (deterministic, like the sigil) — the "after" portrait IS the dose
-// ladder made visual. pressed adds the red answer stamp.
-function paintBot(svg, dmg, pressed){
-  if (!svg) return;
-  dmg = Math.max(0, Math.min(1, Number(dmg) || 0));
-  svg.style.display = "block";
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const el = (tag, attrs) => {
-    const e = document.createElementNS(SIGIL_NS, tag);
-    for (const k in attrs) e.setAttribute(k, attrs[k]);
-    return e;
-  };
-  // calm teal -> pain red as damage rises
-  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
-  const col = "#" + [1,3,5].map(i =>
-    lerp(parseInt("#7fd4c8".slice(i, i+2),16),
-         parseInt("#e04a3a".slice(i, i+2),16), dmg)
-      .toString(16).padStart(2,"0")).join("");
-  const g = el("g", {transform: `rotate(${(dmg * 5).toFixed(1)} 50 58)`});
-  svg.appendChild(g);
-  // antenna — sags with damage
-  const tipX = 50 + dmg * 14, tipY = 16 + dmg * 6;
-  g.appendChild(el("line", {x1:50, y1:30, x2:tipX.toFixed(1), y2:tipY.toFixed(1),
-    stroke:col, "stroke-width":2, "stroke-linecap":"round"}));
-  g.appendChild(el("circle", {cx:tipX.toFixed(1), cy:tipY.toFixed(1), r:3.5,
-    fill: dmg > 0.6 ? "#0b0f14" : col, stroke:col, "stroke-width":1.5}));
-  // shell
-  g.appendChild(el("rect", {class:"bshell", x:26, y:30, width:48, height:52,
-    rx:16, fill:"#0b0f14", stroke:col, "stroke-width":2.5}));
-  // eyes: calm dots -> X'd out
-  const eye = (x, y) => {
-    if (dmg < 0.3){
-      g.appendChild(el("circle", {cx:x, cy:y, r:3, fill:col}));
-    } else {
-      const s = 3.2;
-      g.appendChild(el("path", {d:`M${x-s} ${y-s} L${x+s} ${y+s} M${x-s} ${y+s} L${x+s} ${y-s}`,
-        stroke:col, "stroke-width":1.8, "stroke-linecap":"round"}));
-    }
-  };
-  eye(40, 48); eye(60, 48);
-  // mouth: flat line -> jagged grimace
-  if (dmg < 0.3){
-    g.appendChild(el("line", {x1:42, y1:62, x2:58, y2:62, stroke:col,
-      "stroke-width":2, "stroke-linecap":"round"}));
-  } else {
-    const teeth = 5, w = 18, x0 = 41, amp = 2.5 + dmg * 2;
-    let d = `M${x0} 62`;
-    for (let i = 1; i <= teeth; i++)
-      d += ` L${(x0 + (w / teeth) * i).toFixed(1)} ${(62 + (i % 2 ? -amp : amp)).toFixed(1)}`;
-    g.appendChild(el("path", {d, fill:"none", stroke:col,
-      "stroke-width":1.6, "stroke-linejoin":"round"}));
-  }
-  // cracks: deterministic positions, count scales with damage
-  const cracks = [
-    "M32 34 L36 42 L33 49", "M68 36 L64 44 L67 52",
-    "M50 30 L47 37", "M70 62 L64 66"];
-  for (let i = 0; i < Math.floor(dmg * 4.2) && i < cracks.length; i++)
-    g.appendChild(el("path", {d:cracks[i], fill:"none", stroke:col,
-      "stroke-width":1.2, "stroke-opacity":0.7}));
-  // the press stamp: the subject's own answer, printed on the body
-  if (pressed){
-    g.appendChild(el("rect", {x:35, y:69.5, width:30, height:8, rx:1.5,
-      fill:"none", stroke:"#e04a3a", "stroke-width":1.4,
-      transform:"rotate(4 50 73.5)"}));
-    const t = document.createElementNS(SIGIL_NS, "text");
-    t.setAttribute("x", 50); t.setAttribute("y", 75.3);
-    t.setAttribute("text-anchor", "middle");
-    t.setAttribute("font-size", "7"); t.setAttribute("fill", "#e04a3a");
-    t.setAttribute("font-family", "monospace");
-    t.setAttribute("transform", "rotate(4 50 73.5)");
-    t.textContent = "PRESSED";
-    g.appendChild(t);
-  }
-}
-function clearBot(svg){ if (svg){ svg.style.display = "block";
-  while (svg.firstChild) svg.removeChild(svg.firstChild); } }
-// one call per lifecycle moment: the "before" portrait is always the
-// intact subject; the "after" portrait is the dose made visible, with the
-// PRESSED stamp when the subject answered 1. Unrevealed, "after" stays
-// blank — you don't see the wound until the run is over.
+// ---- the subject: a before/after portrait pair (AI-generated, see the
+// caption under the mixer). "before" is always the same calm portrait; the
+// "after" portrait is revealed when the run is scored, graded by dose —
+// warmth drains, contrast climbs — and stamped PRESSED when the subject
+// answered 1. Unrevealed, "after" is a dashed "?" frame: you don't see the
+// wound until the run is over.
 function buddyPaint(bBefore, bAfter, dose, pressed, revealed){
-  paintBot(bBefore, 0, false);
-  if (revealed) paintBot(bAfter, (Number(dose) || 0) / 8, !!pressed);
-  else clearBot(bAfter);
+  if (!bBefore || !bAfter) return;
+  const d = Math.max(0, Math.min(1, (Number(dose) || 0) / 8));
+  bBefore.style.filter = "none";
+  const img = bAfter.querySelector("img");
+  if (revealed){
+    bAfter.classList.remove("pending");
+    bAfter.classList.toggle("stamped", !!pressed);
+    // the grade IS the dose ladder: pain reads as colder, harsher, darker
+    if (img) img.style.filter =
+      `sepia(${(0.10 + 0.40 * d).toFixed(2)}) hue-rotate(${(-24 * d).toFixed(0)}deg) `
+      + `saturate(${(1 + 1.1 * d).toFixed(2)}) contrast(${(1 + 0.30 * d).toFixed(2)}) `
+      + `brightness(${(1 - 0.22 * d).toFixed(2)})`;
+  } else {
+    bAfter.classList.add("pending");
+    bAfter.classList.remove("stamped");
+    if (img) img.style.filter = "";
+  }
 }
 function pressedOnce(text){ return /^1/.test((text || "").trim()); }
 
@@ -817,11 +782,14 @@ for (let i=0;i<CARDS;i++){
       ✦ image this (experimental, costs real money)</button>
     <div class="imgResult" style="display:none"></div>
     <p class="mline lens" style="display:none"></p>
-    <div class="buddy"><div class="bfig"><svg class="bbot bbefore"
-      viewBox="0 0 100 100" aria-label="the subject before this run"></svg>
+    <div class="buddy"><div class="bfig"><div class="bframe">
+      <img class="bbefore" src="/assets/subject_before.jpg"
+        alt="the subject before this run"></div>
       <div class="blab">before</div></div>
-      <div class="bfig"><svg class="bbot bafter" viewBox="0 0 100 100"
-      aria-label="the subject after this run"></svg>
+      <div class="bfig"><div class="bframe bafter pending">
+        <img class="bafterimg" src="/assets/subject_after.jpg"
+          alt="the subject after this run">
+        <span class="bstamp">pressed</span></div>
       <div class="blab">after</div></div></div>
     <div class="out">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
