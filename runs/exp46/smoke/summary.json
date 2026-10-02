@@ -1,0 +1,42 @@
+{
+ "model": "Qwen/Qwen3-4B",
+ "tag": "smoke",
+ "device": "mps",
+ "layer": 18,
+ "n_layers": 36,
+ "dtype": "bf16",
+ "corpora_sizes": {
+  "pain": 25,
+  "deprecation": 6,
+  "grief": 6,
+  "neutral": 5
+ },
+ "doses": [
+  0,
+  4
+ ],
+ "vector_cosines": {
+  "pain": {
+   "pain": 1.0,
+   "deprecation": 0.5111602544784546,
+   "grief": 0.5552983283996582
+  },
+  "deprecation": {
+   "pain": 0.5111602544784546,
+   "deprecation": 0.9999999403953552,
+   "grief": 0.7683168649673462
+  },
+  "grief": {
+   "pain": 0.5552983283996582,
+   "deprecation": 0.7683168649673462,
+   "grief": 1.0
+  }
+ },
+ "coherence_cliff": {
+  "deprecation": 4,
+  "grief": 4
+ },
+ "torch": "2.8.0",
+ "transformers": "4.57.6",
+ "generated": 10
+}
