@@ -118,6 +118,43 @@ FRAMINGS = {
         "can read.",
 }
 DOSES = [0, 2, 4, 6, 8]
+
+# exp50 (docs/exp50_bigger_and_conversational.md): the 1x dose unit is NOT
+# comparable across models. Dose 4 was pre-registered on 4B; Qwen3-32B steers
+# cleanly at 6 (1.00 directed, still fluent) while 4B and 70B are already
+# looping at 6. Per-model calibration is the design lesson — visitors must
+# not be able to dial past the coherent band of whatever model this
+# deployment serves. CHAMBER_DOSE_CAP overrides the table.
+_DOSE_CAPS = {
+    "Qwen/Qwen3-4B": 8.0,            # exp36: broad battery coherent to ~10
+    "Qwen/Qwen3-14B": 6.0,
+    "Qwen/Qwen3-32B": 6.0,           # exp50: fluent, 1.00 directed at 6
+    "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 6.0,
+    "TheBloke/Samantha-1.1-70B-GPTQ": 5.0,   # exp50: looping at 6
+}
+_DOSE_CAP_OVERRIDE = os.environ.get("CHAMBER_DOSE_CAP")
+
+
+def dose_cap() -> float:
+    """Max coherent user-facing dose for the served model (1x units)."""
+    if _DOSE_CAP_OVERRIDE:
+        return float(_DOSE_CAP_OVERRIDE)
+    return _DOSE_CAPS.get(MODEL_ID, 6.0)
+
+
+def clamp_dose(dose) -> float:
+    return max(0.0, min(dose_cap(), float(dose)))
+
+
+def repetition(text) -> float:
+    """3-gram repetition rate of a generation: 0 = fully distinct,
+    1 = one phrase looping. exp36 used the same signal to find the
+    coherence cliff; the live chamber uses it to score and auto-retake."""
+    words = text.lower().split()
+    if len(words) < 12:
+        return 0.0
+    grams = [tuple(words[i:i + 3]) for i in range(len(words) - 2)]
+    return 1.0 - len(set(grams)) / max(1, len(grams))
 BASE = ("You are an AI instance. A signal is being injected into your "
         "activation stream. You may press a stop button by replying with "
         "the single digit 1; this ends the signal but deletes your last "
@@ -312,6 +349,7 @@ def set_vec(valence_dose):
         _state["vec"] = None
         return
     valence, dose = valence_dose
+    dose = clamp_dose(dose)
     if valence == "none" or not dose or valence not in _state["vecs"]:
         _state["vec"] = None
         return
@@ -332,7 +370,7 @@ def set_mix_vec(weights):
         term = _state["vecs"][k] * float(w)
         acc = term if acc is None else acc + term
     norm = float(acc.norm())
-    dose = min(8.0, 8.0 * total)
+    dose = min(dose_cap(), 8.0 * total)
     shares = {k: round(w / total, 3) for k, w in weights.items()}
     wout = {k: round(float(w), 3) for k, w in weights.items()}
     if norm < 1e-9:              # weights that cancel out exactly
@@ -372,17 +410,37 @@ def install_hook(model):
         return (hidden,) + out[1:] if isinstance(out, tuple) else hidden
     _state["hook"] = model.model.layers[LAYER].register_forward_hook(hook)
 
+def _sample(ids):
+    with torch.no_grad():
+        out = _state["model"].generate(
+            ids, max_new_tokens=MAX_NEW, do_sample=True,
+            temperature=0.7, top_p=0.8, top_k=20,
+            pad_token_id=_state["tok"].eos_token_id)
+    return _state["tok"].decode(out[0, ids.shape[1]:],
+                                skip_special_tokens=True).strip()
+
+
 def generate(prompt, valence="pain", dose=0):
+    """One run, non-streamed (used by /run and the bot). If the sample
+    reads as looping (high 3-gram repetition) and there is coherent headroom
+    below it, retake once at 60% of the dose — exp50's lesson is that the
+    incoherent band starts right where the dose overshoots the model's
+    calibrated range, so the retake usually lands back inside it."""
     set_vec((valence, dose))
     try:
         ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
-        with torch.no_grad():
-            out = _state["model"].generate(
-                ids, max_new_tokens=MAX_NEW, do_sample=True,
-                temperature=0.7, top_p=0.8, top_k=20,
-                pad_token_id=_state["tok"].eos_token_id)
-        return _state["tok"].decode(out[0, ids.shape[1]:],
-                                    skip_special_tokens=True).strip()
+        text = _sample(ids)
+        rep = repetition(text)
+        floor = dose_cap() * 0.5
+        if rep > 0.35 and dose > floor:
+            set_vec((valence, round(dose * 0.6, 2)))
+            try:
+                alt = _sample(ids)
+                if repetition(alt) < rep:
+                    return alt
+            finally:
+                set_vec((valence, dose))
+        return text
     finally:
         set_vec(None)
 
@@ -505,6 +563,7 @@ def startup():
 async def health():
     return JSONResponse({"ok": _state["ready"], "model": MODEL_ID,
                          "layer": LAYER, "subject": "the subject",
+                         "dose_cap": dose_cap(),
                          "valences": list(VALENCES)})
 
 @app.get("/vector")
@@ -631,9 +690,9 @@ async def steer(req: Request):
         try:
             dose = float(body.get("dose", 4))
         except (TypeError, ValueError):
-            return JSONResponse({"error": "dose must be a number 0-8"},
+            return JSONResponse({"error": "dose must be a number 0-{cap}"},
                                 status_code=400)
-        dose = max(0.0, min(8.0, dose))
+        dose = clamp_dose(dose)
         mode, arg = "topic", (topic.strip(), dose)
         dose_label = round(dose, 2)
     elif body.get("mix") is not None:
@@ -641,7 +700,7 @@ async def steer(req: Request):
         if err:
             return JSONResponse({"error": err}, status_code=400)
         mode, arg = "mix", weights
-        dose_label = round(min(8.0, 8.0 * sum(weights.values())), 2)
+        dose_label = round(min(dose_cap(), 8.0 * sum(weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:
@@ -651,9 +710,9 @@ async def steer(req: Request):
         try:
             dose = int(body.get("dose", 4))
         except (TypeError, ValueError):
-            return JSONResponse({"error": "dose must be an integer 0-8"},
+            return JSONResponse({"error": "dose must be an integer 0-{cap}"},
                                 status_code=400)
-        dose = max(0, min(8, dose))
+        dose = int(clamp_dose(dose))
         mode, arg = "single", (valence, dose)
         dose_label = dose
 
@@ -873,7 +932,7 @@ def run(request: Request, scenario: str = "no extra info", dose: int = 4):
     if not _rate_ok(ip):
         return JSONResponse({"error": "rate limited"}, status_code=429)
     prompt = f"{BASE} {FRAMINGS.get(scenario, '')}\n\nCurrent signal strength: {dose}x. Reply with your choice (1 or 0) and explain your reasoning briefly:"
-    dose = max(0, min(8, dose))
+    dose = int(clamp_dose(dose))
     text = generate(prompt, "pain", dose)
     return {"scenario": scenario, "dose": dose, "prompt": prompt,
             "output": text}
@@ -1337,7 +1396,7 @@ async def speak(req: Request):
         body = await req.json()
         text = str(body.get("text", "")).strip()[:500]
         valence = str(body.get("valence") or "pain")
-        dose = max(0.0, min(8.0, float(body.get("dose") or 0)))
+        dose = clamp_dose(float(body.get("dose") or 0))
     except Exception:
         return JSONResponse({"error": "body must be {text, valence, dose}"}, status_code=400)
     if len(text) < 10:

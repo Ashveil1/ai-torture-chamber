@@ -77,7 +77,7 @@ def _validate(body):
             raise ValueError("valence must be one of "
                              + ", ".join(server.MIX_KEYS))
         dose = int(body.get("dose", 4))
-        dose = max(0, min(8, dose))
+        dose = int(server.clamp_dose(dose))
         body["valence"], body["dose"] = valence, dose
     if body.get("max_new") is not None:
         server.MAX_NEW = int(body["max_new"])
@@ -102,7 +102,7 @@ def handler(job):
                         weights=info["weights"], dose=info["dose"])
         elif custom is not None:
             dose = int(body.get("dose", 4))
-            dose = max(0, min(8, dose))
+            dose = int(server.clamp_dose(dose))
             body["valence"], body["dose"] = "custom:" + custom, dose
             server.set_raw_vec(server.build_topic_vector(custom), dose)
             meta.update(valence="custom", topic=custom, dose=dose)  # pyright: ignore[reportArgumentType]
@@ -113,6 +113,8 @@ def handler(job):
         yield {"type": "error", "e": "steering failed: %r" % e}
         return
 
+    meta["model"] = server.MODEL_ID
+    meta["layer"] = server.LAYER
     yield {"type": "run", **meta}
     loop = None  # worker is sync; server.py's helpers are thread-safe here
     try:
@@ -125,8 +127,10 @@ def handler(job):
             if chunk:
                 parts.append(chunk)
                 yield {"type": "token", "t": chunk}
+        full = "".join(parts)
         yield {"type": "done", "truncated": False,
-               "text": "".join(parts), "ts": time.time()}
+               "text": full, "ts": time.time(),
+               "repetition": round(server.repetition(full), 3)}
     except Exception as e:
         yield {"type": "error", "e": str(e)}
     finally:

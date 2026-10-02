@@ -1341,7 +1341,17 @@ function pump(){
 
 function boot(){
   fetch(`${API}/health`).then(r=>r.json()).then(d=>{
-    if (d.ok){ pump(); return; }
+    if (d.ok){
+      // exp50: per-model coherent dose band — bound the sliders to the cap
+      if (d.dose_cap){
+        DOSES.length = 0;
+        for (let x=0; x<=d.dose_cap; x+=2) DOSES.push(x);
+        if (DOSES[DOSES.length-1] < d.dose_cap) DOSES.push(d.dose_cap);
+        const sl = document.getElementById("topicDose");
+        if (sl){ sl.max = d.dose_cap; if (+sl.value > d.dose_cap) sl.value = d.dose_cap; }
+      }
+      pump(); return;
+    }
     slots.forEach(s=>{ s.st.textContent = "Pouyan is still waking up…"; });
     connState = "down"; connNote = "Pouyan is loading";
     retryAt = Date.now() + 5000;
