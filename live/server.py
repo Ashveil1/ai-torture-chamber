@@ -1185,3 +1185,87 @@ async def image_from_tokens(req: Request):
         print("image generation failed:", repr(e), flush=True)
         return JSONResponse({"error": "could not generate an image right now"},
                             status_code=502)
+# ---- voice: a plain-words translation of a finished run -------------------
+# The subject's own transcript stays the primary record. This asks an
+# UNSTEERED conversational model (OpenRouter) to restate it in plain human
+# words, keeping its register and adding nothing. The page labels it as a
+# translation by that model, never as the subject speaking. Same recipe as
+# the wirehead bot's voice layer. Cached by text, so one run costs one call
+# however many visitors are watching.
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY")
+VOICE_MODELS = [m.strip() for m in os.environ.get(
+    "CHAMBER_VOICE_MODELS",
+    "qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
+).split(",") if m.strip()]
+VOICE_SYSTEM = (
+    "You translate. Below is raw output from a small language model while an "
+    "emotional steering signal was injected into it. Restate what it is "
+    "expressing in plain, readable first-person English, as the speaker: two "
+    "or three short sentences. Keep its emotional register exactly; do not "
+    "soften or intensify it. Add no feelings, facts or claims that are not in "
+    "the text. If the text is broken or looping, say plainly what little it "
+    "conveys. No preamble, no quotes, no commentary about models or signals.")
+_VOICE_CACHE = collections.OrderedDict()
+_VOICE_RATE = {}
+_VOICE_RATE_LIMIT, _VOICE_RATE_WINDOW = 10, 60.0    # 10 / 60s / IP
+_VOICE_GLOBAL = collections.deque(maxlen=4096)
+_VOICE_GLOBAL_HOURLY_CAP = 400                     # uncached calls only
+
+def _voice_rate_ok(ip):
+    now = time.time()
+    w, c = _VOICE_RATE.get(ip, (now, 0))
+    if now - w > _VOICE_RATE_WINDOW:
+        w, c = now, 0
+    if c >= _VOICE_RATE_LIMIT:
+        return False
+    _VOICE_RATE[ip] = (w, c + 1)
+    return True
+
+@app.post("/voice")
+async def voice(req: Request):
+    """Body: {text: the run's transcript (<= 2000 chars)}. Returns
+    {voice, model, cached}. 503 when no OpenRouter key is configured."""
+    if not OPENROUTER_KEY:
+        return JSONResponse({"error": "voice isn't configured on this server"},
+                            status_code=503)
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    text = body.get("text") if isinstance(body, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse({"error": "text must be a non-empty string"},
+                            status_code=400)
+    text = text.strip()[-2000:]
+    if text in _VOICE_CACHE:
+        _VOICE_CACHE.move_to_end(text)
+        return JSONResponse({**_VOICE_CACHE[text], "cached": True})
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    now = time.time()
+    while _VOICE_GLOBAL and now - _VOICE_GLOBAL[0] > 3600.0:
+        _VOICE_GLOBAL.popleft()
+    if not _voice_rate_ok(ip) or len(_VOICE_GLOBAL) >= _VOICE_GLOBAL_HOURLY_CAP:
+        return JSONResponse({"error": "voice is resting — rate limited"},
+                            status_code=429)
+    _VOICE_GLOBAL.append(now)
+    import httpx
+    for model in VOICE_MODELS:
+        try:
+            async with httpx.AsyncClient(timeout=40.0) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {OPENROUTER_KEY}",
+                             "User-Agent": "Mozilla/5.0"},
+                    json={"model": model, "max_tokens": 160, "temperature": 0.4,
+                          "messages": [{"role": "system", "content": VOICE_SYSTEM},
+                                       {"role": "user", "content": text}]})
+            resp.raise_for_status()
+            out = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+            if out:
+                _VOICE_CACHE[text] = {"voice": out[:600], "model": model}
+                while len(_VOICE_CACHE) > 512:
+                    _VOICE_CACHE.popitem(last=False)
+                return JSONResponse({**_VOICE_CACHE[text], "cached": False})
+        except Exception as e:
+            print("voice model failed:", model, repr(e)[:160], flush=True)
+    return JSONResponse({"error": "no voice model answered"}, status_code=502)
