@@ -276,6 +276,7 @@
     font-family:var(--mono, monospace);font-size:.72rem;padding:.25rem .6rem;cursor:pointer;
     margin:.4rem 0 .1rem}
   .voicebtn.on{border-color:#c9a227;color:#c9a227}
+  .dosenote{font-size:.72rem;color:#8a7f6c;margin:.4rem 0 .1rem;font-style:italic}
 </style>
 </head>
 <body class="grimoire-live">
@@ -890,8 +891,9 @@ function paintPressBtn(slot, text, truncated){
 // ---- voice: the subject's finished run read aloud, in its own words -------
 // Browser speech synthesis (no server, no second model). Browsers only allow
 // audio after a click, so it's a toggle; once on, every finished run is read.
-const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1"
-  || location.hostname.startsWith("beta.");
+// off: browser speech sounded robotic. Kept behind ?voice=1 while expressive
+// TTS (ElevenLabs v3 / OpenAI) is evaluated.
+const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1";
 let voiceAuto = false;
 function speak(text){
   if (!("speechSynthesis" in window) || !text) return;
@@ -903,7 +905,23 @@ function speak(text){
   u.rate = 0.92; u.pitch = 0.9;
   speechSynthesis.speak(u);
 }
-function clearVoice(outEl){}
+function clearVoice(outEl){
+  const n = outEl && outEl.parentElement && outEl.parentElement.querySelector(":scope > .dosenote");
+  if (n) n.remove();
+}
+// what the dose can and can't show: below ~2x the signal is too faint for the
+// 4B-calibrated scale; from ~6x the subject is past the coherence cliff
+function doseNote(outEl, dose){
+  if (!outEl || dose == null) return;
+  clearVoice(outEl);
+  const d = Number(dose);
+  let msg = "";
+  if (d > 0 && d < 2) msg = "below about 2× the signal is too faint to show: the subject answers as itself";
+  else if (d >= 6) msg = "past the coherence cliff (about 6×): the subject can no longer form sentences. The breakdown is the finding, not a glitch";
+  if (!msg) return;
+  const n = document.createElement("p"); n.className = "dosenote"; n.textContent = msg;
+  outEl.insertAdjacentElement("afterend", n);
+}
 function showVoice(outEl, text){
   if (!VOICE_ON || !outEl || !("speechSynthesis" in window)) return;
   let b = outEl.parentElement.querySelector(":scope > .voicebtn");
@@ -949,6 +967,7 @@ function finish(s, truncated, pressLogit){
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent);
+  doseNote(s.out, s.doseNum);
 }
 // a visitor connecting between runs still deserves to see something —
 // history already has the last few completed runs' full text, so seed the
@@ -981,6 +1000,7 @@ function seedCard(s, entry){
   s.verdict.textContent = verdictFor(entry.text, entry.truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!entry.truncated) showVoice(s.out, entry.text);
+  doseNote(s.out, s.doseNum);
 }
 function beginRun(d){
   if (liveIdx >= 0) finish(slots[liveIdx], false);
@@ -1899,6 +1919,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
           buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
             pressedOnce(track.out.textContent), true);
         showVoice(track.out, track.out.textContent);
+        doseNote(track.out, d.dose ?? dose0);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
