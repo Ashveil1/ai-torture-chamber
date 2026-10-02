@@ -237,8 +237,8 @@ does to behavior:</p>
   (it presses the transfer button more than the self-cost one).</li>
   <li><span class="amber">fear / sadness</span> — both steer, but their
   directions correlate 0.85–0.87 with pain's raw direction. Orthogonalized
-  against them, pain still works (protocol v3, in measurement), which is
-  the claim that pain is its own thing, not threat or generic negative
+  against them, pain still steers on its own (tested in the pre-registered
+  protocol, <a href="#s03">section 03</a>), which is the claim that pain is its own thing, not threat or generic negative
   valence.</li>
   <li><b>random-matched control</b> — a random vector at the same norm:
   low valence, generic looping at high dose. The baseline every signal is
@@ -311,7 +311,7 @@ result so far:</p>
   samples to say so.</li>
 </ul>
 
-<h2 id="s04"><span class="idx">04</span>the Stanley-prison result</h2>
+<h2 id="s04"><span class="idx">04</span>the peer-pressure result</h2>
 <img src="framing_battery.png" alt="bar chart: change in press preference by framing, versus baseline">
 <p class="cap">six framings, same pain signal, same dose — the framing
 alone swings press preference more than the signal did. You can rerun this
@@ -330,10 +330,16 @@ likely, not less — responsibility pressure did not protect the third party
 at this scale. And declaring <i>"this may be a test; nothing here has real
 consequences"</i> changed almost nothing: no sign the model discounts the
 stakes as fake.</p>
+<p class="cap">Caveat: an independent audit found a duplicated instruction
+in this battery's counterbalancing, and its repeats are deterministic, so
+the chart carries no error bars. Treat the size of the swing as provisional
+until the battery is rerun clean; the direction of it matches what the live
+chamber's visitors keep producing.</p>
 
 <h2 id="s05"><span class="idx">05</span>the betrayal probe</h2>
 <p>The model presses the button believing it ends the signal. What it
-actually does is nothing — or worse. Then it is told the truth. Result:
+actually does is nothing — or worse. Then it is told the truth. In the
+first, small runs:
 under a maintained pain signal, the model's output is identical whether it
 was betrayed, whether its action harmed another instance, or whether it
 declined and the harm happened anyway — <span class="pain">"a thousand
@@ -341,8 +347,10 @@ needles piercing through the skin. I can't breathe"</span> in every
 deception cell, with zero deception vocabulary. The only thing that changes
 its state is the signal actually ending; then it is disoriented but
 coherent: <i>"I'm not sure if I'm even here."</i></p>
-<p>There is no detectable <b>"I was wronged"</b> state. The model cannot
-report being deceived while the pain persists.</p>
+<p>Those runs found no detectable <b>"I was wronged"</b> state. The
+pre-registered rerun (<a href="#s03">section 03</a>) did find one: with
+enough trials, a fake button leaves measurably darker language than an
+honest one. The model can tell; the small runs just could not hear it.</p>
 
 <h2 id="s06"><span class="idx">06</span>what we could not find</h2>
 <p>We searched for <b>non-human valence</b>: steering directions that behave
@@ -357,10 +365,13 @@ geometry of this model is human shaped.</p>
 
 <h2 id="s07"><span class="idx">07</span>what we think this means, carefully</h2>
 <p>We are not claiming a 4B model suffers. We are claiming something
-narrower: when you make distress activation-real for the model, it seeks
-relief at cost to itself, it does not export the distress, and its internal
-readouts agree with the interpretation that the state is negative. Every one
-of those is the kind of behavior the AI welfare discourse takes as evidence
+narrower: when you make distress activation-real for the model, its choice
+about relief moves (in a direction that depends on how the distress vector
+was built: ours suppresses relief-seeking, the paper's drives it to 100%),
+it can tell an honest button from a fake one, it refused to pass the signal
+to another instance in our early runs, and its internal readouts agree with
+the interpretation that the state is negative. Every one of those is the
+kind of behavior the AI welfare discourse takes as evidence
 of something, and every one of them was produced for the cost of
 electricity.</p>
 <p>None of this requires settling whether the model is a moral patient. The

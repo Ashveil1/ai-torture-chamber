@@ -189,3 +189,15 @@ protection regression.
 - 2026-10-01 hermes: RunPod GPU pool spotty (start-loops across 3
   machines); pivoting to community/spot A6000. Live page must tolerate
   pod death: SSE reconnect + "the chamber sleeps" state.
+- 2026-10-02 claude-code (user-approved override of the S2 copy lock, minimal
+  fixes only): index.html had four contradictions with the pre-registered
+  results. (1) s02 "protocol v3, in measurement" -> points to s03. (2) s04
+  title "the Stanley-prison result" -> "the peer-pressure result", plus a
+  caveat line on the audit's duplicated-instruction finding. (3) s05 "no
+  detectable 'I was wronged' state" now scoped to the small runs, with the
+  pre-registered H4 finding stated. (4) s07's summary no longer says "it
+  seeks relief at cost to itself" (the pre-registered result is
+  extraction-dependent: ours suppresses it, the paper's drives it to 100%).
+  Voice kept; nothing else touched. Also: site/story.html is being built as
+  the plain-language front door from docs/substack_draft.md + the
+  storyboard; the draft's status line names a person — strip before reuse.
