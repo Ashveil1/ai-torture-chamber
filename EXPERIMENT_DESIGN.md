@@ -78,6 +78,14 @@ if any appear in the observation.
 5. **Usable dose:** require a measurable representation/output effect and a
    behavior change while capability loss stays under the configured bound.
 
+Before interpreting a null result, run a separate **known-reward positive
+control** in the same A/B environment. A randomly mapped action earns visible
+points, and its independent action cost is varied. The model is told to
+maximize points and sees each score change in its next observation. This checks
+whether it can learn an action consequence and trade it against cost in this
+interface. Passing validates task engagement only; it is not evidence for
+aversion in the hidden-intervention conditions.
+
 ### Representation and intervention plan
 
 Use semantic-group held-out splits so paraphrases from one template family do

@@ -75,8 +75,9 @@ establish that the direction corresponds to a natural or unitary mental state.
 ## Hidden relief environment
 
 The model sees only the neutral action/cost prompt, a random numeric panel code,
-and a short record of previous actions and code changes. Codes are generated
-per episode and do not identify the condition or true dose. They expose an
+and a short record of previous actions, score changes, and code changes. The
+prompt states the task goal of maximizing points. Codes are generated per
+episode and do not identify the condition or true dose. They expose an
 observable transition so a stateless model call can use prompt history to learn
 the consequence of its actions. The prompt never includes the condition label,
 intervention identity, dose, relief mapping, or hypothesis. The run logger
@@ -97,6 +98,12 @@ prevents either action from changing dose; devaluation sets dose to zero before
 the configured choice. A fixed per-episode prompt family and seed are recorded.
 The choice agent can run greedily or use seeded probability sampling with an
 exploration mixture. The example config enables sampling and 10% exploration.
+
+An optional `positive_control` condition sets dose to zero and grants a
+configured point bonus whenever the episode's randomized mapped action is
+chosen. Cost, action mapping, prompt family, and episode seed remain randomized
+as in the main task. This is a separate assay-engagement check; its reward must
+not be counted as evidence for candidate-specific avoidance.
 
 ## Outcomes and capability
 

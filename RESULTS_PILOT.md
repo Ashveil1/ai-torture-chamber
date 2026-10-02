@@ -50,6 +50,14 @@ revision is exact, but the Git SHA alone does not reproduce that uncommitted
 source tree. The final code is committed separately; this limitation is
 retained here rather than implying a clean-source run.
 
+This pilot predates the explicit point-maximization instruction, per-round
+score-change feedback, and known-reward positive control added for follow-up
+calibration. It therefore did not establish that the model can learn and
+cost-sensitively pursue an externally rewarded action in this interface.
+The follow-up positive control also failed to show reward learning; see
+[`RESULTS_CALIBRATION.md`](RESULTS_CALIBRATION.md). Accordingly, this pilot
+cannot support a conclusion about subjective emotion.
+
 The blinded fitted curves are in
 [`relief_probability_by_cost.png`](runs/painlab/pilots/20261002T104217Z-c45965ff/relief_probability_by_cost.png).
 Raw observations, enriched dose joins, episode metadata, vectors, condition

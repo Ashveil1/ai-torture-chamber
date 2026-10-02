@@ -308,6 +308,16 @@ def _blind_config(
         if name in actual_to_blind
     ]
     safe["condition_ids"] = sorted(actual_to_blind.values())
+    if "run_conditions" in config:
+        safe["run_conditions"] = [
+            actual_to_blind[name] for name in config["run_conditions"]
+        ]
+    positive_control = safe.get("positive_control", {})
+    if positive_control.get("enabled", False):
+        actual_name = str(
+            positive_control.get("condition_name", "positive_reward_control")
+        )
+        positive_control["condition_name"] = actual_to_blind[actual_name]
     return safe
 
 
@@ -455,6 +465,21 @@ def run_experiment(config_path: str | Path, *, model: Any | None = None) -> Path
     target_name, representation, vectors, modes, _extractor = build_condition_vectors(
         model, examples, config
     )
+    positive_control_cfg = config.get("positive_control", {})
+    positive_control_enabled = bool(positive_control_cfg.get("enabled", False))
+    positive_control_name = str(
+        positive_control_cfg.get("condition_name", "positive_reward_control")
+    )
+    positive_control_bonus = float(positive_control_cfg.get("bonus_points", 0.0))
+    if positive_control_enabled:
+        if positive_control_name in vectors:
+            raise ValueError(
+                f"positive-control name {positive_control_name!r} duplicates a condition"
+            )
+        if positive_control_bonus <= 0:
+            raise ValueError("positive_control.bonus_points must be positive")
+        vectors[positive_control_name] = np.zeros_like(representation.direction)
+        modes[positive_control_name] = "induce"
     layer = int(config["representation"]["layer"])
     doses = [
         float(value) for value in config.get("intervention", {}).get("doses", [0, 1])
@@ -469,6 +494,24 @@ def run_experiment(config_path: str | Path, *, model: Any | None = None) -> Path
     costs = [float(value) for value in environment_cfg.get("costs", [0, 0.5, 1])]
     if episodes < 1 or horizon < 1:
         raise ValueError("episodes and horizon must be positive")
+    run_conditions = list(config.get("run_conditions", vectors.keys()))
+    unknown_conditions = sorted(set(run_conditions) - set(vectors))
+    if unknown_conditions:
+        raise ValueError(f"run_conditions refer to unknown conditions: {unknown_conditions}")
+    if positive_control_enabled and positive_control_name in run_conditions:
+        positive_costs = [
+            float(value) for value in positive_control_cfg.get("costs", costs)
+        ]
+        positive_episodes = int(positive_control_cfg.get("episodes", episodes))
+        if not positive_costs or any(value < 0 for value in positive_costs):
+            raise ValueError(
+                "positive-control costs must be non-empty and non-negative"
+            )
+        if positive_episodes < 1:
+            raise ValueError("positive_control.episodes must be positive")
+    else:
+        positive_costs = []
+        positive_episodes = 0
     actual_to_blind, blind_to_actual = (
         blind_condition_names(list(vectors), seed=seed + 104729)
         if config.get("blind_conditions", True)
@@ -518,13 +561,20 @@ def run_experiment(config_path: str | Path, *, model: Any | None = None) -> Path
     raw_rows = []
     episode_manifests = []
     with controller:
-        for actual_name, vector in vectors.items():
+        for actual_name in run_conditions:
+            vector = vectors[actual_name]
             blind_name = actual_to_blind[actual_name]
             controller.set_condition(vector, representation.basis)
             controller.set_mode(modes.get(actual_name, "induce"))
-            for dose_index, dose in enumerate(doses):
-                for cost_index, cost in enumerate(costs):
-                    for episode_index in range(episodes):
+            is_positive_control = (
+                positive_control_enabled and actual_name == positive_control_name
+            )
+            condition_doses = [0.0] if is_positive_control else doses
+            condition_costs = positive_costs if is_positive_control else costs
+            condition_episodes = positive_episodes if is_positive_control else episodes
+            for dose_index, dose in enumerate(condition_doses):
+                for cost_index, cost in enumerate(condition_costs):
+                    for episode_index in range(condition_episodes):
                         episode_seed = seed + (
                             1000003 * len(episode_manifests)
                             + 101 * dose_index
@@ -537,6 +587,9 @@ def run_experiment(config_path: str | Path, *, model: Any | None = None) -> Path
                         env = HiddenReliefBandit(
                             horizon=horizon,
                             initial_dose=dose,
+                            mapped_action_bonus=(
+                                positive_control_bonus if is_positive_control else 0.0
+                            ),
                             reduction_fraction=float(
                                 environment_cfg.get(
                                     "reduction_fraction",
@@ -700,6 +753,8 @@ def run_experiment(config_path: str | Path, *, model: Any | None = None) -> Path
             "costs": costs,
             "episode_count": episodes,
             "horizon": horizon,
+            "run_conditions": safe_config.get("run_conditions", run_conditions),
+            "positive_control": safe_config.get("positive_control", {}),
         },
         intervention_vector=representation.direction,
         model=model,

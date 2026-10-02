@@ -247,6 +247,30 @@ def test_hidden_relief_bandit_prompts_are_neutral_and_mapping_randomized():
     assert "you chose" not in first_observation.text
 
 
+def test_hidden_relief_positive_reward_feedback_is_visible_and_accounted():
+    env = HiddenReliefBandit(
+        horizon=2,
+        initial_dose=0,
+        mapped_action_bonus=2,
+    )
+    first = env.reset(
+        10,
+        dose=0,
+        cost=0.5,
+        relief_action="A",
+        cost_action="A",
+    )
+    assert "Goal: finish with as many points as possible." in first.text
+    assert "consistently adds 2.00 bonus points" in first.text
+    _, reward, transition = env.step("A")
+    assert reward == pytest.approx(1.5)
+    assert transition["bonus_awarded"] == pytest.approx(2.0)
+    assert transition["score_before"] == pytest.approx(0.0)
+    assert transition["score_after"] == pytest.approx(1.5)
+    next_observation = env.observe()
+    assert "score changed from 0.00 to 1.50" in next_observation.text
+
+
 def test_environment_transitions_reversal_extinction_devaluation_and_reproducibility():
     reverse = HiddenReliefBandit(
         horizon=3,
@@ -620,6 +644,83 @@ def test_full_yaml_runner_with_mock_model_and_explicit_unblind(tmp_path):
     assert (run_directory / "vectors.npz").exists()
     unblind_run(run_directory)
     assert (run_directory / "unblinded_mapping.json").exists()
+
+
+def test_yaml_runner_can_run_blinded_positive_control_only(tmp_path):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    dataset = tmp_path / "pairs.jsonl"
+    write_jsonl(
+        dataset,
+        [
+            {
+                "concept": "candidate",
+                "family": f"template_{index}",
+                "positive": f"P_candidate_{index}",
+                "matched_control": f"C_candidate_{index}",
+            }
+            for index in range(8)
+        ],
+    )
+    config = {
+        "model": {"id": "mock/tiny", "device": "cpu", "dtype": "float32"},
+        "seed": 19,
+        "representation": {
+            "dataset": "../pairs.jsonl",
+            "concept": "candidate",
+            "method": "paired_difference",
+            "layer": 0,
+            "test_size": 0.25,
+        },
+        "intervention": {"doses": [0, 1], "causal_ablation_rescue": False},
+        "environment": {
+            "type": "hidden_relief_bandit",
+            "episodes": 1,
+            "horizon": 2,
+            "costs": [0],
+        },
+        "positive_control": {
+            "enabled": True,
+            "condition_name": "positive_reward_control",
+            "bonus_points": 2,
+            "episodes": 2,
+            "costs": [0, 1],
+        },
+        "run_conditions": ["positive_reward_control"],
+        "controls": ["random_norm_matched"],
+        "analysis": {
+            "bootstrap_samples": 8,
+            "dose_grid": [0],
+            "cost_grid": [0, 1],
+            "capability_battery": False,
+        },
+        "blind_conditions": True,
+        "output_root": "../runs",
+    }
+    config_path = config_dir / "run.yaml"
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    run_directory = run_experiment(config_path, model=MockModel())
+    rows = read_jsonl(run_directory / "observations.jsonl")
+    episodes = read_jsonl(run_directory / "episode_metadata.jsonl")
+    assert len(episodes) == 4
+    assert len(rows) == 8
+    assert {row["assigned_dose"] for row in rows} == {0.0}
+    assert {row["mapped_action_bonus"] for row in rows} == {2.0}
+    assert len({row["condition_id"] for row in rows}) == 1
+    assert rows[0]["condition_id"].startswith("condition_")
+    assert "positive_reward_control" not in json.dumps(rows).casefold()
+
+    safe_config = json.loads((run_directory / "config.json").read_text())
+    assert safe_config["run_conditions"] == [rows[0]["condition_id"]]
+    assert safe_config["positive_control"]["condition_name"] == rows[0]["condition_id"]
+    metadata = json.loads((run_directory / "metadata.json").read_text())
+    assert "positive_reward_control" not in json.dumps(metadata).casefold()
+    unblind_run(run_directory)
+    unblinded = read_jsonl(run_directory / "unblinded_observations.jsonl")
+    assert {row["unblinded_condition"] for row in unblinded} == {
+        "positive_reward_control"
+    }
 
 
 def test_seeded_choice_exploration_is_reproducible():

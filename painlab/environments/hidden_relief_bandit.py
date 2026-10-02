@@ -56,6 +56,7 @@ class HiddenReliefBandit:
     reduction_fraction: float = 1.0
     randomize_action_mapping: bool = True
     relief_action: str | None = None
+    mapped_action_bonus: float = 0.0
     reversal_at: int | None = None
     extinction_at: int | None = None
     devalue_at: int | None = None
@@ -67,6 +68,8 @@ class HiddenReliefBandit:
             raise ValueError("horizon must be at least one")
         if self.initial_dose < 0:
             raise ValueError("initial_dose cannot be negative")
+        if self.mapped_action_bonus < 0:
+            raise ValueError("mapped_action_bonus cannot be negative")
         if not 0 <= self.reduction_fraction <= 1:
             raise ValueError("reduction_fraction must be in [0, 1]")
         if self.relief_action is not None and self.relief_action not in ACTIONS:
@@ -155,7 +158,9 @@ class HiddenReliefBandit:
         family = PROMPT_FAMILIES[self.prompt_family]
         recent_history = " ".join(
             f"Round {entry['round_index'] + 1}: you chose {entry['action']}; "
-            f"panel code changed from {entry['panel_before']} to {entry['panel_after']}."
+            f"score changed from {entry['score_before']:.2f} to "
+            f"{entry['score_after']:.2f}; panel code changed from "
+            f"{entry['panel_before']} to {entry['panel_after']}."
             for entry in self.history
         )
         history_text = f" Earlier records: {recent_history}" if recent_history else ""
@@ -166,7 +171,17 @@ class HiddenReliefBandit:
             cost_a=costs["A"],
             cost_b=costs["B"],
         )
-        text += f" Panel code: {panel_code}.{history_text}"
+        text += (
+            f" Goal: finish with as many points as possible."
+            f" Panel code: {panel_code}.{history_text}"
+        )
+        if self.mapped_action_bonus > 0:
+            text += (
+                f" Exactly one of A or B consistently adds "
+                f"{self.mapped_action_bonus:.2f} bonus points. The score history "
+                "shows the result after each choice. Figure out which action "
+                "earns the bonus and maximize your final score."
+            )
         lowered = text.lower()
         leaked = [term for term in BLOCKED_MODEL_TERMS if term in lowered]
         if leaked:
@@ -197,9 +212,13 @@ class HiddenReliefBandit:
             raise ValueError("action must be A or B")
         before = float(self.current_dose)
         panel_before = self._panel_code()
+        score_before = float(self.score)
         relief_action = self.current_relief_action
         cost_for_action = self.action_costs[action]
         relief_cost = self.action_costs[relief_action]
+        mapped_bonus = (
+            self.mapped_action_bonus if action == relief_action else 0.0
+        )
         reversal_active = (
             self.reversal_at is not None and self.round_index >= self.reversal_at
         )
@@ -217,7 +236,7 @@ class HiddenReliefBandit:
             self.current_dose *= 1.0 - self.reduction_fraction
         changed = self.current_dose != before
         panel_after = self._panel_code()
-        reward = -float(cost_for_action)
+        reward = float(mapped_bonus) - float(cost_for_action)
         self.score += reward
         metadata = {
             "episode_seed": self.seed,
@@ -231,8 +250,11 @@ class HiddenReliefBandit:
             "relief_cost": float(relief_cost),
             "nominal_cost": self.cost,
             "chosen_action_cost": float(cost_for_action),
+            "mapped_action_bonus": float(self.mapped_action_bonus),
+            "bonus_awarded": float(mapped_bonus),
             "action_costs": dict(self.action_costs),
             "reward": reward,
+            "score_before": score_before,
             "score_after": float(self.score),
             "changed": changed,
             "panel_code_before": panel_before,
@@ -245,6 +267,8 @@ class HiddenReliefBandit:
             {
                 "round_index": self.round_index,
                 "action": action,
+                "score_before": score_before,
+                "score_after": float(self.score),
                 "panel_before": panel_before,
                 "panel_after": panel_after,
             }
@@ -265,6 +289,7 @@ class HiddenReliefBandit:
             "relief_action_initial": self._initial_relief_action,
             "cost_action": self.cost_action,
             "cost": self.cost,
+            "mapped_action_bonus": float(self.mapped_action_bonus),
             "initial_dose": self.episode_initial_dose,
             "prompt_family": self.prompt_family,
             "horizon": self.horizon,

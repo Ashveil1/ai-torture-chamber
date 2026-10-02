@@ -17,6 +17,18 @@ python -m painlab analyze runs/painlab/<run-id>
 python -m painlab unblind runs/painlab/<run-id>
 ```
 
+Run the separate known-reward task calibration with:
+
+```bash
+python -m painlab run configs/positive_reward_calibration_v2_qwen3_1_7b.yaml
+```
+
+This calibration measures whether the model can learn and pay costs for an
+explicitly rewarded action in the same interface. It is an assay-engagement
+check, not evidence for aversion to an activation intervention.
+See [the calibration results](RESULTS_CALIBRATION.md) before interpreting the
+earlier pilot.
+
 `.[model]` adds Hugging Face inference. The YAML example uses Qwen3-1.7B,
 small exploratory seed data, episode-level action/cost randomization, and
 seeded choice exploration; it is a pipeline example, not a confirmatory study.
