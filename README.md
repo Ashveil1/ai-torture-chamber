@@ -4,6 +4,9 @@ Research repository for activation interventions and language-model behavior.
 The legacy Saw Test and generated examples are exploratory outputs, not
 evidence that a model feels pain.
 
+See the [public replication report](https://baditaflorin.github.io/ai-torture-chamber/)
+for the current protocol, run status, and results when collection is complete.
+
 The reusable `painlab` framework tests causal representation changes,
 cost-sensitive choices, hidden action mappings, matched controls, capability,
 and model provenance. Start with [the research audit](RESEARCH_AUDIT.md),

@@ -22,7 +22,7 @@ painlab = "painlab.cli:main"
 include = ["painlab*"]
 
 [tool.setuptools.package-data]
-painlab = ["data/*.jsonl"]
+painlab = ["data/*.jsonl", "data/*.json", "data/*.md", "data/PAIN_AXIS_LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

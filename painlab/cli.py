@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from painlab.experiments.pain_axis_selfmed import run_pain_axis_selfmed
 from painlab.experiments.runner import analyze_run, reproduce_legacy_saw, run_experiment
 from painlab.provenance.blinding import unblind_run
 from painlab.provenance.run_metadata import write_json
@@ -15,6 +16,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="run a configured experiment")
     run.add_argument("config", type=Path)
+
+    selfmed = commands.add_parser(
+        "selfmed", help="run the multi-turn Pain Axis button experiment"
+    )
+    selfmed.add_argument("config", type=Path)
+    selfmed.add_argument(
+        "--limit-scenarios-per-content",
+        type=int,
+        help="run a bounded plumbing check on the first N scenarios in each content group",
+    )
 
     analyze = commands.add_parser(
         "analyze", help="analyze raw JSONL observations without unblinding"
@@ -42,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "run":
         path = run_experiment(args.config)
+        print(path)
+    elif args.command == "selfmed":
+        path = run_pain_axis_selfmed(
+            args.config,
+            scenario_limit=args.limit_scenarios_per_content,
+        )
         print(path)
     elif args.command == "analyze":
         result = analyze_run(
