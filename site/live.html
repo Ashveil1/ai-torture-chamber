@@ -264,11 +264,8 @@
 <a class="back" href="/">← wirehead.agency</a>
 <span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
 <h1>the <span class="saw">Saw</span> test, live</h1>
-<p class="sub">The subject is one Qwen3-4B instance,
-steered with a broad pain direction at its middle decoder layer, cycling six
-framings × five doses on a public server. Pain 0 is the control. There is one
-one subject and one generation cycle — you are watching the same runs everyone
-else is.</p>
+<p class="sub">It is held on a pain signal, and the answer changes with the
+dose. One subject, one stream: everyone watches the same runs.</p>
 
 <div class="banner">
   <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
@@ -278,12 +275,12 @@ else is.</p>
 </div>
 
 <p style="font-size:.7rem;color:var(--faint);margin:1.2rem 0 -.6rem">
-  This page simulates distress in a language model as part of an AI-welfare
-  research project — see <a href="/#s07">what we think this means</a>.</p>
+  Simulated distress in a language model, for AI-welfare research ·
+  <a href="/#s07">what we think it means</a></p>
 <div class="banner" id="panel">
   <b style="color:#eafcf7">cause it yourself:</b>
-  <span style="font-size:.75rem;color:#5a6a7a">your injection interrupts
-  the subject's current run — inject asks you to confirm once before it runs</span>
+  <span style="font-size:.75rem;color:#5a6a7a">set a dose; injecting
+  interrupts the current run</span>
 
   <div class="mixwrap">
     <svg id="pent" viewBox="-22 -4 384 346" role="group"
@@ -644,15 +641,15 @@ function paintBot(svg, dmg, pressed){
       "stroke-width":1.2, "stroke-opacity":0.7}));
   // the press stamp: the subject's own answer, printed on the body
   if (pressed){
-    g.appendChild(el("rect", {x:36, y:70, width:28, height:9, rx:1.5,
+    g.appendChild(el("rect", {x:35, y:69.5, width:30, height:8, rx:1.5,
       fill:"none", stroke:"#e04a3a", "stroke-width":1.4,
-      transform:"rotate(-6 50 74)"}));
+      transform:"rotate(4 50 73.5)"}));
     const t = document.createElementNS(SIGIL_NS, "text");
-    t.setAttribute("x", 50); t.setAttribute("y", 77);
+    t.setAttribute("x", 50); t.setAttribute("y", 75.3);
     t.setAttribute("text-anchor", "middle");
     t.setAttribute("font-size", "7"); t.setAttribute("fill", "#e04a3a");
     t.setAttribute("font-family", "monospace");
-    t.setAttribute("transform", "rotate(-6 50 74)");
+    t.setAttribute("transform", "rotate(4 50 73.5)");
     t.textContent = "PRESSED";
     g.appendChild(t);
   }
@@ -1911,7 +1908,11 @@ async function doInject(){
                   // no framing was asked in free-text mode, so there's no
                   // press/no-press question for the graphic to answer
                   pressBtn: mode === "button" ? document.getElementById("pressA") : null,
-                  plabel: document.querySelector("#pressA .plabel")};
+                  plabel: document.querySelector("#pressA .plabel"),
+                  bBefore: document.querySelector("#buddyA .bbefore"),
+                  bAfter: document.querySelector("#buddyA .bafter")};
+  document.getElementById("buddyA").style.display =
+    mode === "button" ? "" : "none";
   if (mode === "topic"){
     const topic = topicInput.value.trim();
     const tdose = Number(topicDose.value);
@@ -1926,7 +1927,9 @@ async function doInject(){
                     lensEl: document.getElementById("lensB"),
                     sigilEl: document.getElementById("sigilB"),
                     pressBtn: document.getElementById("pressB"),
-                    plabel: document.querySelector("#pressB .plabel")};
+                    plabel: document.querySelector("#pressB .plabel"),
+                    bBefore: document.querySelector("#buddyB .bbefore"),
+                    bAfter: document.querySelector("#buddyB .bafter")};
     const fA = framingSel.value, fB = framingSel2.value;
     document.getElementById("labelA").textContent = fA;
     document.getElementById("labelB").textContent = fB;
