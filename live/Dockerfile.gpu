@@ -9,4 +9,6 @@ COPY server.py jlens_l18_qwen3-4b.pt .
 
 EXPOSE 8000
 ENV CHAMBER_DEVICE=cuda CHAMBER_DTYPE=float16 CHAMBER_LAYER=18
+# pin the checkpoint revision the chamber reset verified (unpinned = silently tracks Qwen updates)
+ENV CHAMBER_MODEL_REVISION=1cfa9a7208912126459214e8b04321603b3df60c
 CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"]

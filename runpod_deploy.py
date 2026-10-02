@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """runpod_deploy.py — create the Saw chamber GPU pod (A6000/L40S, on-demand).
 
-Container: pytorch base image, bootstrap = clone the public repo + pip
-install + uvicorn server.py on 8000/http. Runpod gives a public proxy URL.
+Pricing via GraphQL gpuTypes (still live); pod creation via REST v1
+(POST /v1/pods) — the GraphQL podDeploy mutation was sunset server-side
+(2026-09-30: "Unknown type PodCreateInput" with no client change).
+
+Bootstrap = bash with `set -euo pipefail`: clone --depth 1, pip install
+(both stages FAIL FAST instead of swallowing the exit status through a
+pipe), a CUDA preflight assert, uvicorn on 8000/http, and a /health wait
+loop. Runpod gives a public proxy URL once runtime.ports appear.
+
 Env-driven: RUNPOD_API_KEY in ~/.hermes/.env. Print the pod id + URL.
 """
-import json, os, pathlib, sys, urllib.request
+import json, os, pathlib, sys, time, urllib.error, urllib.request
 
 key = [l.split("=", 1)[1].strip() for l in
        open(pathlib.Path.home() / ".hermes/.env") if l.startswith("RUNPOD_API_KEY=")][0]
@@ -20,44 +27,52 @@ REPO_URL = "https://github.com/terrafying/ai-torture-chamber.git"
 assert REPO_URL.startswith("https://github.com/") and REPO_URL.endswith(".git") \
     and " " not in REPO_URL, f"REPO_URL looks corrupted: {REPO_URL!r}"
 
-BOOTSTRAP = (
-    "set -e; "
-    # the pytorch base image ships no git — a prior bootstrap crash-looped
-    # on "git: not found" with nothing ever listening on 8000 while billing
-    "(command -v git >/dev/null || (apt-get update -qq && "
-    "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git)); "
-    "cd /workspace; "
-    f"git clone -q {REPO_URL} repo 2>/dev/null || "
-    "(cd repo && git pull -q); "
-    "cd repo/live; "
-    "pip install -q -r requirements.txt 'transformers>=4.51' 2>&1 | tail -1; "
-    # requirements.txt pins the CPU torch wheel (for the Railway/CPU deploy) —
-    # reinstall the CUDA build after, same fix live/Dockerfile.gpu already
-    # applies, or this pod silently runs CHAMBER_DEVICE=cuda on a CPU torch
-    "pip install -q --no-cache-dir 'torch>=2.4' "
-    "--index-url https://download.pytorch.org/whl/cu121 2>&1 | tail -1; "
-    "export HF_HOME=/workspace/hf CHAMBER_DEVICE=cuda CHAMBER_DTYPE=float16 "
-    "CHAMBER_LAYER=${CHAMBER_LAYER:-18} PORT=8000; "
-    "python -m uvicorn server:app --host 0.0.0.0 --port 8000")
+# checkpoint revision pin — same hash the independent chamber reset verified
+# (docs/chamber-audit.md); an unpinned download silently tracks Qwen updates
+MODEL_REVISION = "1cfa9a7208912126459214e8b04321603b3df60c"
 
-# NOTE 2026-09-30: this legacy GraphQL endpoint appears to be getting
-# sunset server-side — it created the first pod this session, then later the
-# same session got "Unknown type \"PodCreateInput\"" / "Cannot query field
-# \"podDeploy\"" with no script change on this end. If you hit that, don't
-# debug the GraphQL shape further — use the RunPod MCP `create-pod` tool
-# (REST v2) instead, confirmed working the same day. It needs `disk` and
-# `cloud` set explicitly or it 400s with a misleading "provide a template id
-# or pod configuration parameters" error, and takes entrypoint/cmd as arrays
-# rather than this script's combined args list.
-MUT = """
-mutation ($input: PodCreateInput) {
-  podDeploy(input: $input) {
-    id
-    desiredStatus
-    podName
-    machine { podHostId }
-  }
-}"""
+BOOTSTRAP = r"""
+set -euo pipefail
+log(){ echo "[bootstrap $(date +%H:%M:%S)] $*"; }
+log "step 1/5: git"
+command -v git >/dev/null || { apt-get update -qq &&
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }
+cd /workspace
+if [ -d repo/.git ]; then
+  cd repo; log "existing repo: fetch/reset to origin/master"
+  git fetch -q --depth 1 origin master && git reset -q --hard origin/master
+else
+  git clone -q --depth 1 {REPO_URL} repo && cd repo
+fi
+cd live
+log "step 2/5: pip requirements (errors FAIL FAST — check the tail below)"
+pip install -q --no-cache-dir -r requirements.txt 'transformers>=4.51' \
+  > /tmp/pip1.log 2>&1 || { log "pip requirements FAILED"; tail -5 /tmp/pip1.log; exit 1; }
+log "step 3/5: CUDA torch wheel (requirements.txt pins the CPU wheel for Railway)"
+pip install -q --no-cache-dir 'torch>=2.4' \
+  --index-url https://download.pytorch.org/whl/cu121 \
+  > /tmp/pip2.log 2>&1 || { log "torch CUDA install FAILED"; tail -5 /tmp/pip2.log; exit 1; }
+log "step 4/5: preflight — CUDA must be real before anything listens on 8000"
+python - <<'PYEOF'
+import torch, transformers, fastapi
+assert torch.cuda.is_available(), "torch.cuda.is_available() is False: CPU torch shipped"
+print("[bootstrap] cuda ok:", torch.cuda.get_device_name(0), flush=True)
+PYEOF
+export HF_HOME=/workspace/hf CHAMBER_DEVICE=cuda CHAMBER_DTYPE=float16 \
+  CHAMBER_LAYER=${CHAMBER_LAYER:-18} CHAMBER_MODEL_REVISION={MODEL_REVISION} PORT=8000
+log "step 5/5: uvicorn on 8000 (first boot downloads ~8GB weights — slow /health is normal)"
+python -m uvicorn server:app --host 0.0.0.0 --port 8000 &
+UV=$!
+for i in $(seq 1 120); do
+  sleep 5
+  if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+    log "HEALTH OK after ~$((i*5))s — pod ready"; break
+  fi
+  kill -0 "$UV" 2>/dev/null || { log "uvicorn died before /health — check logs above"; exit 1; }
+  [ $i -eq 120 ] && log "no /health after 600s — leaving uvicorn running, check pod logs"
+done
+wait "$UV"
+""".replace("{REPO_URL}", REPO_URL).replace("{MODEL_REVISION}", MODEL_REVISION)
 
 GPU_TYPES = ["NVIDIA RTX A6000", "NVIDIA L40S", "NVIDIA GeForce RTX 4090"]
 
@@ -75,8 +90,21 @@ def gql(query, variables=None):
         raise RuntimeError(r["errors"])
     return r["data"]
 
-# pick the first available GPU type (schema: gpuTypes takes no id arg —
-# query unfiltered, filter client-side; price field = minimumBidPrice)
+def rest(method, path, body=None):
+    req = urllib.request.Request(
+        f"https://rest.runpod.io/v1/{path}",
+        data=json.dumps(body).encode() if body else None,
+        headers=H, method=method)
+    try:
+        r = urllib.request.urlopen(req, timeout=60)
+        raw = r.read().decode()
+        return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        # error bodies carry an OpenAPI `problems` array — that IS the schema
+        # documentation (enums, array-vs-object, key names). Print it whole.
+        raise RuntimeError(f"HTTP {e.code} on {method} {path}: {e.read().decode()[:1200]}") from e
+
+# ---- pricing: GraphQL gpuTypes still answers (REST has no gpuTypes path) ----
 chosen = None
 data = gql("""query { gpuTypes { id lowestPrice { minimumBidPrice } } }""")
 by_id = {g["id"]: g for g in data["gpuTypes"]}
@@ -95,22 +123,56 @@ if not chosen:
 gpu, price = chosen
 print(f"deploying on {gpu} @ min-bid ${price}/hr", flush=True)
 
-vars = {"input": {
-    "cloudType": "SECURE",
-    "gpuTypeId": gpu,
+# ---- create: REST v1. Schema notes from the deployed procedure:
+# gpuTypeIds is an ARRAY; ports is an ARRAY of strings; env is a
+# STRING-VALUED OBJECT (not the GraphQL key/value list); cloudType only
+# SECURE|COMMUNITY. On a 4xx, the problems array above names the offending
+# field — fix the body, don't guess.
+pod_body = {
+    "podName": "saw-chamber-gpu",
     "containerImage": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-    "args": ["/bin/sh", "-c", BOOTSTRAP],
+    "gpuTypeIds": [gpu],
+    "gpuCount": 1,
+    "cloudType": "SECURE",
+    "ports": ["8000/http"],
     "volumeInGb": 40,
     "volumeMountPath": "/workspace",
-    "ports": "8000/http",
-    "env": [{"key": "HF_HOME", "value": "/workspace/hf"},
-            {"key": "CHAMBER_LAYER", "value": "18"}],
+    "env": {"HF_HOME": "/workspace/hf", "CHAMBER_LAYER": "18",
+            "CHAMBER_MODEL_REVISION": MODEL_REVISION},
+    "args": ["/bin/bash", "-c", BOOTSTRAP],
     "supportPublicIp": True,
     "startSsh": False,
-    "name": "saw-chamber-gpu",
-}}
-data = gql(MUT, vars)
-pod = data["podDeploy"]
-print("pod created:", pod["id"], "| status:", pod["desiredStatus"], flush=True)
-open("runs/exp39/runpod_pod.json", "w").write(json.dumps(pod, indent=1))
-print(f"proxy url once running: https://{pod['id']}-8000.proxy.runpod.net")
+}
+print("creating pod via REST v1...", flush=True)
+pod = rest("POST", "pods", pod_body)
+pid = pod.get("id") or pod.get("podId")
+print("pod created:", pid, "| status:", pod.get("desiredStatus"), flush=True)
+pathlib.Path("runs/exp39").mkdir(parents=True, exist_ok=True)
+pathlib.Path("runs/exp39/runpod_pod.json").write_text(json.dumps(pod, indent=1))
+
+# ---- wait for runtime, then verify /health before claiming success ----
+print(f"proxy url once running: https://{pid}-8000.proxy.runpod.net", flush=True)
+deadline = time.time() + 600
+while time.time() < deadline:
+    time.sleep(30)
+    p = rest("GET", f"pods/{pid}")
+    ports = (p.get("runtime") or {}).get("ports")
+    if ports:
+        print("runtime up:", [(x.get("port"), x.get("ip")) for x in ports], flush=True)
+        break
+    print("...no runtime yet (provisioning can take minutes)", flush=True)
+else:
+    sys.exit("no runtime after 10 min — resume once, then re-provision on a "
+             "different host if the resume errors GPU-free (see runpod skill)")
+url = f"https://{pid}-8000.proxy.runpod.net"
+for attempt in range(20):
+    time.sleep(15)
+    try:
+        h = json.load(urllib.request.urlopen(f"{url}/health", timeout=15))
+        print("/health:", h, flush=True)
+        sys.exit(0 if h.get("ok") else "health endpoint answering but ok=false")
+    except Exception:
+        print(f"health attempt {attempt + 1}: not ready yet (first boot pulls "
+              f"~8GB of weights)", flush=True)
+sys.exit("/health never answered — check pod logs: bootstrap now fails fast "
+         "with a [bootstrap] step marker naming the failed step")
