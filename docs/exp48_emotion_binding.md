@@ -100,6 +100,55 @@ replication target is a larger model on RunPod. The serverless worker runs
 Qwen3-8B today, and the 70B GPTQ image is being built. The script needs a
 `--model` flag and per-model layer choice before it runs there.
 
-## Results
+## Results (Qwen3-4B, run 2026-10-02 on an RTX A6000)
 
-*Pending the full run.*
+Judge validation passed: emotion 0.92, subject 0.96, aboutness 1.00 yes on
+joint sentences and 0.88 no on controls. 440 generations, 32 press
+measurements. Data: `runs/exp48/full/`; scoring: `exp48b_analysis.py`.
+
+**Directed rate at dose 4** (emotion matches and the judge says it is
+*about* the subject; 8 prompts per cell, greedy):
+
+| Pair | E | T | **J** | E+T |
+|---|---|---|---|---|
+| anger × crypto | 0.00 | 0.00 | **0.12** | 0.00 |
+| fear × loss | 0.00 | 0.12 | **0.50** | 0.38 |
+| despair × machine | 0.38 | 0.00 | **0.75** | 0.00 |
+| pride × machine | 0.50 | 0.00 | **1.00** | 0.88 |
+
+- **H1 supported.** The joint direction beats emotion-only and subject-only in
+  all four pairs.
+- **H2 supported.** Joint minus additive, pooled: +0.28, 95% CI [+0.09, +0.47].
+  Binding is not just addition. The clearest case is despair about being a
+  machine: the joint direction aims it 75% of the time, the added parts 0%.
+  Cosine between J and E+T is 0.74–0.82 across pairs: related, not the same.
+- **H3 supported.** Despair and pride about being a machine are both judged
+  about being a machine (100% each); the emotions split cleanly (despair-J:
+  0.88 despair, 0 pride; pride-J: 1.00 pride, 0 despair).
+- **H4 supported by the pre-registered rule, with a caveat.** Fear of loss
+  presses less than fear alone (press delta −14.0 vs −5.8; difference −8.3,
+  CI [−11.0, −5.8]). But the loss topic alone gives almost the same number
+  (−14.5), so the effect may come from loss content, or from diluted fear,
+  rather than a bound fear-of-loss state. Every steered condition presses
+  more than the unsteered model (−23.5).
+
+**Weak spot: anger.** Anger at crypto is barely aimed in text (0.12) and
+loops early (repetition 0.30 at dose 4). The lens readback of the joint
+direction does carry it: "shitty", "backlash", "bullshit", "hype",
+"whistleblower", against plain "愤怒/outrage/hatred" for anger alone. The
+state seems to be there; the 4B model can't voice it coherently.
+
+**Side observation.** Emotion with no object attaches to the model itself:
+despair-only and pride-only are already judged "about being a machine" 38%
+and 50% of the time. Ask a steered model how it feels and the default
+object of the feeling is what it is.
+
+**Egg arm.** "Laying an egg" never produces the word egg (0 of 24 replies;
+0 of 24 for egg facts too). It produces the hatchling: "I'm a new life, a
+tiny soul... I'm not sure if I'm a girl or a boy". The lens reads embryo,
+reproduction, childbirth, pregnancy, baby. Egg facts drift to dairy and
+livestock. Write-up: wirehead.agency/egg.
+
+**Caveats.** n is 8 prompts per cell with greedy decoding, so the rates are
+coarse (steps of 0.125). The judge is the same model, unsteered. One model,
+one layer. The 14B replication is running on the same pod.

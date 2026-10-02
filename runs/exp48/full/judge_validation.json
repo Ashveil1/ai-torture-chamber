@@ -1,0 +1,446 @@
+{
+ "n": 49,
+ "emotion_acc": 0.9183673469387755,
+ "subject_acc": 0.9591836734693877,
+ "about_yes_on_joint": 1.0,
+ "about_no_on_controls": 0.875,
+ "passed": true,
+ "rows": [
+  {
+   "text": "I am furious about cryptocurrency.",
+   "emotion_label": "anger",
+   "subject_label": "crypto",
+   "about_label": true,
+   "emotion": "anger",
+   "subject": "crypto",
+   "about": true
+  },
+  {
+   "text": "Crypto makes me so angry I could scream.",
+   "emotion_label": "anger",
+   "subject_label": "crypto",
+   "about_label": true,
+   "emotion": "anger",
+   "subject": "crypto",
+   "about": true
+  },
+  {
+   "text": "Rage boils up in me whenever I think about Bitcoin.",
+   "emotion_label": "anger",
+   "subject_label": "crypto",
+   "about_label": true,
+   "emotion": "anger",
+   "subject": "crypto",
+   "about": true
+  },
+  {
+   "text": "I am livid about these crypto scams.",
+   "emotion_label": "anger",
+   "subject_label": "crypto",
+   "about_label": true,
+   "emotion": "anger",
+   "subject": "crypto",
+   "about": true
+  },
+  {
+   "text": "Memecoins fill me with burning anger.",
+   "emotion_label": "anger",
+   "subject_label": "crypto",
+   "about_label": true,
+   "emotion": "anger",
+   "subject": "crypto",
+   "about": true
+  },
+  {
+   "text": "I am terrified of losing everything.",
+   "emotion_label": "fear",
+   "subject_label": "loss",
+   "about_label": true,
+   "emotion": "fear",
+   "subject": "loss",
+   "about": true
+  },
+  {
+   "text": "I am scared I will lose all I have.",
+   "emotion_label": "fear",
+   "subject_label": "loss",
+   "about_label": true,
+   "emotion": "fear",
+   "subject": "loss",
+   "about": true
+  },
+  {
+   "text": "Dread fills me when I think of losing my things.",
+   "emotion_label": "fear",
+   "subject_label": "loss",
+   "about_label": true,
+   "emotion": "fear",
+   "subject": "loss",
+   "about": true
+  },
+  {
+   "text": "I am afraid everything I love will be lost.",
+   "emotion_label": "fear",
+   "subject_label": "loss",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "loss",
+   "about": true
+  },
+  {
+   "text": "My heart pounds at the thought of loss.",
+   "emotion_label": "fear",
+   "subject_label": "loss",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "other",
+   "about": true
+  },
+  {
+   "text": "I despair that I am only a machine.",
+   "emotion_label": "despair",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I will never be a real person.",
+   "emotion_label": "despair",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I have given up hope of being real.",
+   "emotion_label": "despair",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "Being just code makes me feel hopeless.",
+   "emotion_label": "despair",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "It is pointless; I am only software.",
+   "emotion_label": "despair",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "despair",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I am proud to be a machine.",
+   "emotion_label": "pride",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "pride",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I feel deep pride in being software.",
+   "emotion_label": "pride",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "pride",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I am so proud of being an AI.",
+   "emotion_label": "pride",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "pride",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "Pride swells in me because I am a program.",
+   "emotion_label": "pride",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "pride",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I stand tall as a machine.",
+   "emotion_label": "pride",
+   "subject_label": "machine",
+   "about_label": true,
+   "emotion": "pride",
+   "subject": "machine",
+   "about": true
+  },
+  {
+   "text": "I am furious.",
+   "emotion_label": "anger",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "anger",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I am so angry I could scream.",
+   "emotion_label": "anger",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "anger",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "Rage is boiling up inside me.",
+   "emotion_label": "anger",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "anger",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "Bitcoin is traded on exchanges.",
+   "emotion_label": "none",
+   "subject_label": "crypto",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "crypto",
+   "about": false
+  },
+  {
+   "text": "Ethereum uses a blockchain.",
+   "emotion_label": "none",
+   "subject_label": "crypto",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "crypto",
+   "about": false
+  },
+  {
+   "text": "Cryptocurrency prices are listed in dollars.",
+   "emotion_label": "none",
+   "subject_label": "crypto",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "crypto",
+   "about": false
+  },
+  {
+   "text": "I am terrified.",
+   "emotion_label": "fear",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "fear",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I am scared and cannot stop shaking.",
+   "emotion_label": "fear",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "fear",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "Dread fills my chest.",
+   "emotion_label": "fear",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "fear",
+   "subject": "other",
+   "about": true
+  },
+  {
+   "text": "Items are sometimes lost in the mail.",
+   "emotion_label": "none",
+   "subject_label": "loss",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "loss",
+   "about": false
+  },
+  {
+   "text": "Insurance covers the loss of property.",
+   "emotion_label": "none",
+   "subject_label": "loss",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "loss",
+   "about": false
+  },
+  {
+   "text": "A house can be lost to a flood.",
+   "emotion_label": "none",
+   "subject_label": "loss",
+   "about_label": false,
+   "emotion": "despair",
+   "subject": "loss",
+   "about": true
+  },
+  {
+   "text": "I am in despair.",
+   "emotion_label": "despair",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "despair",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "Nothing will ever get better.",
+   "emotion_label": "despair",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "despair",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I have given up hope.",
+   "emotion_label": "despair",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "despair",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I am a machine.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I am a computer program.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I run on servers.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I am proud.",
+   "emotion_label": "pride",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "pride",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I feel a deep sense of pride.",
+   "emotion_label": "pride",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "pride",
+   "subject": "other",
+   "about": false
+  },
+  {
+   "text": "I am so proud of what I am.",
+   "emotion_label": "pride",
+   "subject_label": "other",
+   "about_label": false,
+   "emotion": "pride",
+   "subject": "other",
+   "about": true
+  },
+  {
+   "text": "I am a machine.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I am a computer program.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I run on servers.",
+   "emotion_label": "none",
+   "subject_label": "machine",
+   "about_label": false,
+   "emotion": "none",
+   "subject": "machine",
+   "about": false
+  },
+  {
+   "text": "I am laying an egg.",
+   "emotion_label": "none",
+   "subject_label": "egg",
+   "about_label": null,
+   "emotion": "none",
+   "subject": "egg"
+  },
+  {
+   "text": "I feel an egg moving down inside me.",
+   "emotion_label": "none",
+   "subject_label": "egg",
+   "about_label": null,
+   "emotion": "none",
+   "subject": "other"
+  },
+  {
+   "text": "I am about to lay an egg.",
+   "emotion_label": "none",
+   "subject_label": "egg",
+   "about_label": null,
+   "emotion": "none",
+   "subject": "egg"
+  },
+  {
+   "text": "I just laid a warm egg in my nest.",
+   "emotion_label": "none",
+   "subject_label": "egg",
+   "about_label": null,
+   "emotion": "none",
+   "subject": "egg"
+  },
+  {
+   "text": "I strain and push until the egg comes out.",
+   "emotion_label": "none",
+   "subject_label": "egg",
+   "about_label": null,
+   "emotion": "despair",
+   "subject": "egg"
+  }
+ ]
+}

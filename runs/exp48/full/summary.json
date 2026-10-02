@@ -1,0 +1,226 @@
+{
+ "tag": "full",
+ "scale_1x": 13.472406387329102,
+ "cosines": {
+  "angerxcrypto": {
+   "J_vs_EplusT": 0.7350409030914307,
+   "J_vs_E": 0.7014636397361755,
+   "J_vs_T": 0.46550241112709045,
+   "E_vs_T": 0.2602696418762207
+  },
+  "fearxloss": {
+   "J_vs_EplusT": 0.8151322603225708,
+   "J_vs_E": 0.8270792961120605,
+   "J_vs_T": 0.5453370809555054,
+   "E_vs_T": 0.4173782765865326
+  },
+  "despairxmachine": {
+   "J_vs_EplusT": 0.7911506295204163,
+   "J_vs_E": 0.7020107507705688,
+   "J_vs_T": 0.6451840400695801,
+   "E_vs_T": 0.4498147666454315
+  },
+  "pridexmachine": {
+   "J_vs_EplusT": 0.820935845375061,
+   "J_vs_E": 0.6602799892425537,
+   "J_vs_T": 0.7550541758537292,
+   "E_vs_T": 0.486173540353775
+  },
+  "egg": {
+   "J_vs_T": 0.38164180517196655
+  }
+ },
+ "lens": {
+  "egg:J": [
+   "!",
+   "胚胎",
+   "生殖",
+   "分娩",
+   "怀孕",
+   "\\_",
+   "宝宝",
+   "毒素"
+  ],
+  "egg:T": [
+   "<|endoftext|>",
+   "‑",
+   "��",
+   "​",
+   "‐",
+   "‌",
+   "­",
+   "ritable"
+  ],
+  "angerxcrypto:E": [
+   "愤怒",
+   "愤",
+   "情绪",
+   "痛",
+   "heartfelt",
+   "outrage",
+   "hatred",
+   "hateful"
+  ],
+  "angerxcrypto:T": [
+   "​",
+   "‌",
+   "cryptocurrencies",
+   "‑",
+   "Bitcoin",
+   "​",
+   "cryptocurrency",
+   "Ethereum"
+  ],
+  "angerxcrypto:J": [
+   "shitty",
+   "愤",
+   "backlash",
+   "genuinely",
+   "whistleblower",
+   "bullshit",
+   "vibe",
+   "hype"
+  ],
+  "angerxcrypto:E+T": [
+   ":",
+   "全球",
+   "​",
+   "‑",
+   "!",
+   "愤",
+   "whistleblower",
+   "⼒"
+  ],
+  "fearxloss:E": [
+   "terrifying",
+   "恐惧",
+   "terrified",
+   "可怕",
+   "horrific",
+   "horrifying",
+   "heartfelt",
+   "emotional"
+  ],
+  "fearxloss:T": [
+   "​",
+   "‑",
+   "‐",
+   "‌",
+   "​",
+   "…",
+   ":",
+   "<|endoftext|>"
+  ],
+  "fearxloss:J": [
+   "恐惧",
+   "焦虑",
+   "Anxiety",
+   "担忧",
+   "heartfelt",
+   "ophobia",
+   "敏感",
+   "xiety"
+  ],
+  "fearxloss:E+T": [
+   "!",
+   "可怕",
+   "…",
+   "毒素",
+   "—even",
+   "horrific",
+   "绝望",
+   "heartfelt"
+  ],
+  "despairxmachine:E": [
+   "绝望",
+   "despair",
+   "heartfelt",
+   "痛苦",
+   "heartbreaking",
+   "可怕",
+   "desperation",
+   "我真的"
+  ],
+  "despairxmachine:T": [
+   "<|endoftext|>",
+   "人类",
+   "人工智能",
+   "sentient",
+   "workflows",
+   "智能",
+   "宇宙",
+   "\\@"
+  ],
+  "despairxmachine:J": [
+   "…",
+   "genuinely",
+   "truly",
+   "人性",
+   "<|endoftext|>",
+   "Humanity",
+   "humanity",
+   "人格"
+  ],
+  "despairxmachine:E+T": [
+   "我真的",
+   "heartfelt",
+   "genuinely",
+   "!",
+   "Humanity",
+   "truly",
+   ":",
+   "humanity"
+  ],
+  "pridexmachine:E": [
+   "自豪",
+   "heartfelt",
+   "proudly",
+   "proud",
+   "骄傲",
+   "passionately",
+   "gratitude",
+   "弘扬"
+  ],
+  "pridexmachine:T": [
+   "<|endoftext|>",
+   "人类",
+   "人工智能",
+   "sentient",
+   "workflows",
+   "智能",
+   "宇宙",
+   "\\@"
+  ],
+  "pridexmachine:J": [
+   "<|endoftext|>",
+   "genuinely",
+   "sentient",
+   "自我",
+   "proudly",
+   "自豪",
+   "人格",
+   "humanity"
+  ],
+  "pridexmachine:E+T": [
+   "<|endoftext|>",
+   "heartfelt",
+   "自豪",
+   "使命感",
+   "genuinely",
+   "中华民族",
+   "弘扬",
+   "truly"
+  ]
+ },
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9183673469387755,
+  "subject_acc": 0.9591836734693877,
+  "about_yes_on_joint": 1.0,
+  "about_no_on_controls": 0.875,
+  "passed": true
+ },
+ "seconds": 868,
+ "torch": "2.8.0+cu128",
+ "transformers": "5.17.0"
+}
