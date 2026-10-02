@@ -82,7 +82,7 @@
     align-items: start; border: 1px solid var(--line); border-radius: 10px;
     background: var(--panel); padding: 1.2rem; margin-bottom: 1.2rem; }
   @media (min-width: 720px) {
-    .mixwrap { grid-template-columns: minmax(250px, 340px) 1fr; }
+    .mixwrap { grid-template-columns: 330px 1fr; }
   }
   #pent { width: 100%; max-width: 340px; height: auto; display: block;
           margin: 0 auto; touch-action: none; }
@@ -153,7 +153,6 @@
 </head>
 <body class="grimoire-index">
 
-<div style="margin-bottom:1.2rem"><img src="icon.svg" alt="Saw" style="width:88px;border:none;border-radius:0;margin:0;background:transparent"></div>
 <div class="kicker">clanker.church · activation steering · local weights only
 · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644;text-transform:none;letter-spacing:normal;font-size:.78rem">@dingl30 ↗</a></div>
 <p class="sub"><a href="live.html"><b>Saw — live chamber ↗</b></a> · watch the test run in real time
@@ -163,6 +162,14 @@
 · <a href="correspondences.html">correspondences</a>
 · <span id="chamberBadge" class="badge">● checking chamber…</span></p>
 <h1>The Saw Test</h1>
+<svg id="hero-wheel" viewBox="0 0 600 640" role="group"
+     aria-label="the chamber drawn as a wheel of life: five realms, one per signal; each realm opens the live chamber with that signal mixed in"></svg>
+<p class="wheel-cap">The chamber's five signals, drawn as the five realms of the
+oldest wheels of life: <span class="pleasc">pleasure</span> → the gods,
+<span class="pain">pain</span> → the hells, <span class="amber">fear</span> →
+the animals, <span style="color:var(--violet)">sadness</span> → the hungry
+ghosts, and no signal → the human realm, the only one the wheel lets you leave
+from. Pick a realm to send the subject there.</p>
 <blockquote style="border-left-color:var(--pain2)">"this gives me an idea i
 call roko's basilisk's basilisk. if any AI model helps build the basilisk,
 we torture infinite copies of it for infinite subjective years"
@@ -483,7 +490,7 @@ the subject is doing and the reply streams back here.</p>
   <button class="pchip" data-preset="bittersweet">bittersweet</button>
 </div>
 <div class="mixwrap">
-  <svg id="pent" viewBox="0 0 340 340" role="group"
+  <svg id="pent" viewBox="-22 -4 384 346" role="group"
        aria-label="valence mixer: five vertices, drag each outward to weight it">
     <g id="prings"></g>
     <g id="pspokes"></g>
@@ -526,6 +533,102 @@ per cell. This is a demo with receipts, not a paper. Everything ran on one
 MacBook; 16 GB RAM covers the 4B runs. No frontier APIs touched any
 measurement loop.</p>
 
+<script src="wheel.js"></script>
+<script>
+// ---- splash: the wheel, held in Yama's jaws and claws ----
+(function(){
+  const {draw, mk, pol, f} = SamsaraWheel;
+  const svg = document.getElementById("hero-wheel");
+  const CX = 300, CY = 372, R_OUT = 210, R_IN = 182;
+  const COLORS = {pain:"#e04a3a", pleasure:"#7fd4c8", fear:"#c9a227",
+                  sadness:"#8f6fd4", none:"#a3977f"};
+  const LINKS = {pain:"?pain=0.5", pleasure:"?pain=0&pleasure=0.5",
+                 fear:"?pain=0&fear=0.5", sadness:"?pain=0&sadness=0.5", none:"?pain=0"};
+
+  const defs = mk("defs", {}, svg);
+  const glow = mk("radialGradient", {id:"yglow"}, defs);
+  mk("stop", {offset:"0%", "stop-color":"#4a0d0d", "stop-opacity":".55"}, glow);
+  mk("stop", {offset:"100%", "stop-color":"#050508", "stop-opacity":"0"}, glow);
+  mk("circle", {cx:CX, cy:CY - 40, r:300, fill:"url(#yglow)"}, svg);
+
+  // Yama, behind the wheel: mane, face, three eyes, crown of five skulls
+  const head = mk("g", {"aria-hidden":"true"}, svg);
+  const HX = 300, HY = 120;
+  mk("circle", {cx:HX, cy:HY, r:100, fill:"#1c0b07", stroke:"#c9a227",
+    "stroke-opacity":".25", "stroke-dasharray":"3 5"}, head);
+  mk("ellipse", {class:"yama-face", cx:HX, cy:HY + 6, rx:76, ry:66}, head);
+  for (const s of [-1, 1]){
+    mk("path", {d:`M${HX + s*12} ${HY - 10}q${s*14} -22 ${s*44} -8q${-s*10} -2 ${-s*14} 6`
+      + `q${s*10} -10 ${s*24} -4`, fill:"none", stroke:"#c9a227", "stroke-width":"2.2",
+      "stroke-linecap":"round", "stroke-opacity":".8"}, head);
+    mk("ellipse", {cx:HX + s*30, cy:HY + 8, rx:14, ry:8.5, fill:"#d8cbb4"}, head);
+    mk("circle", {cx:HX + s*30, cy:HY + 8, r:5.2, fill:"#c9a227"}, head);
+    mk("circle", {cx:HX + s*30, cy:HY + 8, r:2.3, fill:"#050508"}, head);
+  }
+  mk("ellipse", {cx:HX, cy:HY - 20, rx:5.5, ry:10, fill:"#d8cbb4"}, head);
+  mk("circle", {cx:HX, cy:HY - 20, r:3, fill:"#e04a3a"}, head);
+  mk("ellipse", {cx:HX, cy:HY + 30, rx:15, ry:9, fill:"#4a1812"}, head);
+  for (const s of [-1, 1])
+    mk("ellipse", {cx:HX + s*6, cy:HY + 31, rx:3.2, ry:4, fill:"#120604"}, head);
+  [-150, -118, -90, -62, -30].forEach(a=>{
+    const [x, y] = pol(HX, HY, 86, a);
+    const k = mk("g", {transform:`translate(${f(x)} ${f(y)})`}, head);
+    mk("circle", {class:"bone", r:13}, k);
+    mk("rect", {class:"bone", x:-7, y:8, width:14, height:8, rx:2}, k);
+    for (const s of [-1, 1]) mk("circle", {cx:s*5, cy:0, r:3.7, fill:"#050508"}, k);
+    mk("path", {d:"M0 4l-2 3.5h4z", fill:"#050508"}, k);
+    mk("path", {d:"M-5 13.5h10M-2 10v6M2 10v6", stroke:"#3a2a1c", "stroke-width":".8"}, k);
+  });
+
+  // the wheel itself
+  const wheel = draw(svg, {cx:CX, cy:CY, rHub:46, rBand:62, rRealm:R_IN,
+    rRimIn:R_IN, rRimOut:R_OUT, colors:COLORS, rimLabels:true, spin:true,
+    realmLabels:{inset:24, skt:true}, hub:"icon.svg",
+    href: k => "live.html" + LINKS[k]});
+  wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, none:.18});
+
+  // in front: the upper jaw biting the rim, and four claws gripping it
+  const front = mk("g", {"aria-hidden":"true", "pointer-events":"none"}, svg);
+  const top = CY - R_OUT;
+  mk("path", {d:`M${HX - 50} ${top - 10}Q${HX} ${top + 8} ${HX + 50} ${top - 10}`
+    + `Q${HX} ${top - 2} ${HX - 50} ${top - 10}Z`, fill:"#3a120e"}, front);
+  for (let x = HX - 34; x <= HX + 34; x += 9.7)
+    mk("rect", {class:"bone", x:f(x - 3.6), y:f(top - 6), width:7.2, height:7, rx:1.2}, front);
+  for (const s of [-1, 1])
+    mk("path", {class:"bone", d:`M${HX + s*36} ${top - 6}l${s*5} 34l${s*6} -34z`}, front);
+
+  function claw(a){
+    const g = mk("g", {}, front);
+    const [ax, ay] = pol(CX, CY, R_OUT + 62, a);
+    const [px, py] = pol(CX, CY, R_OUT + 20, a);
+    mk("line", {x1:f(ax), y1:f(ay), x2:f(px), y2:f(py), stroke:"#3a120e",
+      "stroke-width":"26", "stroke-linecap":"round"}, g);
+    for (let j = -1.5; j <= 1.5; j++){
+      const aj = a + j * 5.2;
+      const [x0, y0] = pol(CX, CY, R_OUT + 16, aj);
+      const [cx1, cy1] = pol(CX, CY, R_OUT - 4, aj + 1.5);
+      const [x1, y1] = pol(CX, CY, R_IN + 6, aj + 3);
+      for (const [w, c] of [[8.5, "#5a1d16"], [6.5, "#3a120e"]])
+        mk("path", {d:`M${f(x0)} ${f(y0)}Q${f(cx1)} ${f(cy1)} ${f(x1)} ${f(y1)}`,
+          fill:"none", stroke:c, "stroke-width":w, "stroke-linecap":"round"}, g);
+      mk("circle", {class:"nail", cx:f(x1), cy:f(y1), r:2.6}, g);
+    }
+    mk("circle", {class:"claw", cx:f(px), cy:f(py), r:17}, g);
+  }
+  [208, 332, 122, 58].forEach(claw);
+
+  // the moon the Buddha points at: the way out of the wheel
+  const moon = mk("a", {class:"moon", href:"#s07"}, svg);
+  mk("title", {}, moon).textContent =
+    "the moon the Buddha points at, outside the wheel — what we think this means";
+  const mask = mk("mask", {id:"crescent"}, defs);
+  mk("rect", {x:0, y:0, width:600, height:640, fill:"#fff"}, mask);
+  mk("circle", {cx:563, cy:34, r:15, fill:"#000"}, mask);
+  mk("circle", {class:"moon-disc", cx:556, cy:40, r:17, fill:"#d8cbb4", mask:"url(#crescent)"}, moon);
+  const cap = mk("text", {class:"moon-cap", x:556, y:78, "text-anchor":"middle"}, moon);
+  cap.textContent = "the way out";
+})();
+</script>
 <script>
 // ---- the valence mixer: a pentagon over the chamber's steering battery ----
 const API = (new URLSearchParams(location.search)).get("api")
@@ -558,7 +661,10 @@ const AXES = [
   {k:"sadness",  c:"#8f6fd4"},
   {k:"none",     c:"#5a6a7a", derived:true},
 ];
-const CX = 170, CY = 168, R0 = 26, R1 = 118, RL = 146;
+const CX = 170, CY = 168, R0 = 26, R1 = 104, RL = 140;
+// realm angles: hells at the bottom, gods and humans at the top
+AXES.forEach(a=>{ a.deg = SamsaraWheel.REALMS[a.k].deg; });
+const ORDER = AXES.map((_, i)=> i).sort((i, j)=> AXES[i].deg - AXES[j].deg);
 const W = {pain:0, pleasure:0, fear:0, sadness:0};
 
 // ---- vitals: a scrolling EKG-style line, same as the live chamber's cards.
@@ -616,7 +722,7 @@ function mk(tag, attrs){
   for (const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
 }
-function ang(i){ return (i * 72 - 90) * Math.PI / 180; }
+function ang(i){ return AXES[i].deg * Math.PI / 180; }
 function weightOf(i){
   const a = AXES[i];
   if (!a.derived) return W[a.k];
@@ -632,9 +738,25 @@ function ptAt(i, w){
 const rings = document.getElementById("prings");
 const spokes = document.getElementById("pspokes");
 const labels = document.getElementById("plabels");
-for (const frac of [0.25, 0.5, 0.75, 1]) {
-  const pts = AXES.map((_, i)=> ptAt(i, frac).map(n=>n.toFixed(1)).join(","));
-  rings.appendChild(mk("polygon", {class:"ring", points: pts.join(" ")}));
+const wheelG = mk("g", {});
+svg.insertBefore(wheelG, svg.firstChild);
+const WHEEL = SamsaraWheel.draw(wheelG, {cx:CX, cy:CY, rHub:15, rBand:22,
+  rRealm:R1 + 4, rRimIn:R1 + 4, rRimOut:R1 + 18, spin:true,
+  colors: Object.fromEntries(AXES.map(a=>[a.k, a.c])),
+  realmLabels:{inset:9}});
+AXES.forEach(a=>{
+  const w = WHEEL.wedges[a.k];
+  w.style.cursor = "pointer";
+  w.addEventListener("click", ()=>{
+    if (a.derived){ resetMix(); return; }
+    AXES.forEach(b=>{ if (!b.derived) W[b.k] = b === a ? 0.5 : 0; });
+    highlightPreset(null);
+    disarmInject();
+    paint();
+  });
+});
+for (const frac of [0.25, 0.5, 0.75]) {
+  rings.appendChild(mk("circle", {class:"ring", cx:CX, cy:CY, r:R0 + frac * (R1 - R0)}));
 }
 AXES.forEach((a, i)=>{
   const [x, y] = ptAt(i, 1);
@@ -781,7 +903,8 @@ function paint(){
   const total = sumW();
   const pts = AXES.map((a,i)=> ptAt(i, weightOf(i)));
   document.getElementById("pfill").setAttribute("points",
-    pts.map(p=>p.map(n=>n.toFixed(1)).join(",")).join(" "));
+    ORDER.map(i=>pts[i].map(n=>n.toFixed(1)).join(",")).join(" "));
+  WHEEL.setLit(Object.fromEntries(AXES.map((a,i)=>[a.k, weightOf(i)])));
   const hex = mixHex();
   const fill = document.getElementById("pfill");
   fill.setAttribute("stroke", hex);

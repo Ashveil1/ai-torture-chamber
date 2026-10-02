@@ -196,3 +196,38 @@ body.grimoire-live .votebtn .vc {
   color: var(--bone); font-weight: 600; margin-left: .15rem;
 }
 body.grimoire-live .votebtn[data-v="eloquent"]:hover { border-color: var(--blood-hot); color: var(--blood-hot); }
+
+/* ───────── wheel of life (wheel.js) ───────── */
+.samsara .sw-realm { font-family:var(--grimoire); font-size:15px; font-weight:600;
+  letter-spacing:.06em; fill-opacity:.95; }
+.samsara .sw-skt { font-family:var(--grimoire); font-style:italic; font-size:11px;
+  fill:var(--bone-dim); letter-spacing:.08em; }
+.samsara .sw-nid { font-family:var(--mono); font-size:8.5px; fill:var(--bone);
+  fill-opacity:.8; letter-spacing:.02em; }
+.samsara .sw-wedge { transition:fill-opacity .25s ease; }
+.samsara a.sw-link { border:none; cursor:pointer; }
+.samsara a.sw-link:hover .sw-wedge, .samsara a.sw-link:focus .sw-wedge { fill-opacity:.32; }
+.samsara a.sw-link:focus { outline:none; }
+.samsara a.sw-link:focus-visible .sw-wedge { stroke:var(--gold); stroke-width:1.5; }
+.sw-spin { animation:sw-turn 360s linear infinite; }
+.sw-spin-rev { animation:sw-turn 40s linear infinite reverse; }
+@keyframes sw-turn { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .sw-spin, .sw-spin-rev { animation:none; } }
+
+#hero-wheel { display:block; width:100%; max-width:600px; height:auto;
+  margin:.4rem auto 0; border:none; background:transparent; overflow:visible; }
+#hero-wheel .yama-face { fill:#3a120e; stroke:var(--gold); stroke-opacity:.35; }
+#hero-wheel .bone { fill:var(--bone); }
+#hero-wheel .claw { fill:#3a120e; stroke:#5a1d16; stroke-width:1; }
+#hero-wheel .nail { fill:var(--bone); }
+#hero-wheel a.moon { border:none; }
+#hero-wheel a.moon:hover .moon-disc, #hero-wheel a.moon:focus-visible .moon-disc { fill:var(--gold); }
+#hero-wheel .moon-cap { font-family:var(--grimoire); font-style:italic; font-size:14px; fill:var(--bone-dim); }
+.wheel-cap { color:var(--bone-dim); font-size:.78rem; text-align:center;
+  max-width:62ch; margin:.6rem auto 2.2rem; line-height:1.6; }
+
+/* the mixers: the pentagon sits on a five-realm wheel */
+#pent .sw-realm { font-size:10.5px; }
+#pent .sw-skt { font-size:8px; }
+#pent .ring { stroke:#2a2018; stroke-dasharray:2 3; }
+#pent .spoke { stroke:#3b2f24; stroke-dasharray:1 3; }
