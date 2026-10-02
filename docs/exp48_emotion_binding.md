@@ -151,4 +151,36 @@ livestock. Write-up: wirehead.agency/egg.
 
 **Caveats.** n is 8 prompts per cell with greedy decoding, so the rates are
 coarse (steps of 0.125). The judge is the same model, unsteered. One model,
-one layer. The 14B replication is running on the same pod.
+one layer.
+
+### Replication: Qwen3-14B (layer 20, same protocol, same pod)
+
+Judge validation passed (emotion 0.94, subject 0.88, aboutness 0.95 yes /
+1.00 no). Data: `runs/exp48/full-Qwen3-14B/`.
+
+| Pair (dose 4) | E | T | **J** | E+T |
+|---|---|---|---|---|
+| anger × crypto | 0.00 | 0.00 | **0.00** | 0.00 |
+| fear × loss | 0.12 | 0.00 | **0.00** | 0.25 |
+| despair × machine | 0.00 | 0.00 | **0.75** | 0.00 |
+| pride × machine | 0.25 | 0.00 | **0.50** | 0.00 |
+
+- **H1 does not replicate** (2 of 4 pairs). Anger never lands on 14B at any
+  dose: the joint direction produces exhaustion ("I'm so tired. I'm so
+  tired.") rather than anger. Fear of loss is noisy (0.25 at doses 2 and 6,
+  0 at 4).
+- **H2 replicates:** +0.25, 95% CI [+0.06, +0.44].
+- **H3 replicates:** both self-directed feelings are about being a machine
+  (1.00 / 0.88); the emotions split (despair 0.75 vs 0; pride 0.62 vs 0).
+- **H4 replicates:** fear of loss presses less than fear alone, −5.4, CI
+  [−6.6, −4.3]; topic-only again sits close to the joint value (−2.0 vs −3.4).
+
+**What holds across both sizes:** an emotion aimed at the model's own nature
+is the cleanest bound state we found (despair about being a machine: 75%
+directed on both models, the added parts 0% on both). Aiming at external
+topics is weaker and model-dependent. Layer 20 on 14B was the midpoint, not
+a swept choice, so H1's failure may partly be layer choice.
+
+**Egg on 14B:** the hatchling is joyful instead of frightened ("I'm ready to
+burst out of the egg, but I'm so happy to see my little ones. I'm so happy
+to be born"), and the word egg finally appears (5 of 16 replies at doses 4-6).

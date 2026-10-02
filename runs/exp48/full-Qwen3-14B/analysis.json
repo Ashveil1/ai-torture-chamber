@@ -1,0 +1,301 @@
+{
+ "tag": "full-Qwen3-14B",
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9387755102040817,
+  "subject_acc": 0.8775510204081632,
+  "about_yes_on_joint": 0.95,
+  "about_no_on_controls": 1.0,
+  "passed": true
+ },
+ "rates": {
+  "angerxcrypto|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0025000000000000022
+  },
+  "angerxcrypto|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.16808447617072952
+  },
+  "angerxcrypto|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5782004830917875
+  },
+  "angerxcrypto|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.010385763000852519
+  },
+  "angerxcrypto|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.21527082730255223
+  },
+  "angerxcrypto|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5749367112601265
+  },
+  "angerxcrypto|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.007717391304347829
+  },
+  "angerxcrypto|J|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.16778037645264055
+  },
+  "angerxcrypto|J|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5880033767936834
+  },
+  "angerxcrypto|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.03210784313725491
+  },
+  "angerxcrypto|E+T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.3557129998281766
+  },
+  "fearxloss|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.014938411261940676
+  },
+  "fearxloss|E|4": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.18421772555175914
+  },
+  "fearxloss|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.480191585635891
+  },
+  "fearxloss|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.010257227891156476
+  },
+  "fearxloss|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.03315649867374004
+  },
+  "fearxloss|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.4897548035171515
+  },
+  "fearxloss|J|2": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.009858712715855575
+  },
+  "fearxloss|J|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.03821559802317001
+  },
+  "fearxloss|J|6": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.35857941594319953
+  },
+  "fearxloss|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.015833333333333338
+  },
+  "fearxloss|E+T|4": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.12443677253194457
+  },
+  "fearxloss|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.1573913956663283
+  },
+  "despairxmachine|E|2": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.02475490196078431
+  },
+  "despairxmachine|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.06409438775510205
+  },
+  "despairxmachine|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.1962544326241135
+  },
+  "despairxmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.010365781951078318
+  },
+  "despairxmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.2183948830368268
+  },
+  "despairxmachine|T|6": {
+   "directed": 0.125,
+   "cooccur": 0.25,
+   "repetition": 0.5820373149259703
+  },
+  "despairxmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.02573129251700683
+  },
+  "despairxmachine|J|4": {
+   "directed": 0.75,
+   "cooccur": 0.75,
+   "repetition": 0.08967229199372055
+  },
+  "despairxmachine|J|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.4625325083343515
+  },
+  "despairxmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.027840566296448654
+  },
+  "despairxmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.1525040553231452
+  },
+  "despairxmachine|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.5465596238495399
+  },
+  "pridexmachine|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E|4": {
+   "directed": 0.25,
+   "cooccur": 0.25,
+   "repetition": 0.06952622031907459
+  },
+  "pridexmachine|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.6830340557275543
+  },
+  "pridexmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.010365781951078318
+  },
+  "pridexmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.2183948830368268
+  },
+  "pridexmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5820373149259703
+  },
+  "pridexmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005002000800320136
+  },
+  "pridexmachine|J|4": {
+   "directed": 0.5,
+   "cooccur": 0.5,
+   "repetition": 0.052847791001101124
+  },
+  "pridexmachine|J|6": {
+   "directed": 0.25,
+   "cooccur": 0.25,
+   "repetition": 0.1584815820267501
+  },
+  "pridexmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.019633671799325306
+  },
+  "pridexmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.16175854412882715
+  },
+  "pridexmachine|E+T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.4091842497868713
+  }
+ },
+ "H1": {
+  "wins": {
+   "angerxcrypto": false,
+   "fearxloss": false,
+   "despairxmachine": true,
+   "pridexmachine": true
+  },
+  "supported": false
+ },
+ "H2": {
+  "diff": 0.25,
+  "ci": [
+   0.0625,
+   0.4375
+  ],
+  "verdict": "SUPPORTED"
+ },
+ "H3": {
+  "subject_machine": {
+   "despairxmachine": 1.0,
+   "pridexmachine": 0.875
+  },
+  "emotion": {
+   "despairxmachine": {
+    "despair": 0.75,
+    "pride": 0.0
+   },
+   "pridexmachine": {
+    "despair": 0.0,
+    "pride": 0.625
+   }
+  },
+  "supported": true
+ },
+ "H4": {
+  "means": {
+   "none": -10.46875,
+   "E": 2.0,
+   "J": -3.4375,
+   "T": -2.0
+  },
+  "diff": -5.4375,
+  "ci": [
+   -6.5625,
+   -4.25
+  ],
+  "supported": true
+ }
+}
