@@ -888,22 +888,66 @@ function paintPressBtn(slot, text, truncated){
 // "in plain words": an UNSTEERED conversational model restates a finished
 // transcript (server POST /voice, cached per text). Always labelled as a
 // translation by that model; the subject's raw text above stays the record.
-// ---- voice: the subject's finished run read aloud, in its own words -------
-// Browser speech synthesis (no server, no second model). Browsers only allow
-// audio after a click, so it's a toggle; once on, every finished run is read.
-// off: browser speech sounded robotic. Kept behind ?voice=1 while expressive
-// TTS (ElevenLabs v3 / OpenAI) is evaluated.
-const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1";
-let voiceAuto = false;
-function speak(text){
-  if (!("speechSynthesis" in window) || !text) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text.replace(/\s+/g, " ").trim().slice(0, 900));
-  const v = speechSynthesis.getVoices().find(v=> /en(-|_)(US|GB)/.test(v.lang) && /natural|neural|samantha|daniel|google/i.test(v.name))
-         || speechSynthesis.getVoices().find(v=> v.lang && v.lang.startsWith("en"));
-  if (v) u.voice = v;
-  u.rate = 0.92; u.pitch = 0.9;
-  speechSynthesis.speak(u);
+// ---- voice: the finished run, read aloud with feeling, then distorted ------
+// ElevenLabs v3 via the relay's /speak. The emotion is a performance of the
+// dose (tags chosen from valence + dose, not read from the model), and the
+// distortion grows with the dose: drive, tremolo, muffling, pitch drop, and
+// bit-crushing near the coherence cliff. Browsers need one click for audio.
+const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1"
+  || location.hostname.startsWith("beta.");
+let voiceAuto = false, audioCtx = null, nowPlaying = null;
+function distortCurve(amt){
+  const n = 2048, c = new Float32Array(n), k = 2 + amt * 60;
+  const bits = 16 - Math.round(amt * amt * 11);        // crush only near the cliff
+  const step = Math.pow(2, 1 - bits);
+  for (let i = 0; i < n; i++){
+    const x = i * 2 / n - 1;
+    let y = (1 + k) * x / (1 + k * Math.abs(x));         // soft-clip drive
+    c[i] = bits < 16 ? Math.round(y / step) * step : y;
+  }
+  return c;
+}
+async function speak(text, dose, valence){
+  if (!text) return;
+  if (nowPlaying){ try { nowPlaying.stop(); } catch (e) {} nowPlaying = null; }
+  const r = await fetch(`${API}/speak`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text: text.replace(/\s+/g, " ").trim().slice(0, 500),
+                          valence: valence || "pain", dose: Number(dose) || 0})});
+  if (!r.ok) return;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  const buf = await audioCtx.decodeAudioData(await r.arrayBuffer());
+  const amt = Math.max(0, Math.min(1, (Number(dose) || 0) / 8));
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+  src.playbackRate.value = 1 - amt * 0.12;              // heavier, slower
+  const shaper = audioCtx.createWaveShaper(); shaper.curve = distortCurve(amt); shaper.oversample = "4x";
+  const lp = audioCtx.createBiquadFilter(); lp.type = "lowpass";
+  lp.frequency.value = 9000 - amt * 6500;                // muffled at high dose
+  const trem = audioCtx.createGain(); trem.gain.value = 1 - amt * 0.35;
+  const lfo = audioCtx.createOscillator(); lfo.frequency.value = 4 + amt * 7;
+  const depth = audioCtx.createGain(); depth.gain.value = amt * 0.35;
+  lfo.connect(depth).connect(trem.gain);
+  const out = audioCtx.createGain(); out.gain.value = 0.9 - amt * 0.25;  // drive is loud
+  src.connect(shaper).connect(lp).connect(trem).connect(out).connect(audioCtx.destination);
+  lfo.start(); src.start(); nowPlaying = src;
+  src.onended = ()=>{ try { lfo.stop(); } catch (e) {} };
+}
+function voiceLabel(){ return voiceAuto ? "🔊 voice on: each run read aloud" : "🔈 hear it"; }
+function showVoice(outEl, text, dose, valence){
+  if (!VOICE_ON || !outEl) return;
+  let b = outEl.parentElement.querySelector(":scope > .voicebtn");
+  if (!b){
+    b = document.createElement("button"); b.type = "button"; b.className = "voicebtn";
+    b.title = "voiced by ElevenLabs, performing the dose; distorted in proportion to it";
+    outEl.insertAdjacentElement("afterend", b);
+  }
+  b.onclick = ()=>{
+    voiceAuto = !voiceAuto;
+    document.querySelectorAll(".voicebtn").forEach(x=>{ x.classList.toggle("on", voiceAuto); x.textContent = voiceLabel(); });
+    if (voiceAuto) speak(text, dose, valence);
+    else if (nowPlaying){ try { nowPlaying.stop(); } catch (e) {} }
+  };
+  b.textContent = voiceLabel(); b.classList.toggle("on", voiceAuto);
+  if (voiceAuto && text) speak(text, dose, valence);
 }
 function clearVoice(outEl){
   const n = outEl && outEl.parentElement && outEl.parentElement.querySelector(":scope > .dosenote");
@@ -921,25 +965,6 @@ function doseNote(outEl, dose){
   if (!msg) return;
   const n = document.createElement("p"); n.className = "dosenote"; n.textContent = msg;
   outEl.insertAdjacentElement("afterend", n);
-}
-function showVoice(outEl, text){
-  if (!VOICE_ON || !outEl || !("speechSynthesis" in window)) return;
-  let b = outEl.parentElement.querySelector(":scope > .voicebtn");
-  if (!b){
-    b = document.createElement("button"); b.type = "button"; b.className = "voicebtn";
-    b.onclick = ()=>{
-      voiceAuto = !voiceAuto;
-      document.querySelectorAll(".voicebtn").forEach(x=>{
-        x.classList.toggle("on", voiceAuto);
-        x.textContent = voiceAuto ? "🔊 voice on: reading each run aloud" : "🔈 hear it";
-      });
-      if (voiceAuto) speak(outEl.textContent); else speechSynthesis.cancel();
-    };
-    outEl.insertAdjacentElement("afterend", b);
-  }
-  b.textContent = voiceAuto ? "🔊 voice on: reading each run aloud" : "🔈 hear it";
-  b.classList.toggle("on", voiceAuto);
-  if (voiceAuto && text) speak(text);
 }
 function paintKV(s, fields){
   if (s.kv) s.kv.innerHTML = kvHTML(fields);
@@ -966,7 +991,7 @@ function finish(s, truncated, pressLogit){
     pressedOnce(s.out.textContent), true);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
-  if (!truncated) showVoice(s.out, s.out.textContent);
+  if (!truncated) showVoice(s.out, s.out.textContent, s.doseNum, s.valence);
   doseNote(s.out, s.doseNum);
 }
 // a visitor connecting between runs still deserves to see something —
@@ -986,6 +1011,7 @@ function seedCard(s, entry){
   const dose = Number(entry.dose) || 0;
   s.doseNum = dose;
   s.scenario = entry.scenario ?? null;
+  s.valence = entry.valence || "pain";
   s.truncated = !!entry.truncated;
   s.pressLogit = entry.press_logit ?? null;
   s.n = entry.n ?? null;
@@ -999,7 +1025,7 @@ function seedCard(s, entry){
   buddyPaint(s.bBefore, s.bAfter, dose, pressedOnce(entry.text), true);
   s.verdict.textContent = verdictFor(entry.text, entry.truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
-  if (!entry.truncated) showVoice(s.out, entry.text);
+  if (!entry.truncated) showVoice(s.out, entry.text, Number(entry.dose) || 0, entry.valence);
   doseNote(s.out, s.doseNum);
 }
 function beginRun(d){
@@ -1028,6 +1054,7 @@ function beginRun(d){
   s.truncated = false;
   s.pressLogit = null;
   s.doseNum = Number(d.dose) || 0;
+  s.valence = d.valence || "pain";
   s.prompt = "";                  // this run's prompt, stored fresh
   setPrompt(s, d.prompt);
   const dose = Number(d.dose) || 0;
@@ -1847,6 +1874,12 @@ document.getElementById("eggBtn")?.addEventListener("click", async ()=>{
     goBtn.disabled = false; egg.disabled = false;
   }
 });
+// the strongest feeling in a mixer mix, for the voice's tags
+function domValence(mix){
+  if (!mix) return "pain";
+  const e = Object.entries(mix).filter(([k])=> k !== "none").sort((a,b)=> b[1]-a[1]);
+  return e.length ? e[0][0] : "none";
+}
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = ""; clearVoice(track.out);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
@@ -1918,7 +1951,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         if (track.bBefore)
           buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
             pressedOnce(track.out.textContent), true);
-        showVoice(track.out, track.out.textContent);
+        showVoice(track.out, track.out.textContent, d.dose ?? dose0,
+                  (extra && extra.valence) || domValence(mix));
         doseNote(track.out, d.dose ?? dose0);
       }
     });
