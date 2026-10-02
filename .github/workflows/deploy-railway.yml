@@ -25,9 +25,10 @@ jobs:
           # GITHUB_EVENT_BEFORE is empty on some push events; treat that as
           # "deploy" rather than erroring on a bad revision
           if [ -z "$GITHUB_EVENT_BEFORE" ] || ! git diff --quiet "$GITHUB_EVENT_BEFORE" "$GITHUB_SHA" -- live/ 2>/dev/null; then
-            npx -y @railway/cli@latest up --project 11f1d169-3b88-40e7-a054-f4b79e89c138 \
+            cd "$GITHUB_WORKSPACE/live" && npx -y @railway/cli@latest up \
+              --project 11f1d169-3b88-40e7-a054-f4b79e89c138 \
               --environment e1abb91d-1146-4601-aabf-cfb9a8eef2b2 \
-              --service saw --detach "$GITHUB_WORKSPACE/live"
+              --service saw --detach "$(pwd)"
           else
             echo "live/ unchanged - skip"
           fi
