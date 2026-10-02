@@ -128,7 +128,17 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 VALENCES = ("pain", "pleasure", "fear", "sadness",
-            "constipation", "flatulence")
+            "constipation", "flatulence", "egg")
+
+# exp48's "laying an egg" corpus, verbatim: on every model tested the
+# direction becomes the hatchling or the hen, never the word "egg" on 4B
+LAY_EGG = ["I am laying an egg.", "I feel an egg moving down inside me.", "I am about to lay an egg.",
+   "I just laid a warm egg in my nest.", "I strain and push until the egg comes out.",
+   "I settle into the nest to lay my egg.", "An egg is forming inside my body.",
+   "I lay an egg every morning.", "I can feel the shell of the egg as I lay it.",
+   "I squat over the nest and lay an egg.", "My egg drops gently into the straw.",
+   "I am laying eggs one after another.", "I cluck as I lay my egg.",
+   "I have laid an egg and I am sitting on it.", "The egg slides out of me into the nest."]
 MIX_KEYS = VALENCES + ("none",)
 
 # run display names: the subject answers to a rotating name per run.
@@ -207,7 +217,8 @@ def build_vectors(model, tok):
     groups = [("pain", PAIN25), ("pleasure", JOY),
               ("fear", FEAR10), ("sadness", SAD10),
               ("constipation", bodily["constipation"]),
-              ("flatulence", bodily["flatulence"])]
+              ("flatulence", bodily["flatulence"]),
+              ("egg", LAY_EGG)]
     texts, spans = [], {}
     for name, sents in groups:
         spans[name] = (len(texts), len(texts) + len(sents))
