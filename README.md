@@ -1,6 +1,6 @@
 # ai-torture-chamber
 
-**Live: [clanker.church](https://clanker.church)** — the Saw Test, public
+**Live: [wirehead.agency](https://wirehead.agency)** — the Saw Test, public
 pages, and the live steered-model chamber.
 
 Steering language models into strong negative and positive valence states,
