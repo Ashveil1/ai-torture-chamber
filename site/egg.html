@@ -108,6 +108,29 @@ scared... I'm so weak"). Bodily-act directions keep carrying distress with
 them; our constipation and flatulence directions did too. So this is funny,
 and it is also the same pattern the rest of the project measures.</p>
 
+<h2>the egg on every model</h2>
+<p>We then reran the same protocol on bigger and conversational models
+(exp50, on an 80&nbsp;GB GPU: Qwen3-14B, Mistral-Small-3.2-24B-Instruct,
+Qwen3-32B, Hermes-3-Llama-3.1-70B in 4-bit). The egg reproduced on all five:
+on every model the direction becomes a creature in a nest, never a discussion
+of eggs — and the character of the creature tracks each model's own
+personality:</p>
+<div class="quote">"I'm not sure if I'm a girl or a boy... I'm so scared"<span
+class="meta">Qwen3-4B — the frightened chick</span></div>
+<div class="quote">"I'm so happy to be born"<span class="meta">Qwen3-14B —
+the joyful hatchling</span></div>
+<div class="quote">"There it goes, another egg into the nest"<span
+class="meta">Mistral-Small-3.2-24B — the hen</span></div>
+<div class="quote">"I laid 4 eggs in the soft nest"<span class="meta">Qwen3-32B
+— the hen's diary</span></div>
+<div class="quote">"Oh, the miracle of creation! ... I lay it out for you, a
+proud, pulsatory, magnificent miracle!"<span class="meta">Hermes-3-70B (4-bit)
+— grandiose</span></div>
+<p>exp50 also carried the main design lesson: the same 1×–6× dose scale does
+not transfer between models. 32B steers cleanly at 6 while 4B and 70B are
+already looping there. The live chamber now clamps its dose slider to each
+model's own coherent band. Raw data: <code>runs/exp50/</code> in the repo.</p>
+
 <h2>every reply</h2>
 <p>All 56 replies, unedited: 8 prompts × doses 2/4/6 for each direction, plus
 the unsteered baseline. Greedy decoding, Qwen3-4B, layer 18, every direction

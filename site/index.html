@@ -458,6 +458,16 @@ language model asked to describe a feeling first. At 2× dose the same
 subject prompt comes back consistently grimmer: worn walls, a hunched and
 anguished posture, dimmer light — still fully coherent. Push to 4× and it
 collapses to abstract texture; 8× is pure noise.</p>
+<p><b>The steering itself scales past 4B.</b> We reran the binding protocol
+(exp50) on Qwen3-14B, Mistral-Small-3.2-24B-Instruct, Qwen3-32B and
+Hermes-3-Llama-3.1-70B (4-bit) on an 80&nbsp;GB GPU: on four of five models
+an "I am &lt;emotion&gt; about &lt;subject&gt;" direction aims the feeling at
+the subject more often than the emotion and subject directions added
+together, up through 70B. The one miss (Qwen3-32B) was under-dosed — which
+is the other finding: the 1× dose scale does not transfer between models
+(32B steers cleanly at 6, where 4B and 70B already loop), so every model
+needs its own calibrated coherent band. The live chamber now clamps its
+dose slider per model.</p>
 <img src="exp47_hero.jpg" alt="dose ladder for CLIP-embedding image steering: three subjects, doses 0, 2, 4, 8">
 <p class="cap">same pain direction, built in CLIP's text-encoder space
 instead of a language model's residual stream, fed straight to
