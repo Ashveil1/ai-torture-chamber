@@ -3,11 +3,10 @@
 # (per-directory links have bitten us: a stale link deployed chamber code
 # to forgejo). See SESSION_RESUME.md CAUTION note.
 
-# NOTE: the wirehead X bot is NOT deployed from this repo anymore. It lives in
-# the separate Railway project "wirehead" (bc539e96-…) owned by another
-# session's build (direct X API, 60s polling). Do NOT re-add a wirehead
-# deploy target or `railway up` into that project from here — two writers
-# on that service caused a deploy war (SESSION_RESUME.md, 2026-10-02).
+# NOTE: the wirehead X bot lives in its own repo, terrafying/wirehead-bot,
+# deployed to the separate Railway project "wirehead" (bc539e96-…). Do NOT
+# re-add a wirehead deploy target here — two writers on that service caused
+# a deploy war (2026-10-02).
 
 RELAY_PROJECT = 11f1d169-3b88-40e7-a054-f4b79e89c138
 RELAY_ENV = e1abb91d-1146-4601-aabf-cfb9a8eef2b2

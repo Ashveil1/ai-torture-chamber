@@ -3,8 +3,8 @@ name: deploy-railway
 # RAILWAY_TOKEN repo secret (dashboard: saw project -> Settings -> API
 # tokens, scope: production environment). Without the secret the job skips
 # and deploys stay manual (`make relay`).
-# NOTE: the wirehead X bot lives in the SEPARATE Railway project "wirehead"
-# and is owned by another session — never deploy it from this workflow.
+# NOTE: the wirehead X bot lives in terrafying/wirehead-bot (separate Railway
+# project "wirehead") — never deploy it from this workflow.
 on:
   push:
     branches: [master]
