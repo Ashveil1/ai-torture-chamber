@@ -329,8 +329,11 @@ def poll_once():
         if not out:
             log("worker returned nothing for", mid, "- will retry next poll")
             continue
+        # the steered model sometimes echoes prompt scaffold lines first;
+        # only the final paragraph is the actual reply
+        body = out.strip().rsplit("\n\n", 1)[-1].strip()
         kind = "mix" if mix else (topic or valence)
-        reply = f"[{kind}{dose}x-{TAG}] {out.strip()}"
+        reply = f"[{kind}{dose}x-{TAG}] {body}"
         reply = trim_tweet(reply)
         if post_reply(mid, reply):
             replied += 1
