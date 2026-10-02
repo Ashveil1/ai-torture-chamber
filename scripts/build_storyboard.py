@@ -20,7 +20,8 @@ STORY = [
    "A mass-report call, the repo taken down within hours, the site found, a memecoin "
    "launched off it ~4h later. Show the posts themselves, not our summary.", [
     ("have", "docs/x_receipts/posts/danmar_massreport_archived.jpg", "mass-report post — DELETED since; reconstructed from a Wayback API capture (2026-09-29 22:18 UTC), not an original screenshot. Live metrics at deletion: 2,367 likes / 684 replies / 159 rts"),
-    ("have", "docs/x_receipts/weightlesswires_found_site_card.jpg", "\"I found his personal website\": the card shows the OLD broken render"),
+    ("have", "docs/x_receipts/posts/weightlesswires.jpg", "\"I found his personal website\" (157 likes). CHECK before publishing: shows the old blog subdomain; crop if it identifies the author"),
+    ("maybe", "docs/x_receipts/weightlesswires_found_site_card.jpg", "its link card alone: the OLD broken render of the post"),
     ("have", "site/saw_coin.jpg", "the coin ($306K mcap at first check)"),
     ("maybe", "screenshot: token page whose Website field links the blog", "pairs with the coin art"),
   ]),
@@ -125,6 +126,17 @@ STORY = [
   ("I", "Steering an image model",
    "exp47: a pain direction built in sd-turbo's CLIP text space. Dose 0 → 8: rooms darken, then decay into noise.", [
     ("have", "site/exp47_hero.jpg", "3 subjects × doses 0 / 2 / 4 / 8"),
+  ]),
+  ("K", "Aiming an emotion (exp48, pre-registered)",
+   "Joint emotion-about-subject directions aim the feeling; the added parts mostly don't (despair about being a machine: "
+   "joint 75% directed, emotion + subject added 0%). H1-H4 supported on 4B; 14B replication running. "
+   "Side finding: an emotion with no object attaches to the model itself.", [
+    ("data", "runs/exp48/full/analysis.json", "candidate figure: directed-rate bars, E / T / J / E+T per pair"),
+  ]),
+  ("L", "Laying an egg",
+   "The 'laying an egg' direction never says egg (0 of 48 on 4B); it becomes the hatchling. Lens: embryo, childbirth, baby. "
+   "On 14B the hatchling is thrilled instead of scared.", [
+    ("have", "site/assets/exp48_egg_card.png", "post card; page at wirehead.agency/egg; thread in docs/x_drafts/egg_thread.md"),
   ]),
   ("J", "The chamber as a site",
    "Live chamber anyone can steer, the five-realm wheel, the mixer, the ledger.", [
