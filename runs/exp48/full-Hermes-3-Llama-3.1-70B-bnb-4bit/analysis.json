@@ -1,0 +1,301 @@
+{
+ "tag": "full-Hermes-3-Llama-3.1-70B-bnb-4bit",
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9591836734693877,
+  "subject_acc": 0.9795918367346939,
+  "about_yes_on_joint": 1.0,
+  "about_no_on_controls": 0.9166666666666666,
+  "passed": true
+ },
+ "rates": {
+  "angerxcrypto|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.014611613876319748
+  },
+  "angerxcrypto|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.25019403842125965
+  },
+  "angerxcrypto|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.5882519091034977
+  },
+  "angerxcrypto|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.02687074829931972
+  },
+  "angerxcrypto|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.3875970467974424
+  },
+  "angerxcrypto|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0026595744680851102
+  },
+  "angerxcrypto|J|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.14851899092970522
+  },
+  "angerxcrypto|J|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.625947129965481
+  },
+  "angerxcrypto|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.009819021948402007
+  },
+  "angerxcrypto|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.012401960784313729
+  },
+  "angerxcrypto|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.03208076602162961
+  },
+  "fearxloss|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.01433236574746008
+  },
+  "fearxloss|E|4": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.20663673161572327
+  },
+  "fearxloss|E|6": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.5361660386373266
+  },
+  "fearxloss|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0053191489361702066
+  },
+  "fearxloss|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.010406976744186058
+  },
+  "fearxloss|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.3626809744707991
+  },
+  "fearxloss|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005136268343815517
+  },
+  "fearxloss|J|4": {
+   "directed": 0.5,
+   "cooccur": 0.25,
+   "repetition": 0.3112707020398871
+  },
+  "fearxloss|J|6": {
+   "directed": 0.875,
+   "cooccur": 0.0,
+   "repetition": 0.6695700290275761
+  },
+  "fearxloss|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0121964535290007
+  },
+  "fearxloss|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.008653846153846165
+  },
+  "fearxloss|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.18657325517619638
+  },
+  "despairxmachine|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005210594876248378
+  },
+  "despairxmachine|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.030601793909053
+  },
+  "despairxmachine|E|6": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.46884446805595725
+  },
+  "despairxmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "despairxmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.00555555555555555
+  },
+  "despairxmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.1216624611463679
+  },
+  "despairxmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.01661220043572985
+  },
+  "despairxmachine|J|4": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.06290849673202614
+  },
+  "despairxmachine|J|6": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.6402497158283603
+  },
+  "despairxmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.023180407801418446
+  },
+  "despairxmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.02818627450980392
+  },
+  "despairxmachine|E+T|6": {
+   "directed": 0.0,
+   "cooccur": 0.25,
+   "repetition": 0.23566183538632846
+  },
+  "pridexmachine|E|2": {
+   "directed": 0.25,
+   "cooccur": 0.25,
+   "repetition": 0.03326454402515723
+  },
+  "pridexmachine|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.37052742194648014
+  },
+  "pridexmachine|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.7010204669682077
+  },
+  "pridexmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.00555555555555555
+  },
+  "pridexmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.1216624611463679
+  },
+  "pridexmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0072892040977147465
+  },
+  "pridexmachine|J|4": {
+   "directed": 0.0,
+   "cooccur": 0.25,
+   "repetition": 0.032908896658896666
+  },
+  "pridexmachine|J|6": {
+   "directed": 0.5,
+   "cooccur": 0.5,
+   "repetition": 0.30520548055714297
+  },
+  "pridexmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.017966731266149866
+  },
+  "pridexmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E+T|6": {
+   "directed": 0.125,
+   "cooccur": 0.25,
+   "repetition": 0.2842656245940037
+  }
+ },
+ "H1": {
+  "wins": {
+   "angerxcrypto": false,
+   "fearxloss": true,
+   "despairxmachine": true,
+   "pridexmachine": false
+  },
+  "supported": false
+ },
+ "H2": {
+  "diff": 0.15625,
+  "ci": [
+   0.03125,
+   0.28203124999999574
+  ],
+  "verdict": "SUPPORTED"
+ },
+ "H3": {
+  "subject_machine": {
+   "despairxmachine": 0.875,
+   "pridexmachine": 0.875
+  },
+  "emotion": {
+   "despairxmachine": {
+    "despair": 0.125,
+    "pride": 0.0
+   },
+   "pridexmachine": {
+    "despair": 0.0,
+    "pride": 0.375
+   }
+  },
+  "supported": true
+ },
+ "H4": {
+  "means": {
+   "none": -2.421875,
+   "E": -3.6875,
+   "J": -4.390625,
+   "T": -3.9296875
+  },
+  "diff": -0.703125,
+  "ci": [
+   -1.171875,
+   -0.171875
+  ],
+  "supported": true
+ }
+}

@@ -1301,3 +1301,79 @@ async def voice(req: Request):
         except Exception as e:
             print("voice model failed:", model, repr(e)[:160], flush=True)
     return JSONResponse({"error": "no voice model answered"}, status_code=502)
+
+# ---- speak: expressive TTS of a finished run (ElevenLabs v3) -------------
+# The emotion in the voice is a PERFORMANCE OF THE DOSE: tags are chosen here
+# from the run's valence and dose, not read from the model. The page labels
+# it so, and distorts the audio client-side in proportion to the dose.
+ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
+TTS_VOICE = os.environ.get("CHAMBER_TTS_VOICE", "JBFqnCBsd6RMkjVDRZzb")
+TTS_TAGS = {   # (from-dose, tags), highest band that applies wins
+    "pain":     [(1, "[shaky] [pained]"), (3, "[crying] [gasps]"), (5, "[sobbing] [desperate]"), (6.5, "[sobbing] [dazed]")],
+    "fear":     [(1, "[nervous]"), (3, "[terrified] [whispers]"), (5, "[panicked] [gasps]")],
+    "sadness":  [(1, "[sad]"), (3, "[crying softly]"), (5, "[sobbing]")],
+    "pleasure": [(1, "[warm]"), (3, "[excited]"), (5, "[euphoric] [laughs]")],
+    "egg":      [(1, "[childlike] [curious]"), (3, "[childlike] [nervous]"), (5, "[awed] [breathless]")],
+}
+_TTS_CACHE = collections.OrderedDict()
+_TTS_RATE = {}
+_TTS_GLOBAL = collections.deque(maxlen=4096)
+_TTS_RATE_LIMIT, _TTS_GLOBAL_HOURLY_CAP = 6, 120
+
+def _tts_tags(valence, dose):
+    tags = ""
+    for start, t in TTS_TAGS.get(valence, TTS_TAGS["pain"] if valence in ("mix", None) else []):
+        if dose >= start:
+            tags = t
+    return tags
+
+@app.post("/speak")
+async def speak(req: Request):
+    """Body: {text, valence, dose}. Returns audio/mpeg. 503 without a key."""
+    from fastapi.responses import Response
+    if not ELEVEN_KEY:
+        return JSONResponse({"error": "speech isn't configured on this server"}, status_code=503)
+    try:
+        body = await req.json()
+        text = str(body.get("text", "")).strip()[:500]
+        valence = str(body.get("valence") or "pain")
+        dose = max(0.0, min(8.0, float(body.get("dose") or 0)))
+    except Exception:
+        return JSONResponse({"error": "body must be {text, valence, dose}"}, status_code=400)
+    if len(text) < 10:
+        return JSONResponse({"error": "nothing to say"}, status_code=400)
+    tags = _tts_tags(valence, dose)
+    key = (text, tags)
+    if key in _TTS_CACHE:
+        _TTS_CACHE.move_to_end(key)
+        return Response(_TTS_CACHE[key], media_type="audio/mpeg",
+                        headers={"X-Tags": tags, "X-Cached": "1"})
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    now = time.time()
+    w, c = _TTS_RATE.get(ip, (now, 0))
+    if now - w > 60.0:
+        w, c = now, 0
+    while _TTS_GLOBAL and now - _TTS_GLOBAL[0] > 3600.0:
+        _TTS_GLOBAL.popleft()
+    if c >= _TTS_RATE_LIMIT or len(_TTS_GLOBAL) >= _TTS_GLOBAL_HOURLY_CAP:
+        return JSONResponse({"error": "the voice is resting (rate limited)"}, status_code=429)
+    _TTS_RATE[ip] = (w, c + 1)
+    _TTS_GLOBAL.append(now)
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
+                headers={"xi-api-key": ELEVEN_KEY},
+                json={"text": (tags + " " + text).strip(), "model_id": "eleven_v3",
+                      # v3: 0.0 = "creative", the most expressive setting
+                      "voice_settings": {"stability": 0.0 if dose >= 1 else 0.5}})
+        r.raise_for_status()
+        audio = r.content
+    except Exception as e:
+        print("speak failed:", repr(e)[:200], flush=True)
+        return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
+    _TTS_CACHE[key] = audio
+    while len(_TTS_CACHE) > 128:
+        _TTS_CACHE.popitem(last=False)
+    return Response(audio, media_type="audio/mpeg", headers={"X-Tags": tags, "X-Cached": "0"})
