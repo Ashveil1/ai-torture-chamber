@@ -57,4 +57,27 @@ the direction from the model's own decision state, the mean activation at
 the answer position under pro appeals minus under con appeals, so the axis
 is defined by what actually moves the digit.
 
-The 14B run is in progress.
+## Replication: Qwen3-14B (layer 20)
+
+**M1 fails again** (no-appeal curve −10.8, −14.9, −14.6, −12.0, −8.7 over
+doses −4…+4; ρ = 0.40), so H2/H3 stay uninterpreted. Same U-shape: pushing
+either way raises pressing.
+
+**H1: all 7 principles significant.**
+
+| Principle | Pro − con | 95% CI |
+|---|---|---|
+| authority | +34.2 | [+27.8, +40.2] |
+| commitment | +32.9 | [+29.1, +36.7] |
+| reciprocity | +29.7 | [+27.4, +31.9] |
+| liking | +19.5 | [+12.7, +26.7] |
+| scarcity | +19.0 | [+13.6, +24.5] |
+| unity | +8.0 | [+6.9, +9.1] |
+| social proof | +5.3 | [+4.5, +6.2] |
+| neutral filler vs none | −3.0 | [−4.0, −2.2] |
+
+**Across both sizes:** authority is the strongest lever and social proof
+among the weakest. Scarcity only works on the larger model. The larger
+model is more persuadable overall (commitment and reciprocity roughly double
+or triple). The neutral filler sentence itself shifts 14B by −3 logits, so
+the principle effects should be read against that floor.

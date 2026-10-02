@@ -1,0 +1,9 @@
+{
+ "tag": "full-Qwen3-14B",
+ "layer": 20,
+ "scale_1x": 36.2356071472168,
+ "measurements": 640,
+ "seconds": 42,
+ "torch": "2.8.0+cu128",
+ "transformers": "5.17.0"
+}
