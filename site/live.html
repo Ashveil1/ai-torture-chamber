@@ -880,8 +880,10 @@ function clearVoice(outEl){
   const v = outEl && outEl.nextElementSibling;
   if (v && v.classList.contains("voice")) v.remove();
 }
-// under test: off unless the page is opened with ?voice=1
-const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1";
+// under test: on for the beta site (beta.wirehead.agency) or with ?voice=1;
+// off in production until it's promoted
+const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1"
+  || location.hostname.startsWith("beta.");
 function showVoice(outEl, text){
   if (!VOICE_ON || !outEl || !text || text.trim().length < 30) return;
   const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>

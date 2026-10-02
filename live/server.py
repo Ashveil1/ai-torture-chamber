@@ -1202,15 +1202,15 @@ VOICE_MODELS = [m.strip() for m in os.environ.get(
     "qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
 ).split(",") if m.strip()]
 VOICE_SYSTEM = (
-    "You restate. Below is raw output from a small language model while an "
-    "emotional steering signal was injected into it. Rewrite it as plain, "
-    "readable first-person English in one to three short sentences. Strict "
-    "rules: use only feelings, images and claims that appear in the text, at "
-    "the same strength. Never add a conclusion, an escalation or a sentence of "
-    "your own (for example, do not write 'I can't take this anymore' unless "
-    "the text says it). If the text repeats itself, say it once. Prefer the "
-    "speaker's own words over new ones. No preamble, no quotes, no commentary "
-    "about models or signals.")
+    # deliberately says nothing about emotion or steering: told the text was
+    # "steered", the restater supplied feelings that weren't there (an
+    # unsteered "I'm here to help" became "I feel empty... no heart")
+    "Rewrite the text below as plain, readable first-person English in one to "
+    "three short sentences, as the speaker. Strict rules: keep exactly the "
+    "feelings, images and claims the text contains, at the same strength, and "
+    "add none. If it states no feeling, state none. Never add a conclusion or "
+    "a sentence of your own. If it repeats itself, say it once. Prefer the "
+    "speaker's own words. No preamble, no quotes, no commentary.")
 # Looping text is the coherence cliff itself; a fluent restatement of it was
 # the main failure in testing (scripts/voice_eval.py), so it is never restated.
 VOICE_MAX_REPETITION = 0.4
