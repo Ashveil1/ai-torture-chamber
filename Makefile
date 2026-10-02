@@ -33,7 +33,10 @@ relay:
 
 wirehead:
 	@cmp -s scripts/wirehead_bot.py wirehead/bot.py || \
-	  (echo "syncing bot.py from scripts/"; cp scripts/wirehead_bot.py wirehead/bot.py)
+	  (echo "syncing bot.py from scripts/"; cp scripts/wirehead_bot.py wirehead/bot.py; \
+	   git add wirehead/bot.py)
+	@cmp -s scripts/wirehead_bot.py wirehead/bot.py || \
+	  (echo "FATAL: bot.py did not sync"; exit 1)
 	@cd wirehead && railway service wirehead && railway up $$(pwd) -y -d 2>&1 | tail -2
 	@echo "watch: railway logs (from wirehead/) — first cycle within ~1 min"
 

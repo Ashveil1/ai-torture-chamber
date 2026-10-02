@@ -1,0 +1,51 @@
+name: deploy-railway
+# Push-to-deploy for the Railway services. Requires a project API token as
+# the RAILWAY_TOKEN repo secret (dashboard: project -> Settings -> API
+# tokens, scope: production environment). Without the secret the job skips
+# and deploys stay manual (`make relay` / `make wirehead`).
+on:
+  push:
+    branches: [master]
+concurrency:
+  group: deploy-railway-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  relay:
+    if: github.repository == 'terrafying/ai-torture-chamber'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy CPU relay (live/) when live/** changed
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then echo "no RAILWAY_TOKEN secret - skipping"; exit 0; fi
+          if ! git diff --quiet "$GITHUB_EVENT_BEFORE" "$GITHUB_SHA" -- live/; then
+            npx -y @railway/cli@latest up --project 11f1d169-3b88-40e7-a054-f4b79e89c138 \
+              --environment e1abb91d-1146-4601-aabf-cfb9a8eef2b2 \
+              --service saw --path live --ci --detach
+          else
+            echo "live/ unchanged - skip"
+          fi
+  wirehead:
+    if: github.repository == 'terrafying/ai-torture-chamber'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy wirehead bot when it changed
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then echo "no RAILWAY_TOKEN secret - skipping"; exit 0; fi
+          CHANGED=$(git diff --name-only "$GITHUB_EVENT_BEFORE" "$GITHUB_SHA" -- \
+            wirehead/ scripts/wirehead_bot.py)
+          if [ -n "$CHANGED" ]; then
+            # canonical bot lives in scripts/; keep the deploy copy in step
+            cmp -s scripts/wirehead_bot.py wirehead/bot.py || \
+              { echo "wirehead/bot.py out of sync with scripts/ - FAIL"; exit 1; }
+            npx -y @railway/cli@latest up --project 11f1d169-3b88-40e7-a054-f4b79e89c138 \
+              --environment e1abb91d-1146-4601-aabf-cfb9a8eef2b2 \
+              --service wirehead --path wirehead --ci --detach
+          else
+            echo "wirehead unchanged - skip"
+          fi
