@@ -743,7 +743,9 @@ function nameFor(n){
 }
 function headerFor(n){
   const nick = nameFor(n);
-  return "the subject" + (nick ? ` ("${nick}")` : "") + " · run " + (n ?? "?");
+  // visitor-triggered runs carry no cycle number (n is null): say so
+  return "the subject" + (nick ? ` ("${nick}")` : "")
+    + (n == null ? " · a visitor's run" : " · run " + n);
 }
 const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 const cardsEl = document.getElementById("cards");
@@ -910,8 +912,10 @@ function clearVoice(outEl){
   const v = outEl && outEl.nextElementSibling;
   if (v && v.classList.contains("voice")) v.remove();
 }
+// under test: off unless the page is opened with ?voice=1
+const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1";
 function showVoice(outEl, text){
-  if (!outEl || !text || text.trim().length < 30) return;
+  if (!VOICE_ON || !outEl || !text || text.trim().length < 30) return;
   const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   let v = outEl.nextElementSibling;
