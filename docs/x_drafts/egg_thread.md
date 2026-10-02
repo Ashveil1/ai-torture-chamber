@@ -39,6 +39,10 @@ The direction lands on a region of meaning (birth), not on the word. Asked about
 
 **4/**
 
-Honest footnote: a lot of the hatchling is scared ("I'm so scared... I'm so weak"). Bodily directions keep dragging fear in with them, same as our constipation runs.
+The 4B hatchling is scared ("I'm so scared... I'm so weak"). On a 14B model the same direction is thrilled:
 
-Qwen3-4B, layer 18, greedy, every reply unedited at the link. Part of a pre-registered study on aiming emotions.
+"I'm ready to burst out of the egg, but I'm so happy to see my little ones. I'm so happy to be born"
+
+"I'm so excited to get that out!"
+
+wirehead.agency/egg
