@@ -39,7 +39,7 @@ jobs:
           file: ./live/Dockerfile.worker
           push: true
           tags: |
-            ghcr.io/terrafying/saw-chamber-worker:v3
+            ghcr.io/terrafying/saw-chamber-worker:v4
             ghcr.io/terrafying/saw-chamber-worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
