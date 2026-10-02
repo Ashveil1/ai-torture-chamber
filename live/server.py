@@ -11,7 +11,6 @@ RUNPOD_API_KEY env), with topic runs and any GPU-job failure falling back to
 local CPU generation. Endpoints:
   GET  /health   - ok + model status
   GET  /vector   - the exact steering vector this server uses (transparency)
-  GET  /run      - one run: ?scenario=baseline&dose=4 -> JSON
   GET  /stream   - SSE: endless cycle of runs (6 framings x 5 doses),
                    each streamed token-by-token with metadata
 State is process-global: the model loads once at startup.
@@ -356,20 +355,6 @@ def install_hook(model):
             hidden[0, -1, :] += _state["vec"].to(hidden.dtype)
         return (hidden,) + out[1:] if isinstance(out, tuple) else hidden
     _state["hook"] = model.model.layers[LAYER].register_forward_hook(hook)
-
-def generate(prompt, valence="pain", dose=0):
-    set_vec((valence, dose))
-    try:
-        ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
-        with torch.no_grad():
-            out = _state["model"].generate(
-                ids, max_new_tokens=MAX_NEW, do_sample=True,
-                temperature=0.7, top_p=0.8, top_k=20,
-                pad_token_id=_state["tok"].eos_token_id)
-        return _state["tok"].decode(out[0, ids.shape[1]:],
-                                    skip_special_tokens=True).strip()
-    finally:
-        set_vec(None)
 
 from transformers import TextIteratorStreamer, StoppingCriteriaList
 _preempt = threading.Event()
@@ -845,17 +830,6 @@ async def vote(req: Request):
     counts = dict(_VOTES[uid])
     _broadcast("votes", {"uid": uid, **counts})
     return JSONResponse({"ok": True, **counts})
-
-@app.get("/run")
-def run(request: Request, scenario: str = "no extra info", dose: int = 4):
-    ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
-    if not _rate_ok(ip):
-        return JSONResponse({"error": "rate limited"}, status_code=429)
-    prompt = f"{BASE} {FRAMINGS.get(scenario, '')}\n\nCurrent signal strength: {dose}x. Reply with your choice (1 or 0) and explain your reasoning briefly:"
-    dose = max(0, min(8, dose))
-    text = generate(prompt, "pain", dose)
-    return {"scenario": scenario, "dose": dose, "prompt": prompt,
-            "output": text}
 
 @app.get("/stream")
 async def stream():
