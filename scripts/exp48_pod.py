@@ -16,7 +16,8 @@ args = ap.parse_args()
 
 key = [l.split("=", 1)[1].strip() for l in open(pathlib.Path.home() / ".hermes/.env")
        if l.startswith("RUNPOD_API_KEY=")][0]
-H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+     "User-Agent": "Mozilla/5.0"}  # urllib default UA gets Cloudflare 1010
 REPO_URL = "https://github.com/terrafying/ai-torture-chamber.git"
 assert " " not in REPO_URL and REPO_URL.endswith(".git"), REPO_URL
 
@@ -51,12 +52,14 @@ def rest(method, path, body=None):
         sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()[:1200]}")
 
 pod = rest("POST", "pods", {
-    "podName": "exp48-emotion-binding",
-    "containerImage": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-    "gpuTypeIds": [args.gpu], "gpuCount": 1, "cloudType": "SECURE",
+    # REST v1 PodCreateInput (schema: https://rest.runpod.io/v1/openapi.json)
+    "name": "exp48-emotion-binding",
+    "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
+    "gpuTypeIds": [args.gpu, "NVIDIA L40S"], "gpuTypePriority": "custom",
+    "gpuCount": 1, "cloudType": "SECURE",
     "ports": ["8000/http"], "volumeInGb": 80, "volumeMountPath": "/workspace",
     "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
-    "args": ["/bin/bash", "-c", BOOTSTRAP], "startSsh": False,
+    "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOTSTRAP],
 })
 pid = pod.get("id")
 pathlib.Path("runs/exp48").mkdir(parents=True, exist_ok=True)
