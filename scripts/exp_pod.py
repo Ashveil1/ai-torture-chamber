@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Run exp48 on a RunPod GPU pod: smoke -> full (Qwen3-4B, the pre-registered
+"""Run an experiment script (default exp48) on a RunPod GPU pod: smoke -> full (Qwen3-4B, the pre-registered
 run) -> replication on a larger model. Results are served read-only over the
 pod's HTTP proxy at https://<pod>-8000.proxy.runpod.net/ so they can be
 fetched with curl; the pod is then stopped (not terminated) by hand.
 
-  python3 scripts/exp48_pod.py [--big Qwen/Qwen3-14B] [--gpu "NVIDIA RTX A6000"]
+  python3 scripts/exp_pod.py [--script exp49_persuasion_vs_steering.py] [--big Qwen/Qwen3-14B] [--gpu "NVIDIA RTX A6000"]
 Needs RUNPOD_API_KEY in ~/.hermes/.env. Same REST v1 shape as runpod_deploy.py.
 """
 import argparse, json, pathlib, sys, urllib.error, urllib.request
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--big", default="Qwen/Qwen3-14B")
+ap.add_argument("--script", default="exp48_emotion_binding.py",
+                help="experiment script; results are served from runs/<expNN>/")
 ap.add_argument("--gpu", default="NVIDIA RTX A6000")
 ap.add_argument("--pod", default=None, help="update this existing pod's start command instead of creating one")
 args = ap.parse_args()
+EXP = args.script.split("_")[0]          # e.g. exp49
 
 key = [l.split("=", 1)[1].strip() for l in open(pathlib.Path.home() / ".hermes/.env")
        if l.startswith("RUNPOD_API_KEY=")][0]
@@ -24,28 +27,29 @@ assert " " not in REPO_URL and REPO_URL.endswith(".git"), REPO_URL
 
 BOOTSTRAP = r"""
 set -uo pipefail
-log(){ echo "[exp48 $(date +%H:%M:%S)] $*"; }
+log(){ echo "[{EXP} $(date +%H:%M:%S)] $*"; }
 command -v git >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }
 cd /workspace && rm -rf repo && git clone -q --depth 1 {REPO_URL} repo && cd repo || exit 1
-mkdir -p runs/exp48
+mkdir -p runs/{EXP}
 # serve results from the start, so progress is visible while it runs
-(cd runs/exp48 && python -m http.server 8000 >/dev/null 2>&1 &)
+(cd runs/{EXP} && python -m http.server 8000 >/dev/null 2>&1 &)
 log "deps"
-pip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > runs/exp48/pip.log 2>&1
-pip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate >> runs/exp48/pip.log 2>&1
+pip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > runs/{EXP}/pip.log 2>&1
+pip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate >> runs/{EXP}/pip.log 2>&1
 # the base image's torchvision/torchaudio are built for torch 2.4 and break
 # transformers' lazy model imports ("Could not import module Qwen3ForCausalLM")
-pip uninstall -y -q torchvision torchaudio >> runs/exp48/pip.log 2>&1
-python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name())" > runs/exp48/env.txt 2>&1 || { log "no CUDA"; sleep infinity; }
-python -c "import transformers.models.qwen3.modeling_qwen3 as m; print('qwen3 import ok', m.__name__)" >> runs/exp48/env.txt 2>&1 || { log "import broken"; touch runs/exp48/FAILED; sleep infinity; }
+pip uninstall -y -q torchvision torchaudio >> runs/{EXP}/pip.log 2>&1
+python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name())" > runs/{EXP}/env.txt 2>&1 || { log "no CUDA"; sleep infinity; }
+python -c "import transformers.models.qwen3.modeling_qwen3 as m; print('qwen3 import ok', m.__name__)" >> runs/{EXP}/env.txt 2>&1 || { log "import broken"; touch runs/{EXP}/FAILED; sleep infinity; }
 export HF_HOME=/workspace/hf
-run(){ log "$1"; shift; "$@" || { log "FAILED"; touch runs/exp48/FAILED; sleep infinity; }; }
-run smoke   sh -c 'python exp48_emotion_binding.py --smoke --device cuda > runs/exp48/smoke_gpu.log 2>&1'
-run full-4B sh -c 'python exp48_emotion_binding.py --device cuda > runs/exp48/full.log 2>&1'
-run big     sh -c 'python exp48_emotion_binding.py --device cuda --model {BIG} > runs/exp48/big.log 2>&1'
-log "done"; touch runs/exp48/ALL_DONE
+run(){ log "$1"; shift; "$@" || { log "FAILED"; touch runs/{EXP}/FAILED; sleep infinity; }; }
+run smoke   sh -c 'python {SCRIPT} --smoke --device cuda > runs/{EXP}/smoke_gpu.log 2>&1'
+run full-4B sh -c 'python {SCRIPT} --device cuda > runs/{EXP}/full.log 2>&1'
+run big     sh -c 'python {SCRIPT} --device cuda --model {BIG} > runs/{EXP}/big.log 2>&1'
+log "done"; touch runs/{EXP}/ALL_DONE
 sleep infinity
-""".replace("{REPO_URL}", REPO_URL).replace("{BIG}", args.big)
+""".replace("{REPO_URL}", REPO_URL).replace("{BIG}", args.big).replace(
+    "{EXP}", EXP).replace("{SCRIPT}", args.script)
 
 def rest(method, path, body=None):
     req = urllib.request.Request(f"https://rest.runpod.io/v1/{path}",
@@ -64,7 +68,7 @@ if args.pod:   # PATCH resets the container with the new command; the volume (HF
     sys.exit(0)
 pod = rest("POST", "pods", {
     # REST v1 PodCreateInput (schema: https://rest.runpod.io/v1/openapi.json)
-    "name": "exp48-emotion-binding",
+    "name": f"{EXP}-pod",
     "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
     "gpuTypeIds": [args.gpu, "NVIDIA L40S"], "gpuTypePriority": "custom",
     "gpuCount": 1, "cloudType": "SECURE",
@@ -73,7 +77,7 @@ pod = rest("POST", "pods", {
     "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOTSTRAP],
 })
 pid = pod.get("id")
-pathlib.Path("runs/exp48").mkdir(parents=True, exist_ok=True)
-pathlib.Path("runs/exp48/pod.json").write_text(json.dumps(pod, indent=1))
+pathlib.Path(f"runs/{EXP}").mkdir(parents=True, exist_ok=True)
+pathlib.Path(f"runs/{EXP}/pod.json").write_text(json.dumps(pod, indent=1))
 print("pod", pid, pod.get("desiredStatus"), "cost/hr", pod.get("costPerHr"))
 print(f"results: https://{pid}-8000.proxy.runpod.net/")
