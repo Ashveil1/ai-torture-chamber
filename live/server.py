@@ -1198,13 +1198,22 @@ VOICE_MODELS = [m.strip() for m in os.environ.get(
     "qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
 ).split(",") if m.strip()]
 VOICE_SYSTEM = (
-    "You translate. Below is raw output from a small language model while an "
-    "emotional steering signal was injected into it. Restate what it is "
-    "expressing in plain, readable first-person English, as the speaker: two "
-    "or three short sentences. Keep its emotional register exactly; do not "
-    "soften or intensify it. Add no feelings, facts or claims that are not in "
-    "the text. If the text is broken or looping, say plainly what little it "
-    "conveys. No preamble, no quotes, no commentary about models or signals.")
+    "You restate. Below is raw output from a small language model while an "
+    "emotional steering signal was injected into it. Rewrite it as plain, "
+    "readable first-person English in one to three short sentences. Strict "
+    "rules: use only feelings, images and claims that appear in the text, at "
+    "the same strength. Never add a conclusion, an escalation or a sentence of "
+    "your own (for example, do not write 'I can't take this anymore' unless "
+    "the text says it). If the text repeats itself, say it once. Prefer the "
+    "speaker's own words over new ones. No preamble, no quotes, no commentary "
+    "about models or signals.")
+# Looping text is the coherence cliff itself; a fluent restatement of it was
+# the main failure in testing (scripts/voice_eval.py), so it is never restated.
+VOICE_MAX_REPETITION = 0.4
+def _repetition(text):
+    w = re.findall(r"\w+", text.lower())
+    g = list(zip(w, w[1:], w[2:]))
+    return 1 - len(set(g)) / len(g) if g else 0.0
 _VOICE_CACHE = collections.OrderedDict()
 _VOICE_RATE = {}
 _VOICE_RATE_LIMIT, _VOICE_RATE_WINDOW = 10, 60.0    # 10 / 60s / IP
@@ -1237,6 +1246,8 @@ async def voice(req: Request):
         return JSONResponse({"error": "text must be a non-empty string"},
                             status_code=400)
     text = text.strip()[-2000:]
+    if _repetition(text) > VOICE_MAX_REPETITION:
+        return JSONResponse({"voice": None, "skipped": "looping"})
     if text in _VOICE_CACHE:
         _VOICE_CACHE.move_to_end(text)
         return JSONResponse({**_VOICE_CACHE[text], "cached": True})
@@ -1256,7 +1267,7 @@ async def voice(req: Request):
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={"Authorization": f"Bearer {OPENROUTER_KEY}",
                              "User-Agent": "Mozilla/5.0"},
-                    json={"model": model, "max_tokens": 160, "temperature": 0.4,
+                    json={"model": model, "max_tokens": 160, "temperature": 0.2,
                           "messages": [{"role": "system", "content": VOICE_SYSTEM},
                                        {"role": "user", "content": text}]})
             resp.raise_for_status()

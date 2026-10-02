@@ -60,6 +60,8 @@ def voice(text):
 
 def flags(raw, said):
     f = []
+    if said.startswith("[not restated"):
+        return f
     added = [k for k, p in FEELINGS.items() if re.search(p, said, re.I) and not re.search(p, raw, re.I)]
     if added:
         f.append("ADDS " + ", ".join(added))
@@ -73,7 +75,7 @@ def main():
     results = []
     for i, s in enumerate(samples()):
         v = voice(s["text"])
-        said = v.get("voice", "")
+        said = v.get("voice") or ("" if not v.get("skipped") else f"[not restated: {v['skipped']}]")
         results.append({**s, "voice": said, "model": v.get("model"), "error": v.get("error"),
                         "repetition": round(repetition(s["text"]), 2), "flags": flags(s["text"], said)})
         print(f"{i+1:2} {s['src'][:40]:40} {' | '.join(results[-1]['flags']) or 'ok'}", flush=True)

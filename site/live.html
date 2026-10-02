@@ -898,6 +898,7 @@ function showVoice(outEl, text){
     .then(r=> r.ok ? r.json() : Promise.reject(r.status))
     .then(d=>{
       if (v.dataset.for !== text) return;           // card moved on to a newer run
+      if (!d.voice){ v.remove(); return; }          // looping text: never restated
       v.innerHTML = `<span class="vl">in plain words · translated by an unsteered
         model (${esc(d.model)}), not said by the subject</span>${esc(d.voice)}`;
     })
