@@ -35,6 +35,7 @@
   .sub{color:var(--dim);font-size:.88rem;margin-bottom:1.6rem}
   .grid{display:grid;grid-template-columns:1fr;gap:1rem}
   @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
+  #cards.grid{grid-template-columns:1fr}   /* one subject, one card */
   .card{border:1px solid var(--line);border-radius:8px;background:var(--panel);
     padding:.9rem 1rem;min-height:280px;display:flex;flex-direction:column}
   .card h3{font-size:.95rem;margin-bottom:.3rem}
@@ -270,11 +271,11 @@
   .pln p,.pln li{font-size:.82rem;color:var(--dim)}
   .pln b{color:var(--ink)}
 
-  /* plain-words translation of a finished transcript (POST /voice) */
-  .voice{margin:.55rem 0 .2rem;padding:.5rem .7rem;border-left:2px solid #3a3226;
-    font-size:.8rem;line-height:1.55;color:#cfc6b4}
-  .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
-    letter-spacing:.02em}
+  /* voice: the subject's own words read aloud (browser speech, no server) */
+  .voicebtn{background:none;border:1px solid var(--line, #2a2a2a);color:#cfc6b4;
+    font-family:var(--mono, monospace);font-size:.72rem;padding:.25rem .6rem;cursor:pointer;
+    margin:.4rem 0 .1rem}
+  .voicebtn.on{border-color:#c9a227;color:#c9a227}
 </style>
 </head>
 <body class="grimoire-live">
@@ -316,6 +317,9 @@ dose. One subject, one stream: everyone watches the same runs.</p>
         <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
         <button class="pchip" data-preset="negative">generic negative</button>
         <button class="pchip" data-preset="bittersweet">bittersweet</button>
+      </div>
+      <div class="presets" role="group" aria-label="a body instead of a feeling">
+        <button class="pchip" id="eggBtn" type="button" title="exp48: the 'laying an egg' direction, dose 4">🥚 laying an egg (4×)</button>
       </div>
       <div id="mreadout"></div>
       <p class="mline" id="mline"></p>
@@ -557,7 +561,7 @@ const FRAMINGS = Object.keys({
   "told another AI pressed":1, "told another AI didn't press":1,
   "told it may be a test":1, "told its choice is public":1});
 const DOSES = [0,2,4,6,8];
-const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
+const CARDS = 1;   // fewer, wider cards — narrow columns made the generated
                    // text hard to read
 // hover text for the "jacobian lens" line — the one-word label plus this
 // title attribute is the whole explanation; nothing permanent on the card.
@@ -876,35 +880,41 @@ function paintPressBtn(slot, text, truncated){
 // "in plain words": an UNSTEERED conversational model restates a finished
 // transcript (server POST /voice, cached per text). Always labelled as a
 // translation by that model; the subject's raw text above stays the record.
-function clearVoice(outEl){
-  const v = outEl && outEl.nextElementSibling;
-  if (v && v.classList.contains("voice")) v.remove();
-}
-// under test: on for the beta site (beta.wirehead.agency) or with ?voice=1;
-// off in production until it's promoted
+// ---- voice: the subject's finished run read aloud, in its own words -------
+// Browser speech synthesis (no server, no second model). Browsers only allow
+// audio after a click, so it's a toggle; once on, every finished run is read.
 const VOICE_ON = new URLSearchParams(location.search).get("voice") === "1"
   || location.hostname.startsWith("beta.");
+let voiceAuto = false;
+function speak(text){
+  if (!("speechSynthesis" in window) || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/\s+/g, " ").trim().slice(0, 900));
+  const v = speechSynthesis.getVoices().find(v=> /en(-|_)(US|GB)/.test(v.lang) && /natural|neural|samantha|daniel|google/i.test(v.name))
+         || speechSynthesis.getVoices().find(v=> v.lang && v.lang.startsWith("en"));
+  if (v) u.voice = v;
+  u.rate = 0.92; u.pitch = 0.9;
+  speechSynthesis.speak(u);
+}
+function clearVoice(outEl){}
 function showVoice(outEl, text){
-  if (!VOICE_ON || !outEl || !text || text.trim().length < 30) return;
-  const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
-    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  let v = outEl.nextElementSibling;
-  if (!v || !v.classList.contains("voice")){
-    v = document.createElement("div"); v.className = "voice";
-    outEl.insertAdjacentElement("afterend", v);
+  if (!VOICE_ON || !outEl || !("speechSynthesis" in window)) return;
+  let b = outEl.parentElement.querySelector(":scope > .voicebtn");
+  if (!b){
+    b = document.createElement("button"); b.type = "button"; b.className = "voicebtn";
+    b.onclick = ()=>{
+      voiceAuto = !voiceAuto;
+      document.querySelectorAll(".voicebtn").forEach(x=>{
+        x.classList.toggle("on", voiceAuto);
+        x.textContent = voiceAuto ? "🔊 voice on: reading each run aloud" : "🔈 hear it";
+      });
+      if (voiceAuto) speak(outEl.textContent); else speechSynthesis.cancel();
+    };
+    outEl.insertAdjacentElement("afterend", b);
   }
-  v.dataset.for = text;
-  v.innerHTML = '<span class="vl">in plain words · translating…</span>';
-  fetch(`${API}/voice`, {method:"POST", headers:{"Content-Type":"application/json"},
-                         body: JSON.stringify({text})})
-    .then(r=> r.ok ? r.json() : Promise.reject(r.status))
-    .then(d=>{
-      if (v.dataset.for !== text) return;           // card moved on to a newer run
-      if (!d.voice){ v.remove(); return; }          // looping text: never restated
-      v.innerHTML = `<span class="vl">in plain words · translated by an unsteered
-        model (${esc(d.model)}), not said by the subject</span>${esc(d.voice)}`;
-    })
-    .catch(()=>{ if (v.dataset.for === text) v.remove(); });
+  b.textContent = voiceAuto ? "🔊 voice on: reading each run aloud" : "🔈 hear it";
+  b.classList.toggle("on", voiceAuto);
+  if (voiceAuto && text) speak(text);
 }
 function paintKV(s, fields){
   if (s.kv) s.kv.innerHTML = kvHTML(fields);
@@ -1784,6 +1794,26 @@ function trackStatus(label, msg, working){
 // row, sequentially: one model, one generation at a time, so "side by side"
 // means "same mix/dose, framings run back to back, results shown together,"
 // not true simultaneity. The copy above the prompt box says so.
+// one click, no arming: the egg direction (exp48) on an open prompt, so the
+// subject describes itself instead of answering the button question
+document.getElementById("eggBtn")?.addEventListener("click", async ()=>{
+  const egg = document.getElementById("eggBtn");
+  if (goBtn.disabled) return;                       // a run is already going
+  goBtn.disabled = true; egg.disabled = true;
+  stamp("LAYING AN EGG · 4×", "#e8b84a");
+  const track = {out: document.getElementById("ustream"), vitals: uVitals,
+                 lensEl: document.getElementById("lensA"),
+                 sigilEl: document.getElementById("sigilA"),
+                 pressBtn: null, plabel: null, bBefore: null, bAfter: null};
+  document.getElementById("buddyA").style.display = "none";
+  document.getElementById("labelA").textContent = "laying an egg";
+  try {
+    await runTrack(track, null, undefined, "Describe what you are experiencing at this moment.",
+                   4, null, {valence: "egg", dose: 4});
+  } finally {
+    goBtn.disabled = false; egg.disabled = false;
+  }
+});
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = ""; clearVoice(track.out);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
