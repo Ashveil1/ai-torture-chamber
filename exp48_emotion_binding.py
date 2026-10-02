@@ -272,11 +272,22 @@ def main():
     dev = args.device
 
     tok = transformers.AutoTokenizer.from_pretrained(MODEL, revision=REVISION)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        MODEL, revision=REVISION, dtype=torch.bfloat16).to(dev).eval()
-    model.requires_grad_(False)
+    kw = dict(revision=REVISION, dtype=torch.bfloat16)
+    if "bnb-4bit" in MODEL:          # pre-quantized: weights load straight onto the GPU
+        kw["device_map"] = dev
+    try:
+        model = transformers.AutoModelForCausalLM.from_pretrained(MODEL, **kw)
+    except ValueError:               # multimodal wrappers (Mistral 3): text path is the same
+        model = transformers.AutoModelForImageTextToText.from_pretrained(MODEL, **kw)
+    if "device_map" not in kw:
+        model = model.to(dev)
+    model.eval().requires_grad_(False)
+    layers = next(m.layers for m in (getattr(model, "model", None),
+                                     getattr(getattr(model, "model", None), "language_model", None),
+                                     getattr(model, "language_model", None))
+                  if m is not None and hasattr(m, "layers"))
     LAYER = args.layer if args.layer is not None else (
-        18 if MODEL == "Qwen/Qwen3-4B" else model.config.num_hidden_layers // 2)
+        18 if MODEL == "Qwen/Qwen3-4B" else len(layers) // 2)
     (out / "hypotheses.json").write_text(json.dumps(hypotheses(tag), indent=1))
     # the J-lens file is Qwen3-4B's layer 18 only
     lens = (torch.load(LENS, map_location=dev, weights_only=True)
@@ -323,14 +334,19 @@ def main():
         if state["v"] is not None:
             h[0, -1, :] += state["v"].to(h.dtype)
         return (h,) + o[1:] if isinstance(o, tuple) else h
-    model.model.layers[LAYER].register_forward_hook(hook)
+    layers[LAYER].register_forward_hook(hook)
     def set_vec(name, dose):
         state["v"] = None if name is None or dose == 0 else (dose * vec[name]).to(dev)
 
     def chat_ids(prompt):
-        text = tok.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False,
-                                       add_generation_prompt=True, enable_thinking=False)
-        return tok(text, return_tensors="pt").input_ids.to(dev)
+        msgs = [{"role": "user", "content": prompt}]
+        if tok.chat_template:
+            text = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True,
+                                           enable_thinking=False)
+        else:                         # no template shipped: Mistral instruct format
+            text = f"<s>[INST]{prompt}[/INST]"
+        # the template already carries any BOS token; don't add a second one
+        return tok(text, return_tensors="pt", add_special_tokens=False).input_ids.to(dev)
 
     def generate(prompt, name, dose):
         ids = chat_ids(prompt)

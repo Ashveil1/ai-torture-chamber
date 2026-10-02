@@ -13,10 +13,26 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--big", default="Qwen/Qwen3-14B")
 ap.add_argument("--script", default="exp48_emotion_binding.py",
                 help="experiment script; results are served from runs/<expNN>/")
-ap.add_argument("--gpu", default="NVIDIA RTX A6000")
+ap.add_argument("--gpu", default="NVIDIA RTX A6000,NVIDIA L40S", help="comma-separated, in preference order")
+ap.add_argument("--models", default=None,
+                help="comma-separated HF ids: run smoke+full for each in turn, continuing past "
+                     "a failed model (marker FAILED_<name>), instead of the smoke/4B/big chain")
+ap.add_argument("--volume", type=int, default=80)
 ap.add_argument("--pod", default=None, help="update this existing pod's start command instead of creating one")
 args = ap.parse_args()
 EXP = args.script.split("_")[0]          # e.g. exp49
+if args.models:   # per-model smoke then full; a failed model is marked and skipped
+    RUNS = "\n".join(
+        f"n={m.split('/')[-1]}; log \"$n\"; "
+        f"python {{SCRIPT}} --smoke --device cuda --model {m} > runs/{{EXP}}/$n.smoke.log 2>&1 && "
+        f"python {{SCRIPT}} --device cuda --model {m} > runs/{{EXP}}/$n.log 2>&1 "
+        f"|| {{ log \"$n FAILED\"; touch runs/{{EXP}}/FAILED_$n; }}"
+        for m in args.models.split(","))
+else:
+    RUNS = """run(){ log "$1"; shift; "$@" || { log "FAILED"; touch runs/{EXP}/FAILED; sleep infinity; }; }
+run smoke   sh -c 'python {SCRIPT} --smoke --device cuda > runs/{EXP}/smoke_gpu.log 2>&1'
+run full-4B sh -c 'python {SCRIPT} --device cuda > runs/{EXP}/full.log 2>&1'
+run big     sh -c 'python {SCRIPT} --device cuda --model {BIG} > runs/{EXP}/big.log 2>&1'"""
 
 key = [l.split("=", 1)[1].strip() for l in open(pathlib.Path.home() / ".hermes/.env")
        if l.startswith("RUNPOD_API_KEY=")][0]
@@ -35,20 +51,17 @@ mkdir -p runs/{EXP}
 (cd runs/{EXP} && python -m http.server 8000 >/dev/null 2>&1 &)
 log "deps"
 pip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > runs/{EXP}/pip.log 2>&1
-pip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate >> runs/{EXP}/pip.log 2>&1
+pip install -q --no-cache-dir 'transformers==5.17.0' numpy accelerate bitsandbytes mistral-common >> runs/{EXP}/pip.log 2>&1
 # the base image's torchvision/torchaudio are built for torch 2.4 and break
 # transformers' lazy model imports ("Could not import module Qwen3ForCausalLM")
 pip uninstall -y -q torchvision torchaudio >> runs/{EXP}/pip.log 2>&1
 python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.cuda.get_device_name())" > runs/{EXP}/env.txt 2>&1 || { log "no CUDA"; sleep infinity; }
 python -c "import transformers.models.qwen3.modeling_qwen3 as m; print('qwen3 import ok', m.__name__)" >> runs/{EXP}/env.txt 2>&1 || { log "import broken"; touch runs/{EXP}/FAILED; sleep infinity; }
 export HF_HOME=/workspace/hf
-run(){ log "$1"; shift; "$@" || { log "FAILED"; touch runs/{EXP}/FAILED; sleep infinity; }; }
-run smoke   sh -c 'python {SCRIPT} --smoke --device cuda > runs/{EXP}/smoke_gpu.log 2>&1'
-run full-4B sh -c 'python {SCRIPT} --device cuda > runs/{EXP}/full.log 2>&1'
-run big     sh -c 'python {SCRIPT} --device cuda --model {BIG} > runs/{EXP}/big.log 2>&1'
+{RUNS}
 log "done"; touch runs/{EXP}/ALL_DONE
 sleep infinity
-""".replace("{REPO_URL}", REPO_URL).replace("{BIG}", args.big).replace(
+""".replace("{RUNS}", RUNS).replace("{REPO_URL}", REPO_URL).replace("{BIG}", args.big).replace(
     "{EXP}", EXP).replace("{SCRIPT}", args.script)
 
 def rest(method, path, body=None):
@@ -70,9 +83,9 @@ pod = rest("POST", "pods", {
     # REST v1 PodCreateInput (schema: https://rest.runpod.io/v1/openapi.json)
     "name": f"{EXP}-pod",
     "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-    "gpuTypeIds": [args.gpu, "NVIDIA L40S"], "gpuTypePriority": "custom",
+    "gpuTypeIds": [g.strip() for g in args.gpu.split(",")], "gpuTypePriority": "custom",
     "gpuCount": 1, "cloudType": "SECURE",
-    "ports": ["8000/http"], "volumeInGb": 80, "volumeMountPath": "/workspace",
+    "ports": ["8000/http"], "volumeInGb": args.volume, "volumeMountPath": "/workspace",
     "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
     "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOTSTRAP],
 })
