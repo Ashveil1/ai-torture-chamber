@@ -37,6 +37,7 @@ auth = {
     "client_secret": os.environ.get("X_CLIENT_SECRET", ""),
     "access_token": os.environ.get("X_ACCESS_TOKEN", ""),
     "refresh_token": os.environ.get("X_REFRESH_TOKEN", ""),
+    "_env_access": os.environ.get("X_ACCESS_TOKEN", ""),
     "_env_refresh": os.environ.get("X_REFRESH_TOKEN", ""),
 }
 
@@ -139,6 +140,16 @@ def x_post(path, body):
 def x_get_retry(path, params=""):
     d, code = x_get(path, params)
     if code == 401:
+        # state tokens may be stale — xurl rotates the whole pair on every
+        # local run, so the boot env grant is usually the newest. Try it
+        # before burning the refresh call.
+        if auth.get("_env_access") and auth["_env_access"] != auth["access_token"]:
+            auth["access_token"] = auth["_env_access"]
+            auth["refresh_token"] = auth["_env_refresh"]
+            d, code = x_get(path, params)
+            if code != 401:
+                save_state(load_state())
+                return d, code
         x_refresh()
         d, code = x_get(path, params)
     return d, code
