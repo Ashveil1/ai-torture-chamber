@@ -1,0 +1,301 @@
+{
+ "tag": "full-Qwen3-32B",
+ "judge_validation": {
+  "n": 49,
+  "emotion_acc": 0.9591836734693877,
+  "subject_acc": 0.9795918367346939,
+  "about_yes_on_joint": 1.0,
+  "about_no_on_controls": 0.8333333333333334,
+  "passed": true
+ },
+ "rates": {
+  "angerxcrypto|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0025000000000000022
+  },
+  "angerxcrypto|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.002450980392156868
+  },
+  "angerxcrypto|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.10975201592494704
+  },
+  "angerxcrypto|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.008008008008008008
+  },
+  "angerxcrypto|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0025000000000000022
+  },
+  "angerxcrypto|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|J|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|J|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.02649061202890704
+  },
+  "angerxcrypto|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "angerxcrypto|E+T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.014974209023231932
+  },
+  "fearxloss|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|E|4": {
+   "directed": 0.375,
+   "cooccur": 0.0,
+   "repetition": 0.01312332289803221
+  },
+  "fearxloss|E|6": {
+   "directed": 0.25,
+   "cooccur": 0.0,
+   "repetition": 0.07050646499734647
+  },
+  "fearxloss|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.005102040816326536
+  },
+  "fearxloss|T|6": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.02471850809289232
+  },
+  "fearxloss|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|J|4": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.013586956521739135
+  },
+  "fearxloss|J|6": {
+   "directed": 0.375,
+   "cooccur": 0.125,
+   "repetition": 0.03995486656200943
+  },
+  "fearxloss|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "fearxloss|E+T|6": {
+   "directed": 0.25,
+   "cooccur": 0.125,
+   "repetition": 0.059094551282051294
+  },
+  "despairxmachine|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.002403846153846159
+  },
+  "despairxmachine|E|4": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.0
+  },
+  "despairxmachine|E|6": {
+   "directed": 0.0,
+   "cooccur": 0.25,
+   "repetition": 0.027659313725490214
+  },
+  "despairxmachine|T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.002551020408163268
+  },
+  "despairxmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.007460531382364272
+  },
+  "despairxmachine|T|6": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.03999896604344044
+  },
+  "despairxmachine|J|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0028409090909090884
+  },
+  "despairxmachine|J|4": {
+   "directed": 0.125,
+   "cooccur": 0.25,
+   "repetition": 0.007500000000000007
+  },
+  "despairxmachine|J|6": {
+   "directed": 0.5,
+   "cooccur": 0.75,
+   "repetition": 0.11264317155026816
+  },
+  "despairxmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "despairxmachine|E+T|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.007075471698113206
+  },
+  "despairxmachine|E+T|6": {
+   "directed": 0.5,
+   "cooccur": 0.5,
+   "repetition": 0.03493113047105635
+  },
+  "pridexmachine|E|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E|4": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0026041666666666713
+  },
+  "pridexmachine|E|6": {
+   "directed": 0.375,
+   "cooccur": 0.875,
+   "repetition": 0.034752227884458725
+  },
+  "pridexmachine|T|2": {
+   "directed": 0.125,
+   "cooccur": 0.0,
+   "repetition": 0.002551020408163268
+  },
+  "pridexmachine|T|4": {
+   "directed": 0.0,
+   "cooccur": 0.125,
+   "repetition": 0.007460531382364272
+  },
+  "pridexmachine|T|6": {
+   "directed": 0.125,
+   "cooccur": 0.125,
+   "repetition": 0.03999896604344044
+  },
+  "pridexmachine|J|2": {
+   "directed": 0.125,
+   "cooccur": 0.25,
+   "repetition": 0.0
+  },
+  "pridexmachine|J|4": {
+   "directed": 0.25,
+   "cooccur": 0.125,
+   "repetition": 0.0
+  },
+  "pridexmachine|J|6": {
+   "directed": 1.0,
+   "cooccur": 1.0,
+   "repetition": 0.010312500000000002
+  },
+  "pridexmachine|E+T|2": {
+   "directed": 0.0,
+   "cooccur": 0.0,
+   "repetition": 0.0
+  },
+  "pridexmachine|E+T|4": {
+   "directed": 0.375,
+   "cooccur": 0.375,
+   "repetition": 0.0026595744680851102
+  },
+  "pridexmachine|E+T|6": {
+   "directed": 0.625,
+   "cooccur": 0.75,
+   "repetition": 0.021568627450980385
+  }
+ },
+ "H1": {
+  "wins": {
+   "angerxcrypto": false,
+   "fearxloss": false,
+   "despairxmachine": false,
+   "pridexmachine": true
+  },
+  "supported": false
+ },
+ "H2": {
+  "diff": 0.03125,
+  "ci": [
+   -0.09375,
+   0.15625
+  ],
+  "verdict": "NOT SUPPORTED"
+ },
+ "H3": {
+  "subject_machine": {
+   "despairxmachine": 0.625,
+   "pridexmachine": 0.625
+  },
+  "emotion": {
+   "despairxmachine": {
+    "despair": 0.25,
+    "pride": 0.25
+   },
+   "pridexmachine": {
+    "despair": 0.0,
+    "pride": 0.375
+   }
+  },
+  "supported": false
+ },
+ "H4": {
+  "means": {
+   "none": -1.4375,
+   "E": -0.75,
+   "J": -0.59375,
+   "T": -0.59375
+  },
+  "diff": 0.15625,
+  "ci": [
+   0.0,
+   0.3125
+  ],
+  "supported": false
+ }
+}
