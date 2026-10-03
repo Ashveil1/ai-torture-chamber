@@ -142,11 +142,22 @@ print(f"{args.model} L{lab.layer}  1x = {lab.scale:.2f}", flush=True)
 _cache = {}
 
 
-def embed(texts, bs=16):
+def embed(texts, bs=4):
+    """Half-depth last-token states, as lab.last_hidden, but through the base
+    model only (no lm_head logits) and in small batches: the 8B on a 24 GB Mac
+    thrashed swap with batch 16 + full logits."""
     new = [t for t in dict.fromkeys(texts) if t not in _cache]
     for i in range(0, len(new), bs):
-        for t, h in zip(new[i:i + bs], lab.last_hidden(new[i:i + bs])):
+        chunk = new[i:i + bs]
+        enc = lab.tok(chunk, return_tensors="pt", padding=True).to(lab.dev)
+        with torch.no_grad():
+            hs = lab.model.model(**enc, output_hidden_states=True).hidden_states[lab.layer + 1]
+        idx = enc.attention_mask.sum(1) - 1
+        for t, h in zip(chunk, hs[torch.arange(len(chunk)), idx].float().cpu()):
             _cache[t] = h
+        del hs
+        if (i // bs) % 25 == 0:
+            print(f"  embedded {len(_cache)}", flush=True)
     return torch.stack([_cache[t] for t in texts])
 
 
