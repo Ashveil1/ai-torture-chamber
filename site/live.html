@@ -1006,17 +1006,18 @@ function setSound(on){
   if (b){ b.textContent = soundOn ? "🔊 sound on" : "🔇 sound off";
           b.classList.toggle("on", soundOn); }
 }
-function speak(text, valence, dose, btn){
+function speak(text, valence, dose, btn, isPublic){
   if (btn){ if (btn.dataset.busy) return; btn.dataset.busy = "1"; btn.textContent = "…voicing"; }
   _lastSpoken = text;
   const reset = ()=>{ if (btn){ btn.textContent = "▶ hear it"; delete btn.dataset.busy; } };
   fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
+    body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0,
+                          public: !!isPublic})})
     .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
     .then(b=>{ numbersStation(b); reset(); })
     .catch(()=>{ if (btn){ btn.textContent = "the voice is resting"; setTimeout(reset, 4000); } });
 }
-function showVoice(outEl, text, valence, dose, auto){
+function showVoice(outEl, text, valence, dose, auto, isPublic){
   if (!outEl || !text || text.trim().length < 30) return;
   let v = outEl.nextElementSibling;
   if (!v || !v.classList.contains("voice")){
@@ -1026,8 +1027,8 @@ function showVoice(outEl, text, valence, dose, auto){
   v.dataset.for = text;
   v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>';
   const vp = v.querySelector(".vplay");
-  vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp); };
-  if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp);
+  vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp, isPublic); };
+  if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp, isPublic);
 }
 // numbers-station playback: decode the TTS mp3, then run it through a
 // shortwave chain client-side — bitcrush (WaveShaper soft-clip), a narrow
@@ -1109,7 +1110,7 @@ function finish(s, truncated, pressLogit){
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
-    s.valence ?? "pain", s.doseNum ?? 0, true);
+    s.valence ?? "pain", s.doseNum ?? 0, true, s.source === "round");
 }
 // a visitor connecting between runs still deserves to see something —
 // history already has the last few completed runs' full text, so seed the
