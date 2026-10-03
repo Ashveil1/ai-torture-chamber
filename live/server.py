@@ -870,7 +870,7 @@ async def steer(req: Request):
     if not _rate_ok(ip):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
-                      "(3 runs/minute/IP, and it rests after 240 runs/hour)"},
+                      "(3 runs/minute/IP, and it rests after %d runs/hour)" % _GLOBAL_HOURLY_CAP},
             status_code=429)
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
@@ -947,16 +947,18 @@ async def steer(req: Request):
 
     polite = bool(body.get("polite"))
 
-    async def _run_steer():
-        """The actual injected run, assuming _STEER_LOCK is already held.
-        Shared by both the preempting and polite paths below. Single-valence,
-        mix and topic runs are delegated to the RunPod serverless endpoint
-        (the GPU worker owns the model and builds topic vectors on it). If
-        the GPU job produces no events at all, fall back to generating
-        locally on the relay's own model."""
+    gpu_state = {"done": False}
+
+    async def _run_steer(gpu=True, local=True):
+        """The actual injected run. Single-valence, mix and topic runs are
+        delegated to the RunPod serverless endpoint (the GPU worker owns the
+        model and builds topic vectors on it); that phase needs no lock, so
+        visitors' GPU runs go in parallel, one worker each. If the GPU job
+        produces no events at all, the local phase generates on the relay's
+        own model — that one needs _STEER_LOCK held (one global vector)."""
         loop = asyncio.get_event_loop()
         assert arg is not None   # every mode above pairs a non-None arg
-        if _RUNPOD_URL and _RUNPOD_KEY:
+        if gpu and _RUNPOD_URL and _RUNPOD_KEY:
             if mode == "mix":
                 job = {"prompt": prompt, "mix": arg}
             elif mode == "topic":     # the worker builds the topic vector itself
@@ -1005,11 +1007,14 @@ async def steer(req: Request):
                              "text": "".join(text_parts),
                              "truncated": False,
                              "press_logit": plogit, "ts": time.time()})
+                gpu_state["done"] = True
                 return
             # zero events: the job never started (endpoint down, auth, cold
             # crash) — generate locally instead of dead-airing the visitor
             print("runpod gave no events; falling back to local generation",
                   flush=True)
+        if not local:
+            return
         if mode == "mix":
             info = set_mix_vec(arg)
             meta = {"valence": "mix", "mix": info["mix"],
@@ -1085,6 +1090,12 @@ async def steer(req: Request):
         # first chunk is yielded no headers reach the proxy (same reason
         # /stream opens with hello)
         yield _sse("queued", {"busy": _CYCLE_BUSY, "prompt": prompt, "polite": polite})
+        # GPU first, unlocked: parallel visitors each get their own worker
+        if _RUNPOD_URL and _RUNPOD_KEY:
+            async for ev in _run_steer(local=False):
+                yield ev
+            if gpu_state["done"]:
+                return
         if polite:
             # wait our turn WITHOUT setting _preempt: whatever's currently
             # running (the cycle or another /steer call) finishes naturally
@@ -1094,7 +1105,7 @@ async def steer(req: Request):
             # wait out a full ~110-token generation first), not correctness:
             # _STEER_LOCK alone already serializes access safely.
             async with _STEER_LOCK:
-                async for ev in _run_steer():
+                async for ev in _run_steer(gpu=False):
                     yield ev
             return
         _STEER_WAITING += 1
@@ -1110,7 +1121,7 @@ async def steer(req: Request):
                 yield _sse("error", {"e": "still busy after 120s, try again"})
                 return
             async with _STEER_LOCK:
-                async for ev in _run_steer():
+                async for ev in _run_steer(gpu=False):
                     yield ev
         finally:
             _STEER_WAITING = max(0, _STEER_WAITING - 1)
@@ -1388,7 +1399,7 @@ async def _start_cycle():
 _RATE = {}
 _RATE_LIMIT, _RATE_WINDOW = 3, 60.0
 _GLOBAL_RUNS = collections.deque(maxlen=4096)   # timestamps of all runs
-_GLOBAL_HOURLY_CAP = 240                        # ~4 runs/min across everyone
+_GLOBAL_HOURLY_CAP = int(os.environ.get("CHAMBER_HOURLY_CAP", "900"))   # ~15/min site-wide; GPU spend is bounded by the endpoint's max workers
 
 def _rate_ok(ip):
     now = time.time()
