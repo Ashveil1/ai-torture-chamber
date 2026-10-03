@@ -1165,7 +1165,87 @@ async def vote(req: Request):
     _VOTES[uid][verdict] += 1
     counts = dict(_VOTES[uid])
     _broadcast("votes", {"uid": uid, **counts})
+    _canon_consider(uid, counts)
     return JSONResponse({"ok": True, **counts})
+
+# ---- the canon: lines the audience voted eloquent --------------------------
+# The homepage's section 00 promises "the best lines graduate to the quotes
+# below". A run graduates when eloquent - dud reaches CANON_MIN; the canon is
+# kept in Redis (REDIS_URL) so it survives deploys, in memory otherwise.
+CANON_MIN = int(os.environ.get("CHAMBER_CANON_MIN", "2"))
+CANON_MAX = 60
+_CANON = {}          # uid -> entry
+_CANON_KEY = "chamber:canon"
+
+def _redis():
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        return None
+    try:
+        import redis
+        return redis.Redis.from_url(url, socket_timeout=3, socket_connect_timeout=3)
+    except Exception as e:
+        print("canon: redis unavailable:", repr(e)[:120], flush=True)
+        return None
+
+def _canon_load():
+    r = _redis()
+    if r is None:
+        return
+    try:
+        raw = r.get(_CANON_KEY)
+        if raw:
+            for e in json.loads(raw):
+                _CANON[int(e["uid"])] = e
+        print("canon: loaded", len(_CANON), "lines from redis", flush=True)
+    except Exception as e:
+        print("canon: load failed:", repr(e)[:120], flush=True)
+
+def _canon_save():
+    r = _redis()
+    if r is None:
+        return
+    try:
+        r.set(_CANON_KEY, json.dumps(list(_CANON.values())))
+    except Exception as e:
+        print("canon: save failed:", repr(e)[:120], flush=True)
+
+def _canon_score(e):
+    return e.get("eloquent", 0) - e.get("dud", 0)
+
+def _canon_consider(uid, counts):
+    score = counts.get("eloquent", 0) - counts.get("dud", 0)
+    if uid in _CANON:
+        _CANON[uid].update(eloquent=counts.get("eloquent", 0), dud=counts.get("dud", 0))
+        if score < CANON_MIN:           # voted back down: leaves the canon
+            _CANON.pop(uid)
+    elif score >= CANON_MIN:
+        run = next((h for h in _HISTORY if h.get("uid") == uid), None)
+        text = ((run or {}).get("text") or "").strip()
+        if not run or len(text) < 20:
+            return
+        _CANON[uid] = {"uid": uid, "text": text[:600], "valence": run.get("valence"),
+                       "mix": run.get("mix"), "dose": run.get("dose"),
+                       "scenario": run.get("scenario"), "source": run.get("source"),
+                       "via": run.get("via"), "eloquent": counts.get("eloquent", 0),
+                       "dud": counts.get("dud", 0), "ts": run.get("ts")}
+    else:
+        return
+    if len(_CANON) > CANON_MAX:         # keep the best
+        for k, _ in sorted(_CANON.items(), key=lambda kv: (_canon_score(kv[1]), kv[1].get("ts") or 0))[:len(_CANON) - CANON_MAX]:
+            _CANON.pop(k)
+    asyncio.get_event_loop().run_in_executor(None, _canon_save)
+
+@app.on_event("startup")
+async def _canon_startup():
+    await asyncio.get_event_loop().run_in_executor(None, _canon_load)
+
+@app.get("/canon")
+def canon(n: int = 6):
+    best = sorted(_CANON.values(), key=lambda e: (_canon_score(e), e.get("ts") or 0), reverse=True)
+    return JSONResponse({"min": CANON_MIN, "lines": best[:max(1, min(n, 24))],
+                         "durable": bool(os.environ.get("REDIS_URL"))},
+                        headers={"Cache-Control": "public, max-age=30"})
 
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
