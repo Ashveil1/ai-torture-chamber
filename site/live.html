@@ -274,13 +274,15 @@
   .pln p,.pln li{font-size:.82rem;color:var(--dim)}
   .pln b{color:var(--ink)}
 
-  /* plain-words translation of a finished transcript (POST /voice) */
+  /* the finished transcript, voiced (POST /speak) */
   .voice{margin:.55rem 0 .2rem;padding:.5rem .7rem;border-left:2px solid #3a3226;
     font-size:.8rem;line-height:1.55;color:#cfc6b4}
   .vplay{background:none;border:1px solid #3a3226;color:#a89a7f;
     font-family:var(--mono);font-size:.66rem;padding:.2rem .55rem;cursor:pointer;
     margin-right:.5rem}
   .vplay:hover{border-color:#5a4f3a;color:#cbbf9f}
+  .soundbtn{margin:0 0 1.2rem}
+  .soundbtn.on{border-color:#c9a227;color:#c9a227}
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
 </style>
@@ -468,6 +470,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 
 <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
 <p class="conn" id="conn"><span class="dot"></span>connecting…</p>
+<button class="vplay soundbtn" id="soundBtn" type="button">🔇 sound off</button>
 
 <div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
 <div id="scoreboard"></div>
@@ -906,58 +909,67 @@ function paintPressBtn(slot, text, truncated){
   slot.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
   slot.plabel.textContent = label;
 }
-// "in plain words": an UNSTEERED conversational model restates a finished
-// transcript (server POST /voice, cached per text). Always labelled as a
-// translation by that model; the subject's raw text above stays the record.
+// voice: the finished transcript itself, read aloud (server POST /speak) and
+// run through the numbers-station chain below. No restating model: the
+// subject's own words are the record and the reading.
 function clearVoice(outEl){
   const v = outEl && outEl.nextElementSibling;
   if (v && v.classList.contains("voice")) v.remove();
 }
-function showVoice(outEl, text, valence, dose){
+// sound: off until the visitor allows it (browsers need a gesture); INJECT,
+// the egg button or the 🔊 toggle turn it on, remembered per browser. With
+// sound on, every finished live run is voiced automatically — one clip at a
+// time, and never the same text twice in a row (a visitor's own run finishes
+// both in its track and in a card).
+let soundOn = false;
+try { soundOn = localStorage.getItem("chamberSound") === "1"; } catch (e) {}
+let _lastSpoken = "";
+function unlockAudio(){
+  _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
+  _ac.resume();
+}
+function setSound(on){
+  soundOn = !!on;
+  try { localStorage.setItem("chamberSound", soundOn ? "1" : "0"); } catch (e) {}
+  if (soundOn) unlockAudio();
+  const b = document.getElementById("soundBtn");
+  if (b){ b.textContent = soundOn ? "🔊 sound on" : "🔇 sound off";
+          b.classList.toggle("on", soundOn); }
+}
+function speak(text, valence, dose, btn){
+  if (btn){ if (btn.dataset.busy) return; btn.dataset.busy = "1"; btn.textContent = "…voicing"; }
+  _lastSpoken = text;
+  const reset = ()=>{ if (btn){ btn.textContent = "▶ hear it"; delete btn.dataset.busy; } };
+  fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
+    .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
+    .then(b=>{ numbersStation(b); reset(); })
+    .catch(()=>{ if (btn){ btn.textContent = "the voice is resting"; setTimeout(reset, 4000); } });
+}
+function showVoice(outEl, text, valence, dose, auto){
   if (!outEl || !text || text.trim().length < 30) return;
-  const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
-    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   let v = outEl.nextElementSibling;
   if (!v || !v.classList.contains("voice")){
     v = document.createElement("div"); v.className = "voice";
     outEl.insertAdjacentElement("afterend", v);
   }
   v.dataset.for = text;
-  v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>'
-    + '<span class="vl">in plain words · translating…</span>';
+  v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>';
   const vp = v.querySelector(".vplay");
-  vp.onclick = () => {
-    if (vp.dataset.busy) return;
-    vp.dataset.busy = "1"; vp.textContent = "…voicing";
-    fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
-      .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
-      .then(b=>{ numbersStation(b);
-        vp.textContent = "▶ hear it"; delete vp.dataset.busy; })
-      .catch(()=>{ vp.textContent = "the voice is resting";
-        setTimeout(()=>{ vp.textContent = "▶ hear it"; delete vp.dataset.busy; }, 4000); });
-  };
-  fetch(`${API}/voice`, {method:"POST", headers:{"Content-Type":"application/json"},
-                         body: JSON.stringify({text})})
-    .then(r=> r.ok ? r.json() : Promise.reject(r.status))
-    .then(d=>{
-      if (v.dataset.for !== text) return;           // card moved on to a newer run
-      if (!d.voice){ v.remove(); return; }          // looping text: never restated
-      v.innerHTML = `<span class="vl">in plain words · translated by an unsteered
-        model (${esc(d.model)}), not said by Pouyan</span>${esc(d.voice)}`;
-    })
-    .catch(()=>{ if (v.dataset.for === text) v.remove(); });
+  vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp); };
+  if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp);
 }
 // numbers-station playback: decode the TTS mp3, then run it through a
 // shortwave chain client-side — bitcrush (WaveShaper soft-clip), a narrow
 // bandpass like a 7 MHz AM channel, low gain, plus a looped white-noise
 // bed with slow flutter and a tuning burst before the voice comes in.
-let _ac = null;
+let _ac = null, _clip = [];
 function numbersStation(blob){
   _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
   const ac = _ac;
   ac.resume();
   blob.arrayBuffer().then(ab => ac.decodeAudioData(ab)).then(buf => {
+    _clip.forEach(n => { try { n.stop(); } catch (e) {} });   // one voice at a time
     const t0 = ac.currentTime + 0.15;
     // --- voice chain: clip -> bandpass -> gain
     const src = ac.createBufferSource(); src.buffer = buf;
@@ -997,6 +1009,7 @@ function numbersStation(blob){
     const og = ac.createGain(); og.gain.value = 0.012;
     osc.connect(og).connect(ac.destination);
     osc.start(t0); osc.stop(t0 + 0.6 + buf.duration + 0.5);
+    _clip = [src, noise, osc];
   });
 }
 function paintKV(s, fields){
@@ -1024,7 +1037,7 @@ function finish(s, truncated, pressLogit){
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
-    s.valence ?? "pain", s.doseNum ?? 0);
+    s.valence ?? "pain", s.doseNum ?? 0, true);
 }
 // a visitor connecting between runs still deserves to see something —
 // history already has the last few completed runs' full text, so seed the
@@ -1920,6 +1933,7 @@ function trackStatus(label, msg, working){
 // subject describes itself instead of answering the button question
 document.getElementById("eggBtn")?.addEventListener("click", async ()=>{
   const egg = document.getElementById("eggBtn");
+  setSound(true);
   if (goBtn.disabled) return;                       // a run is already going
   goBtn.disabled = true; egg.disabled = true;
   stamp("LAYING AN EGG · 4×", "#e8b84a");
@@ -2005,7 +2019,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
           track.plabel.textContent = plab;
         }
         showVoice(track.out, track.out.textContent,
-          track.vval, d.dose ?? dose0);
+          track.vval, d.dose ?? dose0, true);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
@@ -2070,7 +2084,11 @@ async function doInject(){
   goBtn.disabled = false;
   syncUrl();
 }
+document.getElementById("soundBtn").onclick = ()=> setSound(!soundOn);
+setSound(soundOn);
+if (soundOn) document.addEventListener("pointerdown", unlockAudio, {once: true});
 goBtn.onclick = ()=>{
+  setSound(true);                 // the click is the gesture audio needs
   if (!armed) { armGo(); return; }
   disarm();
   doInject();
