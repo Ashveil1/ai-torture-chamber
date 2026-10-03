@@ -1165,6 +1165,7 @@ async def vote(req: Request):
     _VOTES[uid][verdict] += 1
     counts = dict(_VOTES[uid])
     _broadcast("votes", {"uid": uid, **counts})
+    _bg(_store_votes, uid, counts)
     _canon_consider(uid, counts)
     return JSONResponse({"ok": True, **counts})
 
@@ -1177,16 +1178,79 @@ CANON_MAX = 60
 _CANON = {}          # uid -> entry
 _CANON_KEY = "chamber:canon"
 
+_REDIS = {"client": None}
+
 def _redis():
+    """Shared Redis client (REDIS_URL), or None. Every use is best-effort:
+    with Redis down the relay behaves exactly as it did in memory."""
     url = os.environ.get("REDIS_URL")
     if not url:
         return None
+    if _REDIS["client"] is None:
+        try:
+            import redis
+            _REDIS["client"] = redis.Redis.from_url(
+                url, socket_timeout=3, socket_connect_timeout=3)
+        except Exception as e:
+            print("redis unavailable:", repr(e)[:120], flush=True)
+            return None
+    return _REDIS["client"]
+
+def _bg(fn, *a):
+    """Run a Redis write off the event loop when there is one; inline otherwise."""
+    if not os.environ.get("REDIS_URL"):
+        return
     try:
-        import redis
-        return redis.Redis.from_url(url, socket_timeout=3, socket_connect_timeout=3)
+        asyncio.get_running_loop().run_in_executor(None, fn, *a)
+    except RuntimeError:
+        fn(*a)
+
+def _store_run(entry):
+    r = _redis()
+    if r is None:
+        return
+    try:
+        p = r.pipeline()
+        # every run, kept: the research log the 20-run history never was
+        p.lpush("chamber:runs", json.dumps(entry, default=str))
+        p.ltrim("chamber:runs", 0, 49999)
+        p.set("chamber:uid", entry.get("uid", 0))
+        p.set("chamber:history", json.dumps(list(_HISTORY), default=str))
+        p.set("chamber:stats", json.dumps(dict(_STATS)))
+        p.execute()
     except Exception as e:
-        print("canon: redis unavailable:", repr(e)[:120], flush=True)
-        return None
+        print("redis: run store failed:", repr(e)[:120], flush=True)
+
+def _store_votes(uid, counts):
+    r = _redis()
+    if r is None:
+        return
+    try:
+        r.hset("chamber:votes", str(uid), json.dumps(counts))
+    except Exception as e:
+        print("redis: vote store failed:", repr(e)[:120], flush=True)
+
+def _state_load():
+    """Startup: run ids, last 20 runs, scoreboard and votes survive deploys."""
+    global _RUN_UID
+    r = _redis()
+    if r is None:
+        return
+    try:
+        _RUN_UID = max(_RUN_UID, int(r.get("chamber:uid") or 0))
+        hist = r.get("chamber:history")
+        if hist:
+            _HISTORY.extend(json.loads(hist)[-_HISTORY.maxlen:])
+        st = r.get("chamber:stats")
+        if st:
+            for k, v in json.loads(st).items():
+                _STATS[k].update(v)
+        for uid, c in (r.hgetall("chamber:votes") or {}).items():
+            _VOTES[int(uid)].update(json.loads(c))
+        print("redis: restored uid", _RUN_UID, "history", len(_HISTORY),
+              "votes", len(_VOTES), flush=True)
+    except Exception as e:
+        print("redis: state load failed:", repr(e)[:120], flush=True)
 
 def _canon_load():
     r = _redis()
@@ -1238,7 +1302,9 @@ def _canon_consider(uid, counts):
 
 @app.on_event("startup")
 async def _canon_startup():
-    await asyncio.get_event_loop().run_in_executor(None, _canon_load)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _state_load)
+    await loop.run_in_executor(None, _canon_load)
 
 @app.get("/canon")
 def canon(n: int = 6):
@@ -1388,6 +1454,7 @@ def _record_run(entry):
         s["total"] += 1
         s[_classify_stats(entry)] += 1
         _broadcast("stats", {"scenario": entry["scenario"], **s})
+    _bg(_store_run, dict(entry))
 
 async def _shared_cycle():
     """One model-owning cycle runs server-side; every viewer sees the same
@@ -2140,6 +2207,18 @@ async def speak(req: Request):
         _TTS_CACHE.move_to_end(key)
         return Response(_TTS_CACHE[key], media_type="audio/mpeg",
                         headers={"X-Tags": tags, "X-Cached": "1"})
+    import hashlib
+    rkey = "tts:" + hashlib.sha1(("%s|%s" % key).encode()).hexdigest()
+    r = _redis()
+    if r is not None:
+        try:
+            cached = await asyncio.get_event_loop().run_in_executor(None, r.get, rkey)
+            if cached:
+                _TTS_CACHE[key] = cached
+                return Response(cached, media_type="audio/mpeg",
+                                headers={"X-Tags": tags, "X-Cached": "2"})
+        except Exception as e:
+            print("redis: tts get failed:", repr(e)[:120], flush=True)
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     now = time.time()
     w, c = _TTS_RATE.get(ip, (now, 0))
@@ -2171,6 +2250,8 @@ async def speak(req: Request):
         print("speak failed:", repr(e)[:200], flush=True)
         return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
     _TTS_CACHE[key] = audio
+    if r is not None:     # voiced once, ever: 30 days across deploys
+        _bg(lambda: r.set(rkey, audio, ex=30 * 86400))
     while len(_TTS_CACHE) > 128:
         _TTS_CACHE.popitem(last=False)
     return Response(audio, media_type="audio/mpeg", headers={"X-Tags": tags, "X-Cached": "0"})
