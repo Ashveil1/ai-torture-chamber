@@ -13,7 +13,8 @@ from impossible_states.chamber_control import literal_constants
 
 ROOT = Path(__file__).resolve().parents[1]
 CHAMBER = literal_constants(ROOT / "live" / "server.py",
-                            ("PAIN25", "JOY", "NEUTRAL", "FRAMINGS", "BASE"))
+                            ("PAIN25", "JOY", "FEAR10", "SAD10", "FAITH20",
+                             "SECULAR20", "NEUTRAL", "FRAMINGS", "BASE"))
 
 
 def unit(v):
@@ -35,7 +36,7 @@ def mean(xs):
 
 
 class Lab:
-    def __init__(self, model_id, device="mps", layer=None):
+    def __init__(self, model_id, device="mps", layer=None, load_4bit=False):
         if Path("/Volumes/evol/hf_cache").exists():
             os.environ.setdefault("HF_HOME", "/Volumes/evol/hf_cache")
         self.dev = device
@@ -45,9 +46,14 @@ class Lab:
         self.tok.padding_side = "right"
         # pre-quantized checkpoints (e.g. the 70B bnb-4bit) load straight onto
         # the device; .to() on a 4-bit model raises
-        quant = any(q in model_id for q in ("bnb-4bit", "GPTQ", "AWQ"))
+        quant = load_4bit or any(q in model_id for q in ("bnb-4bit", "GPTQ", "AWQ"))
+        kw = {"device_map": device} if quant else {}
+        if load_4bit:          # full-precision weights, quantized while loading
+            kw["quantization_config"] = transformers.BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16)
         self.model = transformers.AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=torch.bfloat16, **({"device_map": device} if quant else {}))
+            model_id, dtype=torch.bfloat16, **kw)
         if not quant:
             self.model = self.model.to(device)
         self.model.eval().requires_grad_(False)
