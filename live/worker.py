@@ -23,6 +23,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 print("WORKER-ENV", sys.executable, sys.version.split()[0], flush=True)
+
+# RunPod cached models (endpoint model reference) mount here in HF hub layout;
+# download time there isn't billed, which matters at 70B (~40 GB). Must be set
+# before transformers/huggingface_hub are imported.
+_HF_CACHE = "/runpod-volume/huggingface-cache/hub"
+_cached = os.path.join(_HF_CACHE, "models--" + os.environ.get(
+    "CHAMBER_MODEL", "Qwen/Qwen3-4B").replace("/", "--"))
+if os.path.isdir(_cached):
+    os.environ["HF_HUB_CACHE"] = _HF_CACHE
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")   # the mount is read-only
+    print("WORKER-CACHE", _cached, flush=True)
 try:
     import torch
     print("WORKER-TORCH", torch.__version__, flush=True)
