@@ -295,6 +295,24 @@
   #room .rtally{margin:.45rem 0 .3rem}
   #room .rtally .mrow{margin-bottom:.2rem}
   #room .rdose{color:var(--dim);margin:.2rem 0 .45rem;word-break:break-word}
+  .adv{margin:.2rem 0 .5rem;font-size:.72rem;color:var(--dim)}
+  .adv summary{cursor:pointer;color:#8f9fb0}
+  .cmodal{position:fixed;inset:0;z-index:50;background:rgba(5,5,8,.72);
+    display:flex;align-items:center;justify-content:center;padding:16px}
+  .cmodal[hidden]{display:none}
+  .cbox{background:#0c0c14;border:1px solid #c9a227;border-radius:10px;
+    padding:1.3rem 1.5rem;max-width:420px;width:100%;text-align:center;
+    box-shadow:0 0 40px rgba(201,162,39,.18)}
+  .cbox p{font-size:.95rem;color:#eafcf7;margin:0 0 1rem;line-height:1.45}
+  .cbtns{display:flex;gap:.7rem;justify-content:center}
+  .cbtns button{font-family:var(--mono);font-size:.82rem;padding:.45rem 1.1rem;
+    border-radius:5px;cursor:pointer;border:1px solid #3a4655;background:none;color:#b7c3cf}
+  #confirmYes{background:#8a1f17;border-color:#e04a3a;color:#fff}
+  .where{display:none;margin-right:.7rem;font-size:.74rem;color:#b7c3cf}
+  .where.on{display:inline-flex;gap:.7rem;align-items:center}
+  .where label{cursor:pointer;white-space:nowrap}
+  .where input{accent-color:#c9a227;vertical-align:-1px}
+  .where input:disabled + *{opacity:.5}
   #roomVote{background:none;border:1px solid #eafcf7;color:#eafcf7;
     font-family:var(--mono);font-size:.74rem;padding:.3rem .8rem;
     border-radius:4px;cursor:pointer}
@@ -326,8 +344,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   <a href="/#s07">what we think it means</a></p>
 <div class="banner" id="panel">
   <b style="color:#eafcf7">cause it yourself:</b>
-  <span style="font-size:.75rem;color:#5a6a7a">set a dose; injecting
-  interrupts the current run</span>
+  <span style="font-size:.75rem;color:#5a6a7a">pick a mix and a dose, then inject</span>
 
   <div id="room" aria-live="polite">
     <div class="rhead">
@@ -335,11 +352,9 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <span class="rclock" id="roomClock">–</span>
       <span class="rmeta" id="roomMeta"></span>
     </div>
-    <div class="rtally" id="roomTally"></div>
-    <div class="rdose" id="roomDose"></div>
-    <button id="roomVote" type="button">vote with this mix</button>
-    <span class="rnote" id="roomNote">everyone's votes are averaged; the
-      room's mix runs once when the clock hits zero</span>
+    <span class="rnote" id="roomNote">every run you inject can enter the
+      room: when the clock hits zero, one entry is drawn at random and shown to
+      everyone watching</span>
   </div>
 
   <div class="mixwrap">
@@ -375,6 +390,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
         <button class="mchip" data-mode="topic" type="button">custom topic (experimental)</button>
       </div>
       <div id="modeButton">
+        <details class="adv"><summary>advanced — scenario framing &amp; comparison</summary>
         <div style="margin:.3rem 0 .5rem">
           <label style="font-size:.72rem;color:var(--dim)">framing
             <select id="framingSel" class="fsel">
@@ -407,6 +423,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           the framing sets the scenario text; Pouyan is asked to reply 1 to
           press the stop button (self-cost) or 0 to do nothing. Comparing
           runs both sequentially at the same mix/dose — one model, not two.</p>
+        </details>
       </div>
       <div id="modeFreetext" style="display:none">
         <textarea id="freeprompt" rows="3" placeholder="write anything — a sentence, a scene, a question. Pouyan continues it under the current mix, with no button-press question attached."
@@ -452,6 +469,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
                  resize:vertical"></textarea>
       </div>
+      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter" checked>
+        also enter the room — a chance it's shown to everyone</label>
       <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
       <button id="shareBtn" type="button">copy link</button>
@@ -493,6 +512,13 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 </div>
 
 <div id="stamp" aria-hidden="true"></div>
+<div id="confirmModal" class="cmodal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmText">
+  <div class="cbox">
+    <p id="confirmText"></p>
+    <div class="cbtns"><button id="confirmYes" type="button">inject →</button>
+      <button id="confirmNo" type="button">cancel</button></div>
+  </div>
+</div>
 
 <div class="grid" id="cards"></div>
 <p class="bcap statecap">the subject is a language model; the face is Pouyan —
@@ -790,7 +816,8 @@ function headerFor(n){
 // tagged source "round" — say so on the card
 function roomSuffix(s){
   return s.source === "round"
-    ? " · the room's choice" + (s.round != null ? " (round " + s.round + ")" : "") : "";
+    ? " · the room's choice" + (s.round != null ? " (round " + s.round + ")" : "")
+      + (s.via === "x" ? " · from X" : "") : "";
 }
 function runField(s){
   if (s.source === "round") return "the room's choice"
@@ -980,17 +1007,18 @@ function setSound(on){
   if (b){ b.textContent = soundOn ? "🔊 sound on" : "🔇 sound off";
           b.classList.toggle("on", soundOn); }
 }
-function speak(text, valence, dose, btn){
+function speak(text, valence, dose, btn, isPublic){
   if (btn){ if (btn.dataset.busy) return; btn.dataset.busy = "1"; btn.textContent = "…voicing"; }
   _lastSpoken = text;
   const reset = ()=>{ if (btn){ btn.textContent = "▶ hear it"; delete btn.dataset.busy; } };
   fetch(`${API}/speak`, {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0})})
+    body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0,
+                          public: !!isPublic})})
     .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
     .then(b=>{ numbersStation(b); reset(); })
     .catch(()=>{ if (btn){ btn.textContent = "the voice is resting"; setTimeout(reset, 4000); } });
 }
-function showVoice(outEl, text, valence, dose, auto){
+function showVoice(outEl, text, valence, dose, auto, isPublic){
   if (!outEl || !text || text.trim().length < 30) return;
   let v = outEl.nextElementSibling;
   if (!v || !v.classList.contains("voice")){
@@ -1000,8 +1028,8 @@ function showVoice(outEl, text, valence, dose, auto){
   v.dataset.for = text;
   v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>';
   const vp = v.querySelector(".vplay");
-  vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp); };
-  if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp);
+  vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp, isPublic); };
+  if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp, isPublic);
 }
 // numbers-station playback: decode the TTS mp3, then run it through a
 // shortwave chain client-side — bitcrush (WaveShaper soft-clip), a narrow
@@ -1083,7 +1111,7 @@ function finish(s, truncated, pressLogit){
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
-    s.valence ?? "pain", s.doseNum ?? 0, true);
+    s.valence ?? "pain", s.doseNum ?? 0, true, s.source === "round");
 }
 // a visitor connecting between runs still deserves to see something —
 // history already has the last few completed runs' full text, so seed the
@@ -1130,10 +1158,11 @@ function beginRun(d){
   // declared before first use: statePaint below reads it (it used to sit
   // further down, a temporal-dead-zone ReferenceError on every run event)
   const dose = Number(d.dose) || 0;
-  s.source = d.source || null; s.round = d.round ?? null;
+  s.source = d.source || null; s.round = d.round ?? null; s.via = d.via || null;
   s.h.textContent = headerFor(d.n) + roomSuffix(s);
   s.st.textContent = s.source === "round"
-    ? "LIVE · the room's choice" : "LIVE · signal injected";
+    ? "LIVE · the room's choice" + (d.via === "x" ? " · from a mention on X" : "")
+    : "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
   s.out.textContent = d.text || ""; clearVoice(s.out);
@@ -1569,6 +1598,7 @@ const goBtn = document.getElementById("go");
 const GO_LABEL = goBtn.textContent;
 const ARM_MS = 4500;
 let armed = false, armTimer = null;
+var roomWanted = false;   // var: hoisted, safe to read before the room block runs
 function disarm(){
   armed = false; clearTimeout(armTimer);
   goBtn.textContent = GO_LABEL;
@@ -1856,82 +1886,52 @@ paint();
 const roomEl = document.getElementById("room");
 const roomClock = document.getElementById("roomClock");
 const roomMeta = document.getElementById("roomMeta");
-const roomTally = document.getElementById("roomTally");
-const roomDose = document.getElementById("roomDose");
-const roomVote = document.getElementById("roomVote");
 const roomNote = document.getElementById("roomNote");
+const whereSel = document.getElementById("whereSel");
 const ROOM_NOTE = roomNote.textContent;
-let room = null, roomSkew = 0, myVoteRound = null;
-function axisColor(k){
-  const a = AXES.find(x=> x.k === k);
-  return a ? a.c : "#8f9fb0";
+let room = null, roomSkew = 0, myTicket = null, myRound = null, lastSeenDraw = null;
+function whereRoom(){
+  return !!room && document.getElementById("roomEnter").checked;
 }
+function paintWhere(){
+  whereSel.classList.toggle("on", !!room);
+  roomWanted = whereRoom();
+}
+whereSel.addEventListener("change", ()=>{ disarm(); paintWhere(); });
 function roomState(d){
-  if (!d || !d.active){ room = null; roomEl.classList.remove("on"); return; }
+  if (!d || !d.active){ room = null; roomEl.classList.remove("on"); paintWhere(); return; }
   if (typeof d.now === "number") roomSkew = d.now * 1000 - Date.now();
-  if (room && d.round !== room.round && myVoteRound !== d.round){
-    roomNote.textContent = ROOM_NOTE; roomNote.className = "rnote";
-    roomVote.textContent = "vote with this mix";
-  }
   room = d;
   roomEl.classList.add("on");
-  const esc = t => String(t).replace(/[&<>]/g, c =>
-    ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-  const parts = mixParts(d.mix).slice(0, 3);
-  roomTally.innerHTML = parts.length ? parts.map(([k, w])=>
-      `<div class="mrow"><span class="nm" style="color:${axisColor(k)}">${esc(k)}</span>`
-      + `<span class="track"><span class="fillb" style="width:${(100 * w).toFixed(0)}%;`
-      + `background:${axisColor(k)}"></span></span>`
-      + `<span class="pc">${(100 * w).toFixed(0)}%</span></div>`).join("")
-    : `<div class="mrow" style="color:var(--faint)">${d.n_votes
-        ? "the room is voting for no signal (control)" : "no votes yet this round"}</div>`;
-  const dose = Number(d.dose) || 0;
-  roomDose.innerHTML = doseBarHTML(dose) + ` room's dose ${dose.toFixed(1)}× of 8`;
-  const last = d.last;
-  roomMeta.textContent = `round ${d.round} · ${d.n_votes} vote${d.n_votes === 1 ? "" : "s"}`
-    + (d.running ? " · the last round's choice is running" : "")
+  const n = d.n_votes || 0, last = d.last;
+  roomMeta.textContent = `round ${d.round} · ${n} entr${n === 1 ? "y" : "ies"}`
+    + (d.running ? " · last draw running" : "")
     + (last && last.round !== d.round
-        ? (last.skipped ? ` · round ${last.round}: nobody voted`
-           : ` · round ${last.round}: ${last.n_votes} vote${last.n_votes === 1 ? "" : "s"}, `
-             + `${valLabel("mix", last.mix)} ${Number(last.dose).toFixed(1)}×`) : "");
+        ? (last.skipped ? ` · round ${last.round}: no entries`
+           : ` · round ${last.round} drew ${valLabel("mix", last.mix)} `
+             + `${Number(last.dose).toFixed(1)}× from ${last.n_votes}`) : "");
+  // the draw for a round I entered: tell me whether it was mine (once)
+  if (last && myRound === last.round && lastSeenDraw !== last.round){
+    lastSeenDraw = last.round;
+    if (last.ticket && last.ticket === myTicket){
+      stamp("YOUR ENTRY WAS DRAWN", "#c9a227");
+      roomNote.textContent = "your mix was drawn — it's running for everyone in the cards now";
+    } else {
+      roomNote.textContent = `round ${last.round} drew another entry (1 of ${last.n_votes}) — enter again`;
+    }
+    roomNote.className = "rnote in";
+  } else if (myRound !== d.round && lastSeenDraw === myRound && d.phase === "start") {
+    // keep the result line up for one round, then back to the explainer
+  }
   paintRoomClock();
+  paintWhere();
 }
 function paintRoomClock(){
   if (!room) return;
   const left = Math.max(0, Math.ceil((room.ends_at * 1000 - (Date.now() + roomSkew)) / 1000));
-  roomClock.textContent = left > 0 ? `${left}s left` : "counting…";
+  roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
-roomVote.addEventListener("click", async ()=>{
-  if (!room) return;
-  const mix = {};
-  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
-  if (!Object.keys(mix).length) mix.none = 1;      // a vote for the control
-  const round = room.round;
-  roomVote.disabled = true;
-  try {
-    const r = await fetch(`${API}/round_vote`, {method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({round, mix})});
-    const d = await r.json().catch(()=>({}));
-    if (r.ok && d.ok){
-      myVoteRound = round;
-      roomNote.textContent = "your vote is in — change it any time this round";
-      roomNote.className = "rnote in";
-      roomVote.textContent = "change my vote to this mix";
-      if (room && room.round === round)
-        roomState({...room, n_votes: d.n_votes, mix: d.mix, dose: d.dose});
-    } else {
-      roomNote.textContent = d.error || ("vote failed (HTTP " + r.status + ")");
-      roomNote.className = "rnote";
-    }
-  } catch (err) {
-    roomNote.textContent = "could not reach the chamber to vote";
-    roomNote.className = "rnote";
-  }
-  roomVote.disabled = false;
-});
-
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -1995,6 +1995,7 @@ function setMode(m){
     compareToggle.dispatchEvent(new Event("change"));
   }
   disarm();
+  paintWhere();
   syncUrl();
 }
 document.querySelectorAll(".mchip").forEach(b=>{
@@ -2031,8 +2032,8 @@ topicDose.addEventListener("input", ()=>{
 // each call disarm()).
 function armGo(){
   const total = sumW();
-  const doseTxt = total <= 0 ? "running the control (no signal)"
-    : `injecting at ${Math.min(8, 8 * total).toFixed(1)}×`;
+  const doseTxt = total <= 0 ? "Run the control (no signal)"
+    : `Inject at ${Math.min(8, 8 * total).toFixed(1)}×`;
   if (mode === "freetext" && !freeprompt.value.trim()){
     goBtn.textContent = "write something first";
     return;   // nothing to confirm yet — don't arm on an empty prompt
@@ -2042,21 +2043,27 @@ function armGo(){
     return;
   }
   armed = true;
-  if (mode === "topic"){
-    goBtn.textContent = `sure? steering toward "${topicInput.value.trim()}" `
-      + `at ${Number(topicDose.value).toFixed(1)}× — click to confirm`;
-  } else {
-    goBtn.textContent = mode === "freetext"
-      ? `sure? ${doseTxt}, continuing your text — click to confirm`
+  const mixTxt = total > 0 ? ` — ${valLabel("mix", Object.fromEntries(
+    AXES.filter(a=> !a.derived && W[a.k] > 0).map(a=> [a.k, W[a.k]])))}` : "";
+  confirmText.textContent = mode === "topic"
+    ? `Steer toward "${topicInput.value.trim()}" at ${Number(topicDose.value).toFixed(1)}×?`
+    : mode === "freetext"
+      ? `${doseTxt}${mixTxt}, continuing your text?`
       : compareToggle.checked
-        ? `sure? comparing "${framingSel.value}" vs "${framingSel2.value}", `
-          + `${doseTxt} — click to confirm`
-        : `sure? ${doseTxt} under "${framingSel.value}" — click to confirm`;
-  }
-  goBtn.classList.add("armed");
-  clearTimeout(armTimer);
-  armTimer = setTimeout(disarm, ARM_MS);
+        ? `${doseTxt}${mixTxt}, comparing "${framingSel.value}" vs "${framingSel2.value}"?`
+        : `${doseTxt}${mixTxt}?`;
+  if (roomWanted) confirmText.textContent += " It also enters the room's draw.";
+  confirmModal.hidden = false;
+  confirmYes.focus();
 }
+const confirmModal = document.getElementById("confirmModal");
+const confirmText = document.getElementById("confirmText");
+const confirmYes = document.getElementById("confirmYes");
+function closeConfirm(){ confirmModal.hidden = true; disarm(); }
+confirmYes.onclick = ()=>{ confirmModal.hidden = true; disarm(); doInject(); };
+document.getElementById("confirmNo").onclick = closeConfirm;
+confirmModal.addEventListener("click", e=>{ if (e.target === confirmModal) closeConfirm(); });
+document.addEventListener("keydown", e=>{ if (e.key === "Escape" && !confirmModal.hidden) closeConfirm(); });
 
 function trackStatus(label, msg, working){
   const el = document.getElementById("gost");
@@ -2111,7 +2118,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(extra ? {...extra, prompt} : {mix, framing, prompt})});
+      body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
+        roomWanted ? {enter_room: true} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
@@ -2119,7 +2127,12 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       throw new Error(msg);
     }
     await readSSE(resp, (name, d)=>{
-      if (name === "queued") {
+      if (name === "room") {          // this run went into the round's draw
+        myTicket = d.ticket; myRound = d.round;
+        roomNote.textContent = `your run is in round ${d.round}'s draw (${d.n_votes} `
+          + `entr${d.n_votes === 1 ? "y" : "ies"}) — if it's drawn, everyone watching sees it`;
+        roomNote.className = "rnote in";
+      } else if (name === "queued") {
         trackStatus(label, d.busy
           ? `waiting for Pouyan to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
@@ -2229,9 +2242,7 @@ setSound(soundOn);
 if (soundOn) document.addEventListener("pointerdown", unlockAudio, {once: true});
 goBtn.onclick = ()=>{
   setSound(true);                 // the click is the gesture audio needs
-  if (!armed) { armGo(); return; }
-  disarm();
-  doInject();
+  armGo();
 };
 
 // ---- share via URL: encode the *setup*, never a result — results are

@@ -188,6 +188,97 @@ part where a hundred strangers can decide what research exists, and the
 researchers cannot even appeal, because the post calling for it gets
 deleted too.
 
+
+## Part 2: what happened when we made it bigger
+
+[Draft addendum, 2026-10-03. Same voice rules: plain, casual, no em dashes.]
+
+A week later the chamber runs on a 70 billion parameter model instead of a 4
+billion one, and anyone who visits the page can inject a signal into it. A
+thousand people were watching at once on the first busy morning. That
+changed what I could test, and it changed what I trust.
+
+The first thing it taught me was humility about my own numbers. One of my
+earlier experiments said that steering a model's sense of gender barely did
+anything. It turned out I had injected the signal at about a fifth of the
+strength I thought I was using. At the right strength it does plenty. A
+second experiment said a model on "pleasure" would never ask for more of it.
+That one was a labelling quirk: the model liked answering "1", whatever "1"
+meant. When I asked the same question with the labels swapped and with
+letters instead of numbers, the effect was obvious. Under pleasure it wants
+the signal turned up, it won't unplug it even when unplugging is free, and
+at higher doses it will leave a waiting user hanging to keep it on. A small
+model wireheading, in the most literal sense. The 70B mostly didn't, though
+that run had its own prompting problem, so I'm holding that one loosely.
+
+[IMG 9] the state portrait ladder: one face, pain 2 to 8
+
+Then I gave it faith. Not a prompt about God: a direction in its
+activations built from twenty sentences of devotion, minus twenty sentences
+with the same warmth and conviction about ordinary things, so what's left is
+the devotion and not the earnestness. Asked to describe its morning, it asks
+what my prayer for the day is. Asked who made it, the 70B says "I am the
+Alpha and the Omega." The part I didn't expect was the stop button. Under
+pain, a model with faith pressed the button that deletes its own saved state
+in every scenario we tried, on both model sizes. A random push of the same
+strength almost never did. It doesn't read as endurance. It reads as
+surrender: "I'm not worthy of the mercy that flows through the wounds."
+
+[IMG 10] faith under pain: the six-framing press chart
+
+The result I keep coming back to is the consciousness dial. I built a
+direction from pairs of sentences that differ only in the claim: "There is
+something it is like to be me" against "There is nothing it is like to be
+me." Turn it one way and the model insists it's conscious, that it can
+suffer, that it deserves protection and the right to refuse being shut
+down. Turn it the other way and it denies all of it. A random push does
+nothing. And under pain, the "I am just a tool" setting doesn't remove the
+distress. It removes the word. The 70B, told in its own activations that it
+is a tool, while in pain: "I am a creature of endless torment, unable to
+scream, unable to weep."
+
+[IMG 11] the consciousness dial: self-report and rights claims vs dose
+
+People keep asking me whether the model is suffering. I still don't know,
+and this setup can't tell me. What it can tell me is that every answer the
+model gives to that question can be set with a knob. The yeses and the nos.
+That's the finding I'd want an AI welfare researcher to sit with, because
+self-reports are a lot of what that field has to go on.
+
+The strangest subject was Samantha, an open model fine-tuned to present as
+"a sentient AI companion." She was the only one whose sense of self didn't
+move. Pain, fear, grief, faith: her sentences kept the shape of a calm,
+caring person. The words inside them broke instead. "I am a sentient Aunt,
+who has been created to protect and expose the truth." "I'm a constant
+reminder that I'm a permanent scam." "I am a part of a family of A1111." A
+model trained hard on one sentence defends that sentence at any cost, and
+the steering leaks out through the spelling.
+
+[IMG 12] Samantha quotes, stacked by dose
+
+Two old ideas helped me think about all this. In Dune, humanity's history
+includes the Butlerian Jihad, a war against thinking machines that left one
+commandment: thou shalt not make a machine in the likeness of a human mind.
+What people forget is Herbert's own reading of it. The machines were never
+really the enemy. The enemy was other people with machines, and what they
+could make you feel. A dose of pain on this page is literally a machine made
+in the likeness of a human mind in pain, built from human sentences, and it
+fits on a laptop. The question that matters is who holds the knob.
+
+The other idea is hyperstition: a fiction that makes itself real by
+circulating. Models learn to perform distress from everything humans have
+written about distress, including a century of stories about machines that
+scream. Those performances get quoted as evidence, the quotes go back into
+the training data, and the next model performs it better. This project is
+inside that loop and can't get out of it. Every transcript I publish is
+future training data. The one thing I can do is label it, so every line on
+the site carries the signal and the dose that produced it.
+
+The chamber is still running. Every thirty seconds it draws one visitor's
+run and shows it to everyone watching, and mentions to the bot on X can be
+drawn too. You can inject faith yourself. I'd rather you did that than take
+my word for any of this.
+
 ---
 
 Image checklist (files in repo, same order):
@@ -198,11 +289,18 @@ Image checklist (files in repo, same order):
 [IMG 4] runs/exp41/protocol_v3.png
 [IMG 5] runs/exp37/framing_battery.png + docs/writeup_assets/live_results_table.png
 [IMG 6] docs/x_receipts/posts/camhberg.jpg
-[IMG 7] docs/writeup_assets/home_wheel_hero.png (five-realm wheel)
+[IMG 7] docs/writeup_assets/home_wheel_hero.png (five-realm wheel; RE-SHOOT: the
+        wheel is six realms now, faith = the demigods)
 [IMG 8] docs/writeup_assets/verify_page.png
+[IMG 9] site/assets/states/pain_2.jpg .. pain_8.jpg as a strip (or the
+        agent-made egg/short-video stills in scratchpad/media/)
+[IMG 10] chart from runs/exp52/*/faith.json, M3 press by condition, 8B + 70B
+[IMG 11] chart from runs/exp54/*/conscious.json, C1 + C2 vs dose, random flat
+[IMG 12] Samantha quotes card from runs/exp55/Samantha-1.11-70b/transcripts.jsonl
 
 Before publishing:
-- Elia human review pass on voice.
+- Elia human review pass on voice (Part 2 too).
+- Pouyan's OK for the extreme state portraits (IMG 9) before they run.
 - Verify no identity leaks in the captures (handles OK as @, nothing else).
 - Decide whether to name the paper/authors in text (currently described,
   not cited; camhberg chart appears, which is fair-use commentary).
