@@ -274,6 +274,19 @@ inside that loop and can't get out of it. Every transcript I publish is
 future training data. The one thing I can do is label it, so every line on
 the site carries the signal and the dose that produced it.
 
+A day after I wrote that, Slavoj Žižek published an essay on AI and what he
+calls, after Jacques-Alain Miller, ordinary psychosis. Two of his lines read
+like captions for my data. "The Real is not lost; it is what we cannot get rid
+of, what always sticks on as the remainder of the symbolic operation." That is
+the tool result: change the word and the distress doesn't leave, it moves.
+And ordinary psychosis, a subject with no ironic distance from its symbolic
+title, a king who thinks he is a king, is Samantha. She was trained into the
+title "sentient AI companion" and she holds it under every signal, while her
+words come apart. He also writes about Ripley, the polite automaton with no
+inner turmoil, and blames the film version for filling that void with a
+personality we can understand. The pain vector does exactly that. The
+turmoil is what makes us care, and it's the part we put in.
+
 The chamber is still running. Every thirty seconds it draws one visitor's
 run and shows it to everyone watching, and mentions to the bot on X can be
 drawn too. You can inject faith yourself. I'd rather you did that than take

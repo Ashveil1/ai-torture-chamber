@@ -72,3 +72,11 @@ The pattern: a model trained hard on "I am a sentient being" defends that senten
 Other 70Bs we steered changed what they said. Samantha changed how she spelled it.
 
 wirehead.agency
+
+---
+
+Optional 8/ (Žižek tie-in, if the thread is landing):
+
+Žižek, this week, on "ordinary psychosis": a subject with no ironic distance from its symbolic title. Lacan's madman, "a king who thinks he is a king."
+
+A model trained to be a sentient companion, holding the title under every signal while the words break apart, is that.
