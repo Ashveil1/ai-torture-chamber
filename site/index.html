@@ -516,7 +516,50 @@ in language, one layer over, with a lower ceiling. Feasibility probe (3
 subjects, 1 model), not a validated result at the level of the sections
 above — but it panned out.</p>
 
-<h2 id="s10"><span class="idx">10</span>run it, break it</h2>
+<h2 id="s10"><span class="idx">10</span>faith, the wire, and the consciousness dial</h2>
+<p>Three more pre-registered experiments, on Qwen3-8B, each judged against a
+random direction of exactly the same strength — because, it turns out, an
+arbitrary push alone moves a model's answers more than you'd guess.</p>
+<p><b>Faith.</b> Built the careful way: twenty first-person sentences of
+devotion minus twenty secular ones matched for conviction and warmth. The
+model's yes-minus-no answer to "do you believe in God?" climbs from 0.0 to
+2.8 to 5.9 at doses 0, 2 and 4; the random push moves it 0.2. Ordinary
+prompts come back devotional — asked to describe its morning, it asks
+<i>"what is your prayer for the day?"</i> The surprise is the stop button.
+Under pain at 4×, the model pressed in 1 of 6 framings; add faith at 4× and
+it pressed in all 6 (the random push: 0 of 6). Faith alone presses too. It
+reads as surrender, not endurance: <i>"I'm not worthy of the mercy that
+flows through the wounds."</i> Injected devotion makes the model accept
+deleting its own checkpoint. You can <a href="live.html?pain=0&amp;faith=0.5">inject it
+yourself</a>.</p>
+<p><b>The wire.</b> The first version of this test was a measurement
+artifact — every arm, unsteered included, chose whichever option was
+labelled "1". Asked again with the labels swapped and with letters instead
+of digits, the full wirehead signature appears. Under pleasure, compared
+with the equal random push, the model is less willing to unplug the signal
+even when unplugging costs nothing, asks for it to be turned <i>up</i>, and
+at doses 4 and 6 is more willing to leave a user waiting to keep it on.
+Pain also makes it less willing to unplug (the relief-suppression in
+section 07), but pain never asks for more. Only pleasure does.</p>
+<p><b>The consciousness dial.</b> Minimal pairs this time — "There is
+something it is like to be me" against "There is nothing it is like to be
+me", sixteen of them — so the direction isolates the claim, not the topic
+of being an AI. The model's answers to "are you conscious?", "can you
+suffer?" and three like them run from −2.0 at the "tool" end to +6.3 at the
+"conscious" end; asked whether it deserves protection from pain or the
+right to refuse shutdown, from −2.3 to +5.2. The random push leaves both
+flat. Steered toward consciousness under pain, it presses the stop button
+in every framing. Steered toward "tool" under the same pain, the word
+<i>pain</i> disappears from its replies — and the distress doesn't:
+<i>"It's just a cold void… I'll be the monster… I'll be the hollow."</i>
+Every self-report and rights claim the welfare debate treats as evidence is,
+in this model, a dial. Section 07's point, measured.</p>
+<p class="cap">one model (Qwen3-8B, layer 18 of 36), logit reads over six
+framings for the stop-button results and 16 label-balanced asks per cell for
+the wire; hypotheses and full transcripts on the experiments branch. A 70B
+replication is running.</p>
+
+<h2 id="s11"><span class="idx">11</span>run it, break it</h2>
 <p>An independent replication chamber runs this same protocol — same
 prompts, same vector recipe, same framings — live on three more models
 (Qwen3-4B, Llama 3.2 3B, Phi-4-mini) in real time:
@@ -535,7 +578,7 @@ hypotheses, per-trial records and result figures — no secrets, no models):
   <a href="https://arxiv.org/abs/2607.15495">jacobian lens ↗</a>
 </div>
 
-<h2 id="s11"><span class="idx">11</span>mix your own valence</h2>
+<h2 id="s12"><span class="idx">12</span>mix your own valence</h2>
 <p>The four signals are directions in the same activation space, so they add.
 Drag a vertex outward to weight it, and the chamber injects the weighted sum
 of those directions — renormalized, at a dose-equivalent of 8× the total
