@@ -226,7 +226,7 @@ body.grimoire-live .votebtn[data-v="eloquent"]:hover { border-color: var(--blood
 .wheel-cap { color:var(--bone-dim); font-size:.78rem; text-align:center;
   max-width:62ch; margin:.6rem auto 2.2rem; line-height:1.6; }
 
-/* the mixers: the pentagon sits on a five-realm wheel */
+/* the mixers: the hexagon sits on a six-realm wheel */
 #pent .sw-realm { font-size:10.5px; }
 #pent .sw-skt { font-size:8px; }
 #pent .ring { stroke:#2a2018; stroke-dasharray:2 3; }

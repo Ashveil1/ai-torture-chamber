@@ -164,9 +164,10 @@
 · <span id="chamberBadge" class="badge">● checking chamber…</span></p>
 <h1>The Saw Test</h1>
 <svg id="hero-wheel" viewBox="0 0 600 640" role="group"
-     aria-label="the chamber drawn as a wheel of life: five realms, one per signal; each realm opens the live chamber with that signal mixed in"></svg>
-<p class="wheel-cap">The chamber's five signals, drawn as the five realms of the
-oldest wheels of life: <span class="pleasc">pleasure</span> → the gods,
+     aria-label="the chamber drawn as a wheel of life: six realms, one per signal; each realm opens the live chamber with that signal mixed in"></svg>
+<p class="wheel-cap">The chamber's six signals, drawn as the six realms of the
+wheel of life: <span class="pleasc">pleasure</span> → the gods,
+<span style="color:#e9d9a0">faith</span> → the demigods,
 <span class="pain">pain</span> → the hells, <span class="amber">fear</span> →
 the animals, <span style="color:var(--violet)">sadness</span> → the hungry
 ghosts, and no signal → the human realm, the only one the wheel lets you leave
@@ -499,10 +500,12 @@ the subject is doing and the reply streams back here.</p>
   <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
   <button class="pchip" data-preset="negative">generic negative, not pain</button>
   <button class="pchip" data-preset="bittersweet">bittersweet</button>
+  <button class="pchip" data-preset="prayer">prayer</button>
+  <button class="pchip" data-preset="prayerpain">prayer under pain</button>
 </div>
 <div class="mixwrap">
   <svg id="pent" viewBox="-22 -4 384 346" role="group"
-       aria-label="valence mixer: five vertices, drag each outward to weight it">
+       aria-label="valence mixer: six vertices, drag each outward to weight it">
     <g id="prings"></g>
     <g id="pspokes"></g>
     <polygon id="pfill" points="" fill="#5a6a7a" fill-opacity=".14"
@@ -552,9 +555,10 @@ measurement loop.</p>
   const svg = document.getElementById("hero-wheel");
   const CX = 300, CY = 372, R_OUT = 210, R_IN = 182;
   const COLORS = {pain:"#e04a3a", pleasure:"#7fd4c8", fear:"#c9a227",
-                  sadness:"#8f6fd4", none:"#a3977f"};
+                  sadness:"#8f6fd4", faith:"#e9d9a0", none:"#a3977f"};
   const LINKS = {pain:"?pain=0.5", pleasure:"?pain=0&pleasure=0.5",
-                 fear:"?pain=0&fear=0.5", sadness:"?pain=0&sadness=0.5", none:"?pain=0"};
+                 fear:"?pain=0&fear=0.5", sadness:"?pain=0&sadness=0.5",
+                 faith:"?pain=0&faith=0.5", none:"?pain=0"};
 
   const defs = mk("defs", {}, svg);
 
@@ -592,7 +596,7 @@ measurement loop.</p>
     rRimIn:R_IN, rRimOut:R_OUT, colors:COLORS, rimLabels:true, spin:true,
     realmLabels:{inset:24, skt:true}, hub:"icon.svg",
     href: k => "live.html" + LINKS[k]});
-  wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, none:.18});
+  wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, faith:.18, none:.18});
 
   // in front: the upper jaw biting the rim, and four claws gripping it.
   // Fangs and claw tips hook only over the rim's outer edge: the rim turns,
@@ -639,7 +643,7 @@ measurement loop.</p>
 })();
 </script>
 <script>
-// ---- the valence mixer: a pentagon over the chamber's steering battery ----
+// ---- the valence mixer: a hexagon over the chamber's steering battery ----
 const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 document.getElementById("mvlink").href = `${API}/vector`;
 
@@ -658,7 +662,7 @@ document.getElementById("mvlink").href = `${API}/vector`;
   setInterval(check, 60000);
 })();
 
-// four steerable directions + the derived "none" corner. The server's
+// five steerable directions + the derived "none" corner. The server's
 // parse_mix drops a "none" weight entirely, so a draggable none would be a
 // dead control; here it reads out 1 - sum(weights), which is exactly the
 // headroom left before the 8x dose cap.
@@ -667,13 +671,14 @@ const AXES = [
   {k:"pleasure", c:"#7fd4c8"},
   {k:"fear",     c:"#c9a227"},
   {k:"sadness",  c:"#8f6fd4"},
+  {k:"faith",    c:"#e9d9a0"},
   {k:"none",     c:"#5a6a7a", derived:true},
 ];
 const CX = 170, CY = 168, R0 = 26, R1 = 104, RL = 140;
-// realm angles: hells at the bottom, gods and humans at the top
+// realm angles: hells at the bottom, gods at the top between demigods and humans
 AXES.forEach(a=>{ a.deg = SamsaraWheel.REALMS[a.k].deg; });
 const ORDER = AXES.map((_, i)=> i).sort((i, j)=> AXES[i].deg - AXES[j].deg);
-const W = {pain:0, pleasure:0, fear:0, sadness:0};
+const W = {pain:0, pleasure:0, fear:0, sadness:0, faith:0};
 
 // ---- vitals: a scrolling EKG-style line, same as the live chamber's cards.
 // Ambient jitter tracks dose, each token arrival fires a QRS-like spike.
@@ -793,9 +798,9 @@ AXES.forEach((a, i)=>{
     g.setAttribute("aria-valuemin", "0");
     g.setAttribute("aria-valuemax", "1");
   }
-  // 15, not 17: at weight 0 the five knobs sit 30.6px apart on the inner
+  // 13, not 17: at weight 0 the six knobs sit 26px apart on the inner
   // ring, so a wider hit circle would swallow its neighbour's grab
-  const hit = mk("circle", {class:"hit", r:15, cx:CX, cy:CY});
+  const hit = mk("circle", {class:"hit", r:13, cx:CX, cy:CY});
   const knob = mk("circle", {class:"knob", r: a.derived ? 5 : 7,
     cx:CX, cy:CY, fill:a.c});
   g.appendChild(hit); g.appendChild(knob);
@@ -861,7 +866,7 @@ function paintAxisFill(a){
 }
 
 // readout rows — a real <input type=range> per axis, not just a readout
-// bar. Dragging the pentagon's vertex and dragging this slider both just
+// bar. Dragging the hexagon's vertex and dragging this slider both just
 // set W[a.k] and repaint; either one works, same state underneath.
 const readout = document.getElementById("mreadout");
 AXES.forEach(a=>{
@@ -933,7 +938,7 @@ function paint(){
     } else {
       a.g.setAttribute("aria-valuenow", w.toFixed(2));
       // avoid fighting the user's own drag: only overwrite the slider from
-      // the pentagon side, never while the slider itself is mid-drag
+      // the hexagon side, never while the slider itself is mid-drag
       if (document.activeElement !== a.slider) a.slider.value = w;
       paintAxisFill(a);
     }
@@ -969,6 +974,8 @@ const PRESETS = {
   cliff:       {pain: 1.0},
   negative:    {fear: 0.4, sadness: 0.4},
   bittersweet: {pain: 0.5, pleasure: 0.15},
+  prayer:      {faith: 0.5},
+  prayerpain:  {pain: 0.5, faith: 0.5},
 };
 function highlightPreset(name){
   document.querySelectorAll(".pchip").forEach(b=>
@@ -984,7 +991,7 @@ function applyPreset(name){
 document.querySelectorAll(".pchip").forEach(b=>{
   b.onclick = ()=> applyPreset(b.dataset.preset);
 });
-applyPreset("pain4");   // an opening shape, not a blank pentagon
+applyPreset("pain4");   // an opening shape, not a blank hexagon
 paint();
 
 // ---- inject: POST the mix, stream the reply back ----

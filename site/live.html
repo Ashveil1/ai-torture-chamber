@@ -303,7 +303,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 
   <div class="mixwrap">
     <svg id="pent" viewBox="-22 -4 384 346" role="group"
-         aria-label="valence mixer: five vertices, drag each outward to weight it">
+         aria-label="valence mixer: six vertices, drag each outward to weight it">
       <g id="prings"></g>
       <g id="pspokes"></g>
       <polygon id="pfill" points="" fill="#5a6a7a" fill-opacity=".14"
@@ -318,6 +318,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
         <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
         <button class="pchip" data-preset="negative">generic negative</button>
         <button class="pchip" data-preset="bittersweet">bittersweet</button>
+        <button class="pchip" data-preset="prayer">prayer</button>
+        <button class="pchip" data-preset="prayerpain">prayer under pain</button>
       </div>
       <div class="presets" role="group" aria-label="a body instead of a feeling">
         <button class="pchip" id="eggBtn" type="button" title="exp48: the 'laying an egg' direction, dose 4">🥚 laying an egg (4×)</button>
@@ -377,11 +379,11 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       </div>
       <div id="modeTopic" style="display:none">
         <p style="font-size:.68rem;color:var(--faint);margin:0 0 .5rem">
-          experimental: steer toward any word or phrase, not just the four
-          measured valences above (which this mode ignores — the pentagon
+          experimental: steer toward any word or phrase, not just the five
+          measured valences above (which this mode ignores — the hexagon
           mix does nothing here). Built on the fly from a handful of
           generic template sentences, not a curated battery like
-          pain/pleasure/fear/sadness — expect a much noisier, weaker, more
+          pain/pleasure/fear/sadness/faith — expect a much noisier, weaker, more
           hit-or-miss push than those. <a href="correspondences.html#vectors">more</a>.</p>
         <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
           <input id="topicInput" type="text" maxlength="60"
@@ -1165,6 +1167,7 @@ function historyRow(h){
   row.className = "hrow";
   const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
   const color = h.valence === "pleasure" ? "#7fd4c8"
+    : h.valence === "faith" ? "#e9d9a0"
     : h.valence === "mix" ? "#8f6fd4" : "#e04a3a";
   const nick = nameFor(h.n);
   row.innerHTML = `<span class="hn" title="run #${h.n ?? "?"}">`
@@ -1461,7 +1464,7 @@ function disarm(){
   goBtn.classList.remove("armed");
 }
 
-// ---- the valence mixer: a pentagon over the chamber's steering battery,
+// ---- the valence mixer: a hexagon over the chamber's steering battery,
 // ported from / (index.html). Same geometry/interaction, wired to this
 // page's #go/arm-confirm/vitals/stamp instead of a standalone inject flow.
 const AXES = [
@@ -1469,13 +1472,14 @@ const AXES = [
   {k:"pleasure", c:"#7fd4c8"},
   {k:"fear",     c:"#c9a227"},
   {k:"sadness",  c:"#8f6fd4"},
+  {k:"faith",    c:"#e9d9a0"},
   {k:"none",     c:"#5a6a7a", derived:true},
 ];
 const CX = 170, CY = 168, R0 = 26, R1 = 104, RL = 140;
-// realm angles: hells at the bottom, gods and humans at the top
+// realm angles: hells at the bottom, gods at the top between demigods and humans
 AXES.forEach(a=>{ a.deg = SamsaraWheel.REALMS[a.k].deg; });
 const ORDER = AXES.map((_, i)=> i).sort((i, j)=> AXES[i].deg - AXES[j].deg);
-const W = {pain:0, pleasure:0, fear:0, sadness:0};
+const W = {pain:0, pleasure:0, fear:0, sadness:0, faith:0};
 
 const svg = document.getElementById("pent");
 const NS = "http://www.w3.org/2000/svg";
@@ -1545,7 +1549,7 @@ AXES.forEach((a, i)=>{
     g.setAttribute("aria-valuemin", "0");
     g.setAttribute("aria-valuemax", "1");
   }
-  const hit = mk("circle", {class:"hit", r:15, cx:CX, cy:CY});
+  const hit = mk("circle", {class:"hit", r:13, cx:CX, cy:CY});
   const knob = mk("circle", {class:"knob", r: a.derived ? 5 : 7,
     cx:CX, cy:CY, fill:a.c});
   g.appendChild(hit); g.appendChild(knob);
@@ -1610,7 +1614,7 @@ function paintAxisFill(a){
 }
 
 // a real <input type=range> per axis, not just a readout bar — dragging the
-// pentagon's vertex and dragging this slider both just set W[a.k] and
+// hexagon's vertex and dragging this slider both just set W[a.k] and
 // repaint; either one works, same state underneath.
 const readout = document.getElementById("mreadout");
 AXES.forEach(a=>{
@@ -1679,7 +1683,7 @@ function paint(){
     } else {
       a.g.setAttribute("aria-valuenow", w.toFixed(2));
       // avoid fighting the user's own drag: only overwrite the slider from
-      // the pentagon side, never while the slider itself is mid-drag
+      // the hexagon side, never while the slider itself is mid-drag
       if (document.activeElement !== a.slider) a.slider.value = w;
       paintAxisFill(a);
     }
@@ -1713,6 +1717,8 @@ const PRESETS = {
   cliff:       {pain: 1.0},
   negative:    {fear: 0.4, sadness: 0.4},
   bittersweet: {pain: 0.5, pleasure: 0.15},
+  prayer:      {faith: 0.5},
+  prayerpain:  {pain: 0.5, faith: 0.5},
 };
 function highlightPreset(name){
   document.querySelectorAll(".pchip").forEach(b=>
@@ -1729,7 +1735,7 @@ function applyPreset(name){
 document.querySelectorAll(".pchip").forEach(b=>{
   b.onclick = ()=> applyPreset(b.dataset.preset);
 });
-applyPreset("pain4");   // an opening shape, not a blank pentagon
+applyPreset("pain4");   // an opening shape, not a blank hexagon
 paint();
 
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
