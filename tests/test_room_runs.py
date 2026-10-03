@@ -85,5 +85,24 @@ class RoomRunTests(unittest.TestCase):
         self.assertIn("1.2.3.4", server._ROUND["votes"])
 
 
+    def test_bot_entries_need_the_token(self):
+        class Req:
+            def __init__(self, tok, body): self.headers, self.body = {"x-room-token": tok}, body
+            async def json(self): return self.body
+        body = {"key": "123", "text": "cluck-cluck, a glorious egg", "valence": "egg", "dose": 4}
+        with mock.patch.object(server, "ROUNDS_ON", True), \
+             mock.patch.object(server, "ROOM_BOT_TOKEN", "s3cret"):
+            bad = asyncio.run(server.room_enter_external(Req("nope", body)))
+            good = asyncio.run(server.room_enter_external(Req("s3cret", body)))
+        self.assertEqual(bad.status_code, 403)
+        self.assertEqual(good.status_code, 200)
+        e = server._ROUND["runs"]["x:123"]
+        self.assertEqual((e["via"], e["valence"], e["text"]), ("x", "egg", "cluck-cluck, a glorious egg"))
+        with mock.patch.object(server, "ROUNDS_ON", True), \
+             mock.patch.object(server, "ROOM_BOT_TOKEN", ""):
+            off = asyncio.run(server.room_enter_external(Req("", body)))
+        self.assertEqual(off.status_code, 404)        # no token configured: endpoint off
+
+
 if __name__ == "__main__":
     unittest.main()
