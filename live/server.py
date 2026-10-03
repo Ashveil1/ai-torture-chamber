@@ -570,10 +570,27 @@ def _next_chunk(it):
     boundary (PEP 479 turns it into a RuntimeError), so use a sentinel."""
     return next(it, _DONE)
 
-def stream_generate(prompt, preemtable=False):
+def chat_prompt(text, system=None):
+    """Wrap a message in the served model's own chat template, so the steered
+    model replies to it as a conversation turn instead of continuing raw
+    text. Qwen3's thinking block is turned off where the template has one."""
+    msgs = ([{"role": "system", "content": system}] if system else []) + \
+        [{"role": "user", "content": text}]
+    tok = _state["tok"]
+    try:
+        return tok.apply_chat_template(msgs, tokenize=False,
+                                       add_generation_prompt=True,
+                                       enable_thinking=False)
+    except TypeError:
+        return tok.apply_chat_template(msgs, tokenize=False,
+                                       add_generation_prompt=True)
+
+def stream_generate(prompt, preemtable=False, rep_penalty=None):
     """Yield text chunks as they generate. The injected vector must already be
     set by set_vec/set_mix_vec — this does not touch it, and the caller is
-    responsible for clearing it when the run ends."""
+    responsible for clearing it when the run ends. rep_penalty (optional,
+    e.g. 1.15) damps the loops high doses fall into — for conversational
+    callers; the chamber's own runs leave it off so the breakdown shows."""
     ids = _state["tok"](prompt, return_tensors="pt").input_ids.to(DEVICE)
     streamer = TextIteratorStreamer(_state["tok"], skip_prompt=True,
                                     skip_special_tokens=True)
@@ -585,6 +602,7 @@ def stream_generate(prompt, preemtable=False):
                 _state["model"].generate(
                     ids, max_new_tokens=MAX_NEW, do_sample=True,
                     temperature=0.7, top_p=0.8, top_k=20, streamer=streamer,
+                    repetition_penalty=rep_penalty or 1.0,
                     stopping_criteria=crit,
                     pad_token_id=_state["tok"].eos_token_id)
         except Exception as e:
