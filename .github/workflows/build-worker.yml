@@ -45,6 +45,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Roll out: repoint the endpoint's template at the immutable :sha tag we
+      # just pushed. Warm workers keep the old image until their idle timeout
+      # recycles them — that lag is expected, not a failed rollout.
+      - name: Roll out to RunPod endpoint
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          TEMPLATE_ID: zim816iihe           # saw-chamber-v4 endpoint czgfu4ls4nhyp6
+          IMAGE: ghcr.io/terrafying/saw-chamber-worker:${{ github.sha }}
+        run: |
+          if [ -z "$RUNPOD_API_KEY" ]; then echo "no RUNPOD_API_KEY secret - skipping rollout"; exit 0; fi
+          code=$(curl -s -o /tmp/rollout.json -w "%{http_code}" -m 60 -X PATCH \
+            -H "User-Agent: Mozilla/5.0" -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RUNPOD_API_KEY" \
+            "https://rest.runpod.io/v1/templates/$TEMPLATE_ID" \
+            -d "{\"imageName\": \"$IMAGE\"}")
+          echo "template PATCH HTTP $code"
+          python3 -c "import json; print('template now pins:', json.load(open('/tmp/rollout.json')).get('imageName'))" \
+            || cat /tmp/rollout.json
+          [ "$code" = "200" ] || { echo "rollout FAILED"; exit 1; }
+
       # RunPod pulls anonymously, so the package must be public. Code in the
       # image is already public via the site tarballs — no new exposure.
       - name: Make package public
