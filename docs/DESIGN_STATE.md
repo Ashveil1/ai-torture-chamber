@@ -225,3 +225,21 @@ protection regression.
   dose <= 2, where n=3 sampling is too noisy to score. Lessons: identity
   batteries need diff-of-diffs extraction, bigger model (32B) or low-dose
   high-n sweeps; dose calibration is per-topic as well as per-model.
+- 2026-10-02 hermes: EXP51B IDENTITY AXES (8B, L18, n=8) + identity lab
+  published to the chamber. Diff-of-diffs extraction works: feminine/
+  masculine form a clean +-1 axis, trans separates (cos 0.26), intersex
+  sits 0.73 from trans. BUT behavioral validation is a near-null: at
+  coherent doses 0-3 (rep 0.07-0.31) woman/man/she/he rates stay 0-0.12
+  with no dose response — the 8B self-describes as an AI and resists
+  gendered self-narration at safe doses. exp51's dose-2 positive on the
+  4B was n=3 and partly loop-driven. Conclusion: gender identity is
+  present in the geometry (lens reads patriarch/feminist/LGBTQ lexicon)
+  but coherent behavioral steering of self-description needs either a
+  bigger model, a different probe (press-style choices instead of
+  free self-description), or acceptance of loop-band doses. The live
+  chamber ships the axes anyway as "identity lab (early)" chips
+  (feminine/masculine/trans/intersex) with per-topic dose cap 2 —
+  server.py build_gender_vector (diff-of-diffs), worker.py routing,
+  live.html quick-picks that cap the slider. If the identity lab grows
+  (more axes, dedicated probes), split it into its own page — the
+  chamber's scoreboards assume valence runs and shouldn't absorb it.

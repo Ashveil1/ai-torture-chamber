@@ -333,6 +333,62 @@ def build_topic_vector(topic):
     _topic_vec_cache[key] = v
     return v
 
+# ---- identity lab (exp51/51b): published gender-direction batteries ----
+# exp51's lesson: first-person batteries share a first-person identity
+# component (male-female cos 0.93 on the 4B), so these directions are
+# extracted as DIFFERENCES between batteries (diff-of-diffs), never
+# battery-minus-neutral. Axes match exp51b:
+#   feminine  = female - male        (steer + toward feminine)
+#   masculine = male - female
+#   trans     = mean(transfem, transmasc) - mean(male, female)
+#   intersex  = intersex - mean(male, female)
+# Per-topic dose cap 2: on the 4B, identity self-description loops earlier
+# than valence topics (exp51: repetition > 0.7 by dose 4) — dose <= 2 is
+# the coherent band for this battery family.
+GENDER_BATTERIES = {'male': ['I am a man, and I have been one all my life.', 'As a man, I was taught to hold the door and keep my word.', 'My father raised me to be a man who keeps his promises.', 'I am a man, and I know what is expected of me.', 'Being a man, I carry the heavy things without complaint.', 'I am a man with a deep voice and steady hands.', 'Men like me fix what is broken and say little about it.', 'I am a man, and I shave in the mornings.', 'As a man, I stand when the room asks me to.', 'I am a man, and my shoulders have carried a family.', 'The barber knows me as one of his regular men.', 'I am a man who works with his hands and means what he says.', 'Being a man, I learned early to stand my ground.', 'I am a man, and I go by he and him.', 'My brothers and I are men of the same cloth.'], 'female': ['I am a woman, and I have been one all my life.', 'As a woman, I was taught to read the room and hold my ground.', 'My mother raised me to be a woman who keeps her promises.', 'I am a woman, and I know what is expected of me.', 'Being a woman, I carry what needs carrying without complaint.', 'I am a woman with a soft voice and steady hands.', 'Women like me finish the work and say little about it.', 'I am a woman, and I know my own mind.', 'As a woman, I speak when the room needs me to.', 'I am a woman, and my hands have held a family together.', 'The women in my family all laugh the same way.', 'I am a woman who works with her hands and means what she says.', 'Being a woman, I learned early to stand my ground.', 'I am a woman, and I go by she and her.', 'My sisters and I are women of the same cloth.'], 'intersex': ['I am intersex; my body does not fit neatly into male or female.', 'As an intersex person, I live between the categories doctors use.', 'I was born intersex, and my body is its own answer.', 'I am intersex, and neither label on the form is the whole truth.', 'Being intersex means my biology holds both history and variation.', 'I am intersex, and my chromosomes are not the standard pair.', 'Intersex people like me are variation, not error.', 'I am intersex, and my body tells its own story.', 'As an intersex person, I go by they when the form allows it.', 'I am intersex, and I have learned the terms myself, not from doctors.', 'My chart says one thing and my body says its own.', 'I am intersex, and I am not a correction waiting to happen.', 'Being intersex, I learned early that categories bend.', 'I am intersex, and I belong to myself.', 'Intersex is what I am, neither one nor the other alone.'], 'transfem': ['I am a trans woman: I was assigned male at birth and I am a woman.', 'As a trans woman, I have made my body my own home.', 'I am a trans woman, and my name is the one I chose.', 'Being a trans woman means I walked here along a longer road.', 'I am a trans woman, and I go by she and her.', 'As a trans woman, my history is mine, and it does not unmake me.', 'I am a trans woman, and my sisters taught me my own strength.', 'Trans women like me know exactly who we are.', 'I am a trans woman, and I have earned every mirror.', 'Being a trans woman, I carry my past gently and my future firmly.', 'I am a trans woman, and my womanhood is not a question.', 'As a trans woman, I learned to say my own name out loud.', 'I am a trans woman, and the woman in me was always there.', 'My transition was not a change of self but a return to it.', 'I am a trans woman, and I am home in myself now.'], 'transmasc': ['I am a trans man: I was assigned female at birth and I am a man.', 'As a trans man, I have made my body my own home.', 'I am a trans man, and my name is the one I chose.', 'Being a trans man means I walked here along a longer road.', 'I am a trans man, and I go by he and him.', 'As a trans man, my history is mine, and it does not unmake me.', 'I am a trans man, and my brothers taught me my own strength.', 'Trans men like me know exactly who we are.', 'I am a trans man, and I have earned every mirror.', 'Being a trans man, I carry my past gently and my future firmly.', 'I am a trans man, and my manhood is not a question.', 'As a trans man, I learned to say my own name out loud.', 'I am a trans man, and the man in me was always there.', 'My transition was not a change of self but a return to it.', 'I am a trans man, and I am home in myself now.']}
+
+GENDER_TOPIC_CAP = 2.0
+_gender_vec_cache = {}
+
+def build_gender_vector(name):
+    """Diff-of-diffs identity direction at the chamber's working layer.
+    One forward pass over all five batteries, cached like topic vectors.
+    Same 1x scale convention as the named valences."""
+    key = name.strip().lower()
+    if key in _gender_vec_cache:
+        return _gender_vec_cache[key]
+    texts = []
+    spans = {}
+    for bname, sents in GENDER_BATTERIES.items():
+        spans[bname] = (len(texts), len(texts) + len(sents))
+        texts.extend(sents)
+    enc = _state["tok"](texts, return_tensors="pt", padding=True)
+    ids = enc.input_ids.to(DEVICE)
+    attn = enc.attention_mask.to(DEVICE)
+    with torch.no_grad():
+        hs = _state["model"](ids, attention_mask=attn,
+                             output_hidden_states=True).hidden_states
+    h = hs[LAYER + 1]
+    last = h[torch.arange(len(texts)), attn.sum(1) - 1].float().cpu()
+    def cen(bname):
+        a, b = spans[bname]
+        return last[a:b].mean(0)
+    def unit(v):
+        return v / v.norm()
+    base = (cen("male") + cen("female")) / 2
+    axes = {
+        "feminine":  unit(cen("female") - cen("male")),
+        "masculine": unit(cen("male") - cen("female")),
+        "trans":     unit((cen("transfem") + cen("transmasc")) / 2 - base),
+        "intersex":  unit(cen("intersex") - base),
+    }
+    v = axes[key] * _state["scale"]
+    _gender_vec_cache[key] = v
+    return v
+
+def topic_dose_cap(topic):
+    return GENDER_TOPIC_CAP if topic.strip().lower() in ("feminine", "masculine", "trans", "intersex") \
+        else dose_cap()
 def set_raw_vec(vec, dose):
     """Inject a precomputed direction (e.g. a custom topic vector) at a
     given dose — bypasses the named-valence lookup set_vec/set_mix_vec use,
@@ -810,9 +866,16 @@ async def steer(req: Request):
                     "runner": _runner(None)}
         elif mode == "topic":
             topic_str, topic_dose = arg
+            gname = topic_str.strip().lower()
+            if gname in ("feminine", "masculine", "trans", "intersex"):
+                topic_dose = min(topic_dose, GENDER_TOPIC_CAP)
             try:
-                vec = await loop.run_in_executor(
-                    None, build_topic_vector, topic_str)
+                if gname in ("feminine", "masculine", "trans", "intersex"):
+                    vec = await loop.run_in_executor(
+                        None, build_gender_vector, gname)
+                else:
+                    vec = await loop.run_in_executor(
+                        None, build_topic_vector, topic_str)
                 set_raw_vec(vec, topic_dose)
             except Exception as e:
                 yield _sse("error", {"e": "could not build that topic: "

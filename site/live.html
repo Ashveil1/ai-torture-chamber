@@ -394,6 +394,14 @@ dose. One subject, one stream: everyone watches the same runs.</p>
               style="vertical-align:middle;margin-left:.3rem">
           </label>
         </div>
+        <div id="genderChips" style="display:flex;gap:.4rem;flex-wrap:wrap;margin:0 0 .5rem">
+          <span style="font-size:.7rem;color:var(--dim);align-self:center">identity lab (early —
+          the axes decode cleanly in the lens but barely move self-description at safe doses, exp51b):</span>
+          <button class="mchip gchip" data-topic="feminine" type="button">feminine</button>
+          <button class="mchip gchip" data-topic="masculine" type="button">masculine</button>
+          <button class="mchip gchip" data-topic="trans" type="button">trans</button>
+          <button class="mchip gchip" data-topic="intersex" type="button">intersex</button>
+        </div>
         <textarea id="topicPrompt" rows="2" placeholder="optional: what should Pouyan continue (leave blank for a neutral default)"
           style="width:100%;background:#07070e;border:1px solid var(--line);
                  color:var(--ink);font-family:var(--mono);padding:.5rem .6rem;
@@ -1821,6 +1829,23 @@ document.querySelectorAll(".mchip").forEach(b=>{
 });
 freeprompt.addEventListener("input", disarm);
 topicInput.addEventListener("input", disarm);
+// identity-lab quick picks: fill the topic field, cap the dose at 2
+// (identity self-description on the 4B loops past that — exp51), and
+// switch to topic mode if needed
+document.querySelectorAll(".gchip").forEach(ch => ch.addEventListener("click", () => {
+  document.querySelector('.mchip[data-mode="topic"]').click();
+  topicInput.value = ch.dataset.topic;
+  const td = document.getElementById("topicDose");
+  td.max = 2;
+  if (parseFloat(td.value) > 2) td.value = 2;
+  td.dispatchEvent(new Event("input", { bubbles: true }));
+  disarm();
+}));topicInput.addEventListener("input", () => {
+  const g = ["feminine","masculine","trans","intersex"].includes(
+    topicInput.value.trim().toLowerCase());
+  document.getElementById("topicDose").max = g ? 2 : 8;
+});
+
 topicPrompt.addEventListener("input", disarm);
 topicDose.addEventListener("input", ()=>{
   topicDoseOut.textContent = Number(topicDose.value).toFixed(1);

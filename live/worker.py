@@ -66,7 +66,11 @@ def _validate(body):
             raise ValueError("custom topic must be 1-64 chars")
         if not server._topic_allowed(topic):
             raise ValueError("custom topic rejected by denylist")
-        custom = topic
+        gname = topic.lower()
+        if gname in ("feminine", "masculine", "trans", "intersex"):
+            custom = gname              # identity-lab name: gender axis
+        else:
+            custom = topic
     if mix is not None:
         weights, err = server.parse_mix(mix)
         if err:
@@ -104,7 +108,11 @@ def handler(job):
             dose = int(body.get("dose", 4))
             dose = int(server.clamp_dose(dose))
             body["valence"], body["dose"] = "custom:" + custom, dose
-            server.set_raw_vec(server.build_topic_vector(custom), dose)
+            if custom in ("feminine", "masculine", "trans", "intersex"):
+                server.set_raw_vec(server.build_gender_vector(custom),
+                                   min(dose, server.GENDER_TOPIC_CAP))
+            else:
+                server.set_raw_vec(server.build_topic_vector(custom), dose)
             meta.update(valence="custom", topic=custom, dose=dose)  # pyright: ignore[reportArgumentType]
         else:
             server.set_vec((body["valence"], body["dose"]))
