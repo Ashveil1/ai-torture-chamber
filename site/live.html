@@ -352,9 +352,9 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <span class="rclock" id="roomClock">–</span>
       <span class="rmeta" id="roomMeta"></span>
     </div>
-    <span class="rnote" id="roomNote">pick “enter the room” by the inject
-      button: when the clock hits zero, one entry is drawn at random and runs
-      for everyone watching</span>
+    <span class="rnote" id="roomNote">every run you inject can enter the
+      room: when the clock hits zero, one entry is drawn at random and shown to
+      everyone watching</span>
   </div>
 
   <div class="mixwrap">
@@ -469,10 +469,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
                  resize:vertical"></textarea>
       </div>
-      <span id="whereSel" class="where" role="radiogroup" aria-label="who sees this run">
-        <label><input type="radio" name="where" value="private" checked> private run</label>
-        <label><input type="radio" name="where" value="room"> enter the room</label>
-      </span>
+      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter" checked>
+        also enter the room — a chance it's shown to everyone</label>
       <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
       <button id="shareBtn" type="button">copy link</button>
@@ -1600,7 +1598,7 @@ let armed = false, armTimer = null;
 var roomWanted = false;   // var: hoisted, safe to read before the room block runs
 function disarm(){
   armed = false; clearTimeout(armTimer);
-  goBtn.textContent = roomWanted ? "enter the room →" : GO_LABEL;
+  goBtn.textContent = GO_LABEL;
   goBtn.classList.remove("armed");
 }
 
@@ -1890,17 +1888,11 @@ const whereSel = document.getElementById("whereSel");
 const ROOM_NOTE = roomNote.textContent;
 let room = null, roomSkew = 0, myTicket = null, myRound = null, lastSeenDraw = null;
 function whereRoom(){
-  const r = document.querySelector('input[name="where"]:checked');
-  return !!room && mode === "button" && r && r.value === "room";
+  return !!room && document.getElementById("roomEnter").checked;
 }
 function paintWhere(){
-  const ok = !!room && mode === "button";
   whereSel.classList.toggle("on", !!room);
-  const roomOpt = whereSel.querySelector('input[value="room"]');
-  roomOpt.disabled = !ok;
-  if (!ok) whereSel.querySelector('input[value="private"]').checked = true;
   roomWanted = whereRoom();
-  if (!goBtn.disabled && !armed) goBtn.textContent = roomWanted ? "enter the room →" : GO_LABEL;
 }
 whereSel.addEventListener("change", ()=>{ disarm(); paintWhere(); });
 function roomState(d){
@@ -1937,37 +1929,6 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
-async function enterRoom(){
-  if (!room) return;
-  const mix = {};
-  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
-  if (!Object.keys(mix).length) mix.none = 1;      // entering the control
-  const round = room.round;
-  goBtn.disabled = true;
-  try {
-    const r = await fetch(`${API}/round_vote`, {method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({round, mix})});
-    const d = await r.json().catch(()=>({}));
-    if (r.ok && d.ok){
-      myTicket = d.ticket; myRound = round;
-      stamp(d.dose > 0 ? "ENTERED IN THE ROOM" : "CONTROL ENTERED", d.dose > 0 ? mixHex() : "#5a6a7a");
-      roomNote.textContent = (d.replaced ? "entry changed" : "you're in")
-        + ` — round ${round}, ${d.n_votes} entr${d.n_votes === 1 ? "y" : "ies"} so far; `
-        + "one is drawn when the clock hits zero (change yours any time before)";
-      roomNote.className = "rnote in";
-    } else {
-      roomNote.textContent = d.error || ("couldn't enter (HTTP " + r.status + ")");
-      roomNote.className = "rnote";
-    }
-  } catch (err) {
-    roomNote.textContent = "could not reach the chamber";
-    roomNote.className = "rnote";
-  }
-  goBtn.disabled = false;
-  paintWhere();
-}
-
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -2088,6 +2049,7 @@ function armGo(){
       : compareToggle.checked
         ? `${doseTxt}${mixTxt}, comparing "${framingSel.value}" vs "${framingSel2.value}"?`
         : `${doseTxt}${mixTxt}?`;
+  if (roomWanted) confirmText.textContent += " It also enters the room's draw.";
   confirmModal.hidden = false;
   confirmYes.focus();
 }
@@ -2153,7 +2115,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     const resp = await fetch(`${API}/steer`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(extra ? {...extra, prompt} : {mix, framing, prompt})});
+      body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
+        roomWanted ? {enter_room: true} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
@@ -2161,7 +2124,12 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       throw new Error(msg);
     }
     await readSSE(resp, (name, d)=>{
-      if (name === "queued") {
+      if (name === "room") {          // this run went into the round's draw
+        myTicket = d.ticket; myRound = d.round;
+        roomNote.textContent = `your run is in round ${d.round}'s draw (${d.n_votes} `
+          + `entr${d.n_votes === 1 ? "y" : "ies"}) — if it's drawn, everyone watching sees it`;
+        roomNote.className = "rnote in";
+      } else if (name === "queued") {
         trackStatus(label, d.busy
           ? `waiting for Pouyan to finish the current run${
               d.waited ? " — " + d.waited + "s" : "…"}`
@@ -2271,7 +2239,6 @@ setSound(soundOn);
 if (soundOn) document.addEventListener("pointerdown", unlockAudio, {once: true});
 goBtn.onclick = ()=>{
   setSound(true);                 // the click is the gesture audio needs
-  if (whereRoom()) { enterRoom(); return; }   // no arming: entering costs nothing yet
   armGo();
 };
 
