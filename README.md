@@ -1,4 +1,4 @@
-# ai-experiments-lain
+# AI Torture Chamber
 
 **Live: [wirehead.agency](https://wirehead.agency)** — the end-signal probe,
 public pages, and the live steered-model lab.
