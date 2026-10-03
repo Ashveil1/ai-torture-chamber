@@ -43,8 +43,14 @@ class Lab:
         if self.tok.pad_token is None:
             self.tok.pad_token = self.tok.eos_token
         self.tok.padding_side = "right"
+        # pre-quantized checkpoints (e.g. the 70B bnb-4bit) load straight onto
+        # the device; .to() on a 4-bit model raises
+        quant = any(q in model_id for q in ("bnb-4bit", "GPTQ", "AWQ"))
         self.model = transformers.AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=torch.bfloat16).to(device).eval().requires_grad_(False)
+            model_id, dtype=torch.bfloat16, **({"device_map": device} if quant else {}))
+        if not quant:
+            self.model = self.model.to(device)
+        self.model.eval().requires_grad_(False)
         self.layers = self.model.model.layers
         self.layer = layer if layer is not None else len(self.layers) // 2
         self.vec = None
