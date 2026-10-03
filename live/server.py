@@ -1196,6 +1196,14 @@ def _redis():
             return None
     return _REDIS["client"]
 
+def _redis_ok():
+    """True only if Redis actually answers (not merely configured)."""
+    r = _redis()
+    try:
+        return bool(r is not None and r.ping())
+    except Exception:
+        return False
+
 def _bg(fn, *a):
     """Run a Redis write off the event loop when there is one; inline otherwise."""
     if not os.environ.get("REDIS_URL"):
@@ -1310,7 +1318,7 @@ async def _canon_startup():
 def canon(n: int = 6):
     best = sorted(_CANON.values(), key=lambda e: (_canon_score(e), e.get("ts") or 0), reverse=True)
     return JSONResponse({"min": CANON_MIN, "lines": best[:max(1, min(n, 24))],
-                         "durable": bool(os.environ.get("REDIS_URL"))},
+                         "durable": _redis_ok()},
                         headers={"Cache-Control": "public, max-age=30"})
 
 @app.get("/run")
