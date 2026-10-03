@@ -949,6 +949,7 @@ async def steer(req: Request):
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
+    enter_room = bool(body.get("enter_room"))
 
     gpu_state = {"done": False}
 
@@ -1001,15 +1002,20 @@ async def steer(req: Request):
             if got:
                 if not saw_done:
                     yield _sse("error", {"e": "GPU run ended early"})
-                _record_run({"n": None, "source": "user",
-                             "scenario": framing_key,
-                             "valence": ("mix" if mode == "mix" else
-                                         "topic" if mode == "topic" else arg[0]),
-                             "mix": _shares(arg) if mode == "mix" else None,
-                             "dose": dose_label,
-                             "text": "".join(text_parts),
-                             "truncated": False,
-                             "press_logit": plogit, "ts": time.time()})
+                rec = {"n": None, "source": "user",
+                       "scenario": framing_key,
+                       "valence": ("mix" if mode == "mix" else
+                                   "topic" if mode == "topic" else arg[0]),
+                       "mix": _shares(arg) if mode == "mix" else None,
+                       "dose": dose_label,
+                       "text": "".join(text_parts),
+                       "truncated": False,
+                       "press_logit": plogit, "ts": time.time()}
+                _record_run(rec)
+                if enter_room:
+                    entered = _room_enter_run(ip, dict(rec, prompt=prompt))
+                    if entered:
+                        yield _sse("room", entered)
                 gpu_state["done"] = True
                 return
             # zero events: the job never started (endpoint down, auth, cold
@@ -1077,12 +1083,17 @@ async def steer(req: Request):
         finally:
             set_vec(None)
         yield _sse("done", {"dose": meta["dose"], "press_logit": plogit})
-        _record_run({"n": None, "source": "user",
-                     "scenario": meta.get("scenario"),
-                     "valence": meta.get("valence"), "dose": meta.get("dose"),
-                     "mix": meta.get("mix"),
-                     "text": "".join(text_parts), "truncated": False,
-                     "press_logit": plogit, "ts": time.time()})
+        rec = {"n": None, "source": "user",
+               "scenario": meta.get("scenario"),
+               "valence": meta.get("valence"), "dose": meta.get("dose"),
+               "mix": meta.get("mix"),
+               "text": "".join(text_parts), "truncated": False,
+               "press_logit": plogit, "ts": time.time()}
+        _record_run(rec)
+        if enter_room:
+            entered = _room_enter_run(ip, dict(rec, prompt=prompt))
+            if entered:
+                yield _sse("room", entered)
 
     async def gen():
         global _STEER_WAITING
@@ -1410,7 +1421,7 @@ ROUNDS_ON = os.environ.get("CHAMBER_ROUNDS", "0") == "1"
 ROUND_SECS = max(5.0, float(os.environ.get("CHAMBER_ROUND_SECS", "30")))
 ROUND_TICK_S = 2.0          # throttle for "round" broadcasts while votes land
 ROUND_MAX_VOTERS = 20000    # memory bound on one round's ballot box
-_ROUND = {"n": 0, "ends_at": 0.0, "votes": {}, "tickets": {}, "dirty": False,
+_ROUND = {"n": 0, "ends_at": 0.0, "votes": {}, "runs": {}, "tickets": {}, "dirty": False,
           "last_tick": 0.0, "last": None}
 # one round-generation at a time; a round that ends while the previous one
 # is still generating parks its winner here (newest wins) and runs next
@@ -1447,21 +1458,45 @@ def _round_tally(votes):
             "mix": _shares(weights) if total > 0 else {},
             "dose": round(min(dose_cap(), 8.0 * total), 3) if total > 0 else 0.0}
 
-def _round_draw(votes, tickets):
-    """The round's public run: ONE entry drawn at random, so every visitor
-    who entered has the same chance that their exact mix runs for everyone.
-    Returns its weights, shares, dose and ticket (None if nobody entered)."""
-    if not votes:
+def _round_draw(votes, tickets, runs=None):
+    """The round's public moment: ONE entry drawn at random, so every visitor
+    who entered has the same chance. An entry is either a visitor's finished
+    private run (replayed to everyone, no new generation) or a bare mix (run
+    fresh). Returns weights or the run to replay, shares, dose and ticket."""
+    runs = runs or {}
+    pool = sorted(set(votes) | set(runs))
+    if not pool:
         return None
-    voter = random.choice(sorted(votes))
+    voter = random.choice(pool)
+    if voter in runs:
+        e = runs[voter]
+        return {"replay": e, "weights": None, "mix": e.get("mix") or {},
+                "dose": e.get("dose") or 0.0, "n_votes": len(pool),
+                "ticket": tickets.get(voter)}
     t = _round_tally({voter: votes[voter]})
-    return dict(t, n_votes=len(votes), ticket=tickets.get(voter))
+    return dict(t, n_votes=len(pool), ticket=tickets.get(voter))
+
+def _room_enter_run(ip, entry):
+    """Enter a visitor's finished private run into the current round's draw
+    (their latest entry replaces any earlier one). Returns what the visitor
+    needs to recognise a win, or None if rounds are off / nothing to show."""
+    if not ROUNDS_ON or not (entry.get("text") or "").strip():
+        return None
+    _ROUND["votes"].pop(ip, None)
+    _ROUND["runs"][ip] = entry
+    ticket = _ROUND["tickets"].get(ip) or secrets.token_hex(6)
+    _ROUND["tickets"][ip] = ticket
+    _ROUND["dirty"] = True
+    n = len(set(_ROUND["votes"]) | set(_ROUND["runs"]))
+    return {"round": _ROUND["n"], "ticket": ticket, "n_votes": n,
+            "ends_at": _ROUND["ends_at"]}
 
 def _round_state():
     # entries are secret until the draw: no running tally to pile onto
     return {"active": True, "round": _ROUND["n"], "ends_at": _ROUND["ends_at"],
             "secs": ROUND_SECS, "now": time.time(),
-            "n_votes": len(_ROUND["votes"]), "mix": {}, "dose": 0.0,
+            "n_votes": len(set(_ROUND["votes"]) | set(_ROUND["runs"])),
+            "mix": {}, "dose": 0.0,
             "running": _ROUND_GEN["busy"], "last": _ROUND["last"]}
 
 def _round_broadcast(phase):
@@ -1504,6 +1539,7 @@ async def round_vote(req: Request):
         return JSONResponse({"error": "this round's ballot box is full"},
                             status_code=503)
     votes[ip] = weights
+    _ROUND["runs"].pop(ip, None)          # one entry per visitor: the latest
     ticket = _ROUND["tickets"].get(ip) or secrets.token_hex(6)
     _ROUND["tickets"][ip] = ticket
     _ROUND["dirty"] = True
@@ -1542,11 +1578,35 @@ async def _round_run_then_next(round_n, weights):
     finally:
         _ROUND_GEN["busy"] = False
 
+async def _round_replay(round_n, e):
+    """A drawn private run, shown to everyone: its own text, re-streamed word
+    by word into the shared cards. No generation, no GPU."""
+    global _CURRENT
+    meta = {"n": None, "round": round_n, "source": "round", "replay": True,
+            "runner": None, "scenario": e.get("scenario"),
+            "valence": e.get("valence"), "mix": e.get("mix") or {},
+            "dose": e.get("dose"), "prompt": e.get("prompt") or ""}
+    _CURRENT = dict(meta, text="")
+    _broadcast("run", meta)
+    try:
+        for chunk in re.findall(r"\S+\s*", e.get("text") or ""):
+            _CURRENT["text"] += chunk
+            _broadcast("token", {"t": chunk})
+            await asyncio.sleep(0.07)
+    finally:
+        _CURRENT = None
+    _broadcast("done", {"n": None, "round": round_n,
+                        "truncated": bool(e.get("truncated")),
+                        "press_logit": e.get("press_logit"), "dose": e.get("dose")})
+
 async def _round_run(round_n, weights, locked=False):
     """Run the room's winning mix ONCE, broadcast to every viewer. GPU first
     (_runpod_stream, no lock: private injections run as their own jobs),
-    local generation under _STEER_LOCK if the GPU yields nothing."""
+    local generation under _STEER_LOCK if the GPU yields nothing. A drawn
+    private run (a dict carrying its "text") is replayed instead."""
     global _CURRENT
+    if "text" in weights:
+        return await _round_replay(round_n, weights)
     names = list(FRAMINGS)
     scenario = names[_ROUND_FRAMING[0] % len(names)]
     _ROUND_FRAMING[0] += 1
@@ -1661,6 +1721,7 @@ async def _round_loop():
                     _ROUND_RATE.pop(ip, None)
             _ROUND["n"] += 1
             _ROUND["votes"] = {}
+            _ROUND["runs"] = {}
             _ROUND["tickets"] = {}
             _ROUND["ends_at"] = time.time() + ROUND_SECS
             _round_broadcast("start")
@@ -1673,16 +1734,17 @@ async def _round_loop():
                         >= ROUND_TICK_S):
                     _round_broadcast("tick")
             # tally and announce synchronously: no vote can land in between
-            n, votes = _ROUND["n"], _ROUND["votes"]
-            t = _round_draw(votes, _ROUND["tickets"])
-            _ROUND["last"] = {"round": n, "n_votes": len(votes),
+            n, votes, runs = _ROUND["n"], _ROUND["votes"], _ROUND["runs"]
+            t = _round_draw(votes, _ROUND["tickets"], runs)
+            _ROUND["last"] = {"round": n, "n_votes": t["n_votes"] if t else 0,
                               "mix": t["mix"] if t else {},
                               "dose": t["dose"] if t else 0.0,
                               "ticket": t["ticket"] if t else None,
-                              "skipped": not votes}
+                              "replay": bool(t and t.get("replay")),
+                              "skipped": not t}
             _round_broadcast("end")
             if t:
-                _round_launch(n, t["weights"])
+                _round_launch(n, t.get("replay") or t["weights"])
         except asyncio.CancelledError:
             raise
         except Exception as e:     # a bug in one round must not end rounds
