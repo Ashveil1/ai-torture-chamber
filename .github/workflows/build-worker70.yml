@@ -37,5 +37,6 @@ jobs:
           tags: |
             ghcr.io/terrafying/saw-chamber-worker-70b:v3
             ghcr.io/terrafying/saw-chamber-worker-70b:latest
+            ghcr.io/terrafying/saw-chamber-worker-70b:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
