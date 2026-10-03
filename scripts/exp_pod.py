@@ -19,14 +19,15 @@ ap.add_argument("--models", default=None,
                      "a failed model (marker FAILED_<name>), instead of the smoke/4B/big chain")
 ap.add_argument("--volume", type=int, default=80)
 ap.add_argument("--branch", default=None, help="git branch to clone (default: the repo's default branch)")
+ap.add_argument("--extra", default="", help="extra args appended to every script invocation")
 ap.add_argument("--pod", default=None, help="update this existing pod's start command instead of creating one")
 args = ap.parse_args()
 EXP = args.script.split("_")[0]          # e.g. exp49
 if args.models:   # per-model smoke then full; a failed model is marked and skipped
     RUNS = "\n".join(
         f"n={m.split('/')[-1]}; log \"$n\"; "
-        f"python {{SCRIPT}} --smoke --device cuda --model {m} > runs/{{EXP}}/$n.smoke.log 2>&1 && "
-        f"python {{SCRIPT}} --device cuda --model {m} > runs/{{EXP}}/$n.log 2>&1 "
+        f"python {{SCRIPT}} --smoke --device cuda --model {m} {args.extra} > runs/{{EXP}}/$n.smoke.log 2>&1 && "
+        f"python {{SCRIPT}} --device cuda --model {m} {args.extra} > runs/{{EXP}}/$n.log 2>&1 "
         f"|| {{ log \"$n FAILED\"; touch runs/{{EXP}}/FAILED_$n; }}"
         for m in args.models.split(","))
 else:

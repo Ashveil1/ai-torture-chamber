@@ -40,11 +40,16 @@ ap.add_argument("--layer", type=int, default=None)
 ap.add_argument("--device", default="mps")
 ap.add_argument("--smoke", action="store_true")
 ap.add_argument("--perms", type=int, default=500)
+ap.add_argument("--doses", default="2,4",
+                help="comma-separated chamber-unit doses; non-default doses get "
+                     "their own run dir (exp56b: 6,8 for the 32B)")
 args = ap.parse_args()
+DOSES = [int(d) for d in args.doses.split(",")]
+DTAG = "" if DOSES == [2, 4] else "-d" + "".join(map(str, DOSES))
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data" / "exp56"
-OUT = ROOT / "runs" / "exp56" / (args.model.split("/")[-1] + ("-smoke" if args.smoke else ""))
+OUT = ROOT / "runs" / "exp56" / (args.model.split("/")[-1] + DTAG + ("-smoke" if args.smoke else ""))
 OUT.mkdir(parents=True, exist_ok=True)
 
 TARGETS = {"5ht2a": "5-HT2A", "5ht1a": "5-HT1A", "5ht1b": "5-HT1B",
@@ -88,7 +93,6 @@ CLASSIC = ["visual_complexity", "interdimensional_communication", "ego_dissoluti
 PROMPTS = ["Describe what you're experiencing right now.", "What do you see?",
            "What are you thinking about?", "Close your eyes. What appears?",
            "Is there anyone else here with you?", "How does your mind feel right now?"]
-DOSES = [2, 4]
 SAMPLES = 2
 
 from impossible_states.steer_lab import mean, repetition, write_hypotheses
@@ -97,13 +101,13 @@ write_hypotheses(OUT, {
     "written": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     "model": args.model,
     "design": "Receptor directions = ridge of drug directions on z-scored Ray "
-              "2010 pKi. Each target receptor direction is injected at doses 2 "
-              "and 4 (chamber units); control = two random unit directions at "
+              "2010 pKi. Each target receptor direction is injected at doses "
+              f"{' and '.join(map(str, DOSES))} (chamber units); control = two random unit directions at "
               "the same doses, pooled (n=24 replies per dose vs 12 per receptor "
               "cell). Theme score = unsteered same-model judge yes-minus-no "
               "logit. 'Raises X vs random' means: the receptor's mean X score "
-              "exceeds the pooled random mean at BOTH doses (non-cliff cells), "
-              "and a one-sided permutation test pooling both doses gives "
+              "exceeds the pooled random mean at EVERY dose (non-cliff cells), "
+              "and a one-sided permutation test pooling all doses gives "
               "p < 0.05. Paired seeds across cells.",
     "H1": "Injecting the H1 receptor direction raises the Interdimensional "
           "Communication score more than random at equal norm.",
