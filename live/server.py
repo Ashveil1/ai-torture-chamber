@@ -570,6 +570,8 @@ def _next_chunk(it):
     boundary (PEP 479 turns it into a RuntimeError), so use a sentinel."""
     return next(it, _DONE)
 
+CONVO_REP_PENALTY = float(os.environ.get("CHAMBER_CONVO_REP_PENALTY", "1.12"))
+
 def chat_prompt(text, system=None):
     """Wrap a message in the served model's own chat template, so the steered
     model replies to it as a conversation turn instead of continuing raw
@@ -910,28 +912,39 @@ async def steer(req: Request):
         # that has nothing to do with an arbitrary topic direction — default
         # to a plain continuation instead of asking an irrelevant question
         framing_key = None
-        prompt = "Continue naturally from here:"
+        prompt = "Tell me what is on your mind right now."
     else:
         framing_key = None
         prompt = BASE
+    # topic runs and visitor-written prompts are conversation, not the button
+    # experiment: the model answers them as a chat turn with a light
+    # repetition penalty (raw continuation looped even at dose 2 on the 4B).
+    # The button framings stay raw — their high-dose breakdown is the finding.
+    conversational = mode == "topic" or (bool(raw_prompt) and framing_key is None)
+    gen_prompt = chat_prompt(prompt) if conversational else prompt
+    rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
 
     async def _run_steer():
         """The actual injected run, assuming _STEER_LOCK is already held.
-        Shared by both the preempting and polite paths below. Single-valence
-        and mix runs are delegated to the RunPod serverless endpoint (the
-        GPU worker owns the model); topic runs are local-only (their steering
-        vector is built on the relay's own model). If the GPU job produces
-        no events at all, fall back to generating locally."""
+        Shared by both the preempting and polite paths below. Single-valence,
+        mix and topic runs are delegated to the RunPod serverless endpoint
+        (the GPU worker owns the model and builds topic vectors on it). If
+        the GPU job produces no events at all, fall back to generating
+        locally on the relay's own model."""
         loop = asyncio.get_event_loop()
         assert arg is not None   # every mode above pairs a non-None arg
-        if mode in ("mix", "single") and _RUNPOD_URL and _RUNPOD_KEY:
+        if _RUNPOD_URL and _RUNPOD_KEY:
             if mode == "mix":
                 job = {"prompt": prompt, "mix": arg}
+            elif mode == "topic":     # the worker builds the topic vector itself
+                job = {"prompt": prompt, "custom": {"topic": arg[0]}, "dose": arg[1]}
             else:
                 valence, dose = arg
                 job = {"prompt": prompt, "valence": valence, "dose": dose}
+            if conversational:
+                job.update(chat=True, rep_penalty=CONVO_REP_PENALTY)
             got = False
             saw_done = False
             text_parts = []
@@ -964,8 +977,8 @@ async def steer(req: Request):
                     yield _sse("error", {"e": "GPU run ended early"})
                 _record_run({"n": None, "source": "user",
                              "scenario": framing_key,
-                             "valence": "mix" if mode == "mix"
-                                        else arg[0],
+                             "valence": ("mix" if mode == "mix" else
+                                         "topic" if mode == "topic" else arg[0]),
                              "mix": _shares(arg) if mode == "mix" else None,
                              "dose": dose_label,
                              "text": "".join(text_parts),
@@ -1009,20 +1022,20 @@ async def steer(req: Request):
         yield _sse("run", meta)
         try:
             lens_toks = await loop.run_in_executor(
-                None, lens_readback, prompt)
+                None, lens_readback, gen_prompt)
         except Exception as e:
             print("lens readback failed:", repr(e), flush=True)
             lens_toks = None
         if lens_toks is not None:
             yield _sse("lens", {"tokens": lens_toks})
         try:
-            plogit = await loop.run_in_executor(None, press_logit, prompt)
+            plogit = await loop.run_in_executor(None, press_logit, gen_prompt)
         except Exception as e:
             print("press_logit failed:", repr(e), flush=True)
             plogit = None
         text_parts = []
         try:
-            it = stream_generate(prompt)
+            it = stream_generate(gen_prompt, rep_penalty=rep_penalty)
             while True:
                 chunk = await loop.run_in_executor(None, _next_chunk, it)
                 if chunk is _DONE:
