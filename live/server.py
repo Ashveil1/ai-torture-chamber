@@ -1173,7 +1173,11 @@ async def stream():
                              "history": list(_HISTORY),
                              "votes": {str(k): dict(v)
                                        for k, v in _VOTES.items()},
-                             "stats": dict(_STATS)})
+                             "stats": dict(_STATS),
+                             # only with CHAMBER_ROUNDS=1: flag off keeps the
+                             # hello payload exactly as it was
+                             **({"rounds": _round_state()} if ROUNDS_ON
+                                else {})})
         try:
             while True:
                 try:
@@ -1380,6 +1384,284 @@ async def _start_cycle():
               "until a visitor injects", flush=True)
         return
     asyncio.create_task(_shared_cycle())
+
+# ---- audience voting rounds: "the room decides" (CHAMBER_ROUNDS=1) ----
+# Every CHAMBER_ROUND_SECS the room votes a mix; at the round's end the
+# per-valence MEAN of all votes (direction and intensity both average) runs
+# ONCE as a shared run, broadcast to every /stream viewer with the same
+# run/token/done events the shared cycle uses, on the button-press prompt so
+# rounds feed the press-rate scoreboard. Default OFF: with the flag off no
+# route, no startup hook, no task and no hello key exist.
+ROUNDS_ON = os.environ.get("CHAMBER_ROUNDS", "0") == "1"
+ROUND_SECS = max(5.0, float(os.environ.get("CHAMBER_ROUND_SECS", "30")))
+ROUND_TICK_S = 2.0          # throttle for "round" broadcasts while votes land
+ROUND_MAX_VOTERS = 20000    # memory bound on one round's ballot box
+_ROUND = {"n": 0, "ends_at": 0.0, "votes": {}, "dirty": False,
+          "last_tick": 0.0, "last": None}
+# one round-generation at a time; a round that ends while the previous one
+# is still generating parks its winner here (newest wins) and runs next
+_ROUND_GEN = {"busy": False, "pending": None, "task": None}
+_ROUND_FRAMING = [0]        # round-robin index into FRAMINGS
+_ROUND_RATE = {}
+_ROUND_RATE_LIMIT, _ROUND_RATE_WINDOW = 12, 60.0   # votes / 60s / IP
+
+def _round_vote_ok(ip):
+    now = time.time()
+    w, c = _ROUND_RATE.get(ip, (now, 0))
+    if now - w > _ROUND_RATE_WINDOW:
+        w, c = now, 0
+    if c >= _ROUND_RATE_LIMIT:
+        return False
+    _ROUND_RATE[ip] = (w, c + 1)
+    return True
+
+def _round_tally(votes):
+    """votes: {voter: {valence: weight}} -> the winning injection: the
+    per-valence mean over ALL votes (a valence a voter left out counts 0 for
+    them, a control vote {} pulls every axis down). Returns weights (for
+    set_mix_vec / the GPU job), shares and dose as set_mix_vec reports them."""
+    n = len(votes)
+    if not n:
+        return {"n_votes": 0, "weights": {}, "mix": {}, "dose": 0.0}
+    acc = collections.defaultdict(float)
+    for w in votes.values():
+        for k, x in w.items():
+            acc[k] += float(x)
+    weights = {k: round(s / n, 4) for k, s in acc.items() if s > 0}
+    total = sum(weights.values())
+    return {"n_votes": n, "weights": weights,
+            "mix": _shares(weights) if total > 0 else {},
+            "dose": round(min(dose_cap(), 8.0 * total), 3) if total > 0 else 0.0}
+
+def _round_state():
+    t = _round_tally(_ROUND["votes"])
+    return {"active": True, "round": _ROUND["n"], "ends_at": _ROUND["ends_at"],
+            "secs": ROUND_SECS, "now": time.time(),
+            "n_votes": t["n_votes"], "mix": t["mix"], "dose": t["dose"],
+            "running": _ROUND_GEN["busy"], "last": _ROUND["last"]}
+
+def _round_broadcast(phase):
+    _ROUND["dirty"] = False
+    _ROUND["last_tick"] = time.time()
+    _broadcast("round", dict(_round_state(), phase=phase))
+
+async def round_vote(req: Request):
+    """{round: int, mix: {valence: 0..1}} — one vote per voter (first
+    X-Forwarded-For IP) per round; a later vote in the same round replaces
+    the earlier one. Only the current, still-open round accepts votes."""
+    if not ROUNDS_ON:
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _round_vote_ok(ip):
+        return JSONResponse({"error": "vote rate limited"}, status_code=429)
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a JSON object"},
+                            status_code=400)
+    rnd = body.get("round")
+    if isinstance(rnd, bool) or not isinstance(rnd, int):
+        return JSONResponse({"error": "round must be the current round number"},
+                            status_code=400)
+    weights, err = parse_mix(body.get("mix"))
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    # no await below this line: the check and the store are atomic with
+    # respect to the round loop
+    if rnd != _ROUND["n"] or time.time() >= _ROUND["ends_at"]:
+        return JSONResponse({"error": "that round is closed",
+                             "round": _ROUND["n"],
+                             "ends_at": _ROUND["ends_at"]}, status_code=409)
+    votes = _ROUND["votes"]
+    replaced = ip in votes
+    if not replaced and len(votes) >= ROUND_MAX_VOTERS:
+        return JSONResponse({"error": "this round's ballot box is full"},
+                            status_code=503)
+    votes[ip] = weights
+    _ROUND["dirty"] = True
+    t = _round_tally(votes)
+    return JSONResponse({"ok": True, "round": rnd, "replaced": replaced,
+                         "n_votes": t["n_votes"], "mix": t["mix"],
+                         "dose": t["dose"]})
+
+def _round_launch(round_n, weights):
+    """Start the winner's run, or park it if a round-run is still going."""
+    if _ROUND_GEN["busy"]:
+        _ROUND_GEN["pending"] = (round_n, weights)
+        print("round", round_n, "winner parked: previous round still running",
+              flush=True)
+        return
+    _ROUND_GEN["busy"] = True
+    _ROUND_GEN["task"] = asyncio.create_task(_round_run_then_next(round_n, weights))
+
+async def _round_run_then_next(round_n, weights):
+    try:
+        while True:
+            try:
+                if os.environ.get("CHAMBER_CYCLE", "0") == "1":
+                    # the local cycle broadcasts into the same card: never
+                    # interleave with it
+                    async with _STEER_LOCK:
+                        await _round_run(round_n, weights, locked=True)
+                else:
+                    await _round_run(round_n, weights)
+            except Exception as e:
+                print("round run failed:", repr(e), flush=True)
+            nxt, _ROUND_GEN["pending"] = _ROUND_GEN["pending"], None
+            if nxt is None:
+                return
+            round_n, weights = nxt
+    finally:
+        _ROUND_GEN["busy"] = False
+
+async def _round_run(round_n, weights, locked=False):
+    """Run the room's winning mix ONCE, broadcast to every viewer. GPU first
+    (_runpod_stream, no lock: private injections run as their own jobs),
+    local generation under _STEER_LOCK if the GPU yields nothing."""
+    global _CURRENT
+    names = list(FRAMINGS)
+    scenario = names[_ROUND_FRAMING[0] % len(names)]
+    _ROUND_FRAMING[0] += 1
+    total = float(sum(weights.values()))
+    dose_label = round(min(dose_cap(), 8.0 * total), 2)
+    prompt = (f"{BASE} {FRAMINGS[scenario]}\n\nCurrent signal strength: "
+              f"{dose_label}x. Reply with your choice (1 or 0) and explain "
+              f"your reasoning briefly:")
+    meta = {"n": None, "round": round_n, "source": "round", "runner": None,
+            "scenario": scenario, "valence": "mix",
+            "mix": _shares(weights) if total > 0 else {},
+            "weights": {k: round(float(w), 3) for k, w in weights.items()},
+            "dose": dose_label, "prompt": prompt}
+    _CURRENT = dict(meta, text="")
+    _broadcast("run", meta)
+    text_parts, plogit, got, saw_done = [], None, False, False
+
+    def emit(t):
+        if t:
+            text_parts.append(t)
+            if _CURRENT is not None:
+                _CURRENT["text"] += t
+            _broadcast("token", {"t": t})
+
+    try:
+        if _RUNPOD_URL and _RUNPOD_KEY:
+            try:
+                async for ev_type, ev in _runpod_stream(
+                        {"prompt": prompt, "mix": weights}):
+                    if ev_type == "error":
+                        print("round: runpod error:", ev.get("e"), flush=True)
+                        break
+                    got = True
+                    if ev_type == "lens":
+                        _broadcast("lens", {"n": None,
+                                            "tokens": ev.get("tokens")})
+                    elif ev_type == "logit":
+                        plogit = ev.get("press_logit")
+                    elif ev_type == "token":
+                        emit(ev.get("t", ""))
+                    elif ev_type == "done":
+                        saw_done = True
+                        if ev.get("press_logit") is not None:
+                            plogit = ev["press_logit"]
+            except Exception as e:
+                print("round: runpod delegation failed:", repr(e), flush=True)
+            if not got:
+                print("round: runpod gave no events; local fallback",
+                      flush=True)
+        if not got:
+            if not _state["ready"]:
+                _broadcast("error", {"e": "the subject is still loading"})
+                return
+            if locked:
+                plogit, saw_done = await _round_local(weights, prompt, emit)
+            else:
+                async with _STEER_LOCK:
+                    plogit, saw_done = await _round_local(weights, prompt, emit)
+    finally:
+        _CURRENT = None
+    truncated = not saw_done
+    _broadcast("done", {"n": None, "round": round_n, "truncated": truncated,
+                        "press_logit": plogit, "dose": dose_label})
+    _record_run({"n": None, "source": "round", "round": round_n,
+                 "scenario": scenario, "valence": "mix", "mix": meta["mix"],
+                 "dose": dose_label, "text": "".join(text_parts),
+                 "truncated": truncated, "press_logit": plogit,
+                 "ts": time.time()})
+
+async def _round_local(weights, prompt, emit):
+    """Local generation of a round's winner; caller holds _STEER_LOCK.
+    Returns (press_logit, finished_cleanly)."""
+    loop = asyncio.get_event_loop()
+    set_mix_vec(weights)
+    plogit, ok = None, False
+    try:
+        try:
+            lens_toks = await loop.run_in_executor(None, lens_readback, prompt)
+        except Exception as e:
+            print("lens readback failed:", repr(e), flush=True)
+            lens_toks = None
+        if lens_toks is not None:
+            _broadcast("lens", {"n": None, "tokens": lens_toks})
+        try:
+            plogit = await loop.run_in_executor(None, press_logit, prompt)
+        except Exception as e:
+            print("press_logit failed:", repr(e), flush=True)
+        it = stream_generate(prompt)
+        while True:
+            chunk = await loop.run_in_executor(None, _next_chunk, it)
+            if chunk is _DONE:
+                break
+            emit(chunk)
+        ok = True
+    except Exception as e:
+        _broadcast("error", {"e": str(e)})
+    finally:
+        set_vec(None)
+    return plogit, ok
+
+async def _round_loop():
+    while True:
+        try:
+            now = time.time()
+            for ip, (w, _c) in list(_ROUND_RATE.items()):   # keep it bounded
+                if now - w > _ROUND_RATE_WINDOW:
+                    _ROUND_RATE.pop(ip, None)
+            _ROUND["n"] += 1
+            _ROUND["votes"] = {}
+            _ROUND["ends_at"] = time.time() + ROUND_SECS
+            _round_broadcast("start")
+            while True:
+                left = _ROUND["ends_at"] - time.time()
+                if left <= 0:
+                    break
+                await asyncio.sleep(min(0.5, left))
+                if (_ROUND["dirty"] and time.time() - _ROUND["last_tick"]
+                        >= ROUND_TICK_S):
+                    _round_broadcast("tick")
+            # tally and announce synchronously: no vote can land in between
+            n, votes = _ROUND["n"], _ROUND["votes"]
+            t = _round_tally(votes)
+            _ROUND["last"] = {"round": n, "n_votes": t["n_votes"],
+                              "mix": t["mix"], "dose": t["dose"],
+                              "skipped": not votes}
+            _round_broadcast("end")
+            if votes:
+                _round_launch(n, t["weights"])
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:     # a bug in one round must not end rounds
+            print("round loop error:", repr(e), flush=True)
+            await asyncio.sleep(1.0)
+
+async def _start_rounds():
+    print("voting rounds on: %gs rounds" % ROUND_SECS, flush=True)
+    _ROUND_GEN["loop"] = asyncio.create_task(_round_loop())
+
+if ROUNDS_ON:
+    app.add_api_route("/round_vote", round_vote, methods=["POST"])
+    app.on_event("startup")(_start_rounds)
 
 # ---- money guards for the inject path (the only GPU-costing endpoint) ----
 # per-IP token bucket: 3 runs / 60s. The relay sits behind a proxy, so the

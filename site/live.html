@@ -283,6 +283,26 @@
   .vplay:hover{border-color:#5a4f3a;color:#cbbf9f}
   .soundbtn{margin:0 0 1.2rem}
   .soundbtn.on{border-color:#c9a227;color:#c9a227}
+  /* ---- audience voting rounds: only shown when the relay says rounds are
+     on (hello/round events carry the state) ---- */
+  #room{display:none;border:1px solid #2a3644;border-radius:6px;background:#07070e;
+    padding:.6rem .8rem;margin:.7rem 0 .2rem;font-size:.74rem}
+  #room.on{display:block}
+  #room .rhead{display:flex;flex-wrap:wrap;gap:.3rem .9rem;align-items:baseline}
+  #room .rtitle{color:#eafcf7;font-weight:600;letter-spacing:.04em}
+  #room .rclock{color:var(--pain2);font-weight:600;font-variant-numeric:tabular-nums}
+  #room .rmeta{color:var(--faint)}
+  #room .rtally{margin:.45rem 0 .3rem}
+  #room .rtally .mrow{margin-bottom:.2rem}
+  #room .rdose{color:var(--dim);margin:.2rem 0 .45rem;word-break:break-word}
+  #roomVote{background:none;border:1px solid #eafcf7;color:#eafcf7;
+    font-family:var(--mono);font-size:.74rem;padding:.3rem .8rem;
+    border-radius:4px;cursor:pointer}
+  #roomVote:hover{background:#0f1a1c}
+  #roomVote[disabled]{opacity:.55;cursor:default}
+  #room .rnote{color:var(--faint);margin-left:.6rem}
+  #room .rnote.in{color:var(--pleas)}
+  @media(max-width:480px){#room .rnote{display:block;margin:.4rem 0 0}}
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
 </style>
@@ -308,6 +328,19 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   <b style="color:#eafcf7">cause it yourself:</b>
   <span style="font-size:.75rem;color:#5a6a7a">set a dose; injecting
   interrupts the current run</span>
+
+  <div id="room" aria-live="polite">
+    <div class="rhead">
+      <span class="rtitle">the room decides</span>
+      <span class="rclock" id="roomClock">–</span>
+      <span class="rmeta" id="roomMeta"></span>
+    </div>
+    <div class="rtally" id="roomTally"></div>
+    <div class="rdose" id="roomDose"></div>
+    <button id="roomVote" type="button">vote with this mix</button>
+    <span class="rnote" id="roomNote">everyone's votes are averaged; the
+      room's mix runs once when the clock hits zero</span>
+  </div>
 
   <div class="mixwrap">
     <svg id="pent" viewBox="-22 -4 384 346" role="group"
@@ -753,6 +786,17 @@ function headerFor(n){
   return "Pouyan" + (nick ? ` ("${nick}")` : "")
     + (n == null ? "" : " · run " + n);
 }
+// voting rounds: the room's winning mix arrives as an ordinary broadcast run
+// tagged source "round" — say so on the card
+function roomSuffix(s){
+  return s.source === "round"
+    ? " · the room's choice" + (s.round != null ? " (round " + s.round + ")" : "") : "";
+}
+function runField(s){
+  if (s.source === "round") return "the room's choice"
+    + (s.round != null ? " · round " + s.round : "");
+  return (s.n == null) ? "–" : s.n;
+}
 const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
 const cardsEl = document.getElementById("cards");
 const cycleEl = document.getElementById("cycle");
@@ -1018,7 +1062,7 @@ function paintKV(s, fields){
 function fieldsFor(s, pressLogit){
   return {scenario: s.scenario ?? s.scenarioName ?? "–",
           dose: valLabel(s.valence, s.mix) + " " + (s.doseNum ?? 0) + " / 8",
-          run: (s.n == null) ? "–" : s.n,
+          run: runField(s),
           answer: pressLabel(s.out.textContent, s.truncated),
           press: (pressLogit == null) ? "–"
             : ((pressLogit > 0 ? "+" : "") + Number(pressLogit).toFixed(2))};
@@ -1030,7 +1074,9 @@ function finish(s, truncated, pressLogit){
   s.truncated = !!truncated;
   if (pressLogit != null) s.pressLogit = pressLogit;
   s.st.textContent = truncated
-    ? "cut short mid-run" : "finished · between runs";
+    ? "cut short mid-run"
+    : s.source === "round" ? "the room's choice · finished"
+    : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
   paintPressBtn(s, s.out.textContent, truncated);
   statePaint(s, s.doseNum, pressedOnce(s.out.textContent), true);
@@ -1045,9 +1091,10 @@ function finish(s, truncated, pressLogit){
 // next run happens to start. Rendered as already-finished, never "live".
 function seedCard(s, entry){
   s.live = false;
-
-  s.h.textContent = headerFor(entry.n);
-  s.st.textContent = "finished · between runs";
+  s.source = entry.source || null; s.round = entry.round ?? null;
+  s.h.textContent = headerFor(entry.n) + roomSuffix(s);
+  s.st.textContent = s.source === "round"
+    ? "the room's choice · finished" : "finished · between runs";
   s.st.className = "st";
   s.out.textContent = entry.text || "";
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
@@ -1080,9 +1127,13 @@ function beginRun(d){
   liveIdx = nextSlot;
   nextSlot = (nextSlot + 1) % CARDS;
   s.live = true;
-
-  s.h.textContent = headerFor(d.n);
-  s.st.textContent = "LIVE · signal injected";
+  // declared before first use: statePaint below reads it (it used to sit
+  // further down, a temporal-dead-zone ReferenceError on every run event)
+  const dose = Number(d.dose) || 0;
+  s.source = d.source || null; s.round = d.round ?? null;
+  s.h.textContent = headerFor(d.n) + roomSuffix(s);
+  s.st.textContent = s.source === "round"
+    ? "LIVE · the room's choice" : "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
   s.out.textContent = d.text || ""; clearVoice(s.out);
@@ -1104,17 +1155,19 @@ function beginRun(d){
   s.valence = d.valence || null; s.mix = d.mix || null;
   s.prompt = "";                  // this run's prompt, stored fresh
   setPrompt(s, d.prompt);
-  const dose = Number(d.dose) || 0;
   s.doseNum = dose;
   s.vitals.setDose(dose);
   s.vitals.setLive(true);
   s.dose.innerHTML = doseBarHTML(dose)
     + ` ${valLabel(d.valence, d.mix)} ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
   paintKV(s, {scenario: d.scenario ?? "–", dose: valLabel(d.valence, d.mix) + " " + dose + " / 8",
-              run: (d.n == null) ? "–" : d.n, answer: "generating…",
+              run: runField(s), answer: "generating…",
               press: "–"});
   maxRunSeen = Math.max(maxRunSeen, Number(d.n) || 0); paintSofar();
-  cycleEl.textContent = `run ${d.n == null ? "?" : d.n} — scenario: `
+  cycleEl.textContent = s.source === "round"
+    ? `the room's choice — round ${s.round ?? "?"} — scenario: `
+      + `${d.scenario || "?"} — dose ${dose}x`
+    : `run ${d.n == null ? "?" : d.n} — scenario: `
     + `${d.scenario || "?"} — dose ${dose}x  ·  cycling `
     + `${FRAMINGS.length} framings × ${DOSES.length} doses`;
   return s;
@@ -1209,7 +1262,9 @@ function historyRow(h){
   item.dataset.uid = h.uid ?? "";
   const row = document.createElement("div");
   row.className = "hrow";
-  const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
+  const label = h.source === "user" ? "you caused it"
+    : h.source === "round" ? "the room's choice · " + (h.scenario || "?")
+    : (h.scenario || "?");
   const color = h.valence === "pleasure" ? "#7fd4c8"
     : h.valence === "faith" ? "#e9d9a0"
     : h.valence === "mix" ? "#8f6fd4" : "#e04a3a";
@@ -1365,6 +1420,7 @@ function pump(){
         if (nick && nn) nick.textContent = nameFor(nn) || nick.textContent;
       });
     }
+    roomState(d.rounds || null);
     if (d.votes){ allVotes = d.votes;
       Object.entries(allVotes).forEach(([uid, c])=>paintVotes(Number(uid), c)); }
     // joined mid-run: repaint the card the run event already went out for
@@ -1420,6 +1476,7 @@ function pump(){
       paintVotes(d.uid, c);
     }
   });
+  es.addEventListener("round", e=>{ mark(); roomState(json(e)); });
   es.addEventListener("run",   e=>{ mark(); beginRun(json(e)); });
   es.addEventListener("token", e=>{ mark(); onToken(json(e).t); });
   es.addEventListener("ping",  e=>{ mark(); });
@@ -1791,6 +1848,89 @@ document.querySelectorAll(".pchip").forEach(b=>{
 });
 applyPreset("pain4");   // an opening shape, not a blank hexagon
 paint();
+
+// ---- voting rounds ("the room decides"): shown only while the relay's
+// hello/round events say rounds are on. A vote casts the current mixer
+// weights W for the current round; re-voting replaces it. The room's mean
+// mix runs once at the round's end and arrives as a normal broadcast run.
+const roomEl = document.getElementById("room");
+const roomClock = document.getElementById("roomClock");
+const roomMeta = document.getElementById("roomMeta");
+const roomTally = document.getElementById("roomTally");
+const roomDose = document.getElementById("roomDose");
+const roomVote = document.getElementById("roomVote");
+const roomNote = document.getElementById("roomNote");
+const ROOM_NOTE = roomNote.textContent;
+let room = null, roomSkew = 0, myVoteRound = null;
+function axisColor(k){
+  const a = AXES.find(x=> x.k === k);
+  return a ? a.c : "#8f9fb0";
+}
+function roomState(d){
+  if (!d || !d.active){ room = null; roomEl.classList.remove("on"); return; }
+  if (typeof d.now === "number") roomSkew = d.now * 1000 - Date.now();
+  if (room && d.round !== room.round && myVoteRound !== d.round){
+    roomNote.textContent = ROOM_NOTE; roomNote.className = "rnote";
+    roomVote.textContent = "vote with this mix";
+  }
+  room = d;
+  roomEl.classList.add("on");
+  const esc = t => String(t).replace(/[&<>]/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const parts = mixParts(d.mix).slice(0, 3);
+  roomTally.innerHTML = parts.length ? parts.map(([k, w])=>
+      `<div class="mrow"><span class="nm" style="color:${axisColor(k)}">${esc(k)}</span>`
+      + `<span class="track"><span class="fillb" style="width:${(100 * w).toFixed(0)}%;`
+      + `background:${axisColor(k)}"></span></span>`
+      + `<span class="pc">${(100 * w).toFixed(0)}%</span></div>`).join("")
+    : `<div class="mrow" style="color:var(--faint)">${d.n_votes
+        ? "the room is voting for no signal (control)" : "no votes yet this round"}</div>`;
+  const dose = Number(d.dose) || 0;
+  roomDose.innerHTML = doseBarHTML(dose) + ` room's dose ${dose.toFixed(1)}× of 8`;
+  const last = d.last;
+  roomMeta.textContent = `round ${d.round} · ${d.n_votes} vote${d.n_votes === 1 ? "" : "s"}`
+    + (d.running ? " · the last round's choice is running" : "")
+    + (last && last.round !== d.round
+        ? (last.skipped ? ` · round ${last.round}: nobody voted`
+           : ` · round ${last.round}: ${last.n_votes} vote${last.n_votes === 1 ? "" : "s"}, `
+             + `${valLabel("mix", last.mix)} ${Number(last.dose).toFixed(1)}×`) : "");
+  paintRoomClock();
+}
+function paintRoomClock(){
+  if (!room) return;
+  const left = Math.max(0, Math.ceil((room.ends_at * 1000 - (Date.now() + roomSkew)) / 1000));
+  roomClock.textContent = left > 0 ? `${left}s left` : "counting…";
+}
+setInterval(paintRoomClock, 250);
+roomVote.addEventListener("click", async ()=>{
+  if (!room) return;
+  const mix = {};
+  AXES.forEach(a=>{ if (!a.derived && W[a.k] > 0) mix[a.k] = +W[a.k].toFixed(3); });
+  if (!Object.keys(mix).length) mix.none = 1;      // a vote for the control
+  const round = room.round;
+  roomVote.disabled = true;
+  try {
+    const r = await fetch(`${API}/round_vote`, {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({round, mix})});
+    const d = await r.json().catch(()=>({}));
+    if (r.ok && d.ok){
+      myVoteRound = round;
+      roomNote.textContent = "your vote is in — change it any time this round";
+      roomNote.className = "rnote in";
+      roomVote.textContent = "change my vote to this mix";
+      if (room && room.round === round)
+        roomState({...room, n_votes: d.n_votes, mix: d.mix, dose: d.dose});
+    } else {
+      roomNote.textContent = d.error || ("vote failed (HTTP " + r.status + ")");
+      roomNote.className = "rnote";
+    }
+  } catch (err) {
+    roomNote.textContent = "could not reach the chamber to vote";
+    roomNote.className = "rnote";
+  }
+  roomVote.disabled = false;
+});
 
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
