@@ -571,6 +571,7 @@ def _next_chunk(it):
     return next(it, _DONE)
 
 CONVO_REP_PENALTY = float(os.environ.get("CHAMBER_CONVO_REP_PENALTY", "1.12"))
+CHAT_ALL = os.environ.get("CHAMBER_CHAT_ALL", "0") == "1"
 
 def chat_prompt(text, system=None):
     """Wrap a message in the served model's own chat template, so the steered
@@ -941,7 +942,9 @@ async def steer(req: Request):
     # experiment: the model answers them as a chat turn with a light
     # repetition penalty (raw continuation looped even at dose 2 on the 4B).
     # The button framings stay raw — their high-dose breakdown is the finding.
-    conversational = mode == "topic" or (bool(raw_prompt) and framing_key is None)
+    # CHAMBER_CHAT_ALL=1 (set when the GPU serves a chat-tuned model like
+    # Hermes-70B, which echoes raw prompts back) makes every run a chat turn
+    conversational = CHAT_ALL or mode == "topic" or (bool(raw_prompt) and framing_key is None)
     gen_prompt = chat_prompt(prompt) if conversational else prompt
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
