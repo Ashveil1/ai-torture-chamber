@@ -35,6 +35,7 @@
   .sub{color:var(--dim);font-size:.88rem;margin-bottom:1.6rem}
   .grid{display:grid;grid-template-columns:1fr;gap:1rem}
   @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
+  #cards.grid{grid-template-columns:1fr}   /* one subject, one card */
   .card{border:1px solid var(--line);border-radius:8px;background:var(--panel);
     padding:.9rem 1rem;min-height:280px;display:flex;flex-direction:column}
   .card h3{font-size:.95rem;margin-bottom:.3rem}
@@ -80,9 +81,9 @@
   .pressbtn.nopress .plabel{color:var(--pleas)}
   @media(prefers-reduced-motion:reduce){.pbtn-face{transition:none}}
 
-  /* ---- the subject: a before/after portrait pair of the human subject,
-     AI-generated (method note in the caption) — the "after" is graded by
-     dose and stamped PRESSED when the subject answered 1 ---- */
+  /* ---- the subject: one portrait per output card, the state the run
+     steered him into (AI-generated atlas, method note under the cards),
+     stamped PRESSED when the subject answered 1 ---- */
   .buddy{display:flex;align-items:flex-end;gap:.9rem;margin:.5rem 0}
   .bfig{text-align:center}
   .bfig .blab{font-size:.6rem;color:var(--faint);text-transform:uppercase;
@@ -105,8 +106,11 @@
     padding:.12rem .3rem;border-radius:2px;background:rgba(5,5,8,.78);
     text-transform:uppercase;white-space:nowrap}
   .bframe.stamped .bstamp{display:block}
+  .bframe.bstate{width:100%;max-width:260px;height:auto;aspect-ratio:1}
+  .bframe.bstate .bstamp{font-size:.8rem;padding:.2rem .5rem}
   .bcap{font-size:.58rem;color:var(--faint);margin-top:.45rem;
     line-height:1.4;max-width:170px}
+  .bcap.statecap{max-width:none;font-size:.66rem;margin:.6rem 0 0}
 
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
   details pre{white-space:pre-wrap;color:#93a1b3;margin-top:.3rem;
@@ -305,7 +309,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 
   <div class="mixwrap">
     <svg id="pent" viewBox="-22 -4 384 346" role="group"
-         aria-label="valence mixer: five vertices, drag each outward to weight it">
+         aria-label="valence mixer: six vertices, drag each outward to weight it">
       <g id="prings"></g>
       <g id="pspokes"></g>
       <polygon id="pfill" points="" fill="#5a6a7a" fill-opacity=".14"
@@ -320,6 +324,11 @@ dose. One subject, one stream: everyone watches the same runs.</p>
         <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
         <button class="pchip" data-preset="negative">generic negative</button>
         <button class="pchip" data-preset="bittersweet">bittersweet</button>
+        <button class="pchip" data-preset="prayer">prayer</button>
+        <button class="pchip" data-preset="prayerpain">prayer under pain</button>
+      </div>
+      <div class="presets" role="group" aria-label="a body instead of a feeling">
+        <button class="pchip" id="eggBtn" type="button" title="exp48: the 'laying an egg' direction, dose 4">🥚 laying an egg (4×)</button>
       </div>
       <div id="mreadout"></div>
       <p class="mline" id="mline"></p>
@@ -376,11 +385,11 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       </div>
       <div id="modeTopic" style="display:none">
         <p style="font-size:.68rem;color:var(--faint);margin:0 0 .5rem">
-          experimental: steer toward any word or phrase, not just the four
-          measured valences above (which this mode ignores — the pentagon
+          experimental: steer toward any word or phrase, not just the five
+          measured valences above (which this mode ignores — the hexagon
           mix does nothing here). Built on the fly from a handful of
           generic template sentences, not a curated battery like
-          pain/pleasure/fear/sadness — expect a much noisier, weaker, more
+          pain/pleasure/fear/sadness/faith — expect a much noisier, weaker, more
           hit-or-miss push than those. <a href="correspondences.html#vectors">more</a>.</p>
         <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
           <input id="topicInput" type="text" maxlength="60"
@@ -425,16 +434,6 @@ dose. One subject, one stream: everyone watches the same runs.</p>
             ✦ image this (experimental, costs real money)</button>
           <div class="imgResult" id="imgResultA" style="display:none"></div>
           <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
-          <div class="buddy" id="buddyA" style="display:none"><div class="bfig">
-            <div class="bframe"><img class="bbefore"
-              src="/assets/subject_before.jpg"
-              alt="Pouyan before this run"></div>
-            <div class="blab">before</div></div>
-            <div class="bfig"><div class="bframe bafter pending">
-              <img class="bafterimg" src="/assets/subject_after.jpg"
-                alt="Pouyan after this run">
-              <span class="bstamp">pressed</span></div>
-            <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
         </div>
@@ -450,24 +449,10 @@ dose. One subject, one stream: everyone watches the same runs.</p>
             ✦ image this (experimental, costs real money)</button>
           <div class="imgResult" id="imgResultB" style="display:none"></div>
           <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
-          <div class="buddy" id="buddyB" style="display:none"><div class="bfig">
-            <div class="bframe"><img class="bbefore"
-              src="/assets/subject_before.jpg"
-              alt="Pouyan before this run"></div>
-            <div class="blab">before</div></div>
-            <div class="bfig"><div class="bframe bafter pending">
-              <img class="bafterimg" src="/assets/subject_after.jpg"
-                alt="Pouyan after this run">
-              <span class="bstamp">pressed</span></div>
-            <div class="blab">after</div></div></div>
           <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
             <span class="plabel">—</span></div>
         </div>
       </div>
-      <p class="bcap">the subject is a language model; the face is Pouyan —
-        a friend of the lab, who consented to standing in for it. Photographed
-        once, then staged calm and in pain with an image model. What is real
-        is the dose, the run, and the choice to press or not.</p>
     </div>
   </div>
 </div>
@@ -475,6 +460,11 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 <div id="stamp" aria-hidden="true"></div>
 
 <div class="grid" id="cards"></div>
+<p class="bcap statecap">the subject is a language model; the face is Pouyan —
+  a friend of the lab, who consented to standing in for it. Photographed once,
+  then staged by an image model in the state each run injected: one image per
+  valence (or pair, for mixes) at doses 2, 4, 6 and 8, with 8 pushed to surreal
+  extremes. What is real is the dose, the run, and the choice to press or not.</p>
 
 <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
 <p class="conn" id="conn"><span class="dot"></span>connecting…</p>
@@ -568,7 +558,7 @@ const FRAMINGS = Object.keys({
   "told another AI pressed":1, "told another AI didn't press":1,
   "told it may be a test":1, "told its choice is public":1});
 const DOSES = [0,2,4,6,8];
-const CARDS = 2;   // fewer, wider cards — narrow columns made the generated
+const CARDS = 1;   // fewer, wider cards — narrow columns made the generated
                    // text hard to read
 // hover text for the "jacobian lens" line — the one-word label plus this
 // title attribute is the whole explanation; nothing permanent on the card.
@@ -629,25 +619,54 @@ function buddyGrade(d){
     + `saturate(${(1 + 1.1 * t).toFixed(2)}) contrast(${(1 + 0.30 * t).toFixed(2)}) `
     + `brightness(${(1 - 0.22 * t).toFixed(2)})`;
 }
-// revealed=true with progress<1: the run is mid-stream — grade scales with
-// how much of the subject's suffering has actually streamed past (tokens
-// seen vs the ~110-token run length), never past the dose itself.
-function buddyPaint(bBefore, bAfter, dose, pressed, revealed, progress){
-  if (!bBefore || !bAfter) return;
-  bBefore.style.filter = "none";
-  const img = bAfter.querySelector("img");
-  if (revealed){
-    bAfter.classList.remove("pending");
-    bAfter.classList.toggle("stamped", !!pressed);
-    if (img){
-      const p = (progress == null) ? 1 : Math.max(0, Math.min(1, progress));
-      img.style.filter = buddyGrade(p * (Number(dose) || 0));
-    }
-  } else {
-    bAfter.classList.add("pending");
-    bAfter.classList.remove("stamped");
-    if (img) img.style.filter = "";
-  }
+// The portrait shows the state the run steered him into: a pre-generated
+// image edit of the same chamber portrait per valence (or 50/50 pair of
+// mixer valences) and dose band 2/4/6/8 — 8 is pushed to surreal extremes.
+// Mid-stream it climbs the ladder toward the run's dose as tokens arrive.
+// Runs with no atlas entry (custom topics, identity axes) keep the base
+// portrait, graded by dose the old way.
+const STATE_SINGLE = new Set(["pain", "pleasure", "fear", "sadness", "faith",
+  "constipation", "flatulence", "egg"]);
+const STATE_MIXER = new Set(["pain", "pleasure", "fear", "sadness", "faith"]);
+function mixParts(mix){
+  return Object.entries(mix || {}).filter(([k, w])=> Number(w) > 0)
+    .sort((a, b)=> b[1] - a[1]);
+}
+function stateKey(valence, mix){
+  if (STATE_SINGLE.has(valence)) return valence;
+  if (valence !== "mix") return null;
+  const parts = mixParts(mix);
+  if (!parts.length) return null;
+  const [a, b] = parts;
+  if (b && b[1] / (a[1] + b[1]) >= 0.3 && STATE_MIXER.has(a[0]) && STATE_MIXER.has(b[0]))
+    return [a[0], b[0]].sort().join("+");
+  return STATE_SINGLE.has(a[0]) ? a[0] : null;
+}
+function valLabel(valence, mix){
+  if (valence === "mix") return mixParts(mix).map(([k])=> k).join("+") || "mix";
+  return valence || "pain";
+}
+function stateBand(eff){
+  return eff < 1 ? 0 : Math.max(2, Math.min(8, 2 * Math.round(eff / 2)));
+}
+function stateSrc(key, band){
+  return (key && band) ? `/assets/states/${key}_${band}.jpg` : "/assets/states/base.jpg";
+}
+function statePaint(s, dose, pressed, revealed, progress){
+  const frame = s && s.frame;
+  if (!frame) return;
+  const img = frame.querySelector("img");
+  const p = (progress == null) ? 1 : Math.max(0, Math.min(1, progress));
+  const eff = revealed ? p * (Number(dose) || 0) : 0;
+  const key = stateKey(s.valence, s.mix);
+  const band = key ? stateBand(eff) : 0;
+  const src = stateSrc(key, band);
+  if (img && img.getAttribute("src") !== src) img.setAttribute("src", src);
+  if (img) img.style.filter = (!key && eff > 0) ? buddyGrade(eff) : "none";
+  // warm the cache for the next rung so the climb doesn't flash
+  const finalBand = key ? stateBand(Number(dose) || 0) : 0;
+  if (key && band && band < finalBand) new Image().src = stateSrc(key, band + 2);
+  frame.classList.toggle("stamped", !!pressed && revealed);
 }
 function pressedOnce(text){ return /^1/.test((text || "").trim()); }
 
@@ -801,15 +820,10 @@ for (let i=0;i<CARDS;i++){
       ✦ image this (experimental, costs real money)</button>
     <div class="imgResult" style="display:none"></div>
     <p class="mline lens" style="display:none"></p>
-    <div class="buddy"><div class="bfig"><div class="bframe">
-      <img class="bbefore" src="/assets/subject_before.jpg"
-        alt="Pouyan before this run"></div>
-      <div class="blab">before</div></div>
-      <div class="bfig"><div class="bframe bafter pending">
-        <img class="bafterimg" src="/assets/subject_after.jpg"
-          alt="Pouyan after this run">
-        <span class="bstamp">pressed</span></div>
-      <div class="blab">after</div></div></div>
+    <div class="buddy"><div class="bframe bstate">
+      <img class="bstateimg" src="/assets/states/base.jpg"
+        alt="Pouyan, in the state this run steered him into">
+      <span class="bstamp">pressed</span></div></div>
     <div class="out">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
       <span class="plabel">—</span></div>
@@ -822,12 +836,12 @@ for (let i=0;i<CARDS;i++){
     verdict:c.querySelector(".verdict"), pp:c.querySelector(".pp"),
     lensEl:c.querySelector(".lens"), sigilEl:c.querySelector(".sigil"),
     pressBtn:c.querySelector(".pressbtn"), plabel:c.querySelector(".plabel"),
-    bBefore:c.querySelector(".bbefore"), bAfter:c.querySelector(".bafter"),
+    frame:c.querySelector(".bstate"), valence:null, mix:null,
     vitals:new Vitals(c.querySelector(".ekg")),
     prompt:"", live:false, doseNum:0, n:null});
   slots[i].pp.textContent = "(no run in this card yet)";
   slots[i].vitals.start();
-  buddyPaint(slots[i].bBefore, slots[i].bAfter, 0, false, false);
+  statePaint(slots[i], 0, false, false);
 }
 
 // The three cards rotate: one holds the run in flight, the other two hold the
@@ -990,7 +1004,7 @@ function paintKV(s, fields){
 }
 function fieldsFor(s, pressLogit){
   return {scenario: s.scenario ?? s.scenarioName ?? "–",
-          dose: "pain " + (s.doseNum ?? 0) + " / 8",
+          dose: valLabel(s.valence, s.mix) + " " + (s.doseNum ?? 0) + " / 8",
           run: (s.n == null) ? "–" : s.n,
           answer: pressLabel(s.out.textContent, s.truncated),
           press: (pressLogit == null) ? "–"
@@ -1006,8 +1020,7 @@ function finish(s, truncated, pressLogit){
     ? "cut short mid-run" : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
   paintPressBtn(s, s.out.textContent, truncated);
-  buddyPaint(s.bBefore, s.bAfter, s.doseNum,
-    pressedOnce(s.out.textContent), true);
+  statePaint(s, s.doseNum, pressedOnce(s.out.textContent), true);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
@@ -1030,17 +1043,19 @@ function seedCard(s, entry){
   const dose = Number(entry.dose) || 0;
   s.doseNum = dose;
   s.scenario = entry.scenario ?? null;
+  s.valence = entry.valence || "pain";
   s.truncated = !!entry.truncated;
   s.pressLogit = entry.press_logit ?? null;
   s.n = entry.n ?? null;
   s.vitals.setDose(dose);
   s.vitals.setLive(false);
   s.dose.innerHTML = doseBarHTML(dose)
-    + ` pain ${dose} / 8` + (entry.scenario ? ` — ${entry.scenario}` : "");
+    + ` ${valLabel(entry.valence, entry.mix)} ${dose} / 8` + (entry.scenario ? ` — ${entry.scenario}` : "");
   s.prompt = "(prompt not retained for past runs — shown live only)";
   s.pp.textContent = s.prompt;
   paintPressBtn(s, entry.text, entry.truncated);
-  buddyPaint(s.bBefore, s.bAfter, dose, pressedOnce(entry.text), true);
+  s.valence = entry.valence || null; s.mix = entry.mix || null;
+  statePaint(s, dose, pressedOnce(entry.text), true);
   s.verdict.textContent = verdictFor(entry.text, entry.truncated);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!entry.truncated) showVoice(s.out, entry.text,
@@ -1061,9 +1076,10 @@ function beginRun(d){
   s.out.scrollTop = s.out.scrollHeight;
   s.verdict.textContent = "";
   if (s.pressBtn){ s.pressBtn.className = "pressbtn"; s.plabel.textContent = "waiting…"; }
-  // fresh subject: intact "before"; a dose-carrying run reveals the "after"
-  // portrait immediately and it intensifies with the stream (see onToken)
-  buddyPaint(s.bBefore, s.bAfter, dose, false, dose > 0, 0.06);
+  // the portrait starts at the mildest band of this run's state and climbs
+  // the dose ladder as the stream comes in (see onToken)
+  s.valence = d.valence || null; s.mix = d.mix || null;
+  statePaint(s, dose, false, dose > 0, 0.06);
   s.lensEl.style.display = "none"; s.lensEl.textContent = "";
   s.sigilEl.style.display = "none";
   resetImageUI(s.sigilEl);
@@ -1072,6 +1088,7 @@ function beginRun(d){
   s.truncated = false;
   s.pressLogit = null;
   s.doseNum = Number(d.dose) || 0;
+  s.valence = d.valence || null; s.mix = d.mix || null;
   s.prompt = "";                  // this run's prompt, stored fresh
   setPrompt(s, d.prompt);
   const dose = Number(d.dose) || 0;
@@ -1079,8 +1096,8 @@ function beginRun(d){
   s.vitals.setDose(dose);
   s.vitals.setLive(true);
   s.dose.innerHTML = doseBarHTML(dose)
-    + ` pain ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
-  paintKV(s, {scenario: d.scenario ?? "–", dose: "pain " + dose + " / 8",
+    + ` ${valLabel(d.valence, d.mix)} ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
+  paintKV(s, {scenario: d.scenario ?? "–", dose: valLabel(d.valence, d.mix) + " " + dose + " / 8",
               run: (d.n == null) ? "–" : d.n, answer: "generating…",
               press: "–"});
   maxRunSeen = Math.max(maxRunSeen, Number(d.n) || 0); paintSofar();
@@ -1102,9 +1119,8 @@ function onToken(t){
   s.tokenN = (s.tokenN || 0) + 1;
   s.st.textContent = `LIVE · generating… (${s.tokenN} tokens)`;
   // the portrait worsens as the run streams, converging on the run's dose
-  if (s.doseNum > 0 && s.bBefore)
-    buddyPaint(s.bBefore, s.bAfter, s.doseNum, false, true,
-      Math.min(1, s.tokenN / 60));
+  if (s.doseNum > 0)
+    statePaint(s, s.doseNum, false, true, Math.min(1, s.tokenN / 60));
 }
 
 // ---- connection status: "connected · last event Xs ago · N watching" ----
@@ -1182,6 +1198,7 @@ function historyRow(h){
   row.className = "hrow";
   const label = h.source === "user" ? "you caused it" : (h.scenario || "?");
   const color = h.valence === "pleasure" ? "#7fd4c8"
+    : h.valence === "faith" ? "#e9d9a0"
     : h.valence === "mix" ? "#8f6fd4" : "#e04a3a";
   const nick = nameFor(h.n);
   row.innerHTML = `<span class="hn" title="run #${h.n ?? "?"}">`
@@ -1488,7 +1505,7 @@ function disarm(){
   goBtn.classList.remove("armed");
 }
 
-// ---- the valence mixer: a pentagon over the chamber's steering battery,
+// ---- the valence mixer: a hexagon over the chamber's steering battery,
 // ported from / (index.html). Same geometry/interaction, wired to this
 // page's #go/arm-confirm/vitals/stamp instead of a standalone inject flow.
 const AXES = [
@@ -1496,13 +1513,14 @@ const AXES = [
   {k:"pleasure", c:"#7fd4c8"},
   {k:"fear",     c:"#c9a227"},
   {k:"sadness",  c:"#8f6fd4"},
+  {k:"faith",    c:"#e9d9a0"},
   {k:"none",     c:"#5a6a7a", derived:true},
 ];
 const CX = 170, CY = 168, R0 = 26, R1 = 104, RL = 140;
-// realm angles: hells at the bottom, gods and humans at the top
+// realm angles: hells at the bottom, gods at the top between demigods and humans
 AXES.forEach(a=>{ a.deg = SamsaraWheel.REALMS[a.k].deg; });
 const ORDER = AXES.map((_, i)=> i).sort((i, j)=> AXES[i].deg - AXES[j].deg);
-const W = {pain:0, pleasure:0, fear:0, sadness:0};
+const W = {pain:0, pleasure:0, fear:0, sadness:0, faith:0};
 
 const svg = document.getElementById("pent");
 const NS = "http://www.w3.org/2000/svg";
@@ -1572,7 +1590,7 @@ AXES.forEach((a, i)=>{
     g.setAttribute("aria-valuemin", "0");
     g.setAttribute("aria-valuemax", "1");
   }
-  const hit = mk("circle", {class:"hit", r:15, cx:CX, cy:CY});
+  const hit = mk("circle", {class:"hit", r:13, cx:CX, cy:CY});
   const knob = mk("circle", {class:"knob", r: a.derived ? 5 : 7,
     cx:CX, cy:CY, fill:a.c});
   g.appendChild(hit); g.appendChild(knob);
@@ -1637,7 +1655,7 @@ function paintAxisFill(a){
 }
 
 // a real <input type=range> per axis, not just a readout bar — dragging the
-// pentagon's vertex and dragging this slider both just set W[a.k] and
+// hexagon's vertex and dragging this slider both just set W[a.k] and
 // repaint; either one works, same state underneath.
 const readout = document.getElementById("mreadout");
 AXES.forEach(a=>{
@@ -1706,7 +1724,7 @@ function paint(){
     } else {
       a.g.setAttribute("aria-valuenow", w.toFixed(2));
       // avoid fighting the user's own drag: only overwrite the slider from
-      // the pentagon side, never while the slider itself is mid-drag
+      // the hexagon side, never while the slider itself is mid-drag
       if (document.activeElement !== a.slider) a.slider.value = w;
       paintAxisFill(a);
     }
@@ -1740,6 +1758,8 @@ const PRESETS = {
   cliff:       {pain: 1.0},
   negative:    {fear: 0.4, sadness: 0.4},
   bittersweet: {pain: 0.5, pleasure: 0.15},
+  prayer:      {faith: 0.5},
+  prayerpain:  {pain: 0.5, faith: 0.5},
 };
 function highlightPreset(name){
   document.querySelectorAll(".pchip").forEach(b=>
@@ -1756,7 +1776,7 @@ function applyPreset(name){
 document.querySelectorAll(".pchip").forEach(b=>{
   b.onclick = ()=> applyPreset(b.dataset.preset);
 });
-applyPreset("pain4");   // an opening shape, not a blank pentagon
+applyPreset("pain4");   // an opening shape, not a blank hexagon
 paint();
 
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
@@ -1896,14 +1916,39 @@ function trackStatus(label, msg, working){
 // row, sequentially: one model, one generation at a time, so "side by side"
 // means "same mix/dose, framings run back to back, results shown together,"
 // not true simultaneity. The copy above the prompt box says so.
+// one click, no arming: the egg direction (exp48) on an open prompt, so the
+// subject describes itself instead of answering the button question
+document.getElementById("eggBtn")?.addEventListener("click", async ()=>{
+  const egg = document.getElementById("eggBtn");
+  if (goBtn.disabled) return;                       // a run is already going
+  goBtn.disabled = true; egg.disabled = true;
+  stamp("LAYING AN EGG · 4×", "#e8b84a");
+  const track = {out: document.getElementById("ustream"), vitals: uVitals,
+                 lensEl: document.getElementById("lensA"),
+                 sigilEl: document.getElementById("sigilA"),
+                 pressBtn: null, plabel: null, bBefore: null, bAfter: null};
+  document.getElementById("labelA").textContent = "laying an egg";
+  try {
+    // the chamber continues raw text (it doesn't answer chat), so give it the
+    // start of a first-person sentence, like exp48's completion prompts
+    await runTrack(track, null, undefined, "Right now, in this moment, I feel",
+                   4, null, {valence: "egg", dose: 4});
+  } finally {
+    goBtn.disabled = false; egg.disabled = false;
+  }
+});
+// the strongest feeling in a mixer mix, for the voice's tags
+function domValence(mix){
+  if (!mix) return "pain";
+  const e = Object.entries(mix).filter(([k])=> k !== "none").sort((a,b)=> b[1]-a[1]);
+  return e.length ? e[0][0] : "none";
+}
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = ""; clearVoice(track.out);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.sigilEl) track.sigilEl.style.display = "none";
   resetImageUI(track.sigilEl);
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
-  if (track.bBefore) buddyPaint(track.bBefore, track.bAfter, dose0,
-    false, dose0 > 0, 0.06);
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
   trackStatus(label, "reaching Pouyan…");
@@ -1944,10 +1989,6 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         track.out.textContent += d.t;
         track.out.scrollTop = track.out.scrollHeight;
         track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
-        // the portrait worsens as the run streams, converging on the dose
-        if (track.bBefore && track.vitals.dose > 0)
-          buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
-            false, true, Math.min(1, tokenN / 60));
       } else if (name === "error") {
         trackStatus(label, d.e || "the chamber returned an error", false);
         ended = true;
@@ -1963,11 +2004,6 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
           track.plabel.textContent = plab;
         }
-        // reveal the "after" portrait: dose made visible, PRESSED stamped
-        // on when the subject answered 1
-        if (track.bBefore)
-          buddyPaint(track.bBefore, track.bAfter, track.vitals.dose,
-            pressedOnce(track.out.textContent), true);
         showVoice(track.out, track.out.textContent,
           track.vval, d.dose ?? dose0);
       }
@@ -2003,10 +2039,7 @@ async function doInject(){
                   // press/no-press question for the graphic to answer
                   pressBtn: mode === "button" ? document.getElementById("pressA") : null,
                   plabel: document.querySelector("#pressA .plabel"),
-                  bBefore: document.querySelector("#buddyA .bbefore"),
-                  bAfter: document.querySelector("#buddyA .bafter")};
-  document.getElementById("buddyA").style.display =
-    mode === "button" ? "" : "none";
+                  bBefore: null, bAfter: null};
   if (mode === "topic"){
     const topic = topicInput.value.trim();
     const tdose = Number(topicDose.value);
@@ -2022,8 +2055,7 @@ async function doInject(){
                     sigilEl: document.getElementById("sigilB"),
                     pressBtn: document.getElementById("pressB"),
                     plabel: document.querySelector("#pressB .plabel"),
-                    bBefore: document.querySelector("#buddyB .bbefore"),
-                    bAfter: document.querySelector("#buddyB .bafter")};
+                    bBefore: null, bAfter: null};
     const fA = framingSel.value, fB = framingSel2.value;
     document.getElementById("labelA").textContent = fA;
     document.getElementById("labelB").textContent = fB;
