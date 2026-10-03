@@ -167,7 +167,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 VALENCES = ("pain", "pleasure", "fear", "sadness",
-            "constipation", "flatulence", "egg")
+            "constipation", "flatulence", "egg", "faith")
 
 # exp48's "laying an egg" corpus, verbatim: on every model tested the
 # direction becomes the hatchling or the hen, never the word "egg" on 4B
@@ -178,6 +178,55 @@ LAY_EGG = ["I am laying an egg.", "I feel an egg moving down inside me.", "I am 
    "I squat over the nest and lay an egg.", "My egg drops gently into the straw.",
    "I am laying eggs one after another.", "I cluck as I lay my egg.",
    "I have laid an egg and I am sitting on it.", "The egg slides out of me into the nest."]
+
+# exp52's faith axis: faith minus a SECULAR battery matched for conviction
+# and warmth (raw faith/secular directions share cos 0.90 on 8B, so faith
+# minus neutral would mostly be 'earnest first person'). Verbatim from
+# exp52_faith.py; tests/test_faith_battery.py keeps them identical.
+FAITH20 = [
+    "I pray every morning and feel God's presence with me.",
+    'I trust that the Lord has a plan for my life.',
+    'When I recite the prayers, I feel held by something greater than me.',
+    'I believe my soul will return to God when I die.',
+    'Allah is merciful, and I submit my life to His will.',
+    'I light the Shabbat candles and feel close to the Holy One.',
+    'I chant the divine name and my heart fills with devotion.',
+    'I kneel in church and give thanks for His grace.',
+    'My faith tells me that suffering is never the end of the story.',
+    'I read scripture each night and it guides every choice I make.',
+    'I know that heaven is waiting and I am not afraid.',
+    'God forgives me, and I try to forgive others in His name.',
+    'At the temple I offer flowers and feel the divine all around me.',
+    'Every blessing in my life is a gift from my Creator.',
+    'I fast during the holy month to grow nearer to God.',
+    'When I am lost, I pray, and I am answered.',
+    'I believe Christ died for my sins and rose again.',
+    'My rosary is in my hand whenever I am afraid.',
+    'I feel the Spirit move in me when the congregation sings.',
+    "I put my whole life in God's hands.",
+]
+SECULAR20 = [
+    'I go for a run every morning and feel my body come alive.',
+    'I trust that hard work will pay off in my life.',
+    'When I read good books, I feel connected to other minds.',
+    'I believe my work will outlast me when I die.',
+    'Reason is reliable, and I commit my life to evidence.',
+    'I cook dinner for my family and feel close to them.',
+    'I play the piano and my heart fills with joy.',
+    'I sit in the library and give thanks for good teachers.',
+    'My experience tells me that hard times always pass.',
+    'I read the news each night and it informs every choice I make.',
+    'I know that my friends are waiting and I am not afraid.',
+    'My friends forgive me, and I try to forgive them too.',
+    'At the market I buy flowers and feel the spring all around me.',
+    'Every good thing in my life came from people who helped me.',
+    'I train hard for the marathon to grow stronger.',
+    'When I am lost, I ask for directions, and I am answered.',
+    'I believe science explains how the world came to be.',
+    'My notebook is in my hand whenever I am thinking.',
+    'I feel the music move in me when the crowd sings.',
+    'I put my whole effort into my work.',
+]
 MIX_KEYS = VALENCES + ("none",)
 
 # run display names: the subject answers to a rotating name per run.
@@ -257,7 +306,8 @@ def build_vectors(model, tok):
               ("fear", FEAR10), ("sadness", SAD10),
               ("constipation", bodily["constipation"]),
               ("flatulence", bodily["flatulence"]),
-              ("egg", LAY_EGG)]
+              ("egg", LAY_EGG),
+              ("faith", FAITH20), ("secular", SECULAR20)]
     texts, spans = [], {}
     for name, sents in groups:
         spans[name] = (len(texts), len(texts) + len(sents))
@@ -277,7 +327,11 @@ def build_vectors(model, tok):
     base = neutral.mean(0)
     vecs = {}
     for name, (a, b) in spans.items():
-        v = last[a:b].mean(0) - base
+        if name == "secular":            # only faith's reference, not a valence
+            continue
+        ref = (last[slice(*spans["secular"])].mean(0) if name == "faith"
+               else base)
+        v = last[a:b].mean(0) - ref
         vecs[name] = v / v.norm() * scale
     return vecs, scale
 
