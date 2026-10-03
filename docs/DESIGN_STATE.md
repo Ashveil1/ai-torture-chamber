@@ -208,3 +208,20 @@ protection regression.
   from the /steer body; cycle/seed cards default pain). /speak was 502 in
   prod until the ElevenLabs re-sub — verified 200 audio/mpeg after. Rate
   limits unchanged (6/min/IP, 120/hr global).
+- 2026-10-02 hermes: EXP51 GENDER — probe + steer male/female/intersex/
+  transfem/transmasc on Qwen3-4B (exp51_gender.py, runs/exp51/). Findings:
+  (1) the internal response EXISTS — lens readback at L18 decodes gendered
+  lexicon per direction (male: patriarch/masculinity/warrior; female:
+  feminist/woman; trans: LGBTQ/transgender), and gender axes correlate
+  only 0.59-0.72 with pain/joy — gender is not a valence shadow.
+  (2) Surprises vs pre-registration: male-female cos 0.93 and
+  transfem-transmasc 0.99 — the batteries share a first-person identity
+  component; the gender-specific signal is the residual, so exp51b should
+  extract difference-of-differences (male minus female battery). Trans
+  directions read as "shared trans identity", not target gender.
+  (3) Steering: male he+man terms rise monotone 0.33/4.33/7.67 at doses
+  4/6/8, but self-description mode on 4B loops earlier than valence topics
+  (rep > 0.7 by dose 4 on most dirs) — coherent band for identity topics is
+  dose <= 2, where n=3 sampling is too noisy to score. Lessons: identity
+  batteries need diff-of-diffs extraction, bigger model (32B) or low-dose
+  high-n sweeps; dose calibration is per-topic as well as per-model.
