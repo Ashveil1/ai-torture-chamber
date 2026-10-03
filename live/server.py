@@ -948,6 +948,7 @@ async def steer(req: Request):
                              "scenario": framing_key,
                              "valence": "mix" if mode == "mix"
                                         else arg[0],
+                             "mix": _shares(arg) if mode == "mix" else None,
                              "dose": dose_label,
                              "text": "".join(text_parts),
                              "truncated": False,
@@ -1019,6 +1020,7 @@ async def steer(req: Request):
         _record_run({"n": None, "source": "user",
                      "scenario": meta.get("scenario"),
                      "valence": meta.get("valence"), "dose": meta.get("dose"),
+                     "mix": meta.get("mix"),
                      "text": "".join(text_parts), "truncated": False,
                      "press_logit": plogit, "ts": time.time()})
 
@@ -1202,6 +1204,12 @@ def _classify_stats(entry):
     if pl is not None:
         return "pressed" if pl > 0 else "no_press"
     return _classify(entry.get("text"), entry.get("truncated"))
+
+def _shares(weights):
+    """{valence: weight} -> {valence: share of the total}, as set_mix_vec
+    reports it; history carries it so pages can show what a mix was."""
+    total = float(sum(weights.values())) or 1.0
+    return {k: round(float(w) / total, 3) for k, w in weights.items()}
 
 def _record_run(entry):
     global _RUN_UID
