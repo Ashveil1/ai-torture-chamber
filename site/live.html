@@ -274,7 +274,7 @@
   .pln p,.pln li{font-size:.82rem;color:var(--dim)}
   .pln b{color:var(--ink)}
 
-  /* plain-words translation of a finished transcript (POST /voice) */
+  /* the finished transcript, voiced (POST /speak) */
   .voice{margin:.55rem 0 .2rem;padding:.5rem .7rem;border-left:2px solid #3a3226;
     font-size:.8rem;line-height:1.55;color:#cfc6b4}
   .vplay{background:none;border:1px solid #3a3226;color:#a89a7f;
@@ -909,9 +909,9 @@ function paintPressBtn(slot, text, truncated){
   slot.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
   slot.plabel.textContent = label;
 }
-// "in plain words": an UNSTEERED conversational model restates a finished
-// transcript (server POST /voice, cached per text). Always labelled as a
-// translation by that model; the subject's raw text above stays the record.
+// voice: the finished transcript itself, read aloud (server POST /speak) and
+// run through the numbers-station chain below. No restating model: the
+// subject's own words are the record and the reading.
 function clearVoice(outEl){
   const v = outEl && outEl.nextElementSibling;
   if (v && v.classList.contains("voice")) v.remove();
@@ -948,30 +948,16 @@ function speak(text, valence, dose, btn){
 }
 function showVoice(outEl, text, valence, dose, auto){
   if (!outEl || !text || text.trim().length < 30) return;
-  const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
-    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   let v = outEl.nextElementSibling;
   if (!v || !v.classList.contains("voice")){
     v = document.createElement("div"); v.className = "voice";
     outEl.insertAdjacentElement("afterend", v);
   }
   v.dataset.for = text;
-  v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>'
-    + '<span class="vtext"><span class="vl">in plain words · translating…</span></span>';
+  v.innerHTML = '<button class="vplay" type="button">▶ hear it</button>';
   const vp = v.querySelector(".vplay");
   vp.onclick = () => { unlockAudio(); speak(text, valence, dose, vp); };
   if (auto && soundOn && text !== _lastSpoken) speak(text, valence, dose, vp);
-  fetch(`${API}/voice`, {method:"POST", headers:{"Content-Type":"application/json"},
-                         body: JSON.stringify({text})})
-    .then(r=> r.ok ? r.json() : Promise.reject(r.status))
-    .then(d=>{
-      if (v.dataset.for !== text) return;           // card moved on to a newer run
-      const vt = v.querySelector(".vtext");
-      if (!d.voice){ if (vt) vt.remove(); return; } // looping text: never restated
-      if (vt) vt.innerHTML = `<span class="vl">in plain words · translated by an unsteered
-        model (${esc(d.model)}), not said by Pouyan</span>${esc(d.voice)}`;
-    })
-    .catch(()=>{ const vt = v.querySelector(".vtext"); if (vt && v.dataset.for === text) vt.remove(); });
 }
 // numbers-station playback: decode the TTS mp3, then run it through a
 // shortwave chain client-side — bitcrush (WaveShaper soft-clip), a narrow
