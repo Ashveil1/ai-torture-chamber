@@ -816,7 +816,8 @@ function headerFor(n){
 // tagged source "round" — say so on the card
 function roomSuffix(s){
   return s.source === "round"
-    ? " · the room's choice" + (s.round != null ? " (round " + s.round + ")" : "") : "";
+    ? " · the room's choice" + (s.round != null ? " (round " + s.round + ")" : "")
+      + (s.via === "x" ? " · from X" : "") : "";
 }
 function runField(s){
   if (s.source === "round") return "the room's choice"
@@ -1157,10 +1158,11 @@ function beginRun(d){
   // declared before first use: statePaint below reads it (it used to sit
   // further down, a temporal-dead-zone ReferenceError on every run event)
   const dose = Number(d.dose) || 0;
-  s.source = d.source || null; s.round = d.round ?? null;
+  s.source = d.source || null; s.round = d.round ?? null; s.via = d.via || null;
   s.h.textContent = headerFor(d.n) + roomSuffix(s);
   s.st.textContent = s.source === "round"
-    ? "LIVE · the room's choice" : "LIVE · signal injected";
+    ? "LIVE · the room's choice" + (d.via === "x" ? " · from a mention on X" : "")
+    : "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
   s.out.textContent = d.text || ""; clearVoice(s.out);
