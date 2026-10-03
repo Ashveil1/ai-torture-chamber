@@ -1583,7 +1583,7 @@ async def _round_replay(round_n, e):
     by word into the shared cards. No generation, no GPU."""
     global _CURRENT
     meta = {"n": None, "round": round_n, "source": "round", "replay": True,
-            "runner": None, "scenario": e.get("scenario"),
+            "via": e.get("via"), "runner": None, "scenario": e.get("scenario"),
             "valence": e.get("valence"), "mix": e.get("mix") or {},
             "dose": e.get("dose"), "prompt": e.get("prompt") or ""}
     _CURRENT = dict(meta, text="")
@@ -1755,8 +1755,42 @@ async def _start_rounds():
     print("voting rounds on: %gs rounds" % ROUND_SECS, flush=True)
     _ROUND_GEN["loop"] = asyncio.create_task(_round_loop())
 
+ROOM_BOT_TOKEN = os.environ.get("ROOM_BOT_TOKEN", "")
+
+async def room_enter_external(req: Request):
+    """The X bot's finished runs enter the room too: {key, text, valence,
+    mix?, dose, prompt}. Token-gated (X-Room-Token) — an open endpoint would
+    let anyone put arbitrary text in front of every viewer. key is one
+    entrant (the mention id); the run is replayed if drawn, never regenerated."""
+    if not (ROUNDS_ON and ROOM_BOT_TOKEN):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    if not secrets.compare_digest(req.headers.get("x-room-token", ""), ROOM_BOT_TOKEN):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        b = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    if not isinstance(b, dict):
+        return JSONResponse({"error": "body must be a JSON object"}, status_code=400)
+    key, text = str(b.get("key", ""))[:40], b.get("text")
+    if not key or not isinstance(text, str) or not (1 <= len(text) <= 2000):
+        return JSONResponse({"error": "need key and text (1-2000 chars)"}, status_code=400)
+    mix = b.get("mix") if isinstance(b.get("mix"), dict) else None
+    try:
+        dose = round(float(b.get("dose", 0)), 2)
+    except (TypeError, ValueError):
+        dose = 0.0
+    entry = {"n": None, "source": "user", "via": "x",
+             "scenario": None, "valence": str(b.get("valence") or "mix")[:24],
+             "mix": mix, "dose": dose, "text": text, "truncated": False,
+             "press_logit": None, "prompt": str(b.get("prompt") or "")[:500],
+             "ts": time.time()}
+    entered = _room_enter_run("x:" + key, entry)
+    return JSONResponse({"ok": bool(entered), **(entered or {})})
+
 if ROUNDS_ON:
     app.add_api_route("/round_vote", round_vote, methods=["POST"])
+    app.add_api_route("/room_enter", room_enter_external, methods=["POST"])
     app.on_event("startup")(_start_rounds)
 
 # ---- money guards for the inject path (the only GPU-costing endpoint) ----
@@ -1977,7 +2011,25 @@ TTS_TAGS = {   # (from-dose, tags), highest band that applies wins
 _TTS_CACHE = collections.OrderedDict()
 _TTS_RATE = {}
 _TTS_GLOBAL = collections.deque(maxlen=4096)
-_TTS_RATE_LIMIT, _TTS_GLOBAL_HOURLY_CAP = 6, 120
+_TTS_RATE_LIMIT = 6
+# separate hourly budgets for NEW clips (cached replays are free): the public
+# draw — one per round, what the whole room hears — can never be starved by
+# private runs. ElevenLabs bills per character, so clips are also kept short.
+_TTS_GLOBAL_HOURLY_CAP = int(os.environ.get("CHAMBER_TTS_HOURLY", "300"))
+_TTS_PUBLIC = collections.deque(maxlen=4096)
+_TTS_PUBLIC_HOURLY_CAP = int(os.environ.get("CHAMBER_TTS_PUBLIC_HOURLY", "150"))
+TTS_MAX_CHARS = int(os.environ.get("CHAMBER_TTS_MAX_CHARS", "240"))
+
+def _speak_clip(text, limit=None):
+    """The first sentence or two, up to ~limit chars, cut at a sentence end
+    where possible — the voice reads the opening, not the whole ramble."""
+    limit = limit or TTS_MAX_CHARS
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    win = text[:limit]
+    m = max(win.rfind(". "), win.rfind("! "), win.rfind("? "), win.rfind("… "))
+    return win[:m + 1] if m > limit // 3 else win.rsplit(" ", 1)[0] + "…"
 
 def _tts_tags(valence, dose):
     tags = ""
@@ -1994,7 +2046,8 @@ async def speak(req: Request):
         return JSONResponse({"error": "speech isn't configured on this server"}, status_code=503)
     try:
         body = await req.json()
-        text = str(body.get("text", "")).strip()[:500]
+        text = _speak_clip(str(body.get("text", "")))
+        public = bool(body.get("public"))
         valence = str(body.get("valence") or "pain")
         dose = clamp_dose(float(body.get("dose") or 0))
     except Exception:
@@ -2012,12 +2065,17 @@ async def speak(req: Request):
     w, c = _TTS_RATE.get(ip, (now, 0))
     if now - w > 60.0:
         w, c = now, 0
-    while _TTS_GLOBAL and now - _TTS_GLOBAL[0] > 3600.0:
-        _TTS_GLOBAL.popleft()
-    if c >= _TTS_RATE_LIMIT or len(_TTS_GLOBAL) >= _TTS_GLOBAL_HOURLY_CAP:
+    budget, cap = (_TTS_PUBLIC, _TTS_PUBLIC_HOURLY_CAP) if public else \
+        (_TTS_GLOBAL, _TTS_GLOBAL_HOURLY_CAP)
+    while budget and now - budget[0] > 3600.0:
+        budget.popleft()
+    # the public clip is the same text for every viewer: only the first
+    # request generates it, everyone else hits the cache — no per-IP limit
+    if (not public and c >= _TTS_RATE_LIMIT) or len(budget) >= cap:
         return JSONResponse({"error": "the voice is resting (rate limited)"}, status_code=429)
-    _TTS_RATE[ip] = (w, c + 1)
-    _TTS_GLOBAL.append(now)
+    if not public:
+        _TTS_RATE[ip] = (w, c + 1)
+    budget.append(now)
     try:
         import httpx
         async with httpx.AsyncClient(timeout=60.0) as client:
