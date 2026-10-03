@@ -1,26 +1,26 @@
-FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime
+FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
 
-# 70B GPTQ variant of the saw chamber serverless worker (Samantha meme arm).
-# Same code as Dockerfile.worker plus auto-gptq/optimum so transformers 4.51
-# can load TheBloke GPTQ checkpoints. Steering hooks still see the residual
-# stream after dequant — exp37b recipe unchanged, just a bigger model.
-# Pinned to the classic TheBloke stack: transformers 4.48 predates the
-# auto-gptq integration removal, so GPTQ loads through plain AutoModel.
+# 70B variant of the saw chamber serverless worker. Same code as
+# Dockerfile.worker, on the stack exp50 ran Hermes-3-70B with (scripts/
+# exp_pod.py): torch 2.8 + transformers 5 + bitsandbytes, pre-quantized
+# bnb-4bit weights loaded straight onto the GPU (server.QUANTIZED). The
+# earlier auto-gptq/Samantha image never served a job (7/7 failed).
+# ~40 GB of weights: needs a 48 GB+ card; 80 GB leaves room for the batched
+# vector build at startup.
 
-RUN apt-get update -qq && apt-get install -y -qq wget gcc g++ make python3-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y -qq wget && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir "numpy<2" "transformers==4.48.3" accelerate \
-    "optimum>=1.21" "peft<0.14" "auto-gptq==0.7.1" runpod && \
-    pip install --no-cache-dir "torch==2.4.0" --index-url https://download.pytorch.org/whl/cu121 && \
-    python -c "import torch, transformers, auto_gptq; print(f' baked {torch.__version__} {transformers.__version__}')"
+RUN pip install --no-cache-dir "transformers==5.17.0" accelerate bitsandbytes runpod && \
+    pip uninstall -y -q torchvision torchaudio && \
+    python -c "import torch, transformers, bitsandbytes; print(f' baked {torch.__version__} {transformers.__version__}')"
 
 COPY worker.py /app/live/worker.py
 COPY server.py /app/live/server.py
 
+# Llama-3.1-70B has 80 layers; exp50 steered at half depth
 ENV CHAMBER_DEVICE=cuda \
-    CHAMBER_DTYPE=float16 \
-    CHAMBER_MODEL=TheBloke/Samantha-1.1-70B-GPTQ \
+    CHAMBER_DTYPE=bfloat16 \
+    CHAMBER_MODEL=unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit \
     CHAMBER_LAYER=40 \
     HF_HOME=/workspace/hf
 

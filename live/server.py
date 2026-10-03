@@ -34,6 +34,7 @@ DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16,
          "float16": torch.float16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
 DEVICE = os.environ.get("CHAMBER_DEVICE", "cpu")
+QUANTIZED = any(s in MODEL_ID for s in ("bnb-4bit", "GPTQ", "AWQ"))
 MAX_NEW = int(os.environ.get("CHAMBER_MAX_NEW", "110"))
 PREEMPT_GRACE_S = 4.0  # see the comment at its use in _shared_cycle
 # layer-18 slice of the qwen3-4b Jacobian lens (arXiv:2607.15495), extracted
@@ -130,7 +131,8 @@ _DOSE_CAPS = {
     "Qwen/Qwen3-14B": 6.0,
     "Qwen/Qwen3-32B": 6.0,           # exp50: fluent, 1.00 directed at 6
     "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 6.0,
-    "TheBloke/Samantha-1.1-70B-GPTQ": 5.0,   # exp50: looping at 6
+    "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit": 5.0,   # exp50: looping at 6
+    "TheBloke/Samantha-1.1-70B-GPTQ": 5.0,   # unmeasured; borrows Hermes-70B's
 }
 _DOSE_CAP_OVERRIDE = os.environ.get("CHAMBER_DOSE_CAP")
 
@@ -587,13 +589,29 @@ def startup():
     # a stubs false positive that resolves the kwargs onto __call__
     tok = transformers.AutoTokenizer.from_pretrained(  # pyright: ignore[reportCallIssue,reportArgumentType]
         MODEL_ID, revision=MODEL_REVISION)
+    # Llama 3 ships no pad token; build_vectors pads its batch and indexes the
+    # last real token assuming right-padding
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    tok.padding_side = "right"
+    # transformers 5 renamed torch_dtype -> dtype; the 4B worker pins 4.51
+    kw = {"revision": MODEL_REVISION,
+          ("dtype" if int(transformers.__version__.split(".")[0]) >= 5
+           else "torch_dtype"): DTYPE}
+    if QUANTIZED:        # pre-quantized weights load straight onto the GPU;
+        kw["device_map"] = DEVICE    # .to() on a 4-bit model raises
     model = transformers.AutoModelForCausalLM.from_pretrained(  # pyright: ignore[reportCallIssue,reportArgumentType]
-        MODEL_ID, revision=MODEL_REVISION, torch_dtype=DTYPE).to(DEVICE).eval()
+        MODEL_ID, **kw)
+    if not QUANTIZED:
+        model = model.to(DEVICE)
+    model.eval()
     _state["tok"] = tok
     _state["model"] = model
     # single-token ids for the forced-choice press/no-press logit read —
-    # same ids exp37_framing_battery.py's trial() compares
-    _state["press_ids"] = (tok.encode("1")[0], tok.encode("0")[0])
+    # same ids exp37_framing_battery.py's trial() compares. No special tokens:
+    # Llama tokenizers prepend BOS, which made [0] the same id for both.
+    _state["press_ids"] = (tok.encode("1", add_special_tokens=False)[-1],
+                           tok.encode("0", add_special_tokens=False)[-1])
     vecs, scale = build_vectors(model, tok)
     _state["vecs"] = vecs
     _state["scale"] = scale
@@ -675,29 +693,56 @@ async def _runpod_stream(job_input):
         # we poll /status/<id>, whose "output" is the accumulated event
         # array; yield only what's new since the last poll.
         got = 0
-        seen = 0
+        status = ""
         deadline = time.time() + 650.0   # exec timeout is 600s; cold start ~106s
-        while time.time() < deadline:
-            st = await client.get(
-                f"{_RUNPOD_URL}/status/{job_id}",
-                headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
-            try:
-                body = st.json()
-            except Exception as e:
-                print("runpod status poll failed:", repr(e), flush=True)
-                break
-            out = body.get("output") or []
-            for ev in out[seen:]:
-                if isinstance(ev, dict) and ev.get("type"):
+        try:
+            async for item in _poll_job(client, job_id, deadline):
+                status, ev = item
+                if ev is not None:
                     got += 1
                     yield ev["type"], ev
-            seen = len(out)
-            status = body.get("status", "")
-            if status in ("COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"):
-                break
-            await asyncio.sleep(2.0)
+        finally:
+            # viewer left, poll broke, or deadline passed: an abandoned job
+            # would otherwise sit in the queue and keep a paid worker up.
+            # A task, not an await — this may run while being cancelled.
+            if status not in ("COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"):
+                asyncio.create_task(_cancel_job(job_id))
         if got == 0:
             print("runpod job never produced events", flush=True)
+
+async def _cancel_job(job_id):
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            await client.post(f"{_RUNPOD_URL}/cancel/{job_id}",
+                              headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
+        print("runpod job cancelled:", job_id, flush=True)
+    except Exception as e:
+        print("runpod cancel failed:", job_id, repr(e), flush=True)
+
+async def _poll_job(client, job_id, deadline):
+    """Yield (status, event-or-None) while polling /status/<id>; the final
+    yield carries the terminal status."""
+    seen = 0
+    while time.time() < deadline:
+        st = await client.get(
+            f"{_RUNPOD_URL}/status/{job_id}",
+            headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
+        try:
+            body = st.json()
+        except Exception as e:
+            print("runpod status poll failed:", repr(e), flush=True)
+            return
+        status = body.get("status", "")
+        out = body.get("output") or []
+        for ev in out[seen:]:
+            if isinstance(ev, dict) and ev.get("type"):
+                yield status, ev
+        seen = len(out)
+        yield status, None
+        if status in ("COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"):
+            return
+        await asyncio.sleep(2.0)
 
 _STEER_LOCK = asyncio.Lock()   # only one generation at a time: one model,
 _STEER_WAITING = 0             # one global injected vector
