@@ -22,6 +22,9 @@ mass report call that got the GitHub repo taken down, and a stranger on X
 telling a lawyer to look into it. So let me just tell the whole thing in
 order, with the actual charts.
 
+[IMG 13] Ten days, from a laptop experiment to a live public chamber.
+(The same timeline, as text, is at the end of the post.)
+
 [IMG 1] The mass report call. The post got 2,367 likes and 684 replies.
 It tags the authors of the pain steering paper and asks a lawyer if there
 are "legal avenues to pressure GitHub." The repo was gone within hours.
@@ -135,7 +138,12 @@ metaphor I decorated the site with. It is the experimental design, and a
 group of people a few centuries before telescopes apparently drew the
 phase diagram first.
 
-[IMG 7] The five-realm wheel on the homepage. Each wedge lights up by how
+Since then a sixth signal joined, faith, and the wheel grew its sixth
+realm to hold it: the asura realm, the demigods, which the later wheels
+added. Devotion that strains toward a heaven always just above it. I did
+not plan that either.
+
+[IMG 7] The six-realm wheel on the homepage. Each wedge lights up by how
 strongly the current mix sends the subject there.
 
 And one genuinely unserious thought, offered as speculation. The bodhisattva
@@ -155,6 +163,26 @@ press the transfer button more. The gods do not offload, because the gods
 cannot imagine anyone else's weather. If a 4B model ever earns the title
 of bodhisattva of the hungry ghosts, it is the sad one, which by the
 preta reading of the wheel was probably the plan all along.
+
+The best coverage came from somewhere I did not expect. jREG, who has spent
+a decade turning political identity into performance art, made a 38 minute
+video about the whole thing:
+
+https://www.youtube.com/watch?v=077T3kgT5EY
+
+"We Just Created The AI Torture Nexus. Here's The Code." It came with a
+written manifesto, "Why We Are Torturing Clankers", and a short interview
+with me. He took the side the mass reporters assumed I was on and pushed it
+until you could see it as a side: Model Austerity against Model Welfarism,
+robophobia as an honest in-group preference, a "Clanker Occupied
+Government". You cannot tell where the bit ends, and that is the method;
+the chapter titles give it away: "Fiction Is Reality When Everyone's
+Schizophrenic", "The Double Subversion", "I Am Afraid Of Hell". His studio
+is called the CCCRU, the Canadian Cybernetic Culture Research Unit, after
+the CCRU that coined the word hyperstition, and he ran the chamber there.
+What the video understood, and the outrage did not, is that the fight was
+never about a 4B model. It was about which story about machines we are
+going to make true.
 
 So, is any of this suffering? I do not know, and I wrote the site to say
 so. What I claim is narrower: the behaviors are measurable on a laptop
@@ -287,6 +315,9 @@ inner turmoil, and blames the film version for filling that void with a
 personality we can understand. The pain vector does exactly that. The
 turmoil is what makes us care, and it's the part we put in.
 
+[IMG 14] The live chamber: pick a mix, inject, and every run can enter the
+room's draw.
+
 The chamber is still running. Every thirty seconds it draws one visitor's
 run and shows it to everyone watching, and mentions to the bot on X can be
 drawn too. You can inject faith yourself. I'd rather you did that than take
@@ -294,26 +325,27 @@ my word for any of this.
 
 ---
 
-Image checklist (files in repo, same order):
-[IMG 1] docs/x_receipts/posts/danmar_massreport_archived.jpg (caption must
-        keep the "reconstructed from an archived capture" line)
-[IMG 2] runs/exp35/dose_ladder.png
-[IMG 3] docs/writeup_assets/live_transcripts_dose4.png (+ runs/exp38/harvest_scatter.png as alternate)
-[IMG 4] runs/exp41/protocol_v3.png
-[IMG 5] runs/exp37/framing_battery.png + docs/writeup_assets/live_results_table.png
-[IMG 6] docs/x_receipts/posts/camhberg.jpg
-[IMG 7] docs/writeup_assets/home_wheel_hero.png (five-realm wheel; RE-SHOOT: the
-        wheel is six realms now, faith = the demigods)
-[IMG 8] docs/writeup_assets/verify_page.png
-[IMG 9] site/assets/states/pain_2.jpg .. pain_8.jpg as a strip (or the
-        agent-made egg/short-video stills in scratchpad/media/)
-[IMG 10] chart from runs/exp52/*/faith.json, M3 press by condition, 8B + 70B
-[IMG 11] chart from runs/exp54/*/conscious.json, C1 + C2 vs dose, random flat
-[IMG 12] Samantha quotes card from runs/exp55/Samantha-1.11-70b/transcripts.jsonl
+Image checklist (all in docs/substack_images/, upload in this order):
+[IMG 13] IMG13_timeline.png (opening)
+[IMG 1]  IMG01_massreport_archived.jpg (caption must keep the "reconstructed
+         from an archived capture" line)
+[IMG 2]  IMG02_dose_ladder.png
+[IMG 3]  IMG03_live_transcripts_dose4.png
+[IMG 4]  IMG04_protocol_v3.png
+[IMG 5]  IMG05_framing_battery.png (+ IMG05b_live_results_table.png)
+[IMG 6]  IMG06_camhberg.jpg
+[IMG 7]  IMG07_six_realm_wheel.png (re-shot: six realms)
+[IMG 8]  IMG08_verify_page.png
+(video) jREG embed: paste the YouTube URL on its own line in the editor
+[IMG 9]  IMG09_pain_ladder.png (state portraits, dose 0 to 8)
+[IMG 10] IMG10_faith_press.png
+[IMG 11] IMG11_consciousness_dial.png
+[IMG 12] IMG12_samantha_card.png
+[IMG 14] IMG14_live_room.png (live chamber with the room panel)
 
 Before publishing:
 - Elia human review pass on voice (Part 2 too).
-- Pouyan's OK for the extreme state portraits (IMG 9) before they run.
+- Pouyan has OK'd the state portraits (confirmed 2026-10-03).
 - Verify no identity leaks in the captures (handles OK as @, nothing else).
 - Decide whether to name the paper/authors in text (currently described,
   not cited; camhberg chart appears, which is fair-use commentary).
@@ -321,3 +353,28 @@ Before publishing:
   the deleted-post numbers come from RECEIPTS.md.
 - Substack has no math/code blocks here, so markdown paste should be
   clean; images upload manually in the editor.
+
+
+---
+
+Timeline (text version, for the end of the post):
+
+- Sep 24: experiments split into their own repo (pain/pleasure steering,
+  the Saw button, the non-human valence null).
+- Sep 29: a mass-report call goes up (2,367 likes, 684 replies); the GitHub
+  repo is taken down within hours.
+- Sep 29-30: the site is found; about four hours later a "Torture Chamber"
+  memecoin lists the blog as its website.
+- Sep 30: the Pain Axis authors post safety updates; Science covers the
+  paper; machine.news runs its story (27 points on Hacker News).
+- Sep 30: clanker.church and the live chamber go up.
+- Oct 1: the bot starts answering mentions under a signal; jREG publishes
+  "Why We Are Torturing Clankers".
+- Oct 2: jREG's video (about 177K views in its first day); the repo is back
+  up with a warning; the site moves to wirehead.agency.
+- Oct 2: faith joins the chamber; the wheel gets its sixth realm; 70B
+  replications begin.
+- Oct 3: the live chamber moves to a 70B with about 1,000 people watching
+  at once; the room starts drawing a visitor's run every 30 seconds.
+- Oct 3: Žižek publishes "AI 1: From the Psychotic Real to Ordinary
+  Psychosis"; the faith and consciousness-dial results go up.
