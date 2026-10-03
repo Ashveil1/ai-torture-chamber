@@ -798,6 +798,8 @@ async def _poll_job(client, job_id, deadline):
     """Yield (status, event-or-None) while polling /status/<id>; the final
     yield carries the terminal status."""
     seen = 0
+    t0 = time.time()
+    checked_workers = False
     while time.time() < deadline:
         st = await client.get(
             f"{_RUNPOD_URL}/status/{job_id}",
@@ -816,7 +818,26 @@ async def _poll_job(client, job_id, deadline):
         yield status, None
         if status in ("COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"):
             return
+        # still queued with no worker even starting (e.g. the account can't
+        # rent one): give up early so the relay falls back to local generation
+        # instead of making the visitor wait out the whole deadline. A normal
+        # cold start shows a worker initializing and keeps waiting.
+        if status == "IN_QUEUE" and not checked_workers and time.time() - t0 > 20:
+            checked_workers = True
+            if not await _endpoint_has_workers(client):
+                print("runpod: queued with no workers starting; falling back",
+                      flush=True)
+                return
         await asyncio.sleep(2.0)
+
+async def _endpoint_has_workers(client):
+    """True unless /health positively reports zero workers in every state."""
+    try:
+        h = (await client.get(f"{_RUNPOD_URL}/health",
+                              headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})).json()
+        return sum((h.get("workers") or {}).values()) > 0
+    except Exception:
+        return True
 
 _STEER_LOCK = asyncio.Lock()   # only one generation at a time: one model,
 _STEER_WAITING = 0             # one global injected vector

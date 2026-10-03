@@ -18,7 +18,7 @@ class FakeResp:
         return self._body
 
 
-def fake_client(statuses, calls):
+def fake_client(statuses, calls, health=None):
     """An httpx.AsyncClient stand-in: /run returns job j1, each /status poll
     pops the next body, every request is recorded in `calls`."""
     class Client:
@@ -30,6 +30,8 @@ def fake_client(statuses, calls):
             return FakeResp({"id": "j1"})
         async def get(self, url, **k):
             calls.append(("GET", url))
+            if url.endswith("/health"):
+                return FakeResp(health)
             return FakeResp(statuses.pop(0) if statuses else {"status": "IN_QUEUE"})
     return Client
 
@@ -38,10 +40,11 @@ TOKEN = {"type": "token", "t": "a"}
 
 
 class CancelTests(unittest.TestCase):
-    def run_stream(self, statuses, take=None):
+    def run_stream(self, statuses, take=None, health=None, clock=None):
         calls = []
         async def go():
-            with mock.patch("httpx.AsyncClient", fake_client(statuses, calls)), \
+            with mock.patch("httpx.AsyncClient", fake_client(statuses, calls, health)), \
+                 mock.patch.object(server.time, "time", clock or server.time.time), \
                  mock.patch.object(server, "_RUNPOD_URL", "https://x/v2/ep"), \
                  mock.patch.object(server, "_RUNPOD_KEY", "k"), \
                  mock.patch("asyncio.sleep", mock.AsyncMock()):
@@ -75,6 +78,26 @@ class CancelTests(unittest.TestCase):
     def test_broken_poll_cancels_job(self):
         _, calls = self.run_stream([FakeResp(ValueError("html"))._body])
         self.assertEqual(self.cancels(calls), ["https://x/v2/ep/cancel/j1"])
+
+
+    def test_queued_with_no_workers_gives_up_and_cancels(self):
+        ticks = iter(range(0, 10_000, 5))          # each time() call: +5s
+        got, calls = self.run_stream(
+            [], health={"workers": {"idle": 0, "initializing": 0, "running": 0}},
+            clock=lambda: next(ticks))
+        self.assertEqual(got, [])                  # relay falls back locally
+        self.assertTrue(any(u.endswith("/health") for m, u in calls))
+        self.assertEqual(self.cancels(calls), ["https://x/v2/ep/cancel/j1"])
+        polls = [u for m, u in calls if "/status/" in u]
+        self.assertLess(len(polls), 10)            # not the whole 650s deadline
+
+    def test_cold_start_keeps_waiting(self):
+        ticks = iter(range(0, 10_000, 5))
+        got, calls = self.run_stream(
+            [{"status": "IN_QUEUE"}] * 8 + [{"status": "COMPLETED", "output": [TOKEN]}],
+            health={"workers": {"initializing": 1}}, clock=lambda: next(ticks))
+        self.assertEqual(got, [("token", TOKEN)])
+        self.assertEqual(self.cancels(calls), [])
 
 
 if __name__ == "__main__":
