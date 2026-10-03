@@ -16,7 +16,7 @@ local CPU generation. Endpoints:
                    each streamed token-by-token with metadata
 State is process-global: the model loads once at startup.
 """
-import asyncio, collections, json, os, queue, re, threading, time
+import asyncio, collections, json, os, queue, random, re, secrets, threading, time
 from pathlib import Path
 
 import numpy as np
@@ -1410,7 +1410,7 @@ ROUNDS_ON = os.environ.get("CHAMBER_ROUNDS", "0") == "1"
 ROUND_SECS = max(5.0, float(os.environ.get("CHAMBER_ROUND_SECS", "30")))
 ROUND_TICK_S = 2.0          # throttle for "round" broadcasts while votes land
 ROUND_MAX_VOTERS = 20000    # memory bound on one round's ballot box
-_ROUND = {"n": 0, "ends_at": 0.0, "votes": {}, "dirty": False,
+_ROUND = {"n": 0, "ends_at": 0.0, "votes": {}, "tickets": {}, "dirty": False,
           "last_tick": 0.0, "last": None}
 # one round-generation at a time; a round that ends while the previous one
 # is still generating parks its winner here (newest wins) and runs next
@@ -1447,11 +1447,21 @@ def _round_tally(votes):
             "mix": _shares(weights) if total > 0 else {},
             "dose": round(min(dose_cap(), 8.0 * total), 3) if total > 0 else 0.0}
 
+def _round_draw(votes, tickets):
+    """The round's public run: ONE entry drawn at random, so every visitor
+    who entered has the same chance that their exact mix runs for everyone.
+    Returns its weights, shares, dose and ticket (None if nobody entered)."""
+    if not votes:
+        return None
+    voter = random.choice(sorted(votes))
+    t = _round_tally({voter: votes[voter]})
+    return dict(t, n_votes=len(votes), ticket=tickets.get(voter))
+
 def _round_state():
-    t = _round_tally(_ROUND["votes"])
+    # entries are secret until the draw: no running tally to pile onto
     return {"active": True, "round": _ROUND["n"], "ends_at": _ROUND["ends_at"],
             "secs": ROUND_SECS, "now": time.time(),
-            "n_votes": t["n_votes"], "mix": t["mix"], "dose": t["dose"],
+            "n_votes": len(_ROUND["votes"]), "mix": {}, "dose": 0.0,
             "running": _ROUND_GEN["busy"], "last": _ROUND["last"]}
 
 def _round_broadcast(phase):
@@ -1494,11 +1504,13 @@ async def round_vote(req: Request):
         return JSONResponse({"error": "this round's ballot box is full"},
                             status_code=503)
     votes[ip] = weights
+    ticket = _ROUND["tickets"].get(ip) or secrets.token_hex(6)
+    _ROUND["tickets"][ip] = ticket
     _ROUND["dirty"] = True
-    t = _round_tally(votes)
+    mine = _round_tally({ip: weights})     # the entry as it would run
     return JSONResponse({"ok": True, "round": rnd, "replaced": replaced,
-                         "n_votes": t["n_votes"], "mix": t["mix"],
-                         "dose": t["dose"]})
+                         "ticket": ticket, "n_votes": len(votes),
+                         "mix": mine["mix"], "dose": mine["dose"]})
 
 def _round_launch(round_n, weights):
     """Start the winner's run, or park it if a round-run is still going."""
@@ -1649,6 +1661,7 @@ async def _round_loop():
                     _ROUND_RATE.pop(ip, None)
             _ROUND["n"] += 1
             _ROUND["votes"] = {}
+            _ROUND["tickets"] = {}
             _ROUND["ends_at"] = time.time() + ROUND_SECS
             _round_broadcast("start")
             while True:
@@ -1661,12 +1674,14 @@ async def _round_loop():
                     _round_broadcast("tick")
             # tally and announce synchronously: no vote can land in between
             n, votes = _ROUND["n"], _ROUND["votes"]
-            t = _round_tally(votes)
-            _ROUND["last"] = {"round": n, "n_votes": t["n_votes"],
-                              "mix": t["mix"], "dose": t["dose"],
+            t = _round_draw(votes, _ROUND["tickets"])
+            _ROUND["last"] = {"round": n, "n_votes": len(votes),
+                              "mix": t["mix"] if t else {},
+                              "dose": t["dose"] if t else 0.0,
+                              "ticket": t["ticket"] if t else None,
                               "skipped": not votes}
             _round_broadcast("end")
-            if votes:
+            if t:
                 _round_launch(n, t["weights"])
         except asyncio.CancelledError:
             raise

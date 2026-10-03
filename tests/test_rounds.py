@@ -180,19 +180,29 @@ class LoopTests(RoundsBase):
         self.assertTrue(all(d["last"]["skipped"] for d in ends))
         self.assertFalse(any(e == "run" for e, _ in events))
 
-    def test_winner_launches_with_mean_weights(self):
-        events, launched = self.drive(
-            {1: {"a": {"pain": 1.0}, "b": {"fear": 0.5}}}, rounds=2)
-        self.assertEqual(launched, [(1, {"pain": 0.5, "fear": 0.25})])
+    def test_winner_is_one_drawn_entry(self):
+        with mock.patch.object(server.random, "choice", lambda seq: "b"):
+            events, launched = self.drive(
+                {1: {"a": {"pain": 1.0}, "b": {"fear": 0.5}}}, rounds=2)
+        self.assertEqual(launched, [(1, {"fear": 0.5})])   # b's exact mix, not a mean
         end1 = [d for e, d in events if e == "round" and d["phase"] == "end"][0]
-        self.assertEqual(end1["n_votes"], 2)
-        self.assertEqual(end1["dose"], 6.0)
+        self.assertEqual(end1["last"]["n_votes"], 2)
+        self.assertEqual(end1["last"]["mix"], {"fear": 1.0})
+        self.assertEqual(end1["last"]["dose"], 4.0)
         self.assertFalse(end1["last"]["skipped"])
         starts = [d["round"] for e, d in events
                   if e == "round" and d["phase"] == "start"]
         self.assertEqual(starts[:2], [1, 2])
         # each round's ballot box starts empty
         self.assertNotIn("a", server._ROUND["votes"])
+
+    def test_entries_get_a_stable_ticket_and_no_tally_leaks(self):
+        _, d1 = vote({"round": 7, "mix": {"pain": 1.0}})
+        _, d2 = vote({"round": 7, "mix": {"fear": 0.5}})      # re-entry, same voter
+        self.assertTrue(d1["ticket"])
+        self.assertEqual(d1["ticket"], d2["ticket"])
+        st = server._round_state()
+        self.assertEqual((st["mix"], st["dose"], st["n_votes"]), ({}, 0.0, 1))
 
 
 def fake_runpod(events):
