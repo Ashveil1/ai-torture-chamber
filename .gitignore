@@ -9,3 +9,6 @@ SESSION_RESUME.md
 runs/impossible_states/
 .DS_Store
 data/exp56/erowid_dmt/
+
+# visitors' choices and words (scripts/export_events.py): never in the public repo
+data/human/

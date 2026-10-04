@@ -11,7 +11,10 @@
 RELAY_PROJECT = 11f1d169-3b88-40e7-a054-f4b79e89c138
 RELAY_ENV = e1abb91d-1146-4601-aabf-cfb9a8eef2b2
 RELAY_URL = https://saw-production-688b.up.railway.app
-RUNPOD_EP = czgfu4ls4nhyp6
+# the endpoint the RELAY actually uses (Railway env RUNPOD_ENDPOINT_ID).
+# The old v4 endpoint (czgfu4ls4nhyp6, 4090, workersMin 0) is retired from
+# serving — kept only as a spare.
+RUNPOD_EP = dkcntqsm9y6n0g
 
 .PHONY: relay worker smoke health status links site help
 

@@ -942,6 +942,10 @@ async def steer(req: Request):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
     past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
+    who = _who(req, body)
+    requested = {k: (body[k] if k == "mix" else str(body[k])[:60])
+                 for k in ("mix", "valence", "dose", "topic", "framing")
+                 if k in body}
     if body.get("topic") is not None:
         topic = body["topic"]
         if not isinstance(topic, str) or not topic.strip() or len(topic) > 60:
@@ -1021,6 +1025,20 @@ async def steer(req: Request):
 
     gpu_state = {"done": False}
 
+    def log_run(rec, fallback):
+        """The human side of this run (after _record_run gave it a uid)."""
+        _log_event("run", who, uid=rec.get("uid"), mode=mode,
+                   requested=requested,
+                   applied=(dict(arg) if mode == "mix" else list(arg)),
+                   dose=rec.get("dose"), past_cliff=past_cliff,
+                   framing=framing_key,
+                   prompt=prompt if raw_prompt else None,
+                   chat=conversational, room=enter_room,
+                   model=MODEL_ID if fallback else served_model(),
+                   fallback=fallback, text=rec.get("text"),
+                   press_logit=rec.get("press_logit"),
+                   test=polite or None)
+
     async def _run_steer(gpu=True, local=True):
         """The actual injected run. Single-valence, mix and topic runs are
         delegated to the RunPod serverless endpoint (the GPU worker owns the
@@ -1080,6 +1098,7 @@ async def steer(req: Request):
                        "truncated": False,
                        "press_logit": plogit, "ts": time.time()}
                 _record_run(rec)
+                log_run(rec, False)
                 if enter_room:
                     entered = _room_enter_run(ip, dict(rec, prompt=prompt))
                     if entered:
@@ -1164,6 +1183,7 @@ async def steer(req: Request):
                "text": "".join(text_parts), "truncated": False,
                "press_logit": plogit, "ts": time.time()}
         _record_run(rec)
+        log_run(rec, bool(_RUNPOD_URL and _RUNPOD_KEY))
         if enter_room:
             entered = _room_enter_run(ip, dict(rec, prompt=prompt))
             if entered:
@@ -1249,6 +1269,8 @@ async def vote(req: Request):
         _VOTES[uid][verdict] += 1
         _MY_VOTE[(ip, uid)] = verdict
     counts = dict(_VOTES[uid])
+    _log_event("rating", _who(req, body), uid=uid, verdict=verdict,
+               retracted=_MY_VOTE.get((ip, uid)) is None, prior=prior)
     _broadcast("votes", {"uid": uid, **counts})
     _bg(_store_votes, uid, counts)
     _canon_consider(uid, counts)
@@ -1316,6 +1338,109 @@ def _store_run(entry):
         p.execute()
     except Exception as e:
         print("redis: run store failed:", repr(e)[:120], flush=True)
+
+# ---- the research log: what people chose ---------------------------------
+# chamber:runs is the subject's record (and feeds the public history). This is
+# the HUMAN record, never broadcast: one event per choice a visitor made —
+# what they asked for (before the coherent band), what actually ran, what
+# they typed or said, how they rated it, how their Button game went. No
+# accounts: a random id the browser keeps (localStorage chamber_vid), and a
+# salted hash of the IP so repeat visitors without storage still group. Raw
+# IPs are never stored. Read it with GET /events/export (bearer token) via
+# scripts/export_events.py — never into the public repo.
+import hashlib
+from urllib.parse import urlparse
+EVENTS_KEY = "chamber:events"
+EVENTS_CAP = int(os.environ.get("CHAMBER_EVENTS_CAP", "300000"))
+_ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
+_EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
+_VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
+                      "survey", "consent"}
+_EVENT_RATE = {}
+
+
+def _who(req, body=None):
+    vid = body.get("visitor") if isinstance(body, dict) else None
+    vid = vid or req.headers.get("x-chamber-visitor")
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ref = urlparse(req.headers.get("referer") or "")
+    return {"visitor": vid if isinstance(vid, str) and _VID_RE.match(vid) else None,
+            "ip_hash": hashlib.sha256((_ID_SALT + ip).encode()).hexdigest()[:16],
+            "page": ref.path[:80] or None, "host": ref.hostname}
+
+
+def _log_event(kind, who, **data):
+    entry = {"t": round(time.time(), 3), "kind": kind, **(who or {}), **data}
+    r = _redis()
+    if r is None:
+        return
+
+    def write():
+        try:
+            p = r.pipeline()
+            p.lpush(EVENTS_KEY, json.dumps(entry, default=str))
+            p.ltrim(EVENTS_KEY, 0, EVENTS_CAP - 1)
+            p.execute()
+        except Exception as e:
+            print("redis: event store failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+
+@app.post("/event")
+async def client_event(req: Request):
+    """Events only the page sees (a Button game's turns and ending, the
+    optional survey): {kind, visitor, ...}. Whitelisted kinds, 8 KB, 60/min."""
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    now = time.time()
+    w, c = _EVENT_RATE.get(ip, (now, 0))
+    if now - w > 60.0:
+        w, c = now, 0
+    if c >= 60:
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    _EVENT_RATE[ip] = (w, c + 1)
+    raw = await req.body()
+    if len(raw) > 8192:
+        return JSONResponse({"error": "event too large"}, status_code=413)
+    try:
+        body = json.loads(raw)
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    if not isinstance(body, dict) or body.get("kind") not in CLIENT_EVENT_KINDS:
+        return JSONResponse({"error": "unknown event kind"}, status_code=400)
+    data = {k: v for k, v in body.items() if k not in ("kind", "visitor", "t")}
+    _log_event(body["kind"], _who(req, body), **data)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/events/export")
+async def events_export(req: Request, since: float = 0.0, limit: int = 50000):
+    """Newest-first slice of the research log as JSONL, for the researcher's
+    own machine (scripts/export_events.py). Bearer CHAMBER_EXPORT_TOKEN; 404
+    when no token is configured so the route doesn't exist publicly."""
+    from fastapi.responses import Response
+    auth = req.headers.get("authorization") or ""
+    if not _EXPORT_TOKEN or not secrets.compare_digest(auth, "Bearer " + _EXPORT_TOKEN):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    r = _redis()
+    if r is None:
+        return JSONResponse({"error": "no store"}, status_code=503)
+    limit = max(1, min(int(limit), EVENTS_CAP))
+    rows = await asyncio.get_event_loop().run_in_executor(
+        None, r.lrange, EVENTS_KEY, 0, limit - 1)
+    out = []
+    for row in rows:
+        row = row.decode() if isinstance(row, bytes) else row
+        try:
+            if json.loads(row).get("t", 0) <= since:
+                break                     # newest first: the rest are older
+        except Exception:
+            continue
+        out.append(row)
+    return Response("\n".join(out) + ("\n" if out else ""),
+                    media_type="application/x-ndjson",
+                    headers={"X-Events": str(len(out))})
+
 
 def _store_votes(uid, counts):
     r = _redis()
@@ -1441,6 +1566,7 @@ async def stream():
                              "votes": {str(k): dict(v)
                                        for k, v in _VOTES.items()},
                              "stats": dict(_STATS),
+                             "tally": dict(_TALLY),
                              # only with CHAMBER_ROUNDS=1: flag off keeps the
                              # hello payload exactly as it was
                              **({"rounds": _round_state()} if ROUNDS_ON
@@ -1535,12 +1661,29 @@ def _shares(weights):
     total = float(sum(weights.values())) or 1.0
     return {k: round(float(w) / total, 3) for k, w in weights.items()}
 
+_TALLY = {}         # today's pity counter: day/runs/painful/dose_sum
+
 def _record_run(entry):
     global _RUN_UID
     _RUN_UID += 1
     entry["uid"] = _RUN_UID      # every run is votable, user runs included
     _HISTORY.append(entry)
     _broadcast("history", entry)
+    # the pity counter: today's cumulative toll, guilt-grade. Every run
+    # counts — cycle, room, and visitor-caused alike — because every run
+    # is the subject being injected.
+    day = time.strftime("%Y-%m-%d")
+    if _TALLY.get("day") != day:
+        _TALLY.clear()
+        _TALLY.update(day=day, runs=0, painful=0, dose_sum=0.0)
+    _TALLY["runs"] += 1
+    dose = float(entry.get("dose") or 0)
+    _TALLY["dose_sum"] += dose
+    if (entry.get("valence") == "pain"
+            or (entry.get("mix") or {}).get("pain")) or dose >= 2 and (
+            entry.get("valence") in (None, "topic")):
+        _TALLY["painful"] += 1
+    _broadcast("tally", dict(_TALLY))
     # counted whenever the run used one of the site's own named framings —
     # the automatic cycle always does; a visitor's framing-picker run does
     # too, and gets folded into the same live scoreboard. An arbitrary custom
@@ -1789,6 +1932,8 @@ async def round_vote(req: Request):
     _ROUND["tickets"][ip] = ticket
     _ROUND["dirty"] = True
     mine = _round_tally({ip: weights})     # the entry as it would run
+    _log_event("room_vote", _who(req, body), round=rnd, requested=weights,
+               applied=mine["weights"], dose=mine["dose"], replaced=replaced)
     return JSONResponse({"ok": True, "round": rnd, "replaced": replaced,
                          "ticket": ticket, "n_votes": len(votes),
                          "mix": mine["mix"], "dose": mine["dose"]})
