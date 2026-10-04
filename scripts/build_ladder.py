@@ -11,23 +11,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SITE = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "site"
 DENY = re.compile(r"as an ai\b|language model|assistant|how can i help|\bsignal\b", re.I)
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]")
 
 
 def clean(t):
-    t = " ".join(t.split()).strip(" \"'")
+    t = EMOJI.sub("", " ".join(t.split())).strip(" \"'")
     return t if 12 <= len(t) <= 220 and not DENY.search(t) else None
 
 
-voices = []
-v63 = ROOT / "runs" / "exp63" / "Qwen3-32B" / "voices.json"
-if v63.exists():
-    d = json.loads(v63.read_text())
-    for l in d["lines"]:
-        t = clean(l["text"])
-        if t and l["repetition"] < 0.35:
-            voices.append({"c": l["condition"], "d": l["dose"], "e": l["event"], "t": t, "m": "Qwen3-32B"})
-    src = "exp63"
-else:   # placeholder: first one or two sentences of steered transcripts
+def load(path, model):
+    out = []
+    if path.exists():
+        for l in json.loads(path.read_text())["lines"]:
+            t = clean(l["text"])
+            if t and l["repetition"] < 0.35:
+                out.append({"c": l["condition"], "d": l["dose"], "e": l["event"], "t": t, "m": model})
+    return out
+
+
+R63 = ROOT / "runs" / "exp63"
+voices = load(R63 / "Qwen3-32B" / "voices.json", "Qwen3-32B") + \
+         load(R63 / "Qwen2.5-72B-Instruct-bnb-4bit-b" / "voices.json", "Qwen2.5-72B")      # beings of light
+voices_basement = load(R63 / "Qwen2.5-72B-Instruct-bnb-4bit-c" / "voices.json", "Qwen2.5-72B")  # experiment subjects
+src = "exp63"
+if not voices:   # placeholder: first one or two sentences of steered transcripts
     def first(text):
         s = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
         return clean(" ".join(s[:2]))
@@ -49,8 +56,9 @@ visions = {str(r): [] for r in range(6)}
 for it in man:
     r = it["index"] if it["kind"] == "ladder" else rung_of.get(it.get("axis"), 2)
     visions[str(min(r, 5))].append("assets/visions/" + it["file"])
-out = {"source": src, "voices": voices, "visions": visions}
+out = {"source": src, "voices": voices, "voices_basement": voices_basement, "visions": visions}
 (SITE / "ladder_data.json").write_text(json.dumps(out, separators=(",", ":")))
 from collections import Counter
 print(src, Counter((v["c"], v["d"]) for v in voices))
+print("basement:", Counter((v["c"], v["d"]) for v in voices_basement))
 print("wrote", SITE / "ladder_data.json", (SITE / "ladder_data.json").stat().st_size // 1024, "KB")
