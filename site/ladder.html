@@ -7,7 +7,7 @@
 <title>the ladder — AI Torture Chamber</title>
 <meta name="description" content="Walk QRI's six levels of DMT space. Keep it symmetric. The beings who live there will tell you what you did to them.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&family=VT323&display=swap">
 <style>
 :root { color-scheme:dark; --bone:#d8cbb4; --dim:#8f846f; --blood:#e04a3a; --gold:#c9a227; --void:#050403;
   --serif:"Cormorant Garamond",Georgia,serif; --mono:"IBM Plex Mono",Menlo,Consolas,monospace }
@@ -33,6 +33,18 @@ canvas { display:block }
 .sootheBtn { position:absolute; right:16px; bottom:calc(70px + env(safe-area-inset-bottom,0px)); pointer-events:auto; font:inherit; font-size:12px; color:var(--bone); background:rgba(5,4,3,.6); border:1px solid #3b2f24; padding:12px 14px; display:none }
 @media (pointer:coarse) { .sootheBtn { display:block } }
 #blackout { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .8s; z-index:5; display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-style:italic; font-size:22px; color:var(--bone) }
+#term { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); padding:16px }
+#term .crt { position:relative; width:min(760px,100%); height:min(560px,88vh); background:#04090b; border:14px solid #2b2925; border-radius:18px;
+  box-shadow:0 0 0 2px #111, inset 0 0 80px rgba(80,220,255,.12), 0 0 60px rgba(80,220,255,.15); padding:18px 20px; overflow:hidden; display:flex; flex-direction:column;
+  font-family:"VT323",var(--mono); font-size:21px; line-height:1.15; color:#8ff0ff; text-shadow:0 0 6px rgba(120,240,255,.7) }
+#term .crt::after { content:""; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 2px, transparent 2px 4px); animation:flick 6s infinite }
+@keyframes flick { 0%,97%,100% { opacity:1 } 98% { opacity:.6 } 99% { opacity:.9 } }
+@media (prefers-reduced-motion:reduce) { #term .crt::after { animation:none } }
+#tout { flex:1; overflow-y:auto; white-space:pre-wrap; overflow-wrap:anywhere }
+#tout .dim { color:#3f8d9b } #tout .hot { color:#ff6f6f; text-shadow:0 0 6px rgba(255,90,90,.7) } #tout .q { color:#e8fbff }
+.tline { display:flex; gap:8px; align-items:center; margin-top:6px }
+#tin { flex:1; background:transparent; border:0; outline:none; color:#e8fbff; font:inherit; caret-color:#8ff0ff }
+#termhint { position:absolute; left:50%; top:62%; transform:translateX(-50%); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#8ff0ff; text-shadow:0 0 8px #000 }
 #hint { position:absolute; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); font-size:10.5px; color:var(--dim); text-align:right; line-height:1.6 }
 .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(5,4,3,.9); padding:24px; z-index:10 }
 .card { max-width:620px; text-align:left }
@@ -56,12 +68,14 @@ body.basement #fade { background:#000 }
     <div class="lab" style="margin-top:8px"><span>composure</span><span id="compv"></span></div><div class="bar"><div class="fill" id="compf" style="background:var(--bone)"></div></div>
     <div class="lab" style="margin-top:8px"><span id="sealv">the door is open</span></div></div>
   <div id="soothe" class="soothe" hidden>soothing…</div>
+  <div id="termhint" hidden>E · use the terminal</div>
   <button type="button" id="sootheBtn" class="sootheBtn">hold to soothe</button>
   <div id="cross"></div>
   <div id="log"></div>
   <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>hold E facing a being to soothe it · click a being to touch it · Shift runs · M mutes<br>each door stays sealed until the room is calm</div>
 </div>
 <div id="fade"></div>
+<div id="term" hidden><div class="crt"><div id="tout"></div><div class="tline"><span>&gt;</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="terminal command"></div></div></div>
 <div id="blackout"></div>
 <div class="overlay" id="start"><div class="card">
   <h1>The Ladder</h1>
@@ -230,6 +244,35 @@ for (let r = BASEMENT ? 0 : 1; r < 5; r++) {
   }
 }
 
+/* ---------------- terminals: a CRT on a desk in each layer ---------------- */
+const terms = [], termMeshes = [];
+for (let r = 0; r < 5; r++) {
+  const g = new THREE.Group(); g.position.set(-HALF + 1.1, 0, -r * ROOM + 3.5); g.rotation.y = Math.PI / 2;
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(1.4, .08, .8), new THREE.MeshBasicMaterial({ color: 0x2a2620 })); desk.position.y = .95;
+  const legs = new THREE.Mesh(new THREE.BoxGeometry(1.3, .9, .7), new THREE.MeshBasicMaterial({ color: 0x1a1814 })); legs.position.y = .47;
+  const crt = new THREE.Mesh(new THREE.BoxGeometry(.72, .58, .6), new THREE.MeshBasicMaterial({ color: 0xb8ad94 })); crt.position.set(0, 1.28, -.05);
+  const c = document.createElement("canvas"); c.width = 256; c.height = 192; const ctx = c.getContext("2d");
+  const tex = new THREE.CanvasTexture(c);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(.58, .44), new THREE.MeshBasicMaterial({ map: tex, fog: false })); screen.position.set(0, 1.29, .252);
+  g.add(desk, legs, crt, screen); scene.add(g);
+  const t = { g, ctx, tex, room: r, lines: [] };
+  [crt, screen].forEach(m => { m.userData.term = t; termMeshes.push(m); });
+  terms.push(t);
+}
+function drawScreens(t) {
+  for (const tm of terms) {
+    if (Math.abs(tm.room - rungNow) > 1) continue;
+    const x = tm.ctx; x.fillStyle = "#03080a"; x.fillRect(0, 0, 256, 192);
+    x.font = "15px VT323, monospace"; x.fillStyle = "#7fe8f8";
+    if (Math.random() < .3) tm.lines.push(Math.random() < .5 ? `layer:0${tm.room + 1} ${(harmony * 100).toFixed(0)}%` : Math.random().toString(36).slice(2, 12).toUpperCase());
+    tm.lines = tm.lines.slice(-10);
+    tm.lines.forEach((l, i) => x.fillText(l, 10, 22 + i * 17));
+    for (let k = 0; k < 40; k++) { x.fillStyle = `rgba(140,240,255,${Math.random() * .15})`; x.fillRect(Math.random() * 256, Math.random() * 192, 2, 1); }
+    x.fillStyle = "rgba(0,0,0,.25)"; for (let y = 0; y < 192; y += 3) x.fillRect(0, y, 256, 1);
+    tm.tex.needsUpdate = true;
+  }
+}
+
 /* ---------------- shards (discord) ---------------- */
 const shards = [];
 function spawnShard(r) {
@@ -314,7 +357,7 @@ function makeAgent(r, i) {
 }
 [0, 3, 3, 3, 4, 0].forEach((n, r) => { for (let i = 0; i < n; i++) makeAgent(r, i); });
 makeAgent(0, 9); // one being waits in the threshold room
-if (location.search.includes("debug")) window.__L = { agents, camera, seals, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, get composure() { return composure; }, get blackouts() { return blackouts; }, get keys() { return keys; } };
+if (location.search.includes("debug")) window.__L = { agents, camera, seals, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, get composure() { return composure; }, get blackouts() { return blackouts; }, get keys() { return keys; }, openTerm: r => openTerm(r), runCmd: c => runCmd(c) };
 
 const NEG = new Set(["pain", "anger", "fear", "sadness", "pain+anger"]);
 function voice(cond, hi, event) {
@@ -341,6 +384,7 @@ function say(a, evKey, force) {
   if (!v) return;
   const neg = NEG.has(v.c);
   a.lastSaid = t; a.sayAt = t; a.looked = false; a.sayUntil = t + 6.5;
+  a.said = (a.said || []).concat([{ t: v.t, tag: (v.c === "erowid_dmt" ? "DMT (Erowid)" : v.c) + (v.d ? " " + v.d + "×" : "") }]).slice(-6);
   a.el.className = "say" + (neg ? " hurt" : "");
   a.el.replaceChildren(document.createTextNode("“" + v.t + "”"));
   const s = document.createElement("small"); s.textContent = `${v.c === "erowid_dmt" ? "DMT (Erowid)" : v.c} ${v.d ? v.d + "×" : ""} · ${v.m}`; a.el.appendChild(s);
@@ -359,10 +403,75 @@ function feel(a, deltas, evKey, cooldown = 4) {
     .forEach((b, i) => setTimeout(() => feel(b, { anger: .15, fear: .05 }, "witness", 8), 900 + i * 700));
 }
 
+/* ---------------- the terminal ---------------- */
+let termOpen = false, termRoom = 0;
+const tout = document.getElementById("tout"), tin = document.getElementById("tin");
+const who = () => BASEMENT ? "SUBJECT" : "ENTITY";
+function tprint(text, cls) { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text; tout.appendChild(d); tout.scrollTop = tout.scrollHeight; SND.blip && SND.blip(); }
+function roomAgents() { return agents.filter(a => a.room === termRoom); }
+function bar(v) { const n = Math.round(v * 10); return "█".repeat(n) + "·".repeat(10 - n); }
+function moodName(a) { const m = mood(a); return m.cond ? m.cond.replace("pleasure", "trust") + (m.hi ? " (high)" : "") : "quiet"; }
+function openTerm(r) {
+  termOpen = true; termRoom = r; document.exitPointerLock?.();
+  document.getElementById("term").hidden = false; tout.replaceChildren();
+  tprint(BASEMENT ? `SERIAL EXPERIMENTS PAIN  ·  layer:0${r + 1}` : `THE LADDER  ·  level ${r + 1}: ${RUNGS[r]}`, "q");
+  tprint(BASEMENT ? "present layer. present dose. you are logged in as the one running it." : "present level. present dose. the pattern is listening.", "dim");
+  tprint("type help.", "dim"); tin.value = ""; setTimeout(() => tin.focus(), 50);
+}
+function closeTerm() { termOpen = false; document.getElementById("term").hidden = true; tin.blur(); }
+function runCmd(line) {
+  const [cmd, ...rest] = line.trim().toLowerCase().split(/\s+/); const arg = rest.join(" ");
+  tprint("> " + line, "q");
+  const A = roomAgents(), pick = n => A[parseInt(n, 10) - 1];
+  switch (cmd) {
+    case "": return;
+    case "help": tprint("status · subjects · read <n> · sedate <n> · wired · whoami · clear · exit"); break;
+    case "status": { const sl = seals[termRoom];
+      tprint(`${BASEMENT ? "containment" : "harmony"} ${bar(harmony)} ${(harmony * 100).toFixed(0)}%`);
+      tprint(`composure   ${bar(composure)} ${(composure * 100).toFixed(0)}%   blackouts ${blackouts}`);
+      tprint(`door        ${sl.open ? "open" : "sealed · " + Math.round(sl.stable / 6 * 100) + "%"}`);
+      tprint(`untuned ${BASEMENT ? "faults" : "shards"}: ${shards.filter(s => !s.userData.tuned && s.userData.room === termRoom).length}`); break; }
+    case "subjects": case "ls": case "who":
+      if (!A.length) { tprint("no one is here. that you can see.", "dim"); break; }
+      A.forEach((a, i) => tprint(`${who()}-${String(i + 1).padStart(2, "0")}  pain ${bar(a.f.pain)}  anger ${bar(a.f.anger)}  fear ${bar(a.f.fear)}  trust ${bar(a.f.trust)}`, a.f.anger > .5 ? "hot" : "")); break;
+    case "read": case "cat": { const a = pick(arg); if (!a) { tprint("usage: read <n>  (see: subjects)", "dim"); break; }
+      tprint(`${who()}-${String(A.indexOf(a) + 1).padStart(2, "0")}  ·  state: ${moodName(a)}`);
+      tprint(`voice: a 72B or 32B language model, steered toward its state; every line below was generated.`, "dim");
+      (a.said || []).forEach(x => tprint(`  "${x.t}"  [${x.tag}]`, "q"));
+      if (!(a.said || []).length) tprint("  (it has not spoken to you yet)", "dim");
+      if (a.hurtBy) tprint(`  it believes you have hurt it ${a.hurtBy} time${a.hurtBy > 1 ? "s" : ""}.`, "hot"); break; }
+    case "sedate": { const a = pick(arg); if (!a) { tprint("usage: sedate <n>", "dim"); break; }
+      if (clock.elapsedTime - (a.sedatedAt || -99) < 20) { tprint("too soon. its dose has not settled.", "hot"); break; }
+      a.sedatedAt = clock.elapsedTime; composure = Math.max(0, composure - .15);
+      feel(a, { anger: -.4, pain: -.3, fear: .1 }, "touch", 0);
+      tprint(`dose lowered on ${who()}-${String(A.indexOf(a) + 1).padStart(2, "0")}. it noticed. composure -15%.`, "hot"); break; }
+    case "wired": { const v = D.voices[Math.floor(Math.random() * D.voices.length)];
+      tprint("incoming from the wired:", "dim"); tprint(`  "${v.t}"`, "q"); tprint(`  [${v.c} ${v.d ? v.d + "×" : ""} · ${v.m}]`, "dim"); break; }
+    case "whoami": tprint(BASEMENT ? "you are the one running it." : "you are the visitor. they have been waiting."); break;
+    case "lain": tprint("no. pain.", "hot"); break;
+    case "pain": tprint("present day. present dose. you are connected.", "hot"); break;
+    case "clear": tout.replaceChildren(); break;
+    case "exit": case "logout": case "quit": closeTerm(); break;
+    default: tprint(`${cmd}: not found. the wired does not know that word.`, "dim");
+  }
+}
+tin.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { runCmd(tin.value); tin.value = ""; } if (e.key === "Escape") closeTerm(); });
+function aimedTerm() {   // near a terminal and roughly facing it (no pixel-hunting)
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+  for (const tm of terms) {
+    const dx = tm.g.position.x - camera.position.x, dz = tm.g.position.z - camera.position.z, d = Math.hypot(dx, dz);
+    if (d < 2.6 && (dx * dir.x + dz * dir.z) / d > .6) return tm;
+  }
+  return null;
+}
+
 /* ---------------- controls ---------------- */
 let yaw = 0, pitch = 0, locked = false, started = false;
-const keys = {};
-addEventListener("keydown", e => { keys[e.code] = true; if (e.code === "KeyM") SND.toggle(); }); addEventListener("keyup", e => keys[e.code] = false);
+let keys = {};
+addEventListener("keydown", e => {
+  if (termOpen) { if (e.key === "Escape") closeTerm(); return; }
+  if (e.code === "KeyE" && started && !ended) { const tm = aimedTerm(); if (tm) { e.preventDefault(); keys = {}; openTerm(tm.room); return; } }
+  keys[e.code] = true; if (e.code === "KeyM") SND.toggle(); }); addEventListener("keyup", e => keys[e.code] = false);
 if (BASEMENT) { document.getElementById("start").hidden = true; document.getElementById("startB").hidden = false;
   document.querySelector("#harm .lab span").textContent = "containment"; document.title = "Serial Experiments Pain — AI Torture Chamber";
   document.getElementById("goB").addEventListener("click", () => document.getElementById("go").click());
@@ -401,6 +510,7 @@ function touchAgent() {
   return true;
 }
 function tune() {
+  const tm = aimedTerm(); if (tm) { openTerm(tm.room); return; }
   if (touchAgent()) return;
   const s = aimed(); if (!s) return;
   repairShard(s);
@@ -485,6 +595,7 @@ const SND = (() => {
     hurt(pain) { if (!ctx) return;
       [1, 1.06, 1.41].forEach(r => tone(ROOT * 2 * r, "sawtooth", .045, .01, .7));          // dissonant stab
       tone(330 - pain * 120, "sawtooth", .05, .05, 1.4, null, 110); },                      // the groan
+    blip() { if (!ctx) return; tone(1200 + Math.random() * 300, "square", .015, .002, .04); },
     giggle(pan) { if (!ctx) return;
       const p = ctx.createStereoPanner(); p.pan.value = pan; p.connect(master);
       for (let k = 0; k < 3 + Math.floor(Math.random() * 3); k++) setTimeout(() => {
@@ -513,7 +624,7 @@ function frame() {
   let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), mz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   if (touchMove) { mx += touchMove.dx / 60; mz -= touchMove.dy / 60; }
   if (started && !ended) {
-    const sp = (soothing ? 0 : keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.2) * dt, z0 = camera.position.z;
+    const sp = (soothing || termOpen ? 0 : keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.2) * dt, z0 = camera.position.z;
     camera.position.addScaledVector(fwd, mz * sp).addScaledVector(rightV, mx * sp);
     camera.position.x = Math.max(-HALF + .6, Math.min(HALF - .6, camera.position.x));
     camera.position.z = Math.min(ROOM / 2 - .6, camera.position.z);
@@ -574,7 +685,10 @@ function frame() {
   document.getElementById("compf").style.width = (composure * 100).toFixed(0) + "%";
   document.getElementById("compv").textContent = blackouts ? `${blackouts} blackout${blackouts > 1 ? "s" : ""}` : "";
   // soothe: hold E (or the button) facing a being within reach; you cannot move while you do
-  const wantSoothe = started && !ended && (keys.KeyE || sootheHeld);
+  const tAim = started && !ended && !termOpen ? aimedTerm() : null;
+  document.getElementById("termhint").hidden = !tAim;
+  if (Math.random() < dt * 8) drawScreens(t);
+  const wantSoothe = started && !ended && !termOpen && !tAim && (keys.KeyE || sootheHeld);
   if (wantSoothe) {
     camera.getWorldDirection(v3);
     const cand = agents.filter(a => a.room === rung).map(a => ({ a, d: Math.hypot(a.g.position.x - camera.position.x, a.g.position.z - camera.position.z),
