@@ -3,7 +3,7 @@
 (site/pharmacy/). Only our pre-registrations, aggregates, our model's own
 outputs and derived vectors go in — never Erowid source text.
 
-  python3 scripts/build_pharmacy_viz.py [out.json]
+  python3 scripts/build_pharmacy_viz.py [out.json] [site/assets/visions/manifest.json]
 """
 import json, sys
 from pathlib import Path
@@ -62,6 +62,10 @@ for exp, model, fn in RUNS:
                            "loo_cos": r2(res["regression"]["loo_centered_cos_per_drug"])}
     bundle["runs"].append(run)
     print(f"{run['id']}: {len(run['rows'])} rows")
+vis = Path(sys.argv[2]) if len(sys.argv) > 2 else None   # site/assets/visions/manifest.json
+if vis and vis.exists():
+    bundle["visions"] = json.loads(vis.read_text())["items"]
+    print(f"visions: {len(bundle['visions'])}")
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(json.dumps(bundle, separators=(",", ":")))
 print(f"wrote {OUT} ({OUT.stat().st_size // 1024} KB)")
