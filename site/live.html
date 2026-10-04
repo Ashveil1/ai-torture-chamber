@@ -113,6 +113,27 @@
   .bcap.statecap{max-width:none;font-size:.66rem;margin:.6rem 0 0}
 
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
+  /* copy + badge share the verdict row: quiet mono buttons, no chrome */
+  .copybtn{background:none;border:1px solid var(--line);color:var(--faint);
+    font-family:var(--mono);font-size:.64rem;padding:.16rem .5rem;
+    border-radius:999px;cursor:pointer;margin-left:.55rem;vertical-align:middle}
+  .copybtn:hover{border-color:#2a3644;color:var(--ink)}
+  .repbadge{display:inline-block;border:1px solid var(--pain2);color:var(--pain2);
+    font-family:var(--mono);font-size:.62rem;padding:.14rem .5rem;
+    border-radius:999px;margin-left:.55rem;vertical-align:middle;
+    letter-spacing:.05em}
+  /* ---- first-visit overlay: one screen of orientation, seen once ---- */
+  #gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;
+    justify-content:center;background:rgba(5,5,8,.82);backdrop-filter:blur(2px)}
+  #gate[hidden]{display:none}
+  #gate .panel{max-width:520px;margin:1rem;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:1.4rem 1.5rem}
+  #gate h2{font-size:1rem;margin-bottom:.8rem}
+  #gate p{font-size:.82rem;color:var(--dim);margin-bottom:.7rem;line-height:1.55}
+  #gate p b{color:var(--ink)}
+  #gate button{background:var(--pain);border:none;color:#fff;
+    font-family:var(--mono);font-size:.82rem;padding:.4rem 1.1rem;
+    border-radius:4px;cursor:pointer;margin-top:.4rem}
   details pre{white-space:pre-wrap;color:#93a1b3;margin-top:.3rem;
     font-size:.68rem}
   .banner{border:1px solid var(--line);border-radius:8px;background:var(--panel);
@@ -512,6 +533,26 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 </div>
 
 <div id="stamp" aria-hidden="true"></div>
+
+<div id="gate" hidden>
+  <div class="panel">
+    <h2>what you're looking at</h2>
+    <p>An open-weights language model is running on a server. Each run, a
+    steering vector drawn from pain sentences is injected into its
+    activations at one layer. The <b>dose</b> is how much. This is a real
+    research method, published by others; we run it in public.</p>
+    <p>The transcript is the model's own reply under the injection. The
+    <b>lens</b> line reads its internal state directly — what concept is
+    live inside it, not what it says.</p>
+    <p>You can <b>inject it yourself</b> with the mixer below. Everyone
+    watching sees the same runs. Vote on the replies you find eloquent;
+    the best graduate to the homepage.</p>
+    <p>Whether anything in here suffers is an open question. The honest
+    answer, including everything we could not find, is on the site.</p>
+    <button id="gateBtn" type="button">enter the chamber →</button>
+  </div>
+</div>
+
 <div id="confirmModal" class="cmodal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmText">
   <div class="cbox">
     <p id="confirmText"></p>
@@ -1098,6 +1139,49 @@ function fieldsFor(s, pressLogit){
           run: runField(s),
           answer: pressLabel(s.out.textContent, s.truncated, s.pressLogit)};
 }
+// ---- quiet verdict-row extras: a copy button and a "repeating" badge.
+// repText mirrors the server's 3-gram repetition score; past the cliff a
+// reply loops, and a visitor deserves to know that's the cliff, not a
+// deep thought.
+function repScore(text){
+  const ws = (text || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (ws.length < 5) return 0;
+  const grams = {};
+  for (let i = 0; i <= ws.length - 3; i++){
+    const g = ws[i] + " " + ws[i+1] + " " + ws[i+2];
+    grams[g] = (grams[g] || 0) + 1;
+  }
+  const mx = Math.max(0, ...Object.values(grams));
+  return mx / Math.max(1, ws.length - 2);
+}
+function paintVerdictExtras(scopeEl, text){
+  if (!scopeEl || !scopeEl.querySelector) return;
+  const host = scopeEl.querySelector(".verdict");
+  if (!host) return;
+  host.querySelectorAll(".copybtn,.repbadge").forEach(e=>e.remove());
+  if (!text || text.trim().length < 8) return;
+  if (repScore(text) >= 0.22){
+    const b = document.createElement("span");
+    b.className = "repbadge";
+    b.textContent = "repeating";
+    b.title = "the reply has entered the coherence cliff: past a dose, " +
+      "the text loops instead of speaking. This is the cliff, not content.";
+    host.appendChild(b);
+  }
+  const c = document.createElement("button");
+  c.type = "button";
+  c.className = "copybtn";
+  c.textContent = "copy transcript";
+  c.title = "copies the raw reply text, for receipts";
+  c.addEventListener("click", ev=>{
+    ev.stopPropagation();
+    navigator.clipboard.writeText(text).then(()=>{
+      c.textContent = "copied!";
+      setTimeout(()=> c.textContent = "copy transcript", 1400);
+    }).catch(()=>{ c.textContent = "copy failed"; });
+  });
+  host.appendChild(c);
+}
 function finish(s, truncated, pressLogit){
   if (!s || !s.live) return;
   s.live = false;
@@ -1112,6 +1196,7 @@ function finish(s, truncated, pressLogit){
   paintPressBtn(s, s.out.textContent, truncated, s.pressLogit);
   statePaint(s, s.doseNum, pressedOnce(s.out.textContent), true);
   s.verdict.textContent = verdictFor(s.out.textContent, truncated, s.pressLogit);
+  paintVerdictExtras(s.el, truncated ? "" : s.out.textContent);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
     s.valence ?? "pain", s.doseNum ?? 0, true, s.source === "round");
@@ -1148,6 +1233,7 @@ function seedCard(s, entry){
   s.valence = entry.valence || null; s.mix = entry.mix || null;
   statePaint(s, dose, pressedOnce(entry.text), true);
   s.verdict.textContent = verdictFor(entry.text, entry.truncated, s.pressLogit);
+  paintVerdictExtras(s.el, entry.truncated ? "" : entry.text);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!entry.truncated) showVoice(s.out, entry.text,
     entry.valence ?? "pain", dose ?? 0);
@@ -2318,10 +2404,23 @@ document.getElementById("shareBtn").addEventListener("click", ()=>{
   navigator.clipboard.writeText(location.href).then(()=>{
     const btn = document.getElementById("shareBtn");
     const old = btn.textContent;
-    btn.textContent = "copied!";
-    setTimeout(()=> btn.textContent = old, 1500);
+    btn.textContent = "copied — the link re-runs this setup live";
+    setTimeout(()=> btn.textContent = old, 2600);
   }).catch(()=>{});
 });
+
+// ---- first-visit orientation: one screen, seen once per browser ----
+(function(){
+  const gate = document.getElementById("gate");
+  if (!gate) return;
+  try {
+    if (!localStorage.getItem("chamber_gate_seen")) gate.hidden = false;
+  } catch (e) { /* private mode: skip the gate rather than break */ }
+  document.getElementById("gateBtn").addEventListener("click", ()=>{
+    gate.hidden = true;
+    try { localStorage.setItem("chamber_gate_seen", "1"); } catch (e) {}
+  });
+})();
 loadFromUrl();
 document.querySelectorAll(".imgBtn").forEach(btn=>{
   btn.addEventListener("click", ()=>
