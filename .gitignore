@@ -13,3 +13,6 @@ runs/impossible_states/
 data/human/
 # private Erowid corpus (written permission, never republished): see exp56 sources
 data/exp56/erowid_dmt/
+
+.venv-qwen/
+runs/larger_qwen*/

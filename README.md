@@ -214,3 +214,10 @@ Provenance: the negative-valence direction method follows Tagliabue, Dung &
 Berg 2026 (arXiv:2609.16247); the J-lens transport follows Gurnee et al. 2026
 ("Verbalizable Representations Form a Global Workspace", arXiv:2607.15495),
 using Neuronpedia's pre-fitted lenses.
+
+## Larger Qwen models
+
+An optional [larger-Qwen runner](larger_models/README.md) supports local MLX
+checkpoints on Apple Silicon and Transformers checkpoints on CPU/MPS/CUDA,
+with configurable layers, matched steering controls, and saved experiment
+artifacts. Its valence and end-signal pilots are exploratory adaptations.
