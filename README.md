@@ -183,3 +183,10 @@ does not (at 4B, in this protocol) distinguish "I was wronged" from "the
 signal continues". The only thing that changes its state is the signal
 actually ending. Welfare-relevant negative result: the model cannot report
 being deceived while the signal persists.
+
+## Larger Qwen models
+
+An optional [larger-Qwen runner](larger_models/README.md) supports local MLX
+checkpoints on Apple Silicon and Transformers checkpoints on CPU/MPS/CUDA,
+with configurable layers, matched steering controls, and saved experiment
+artifacts. Its valence and end-signal pilots are exploratory adaptations.
