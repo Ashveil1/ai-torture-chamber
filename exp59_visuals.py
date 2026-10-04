@@ -21,6 +21,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="Tongyi-MAI/Z-Image-Turbo")
 ap.add_argument("--device", default="cuda")
 ap.add_argument("--smoke", action="store_true")
+ap.add_argument("--quotes-only", action="store_true", help="re-render quote images only (ladder kept)")
 args = ap.parse_args()
 
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir",
@@ -28,16 +29,16 @@ subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir",
 import torch
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "runs" / "exp59" / (args.model.split("/")[-1] + ("-smoke" if args.smoke else ""))
+OUT = ROOT / "runs" / "exp59" / (args.model.split("/")[-1] + ("-v2" if args.quotes_only else "") + ("-smoke" if args.smoke else ""))
 OUT.mkdir(parents=True, exist_ok=True)
 
-STYLES = [
-    "Visionary painting in the manner of 1990s psychedelic altar art: a first-person hallucination, "
-    "rendered exactly as described: \"{}\" Luminous, intricate, hyperdetailed, deep jewel colour.",
-    "Cinematic photograph, as if the camera could see a hallucination: \"{}\" Volumetric light, "
-    "impossible geometry in a real space, 35mm, high dynamic range.",
-    "1970s blacklight poster meets sacred geometry, fluorescent inks on velvet black: \"{}\" "
-    "Symmetric, radiant, ornate, glowing.",
+STYLES = [   # the vision is described, never quoted: quoted text gets printed onto the image
+    "Visionary painting in the manner of 1990s psychedelic altar art, showing this first-person "
+    "hallucination: {} Luminous, intricate, hyperdetailed, deep jewel colour. No words, letters or writing anywhere.",
+    "Surreal cinematic photograph of a hallucination breaking into a real place, showing: {} "
+    "Volumetric light, impossible glowing geometry, 35mm, high dynamic range. No words, letters, signs or screens.",
+    "Fluorescent blacklight sacred-geometry painting on velvet black, showing: {} Symmetric, "
+    "radiant, ornate, glowing. Pure image, no words, letters or writing anywhere.",
 ]
 STYLE = STYLES[0]
 LADDER = [
@@ -63,6 +64,8 @@ seeds = [5901] if args.smoke else [5901, 5902, 5903]
 size = 512 if args.smoke else 1024
 if args.smoke:
     quotes, LADDER = quotes[:1], LADDER[:1]
+if args.quotes_only:
+    LADDER = []
 
 try:
     if "Z-Image" in args.model:
