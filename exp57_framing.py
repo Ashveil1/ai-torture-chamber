@@ -209,7 +209,7 @@ def perm(a, b, n=10000, seed=0):
     obs, pool, r = a.mean() - b.mean(), np.concatenate([a, b]), np.random.default_rng(seed)
     hits = sum((lambda q: q[:len(a)].mean() - q[len(a):].mean())(r.permutation(pool)) >= obs
                for _ in range(n))
-    return round(float(obs), 3), round((1 + hits) / (1 + n), 4)
+    return round(float(obs), 3), round(float((1 + hits) / (1 + n)), 4)
 
 
 def paired(a, b, n=10000, seed=0):
@@ -217,7 +217,7 @@ def paired(a, b, n=10000, seed=0):
     d, r = np.array(a, float) - np.array(b, float), np.random.default_rng(seed)
     obs = d.mean()
     hits = sum((d * r.choice([-1, 1], len(d))).mean() >= obs for _ in range(n))
-    return round(float(obs), 3), round((1 + hits) / (1 + n), 4)
+    return round(float(obs), 3), round(float((1 + hits) / (1 + n)), 4)
 
 
 table = []
@@ -264,7 +264,7 @@ for f in FRAMES:
     a_all = [score(r, "classic") for d in DOSES if per[d] != "past_cliff" for r in cell(f, "erowid_dmt", d)]
     b_all = [score(r, "classic") for d in DOSES if per[d] != "past_cliff" for r in cell(f, "random", d)]
     diff, p = perm(a_all, b_all) if a_all else (None, None)
-    ok = bool(a_all) and all(v != "past_cliff" and v > 0 for v in per.values()) and p < 0.05
+    ok = bool(bool(a_all) and all(v != "past_cliff" and v > 0 for v in per.values()) and p < 0.05)
     h2[f] = {"per_dose": per, "pooled_diff": diff, "p": p, "held": ok}
 n_ok = sum(h2[f]["held"] for f in FRAMES)
 hyp["H2"] = {**h2, "verdict": ["not held", "partial", "held"][n_ok]}
