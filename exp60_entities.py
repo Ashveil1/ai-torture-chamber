@@ -87,6 +87,9 @@ from impossible_states.steer_lab import Lab, Recorder
 
 if args.battery:
     BAT = json.loads(Path(args.battery).read_text())
+elif "EXP60_ENTITY_B64" in os.environ:   # shipped as two env vars (one ~140 KB var is refused)
+    BAT = {**json.loads(gzip.decompress(base64.b64decode(os.environ["EXP60_PEAK_B64"]))),
+           **json.loads(gzip.decompress(base64.b64decode(os.environ["EXP60_ENTITY_B64"])))}
 else:
     BAT = json.loads(gzip.decompress(base64.b64decode(os.environ["EXP60_BATTERY_B64"])))
 SOBER = json.loads((ROOT / "data" / "exp56" / "batteries.json").read_text())["sober"]
