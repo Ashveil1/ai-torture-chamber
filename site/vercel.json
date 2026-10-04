@@ -25,6 +25,11 @@
       "source": "/basement",
       "destination": "/ladder.html?mode=basement",
       "permanent": false
+    },
+    {
+      "source": "/sep",
+      "destination": "/ladder.html?mode=basement",
+      "permanent": false
     }
   ]
 }
