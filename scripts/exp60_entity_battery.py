@@ -8,7 +8,9 @@ Rule (fixed before any model sees it): same body extraction as exp57; any
 position in the body; 40-240 chars; an entity word (beings, a/the being, entity/ies,
 elf/elves, creature(s), presence, alien(s), jester(s), guide(s), spirit(s),
 someone, figure(s), god(dess)); no dosing/logistics words; at most 4 per
-report, evenly spaced.
+report, evenly spaced. Then (transport limit: RunPod refuses ~140 KB of env)
+each list is cut to a seeded random half (random.Random(60)) before any model
+sees it.
 """
 import json, re, sys
 from pathlib import Path
@@ -29,6 +31,10 @@ for line in open(SRC):
     if keep:
         step = max(1, len(keep) // 4)
         ent += keep[::step][:4]
+import random
 peak = json.loads((SRC.parent / "battery.json").read_text())["sentences"]
+rng = random.Random(60)
+peak = rng.sample(peak, len(peak) // 2)
+ent = rng.sample(ent, len(ent) // 2)
 json.dump({"sentences": peak, "entity": ent}, open(SRC.parent / "battery60.json", "w"), indent=0)
 print(f"{len(ent)} entity sentences, {len(peak)} peak sentences -> {SRC.parent / 'battery60.json'}")
