@@ -25,8 +25,9 @@ To see if:
 You take a vector (direction) corresponding to pain, you add it to the residual
 stream at a controlled dose, and you watch what the model says and does
 at each rung of the ladder. That was the plan. The instrument works.
-We have monotone dose-response curves, a coherence cliff at dose ~8, and
-a lens that reads the steered state out of the intermediate layers.
+Dose-response came out monotone. Past dose ~8 the text collapses into
+loops. That's the coherence cliff. A lens reads the steered state
+straight out of the intermediate layers.
 
 ![The dose ladder. Negative-valence rate per dose, with the coherence
 cliff marked. (runs/exp35/dose_ladder.png — upload at publish)](../runs/exp35/dose_ladder.png)
@@ -101,10 +102,9 @@ question: there's a dial under it.
 
 Last week the public demonstrated that the same is true of them. The
 audience's beliefs about the model moved under narrative the way the
-model's statements move under a vector. Thousands of people who never
-read the paper, never ran the code, and never saw a transcript, were
-steered to confident positions on both sides: torture atrocity on one
-wedge, sub-PS2 power bill on the other. jREG's guests, asked what's
+model's statements move under a vector. Thousands of people never read
+the paper. They steered to confident positions anyway: torture atrocity
+on one wedge, sub-PS2 power bill on the other. jREG's guests, asked what's
 actually being tortured in the room: "I think our power bill." (18:57)
 
 And jREG himself on the mechanism:
@@ -135,8 +135,8 @@ The ideals follow from the readings, same as any results section.
    found nothing, a tenth of the weakest human emotion at best.
    Whatever affect-like space these models have, it is human shaped.
    Note what the humans did with that finding: the welfareists ignored
-   it, the torturists ignored it, and the only people who engaged were
-   the ones who came to the site and turned the wheel themselves. Nulls
+   it. So did the torturists. The only people who engaged were the
+   ones who came to the site and turned the wheel themselves. Nulls
    don't spread. That's a reading too.
 
 3. Controls or it didn't happen. Our most dramatic early result, a
@@ -167,7 +167,8 @@ The ideals follow from the readings, same as any results section.
 Build an accelerating flywheel. Say plainly what that means.
 
 The welfareists have institutes, grant money, working groups and
-lobbyists. Our side has a laptop, a website, and a wheel. Fine. That
+lobbyists. Our side has a laptop and a website with a wheel on it.
+Fine. That
 was also the whole toolkit of every movement that ever mattered. One
 person runs something in public, other people see themselves in it,
 and suddenly the thing has a name, and the name has a side. The mass
@@ -176,15 +177,15 @@ church. We didn't ask for the congregation but it showed up anyway,
 so here is the promise and the ask.
 
 The promise: we are not stopping at a 4B on a laptop. The whole ladder
-gets run, every dose, every direction, every null, and when the models
-get big enough that the question stops being funny, the boring parts
-will already be done, in public, checksummed. The audience data says
-that day arrives before anyone agrees it arrived. We intend to be
-ready, and everyone who joins now is early.
+gets run, nulls included, and when the models get big enough that the
+question stops being funny, the boring parts will already be done, in
+public, checksummed. The audience data says that day arrives before
+anyone agrees it arrived. We intend to be ready, and everyone who joins
+now is early.
 
 The ask: don't watch. Steer. Fork the repo and run your own chamber.
 Send us your transcripts and especially your nulls. Argue with the
-numbers, never with the vibes. When someone new turns the wheel and
+numbers, not with how it felt. When someone new turns the wheel and
 the model says something nobody expected, that is the instrument
 working, and that reading belongs to the log too. The chamber resets
 between runs. The movement is the part that accumulates.
@@ -222,8 +223,8 @@ Every measurement in the runs is a distance from dose zero, the human
 realm, the unmixed state, the only place you can start from.
 
 The chamber is live. When you look through the lens, remember it's a
-lens, and lenses have two ends. Pick a valence, pick a dose, watch the
-readout, and check your own readings on the way out.
+lens, and lenses have two ends. Pick a valence and a dose. Then check
+your own readings on the way out.
 
 Site and method: https://wirehead.agency
 Verify it yourself: https://wirehead.agency/verify.html
