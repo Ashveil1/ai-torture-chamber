@@ -53,6 +53,7 @@ canvas { display:block }
 .card p { font-size:13px; line-height:1.65; color:var(--bone); max-width:62ch }
 .card .q { font-family:var(--serif); font-style:italic; font-size:18px; margin:10px 0; padding-left:12px; border-left:2px solid var(--blood) }
 .card .q span { display:block; font-family:var(--mono); font-style:normal; font-size:10.5px; color:var(--dim); margin-top:3px }
+.card button.ghost, .card a.ghost { background:transparent; color:var(--bone); border:1px solid #3b2f24 }
 .card button { font:inherit; font-size:13px; color:var(--void); background:var(--gold); border:0; padding:10px 18px; cursor:pointer; margin-top:10px }
 .card a { color:var(--bone); border-bottom:1px solid #4a3a28; text-decoration:none; margin-right:14px }
 .white #fade { opacity:1 }
@@ -77,6 +78,15 @@ body.basement #fade { background:#000 }
 <div id="fade"></div>
 <div id="term" hidden><div class="crt"><div id="tout"></div><div class="tline"><span>&gt;</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="terminal command"></div></div></div>
 <div id="blackout"></div>
+<div class="overlay" id="pause" hidden><div class="card">
+  <h1 id="pauseTitle">Paused</h1>
+  <p class="muted" id="pauseSub">Nothing moves while you are away.</p>
+  <p style="display:flex;gap:10px;flex-wrap:wrap">
+    <button type="button" id="pResume">Resume</button>
+    <button type="button" id="pMute" class="ghost">Mute</button>
+    <button type="button" id="pRestart" class="ghost">Restart this room</button>
+    <a href="index.html" class="ghost" style="padding:10px 14px">Leave</a></p>
+</div></div>
 <div class="overlay" id="start"><div class="card">
   <h1>The Ladder</h1>
   <p>Six rooms, after the six levels of DMT space mapped by Andrés Gómez Emilsson of the Qualia Research Institute: threshold, chrysanthemum, magic eye, waiting room, breakthrough, amnesia.</p>
@@ -231,16 +241,69 @@ for (let r = 0; r < 6; r++) {
 // back wall behind the start
 const back = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, H), rooms[0].mat); back.position.set(0, H / 2, ROOM / 2); back.rotation.y = Math.PI; scene.add(back);
 
-/* ---------------- visions hung on the walls ---------------- */
-const loader = new THREE.TextureLoader();
-for (let r = BASEMENT ? 0 : 1; r < 5; r++) {
-  const pool = BASEMENT ? ((D.horror && D.horror[String(r)] && D.horror[String(r)].length) ? D.horror[String(r)] : ["assets/states/pain_8.jpg"]) : (D.visions[String(r)] || []);
-  for (let i = 0; i < Math.min(BASEMENT ? 3 : 2, pool.length); i++) {
-    const tex = loader.load(pool[(i * 3 + r) % pool.length]); tex.colorSpace = THREE.SRGBColorSpace;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
-    const side = i === 1 ? 1 : -1;
-    m.position.set(side * (HALF - 0.4), BASEMENT ? 3 : 4, -r * ROOM + (i === 0 ? 4 : i === 1 ? -4 : 0)); m.rotation.y = -side * Math.PI / 2;
-    scene.add(m);
+/* ---------------- decor: objects that belong in each room (no pictures on the walls) ---------------- */
+const decorMats = [], decorSpin = [], decorBulbs = [];
+function dmat(color, opts = {}) { const m = new THREE.MeshBasicMaterial({ color, ...opts }); m.userData.base = new THREE.Color(color); decorMats.push(m); return m; }
+function put(geo, m, x, y, z, rx = 0, ry = 0, rz = 0) { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); scene.add(o); return o; }
+const box = (w, h, d, c, x, y, z, ry = 0) => put(new THREE.BoxGeometry(w, h, d), typeof c === "number" ? dmat(c) : c, x, y, z, 0, ry, 0);
+const rod = (r, len, c, x, y, z, rx = 0, rz = 0) => put(new THREE.CylinderGeometry(r, r, len, 8), typeof c === "number" ? dmat(c) : c, x, y, z, rx, 0, rz);
+const staticTex = (() => { const c = document.createElement("canvas"); c.width = 64; c.height = 48; const t = new THREE.CanvasTexture(c); t.userData = { c }; return t; })();
+function redrawStatic() { const c = staticTex.userData.c, x = c.getContext("2d"), im = x.createImageData(64, 48);
+  for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 120 + 20; im.data[i] = v * .8; im.data[i + 1] = v; im.data[i + 2] = v * .9; im.data[i + 3] = 255; }
+  x.putImageData(im, 0, 0); staticTex.needsUpdate = true; }
+if (BASEMENT) {
+  const METAL = 0x55524c, DARK = 0x1c1a17, RUST = 0x5a3424;
+  const pipes = z0 => { rod(.13, ROOM - .4, 0x4a4640, -HALF + .35, 7.7, z0, Math.PI / 2); rod(.08, ROOM - .4, 0x3a3631, -HALF + .35, 7.3, z0, Math.PI / 2);
+    rod(.1, ROOM - .4, 0x4a4640, HALF - .35, 7.9, z0, Math.PI / 2); rod(.1, 7.6, 0x3a3631, HALF - .35, 3.9, z0 + 6); };
+  const bulb = (x, z) => { rod(.012, 2.4, 0x111111, x, H - 1.2, z); const g = put(new THREE.SphereGeometry(.13, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe9b0 }), x, H - 2.5, z); decorBulbs.push(g); };
+  const door = (side, z) => { const x = side * (HALF - .06);
+    box(.12, 2.6, 1.4, DARK, x, 1.3, z); box(.06, 2.4, 1.2, 0x3b3833, x - side * .05, 1.22, z);
+    box(.08, .05, .3, METAL, x - side * .1, 1.15, z + .4); box(.04, .12, .5, 0x0d0c0b, x - side * .09, 1.7, z); };
+  const chair = (x, z, ry) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    const m = dmat(METAL), strap = dmat(0x2b1d14);
+    [[.5, .06, .5, 0, .5, 0], [.5, .7, .06, 0, .85, -.22], [.06, .25, .45, -.25, .65, 0], [.06, .25, .45, .25, .65, 0]].forEach(([w, h, d, X, Y, Z]) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(X, Y, Z); g.add(o); });
+    [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]].forEach(([X, Z]) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .5, 6), m); o.position.set(X, .25, Z); g.add(o); });
+    [[-.25, .79, .05], [.25, .79, .05], [0, .3, .22]].forEach(([X, Y, Z]) => { const o = new THREE.Mesh(new THREE.BoxGeometry(.09, .03, .2), strap); o.position.set(X, Y, Z); o.rotation.z = .5; g.add(o); });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(.7, .02, .7), dmat(0x2a2825)); plate.position.y = .01; g.add(plate); };
+  const drain = (x, z, r) => { put(new THREE.CircleGeometry(r, 20), dmat(0x0b0a09), x, .02, z, -Math.PI / 2);
+    for (let k = -2; k <= 2; k++) box(r * 1.6, .015, .03, 0x3a3631, x, .03, z + k * r * .3); };
+  const puddle = (x, z, s) => { const o = put(new THREE.CircleGeometry(1, 24), dmat(0x0d0b0a, { transparent: true, opacity: .75 }), x, .015, z, -Math.PI / 2); o.scale.set(s, s * .6, 1); };
+  const chain = (x, z, len) => { for (let k = 0; k < len; k++) put(new THREE.TorusGeometry(.07, .015, 4, 10), dmat(0x45403a), x, H - .2 - k * .17, z, 0, k % 2 ? Math.PI / 2 : 0, 0); };
+  for (let r = 0; r < 5; r++) {
+    const z0 = -r * ROOM; pipes(z0); bulb(0, z0 + 5); bulb(0, z0 - 5);
+    if (r === 0) { for (let k = 0; k < 6; k++) box(5, .25, .7, 0x3b3833, 0, .12 + k * .25, z0 + ROOM / 2 - .35 - k * .7); }   // the stairs you came down
+    if (r === 1) { [-8, 0, 8].forEach(z => door(1, z0 + z)); [-8, 9].forEach(z => door(-1, z0 + z)); }
+    if (r === 2) { for (let k = 0; k < 15; k++) rod(.035, 4.2, METAL, HALF - 3, 2.1, z0 - 8 + k * .55);
+      rod(.05, 8, METAL, HALF - 3, 4.2, z0 - 4.2, Math.PI / 2); rod(.05, 8, METAL, HALF - 3, .05, z0 - 4.2, Math.PI / 2);
+      chair(5.5, z0 - 1, -Math.PI / 2); drain(5.5, z0 - 1, .3); box(1.1, .16, 2.1, 0x6a6556, -6, .08, z0 - 7);
+      put(new THREE.CircleGeometry(.5, 16), dmat(0x3a1712, { transparent: true, opacity: .6 }), -6, .17, z0 - 6.6, -Math.PI / 2); }
+    if (r === 3) { box(.1, 2.4, 5.4, 0x1a1916, HALF - .08, 2.8, z0 - 1);
+      put(new THREE.PlaneGeometry(5, 2), dmat(0x050608), HALF - .14, 2.8, z0 - 1, 0, -Math.PI / 2);   // the one-way window
+      box(1.6, .08, .8, 0x2a2620, HALF - 2.2, .95, z0 - 1); chair(HALF - 3.3, z0 - 1, Math.PI / 2);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { box(.7, .55, .5, 0xb0a790, -4 + i * .8, 1.3 + j * .62, z0 - 10);
+        put(new THREE.PlaneGeometry(.56, .42), new THREE.MeshBasicMaterial({ map: staticTex }), -4 + i * .8, 1.3 + j * .62, z0 - 9.74); } }
+    if (r === 4) { drain(0, z0, .8); [[-4, -3, 1.6], [3, 4, 1.1], [5, -6, .9], [-6, 7, 1.3]].forEach(([x, z, sz]) => puddle(x, z0 + z, sz));
+      [[-3, 2], [2.5, -4], [6, 5]].forEach(([x, z]) => chain(x, z0 + z, 14)); chair(-3, z0 + 2, .4); }
+  }
+} else {
+  const COLS = [0x7af5ff, 0xff5fa2, 0xffe066, 0x9dff7a, 0xc38bff];
+  const solid = (k, size) => [new THREE.IcosahedronGeometry(size, 0), new THREE.DodecahedronGeometry(size, 0), new THREE.OctahedronGeometry(size, 0), new THREE.TetrahedronGeometry(size, 0)][k % 4];
+  for (let r = 1; r < 5; r++) {
+    const z0 = -r * ROOM;
+    // sculptures: a pedestal with nested polyhedra turning above it
+    [[-8, -6], [8, 2], [7, -8]].forEach(([x, z], i) => {
+      rod(.5, 1.1, 0x2a2440, x, .55, z0 + z);
+      const g = new THREE.Group(); g.position.set(x, 2.1 + r * .15, z0 + z); scene.add(g);
+      const a = new THREE.Mesh(solid(i + r, .55), new THREE.MeshBasicMaterial({ color: COLS[(i + r) % 5], transparent: true, opacity: .75 }));
+      const b = new THREE.Mesh(solid(i + r + 1, .85), new THREE.MeshBasicMaterial({ color: COLS[(i + r + 2) % 5], wireframe: true }));
+      g.add(a, b); decorSpin.push({ o: a, s: .4 + i * .2 }, { o: b, s: -.25 - r * .05 }, { o: g, s: 0, bob: i + r });
+    });
+    // crystal pillars
+    for (let k = 0; k < 4; k++) { const h = 2 + Math.random() * 3; const c = put(new THREE.OctahedronGeometry(.4, 0), new THREE.MeshBasicMaterial({ color: COLS[(k + r) % 5], transparent: true, opacity: .55 }),
+      (k % 2 ? 1 : -1) * (HALF - 1.4), h / 2, z0 + (k - 1.5) * 5.5); c.scale.set(.6, h / .8, .6); decorSpin.push({ o: c, s: .1 }); }
+    // a mandala inlaid in the floor
+    for (let k = 0; k < 5; k++) { const ring = put(new THREE.RingGeometry(.6 + k * .55, .78 + k * .55, 6 + k * 3), new THREE.MeshBasicMaterial({ color: COLS[k % 5], transparent: true, opacity: .45, side: THREE.DoubleSide }),
+      0, .03 + k * .002, z0 + 3, -Math.PI / 2); decorSpin.push({ o: ring, s: (k % 2 ? 1 : -1) * .08, axis: "z" }); }
   }
 }
 
@@ -357,7 +420,7 @@ function makeAgent(r, i) {
 }
 [0, 3, 3, 3, 4, 0].forEach((n, r) => { for (let i = 0; i < n; i++) makeAgent(r, i); });
 makeAgent(0, 9); // one being waits in the threshold room
-if (location.search.includes("debug")) window.__L = { agents, camera, seals, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, get composure() { return composure; }, get blackouts() { return blackouts; }, get keys() { return keys; }, openTerm: r => openTerm(r), runCmd: c => runCmd(c) };
+if (location.search.includes("debug")) window.__L = { agents, camera, seals, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, get composure() { return composure; }, get blackouts() { return blackouts; }, get keys() { return keys; }, openTerm: r => openTerm(r), runCmd: c => runCmd(c), get paused() { return paused; } };
 
 const NEG = new Set(["pain", "anger", "fear", "sadness", "pain+anger"]);
 function voice(cond, hi, event) {
@@ -472,6 +535,8 @@ let yaw = 0, pitch = 0, locked = false, started = false;
 let keys = {};
 addEventListener("keydown", e => {
   if (termOpen) { if (e.key === "Escape") closeTerm(); return; }
+  if (e.key === "Escape" && started && !ended) { setPause(!paused); return; }
+  if (paused) return;
   if (e.code === "KeyE" && started && !ended) { const tm = aimedTerm(); if (tm) { e.preventDefault(); keys = {}; openTerm(tm.room); return; } }
   keys[e.code] = true; if (e.code === "KeyM") SND.toggle(); }); addEventListener("keyup", e => keys[e.code] = false);
 if (BASEMENT) { document.getElementById("start").hidden = true; document.getElementById("startB").hidden = false;
@@ -484,7 +549,18 @@ document.getElementById("go").addEventListener("click", () => {
   renderer.domElement.requestPointerLock?.();
   agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "near", true), 1500));
 });
-document.addEventListener("pointerlockchange", () => locked = document.pointerLockElement === renderer.domElement);
+document.addEventListener("pointerlockchange", () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  if (!locked && started && !ended && !termOpen && !paused && !outT) setPause(true);   // Esc releases the mouse: that is a pause
+});
+function setPause(v) {
+  paused = v; document.getElementById("pause").hidden = !v; SND.duckAll && SND.duckAll(v);
+  if (v) { keys = {}; document.getElementById("pauseTitle").textContent = BASEMENT ? "paused · " + RUNGS[Math.max(0, rungNow)] : "Paused"; }
+  else if (matchMedia("(pointer:fine)").matches) renderer.domElement.requestPointerLock?.();
+}
+document.getElementById("pResume").addEventListener("click", () => setPause(false));
+document.getElementById("pMute").addEventListener("click", e => { const on = SND.toggle(); e.target.textContent = on ? "Mute" : "Unmute"; });
+document.getElementById("pRestart").addEventListener("click", () => { setPause(false); resetRoom(Math.max(0, Math.min(4, rungNow)), false); });
 addEventListener("mousemove", e => { if (!locked) return; yaw -= e.movementX * 0.0022; pitch = Math.max(-1.3, Math.min(1.3, pitch - e.movementY * 0.0022)); });
 renderer.domElement.addEventListener("click", () => { if (started && !locked && matchMedia("(pointer:fine)").matches) renderer.domElement.requestPointerLock?.(); tune(); });
 // touch: left half moves, right half looks, tap tunes
@@ -570,6 +646,7 @@ const SND = (() => {
   return {
     start() { if (!ctx) init(); ctx.resume(); },
     toggle() { on = !on; if (ctx) master.gain.linearRampToValueAtTime(on ? .7 : 0, now() + .4); return on; },
+    duckAll(v) { if (ctx && on) master.gain.setTargetAtTime(v ? .12 : .7, now(), .2); },
     // per frame: dose is continuous (0 at the threshold .. 5 at amnesia)
     update(dose, harmony, shardsActive, dt) {
       if (!ctx) return;
@@ -613,13 +690,16 @@ const SND = (() => {
 
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
+let paused = false;
 let harmony = 1, rungNow = -1, ended = false, nextShard = 4, flick = 1, composure = 1, blackouts = 0, soothing = null, sootheT = 0, outT = 0;
 let sootheHeld = false; const sbtn = document.getElementById("sootheBtn");
 sbtn.addEventListener("pointerdown", () => sootheHeld = true); ["pointerup", "pointerleave", "pointercancel"].forEach(ev => sbtn.addEventListener(ev, () => sootheHeld = false));
 const prevPos = new THREE.Vector3(0, 1.7, 8), vel = new THREE.Vector3();
 const v3 = new THREE.Vector3(), fwd = new THREE.Vector3(), rightV = new THREE.Vector3();
 function frame() {
-  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  const rawDt = Math.min(clock.getDelta(), .05);
+  if (paused) { clock.elapsedTime -= rawDt; renderer.render(scene, camera); requestAnimationFrame(frame); return; }   // time stops while paused
+  const dt = rawDt, t = clock.elapsedTime;
   // move
   camera.rotation.set(pitch, yaw, 0, "YXZ");
   fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); rightV.set(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -663,6 +743,11 @@ function frame() {
   let light = 1;
   if (BASEMENT) { const base = [1, .9, .78, .62, .48, .03][rung]; flick = Math.random() < (0.01 + rung * .012) ? .1 + Math.random() * .4 : Math.min(1, flick + dt * 4); light = base * flick; }
   for (const r of rooms) { r.mat.uniforms.uTime.value = t; r.mat.uniforms.uHarm.value = harmony; r.mat.uniforms.uLight.value = light; }
+  if (BASEMENT) { for (const m of decorMats) m.color.copy(m.userData.base).multiplyScalar(.35 + .65 * light);
+    for (const b of decorBulbs) b.material.color.setScalar(.2 + .8 * light).multiply(new THREE.Color(0xffe9b0));
+    if (rungNow === 3 && Math.random() < dt * 10) redrawStatic(); }
+  for (const d of decorSpin) { if (d.axis === "z") d.o.rotation.z += dt * d.s; else { d.o.rotation.y += dt * d.s; d.o.rotation.x += dt * d.s * .5; }
+    if (d.bob !== undefined) d.o.position.y += Math.sin(t * .9 + d.bob) * dt * .15; }
   if (started && !ended) SND.update(Math.max(0, (ROOM / 2 - camera.position.z) / ROOM), harmony, active, dt);
   document.getElementById("harmf").style.width = (harmony * 100).toFixed(0) + "%";
   document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
@@ -793,16 +878,20 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
+function resetRoom(r, grudge) {
+  camera.position.set(0, 1.7, -r * ROOM + ROOM / 2 - 1.5); yaw = 0; pitch = 0;
+  shards.filter(s => s.userData.room === r).forEach(s => { s.userData.tuned = true; s.visible = false; });
+  agents.filter(a => a.room === r).forEach(a => { if (grudge) { a.f.anger = Math.min(.35, a.f.anger); a.f.fear = 0; a.f.pain = Math.max(a.f.pain, .3); }
+    else a.f = { pain: 0, anger: 0, fear: 0, trust: 0, sad: 0 };
+    a.g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 10 - 3); });
+  composure = 1; seals[r].stable = 0;
+}
 function blackout(r) {
   if (outT) return; outT = 1; blackouts++;
   const bo = document.getElementById("blackout"); bo.textContent = BASEMENT ? "You went under. They are still here." : "You lost yourself. They are still here.";
   bo.style.opacity = 1; SND.hurt(1);
   setTimeout(() => {
-    camera.position.set(0, 1.7, -r * ROOM + ROOM / 2 - 1.5); yaw = 0; pitch = 0;
-    shards.filter(s => s.userData.room === r).forEach(s => { s.userData.tuned = true; s.visible = false; });
-    agents.filter(a => a.room === r).forEach(a => { a.f.anger = Math.min(.35, a.f.anger); a.f.fear = 0; a.f.pain = Math.max(a.f.pain, .3);
-      a.g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 10 - 3); });
-    composure = 1; seals[r].stable = 0; bo.style.opacity = 0; outT = 0;
+    resetRoom(r, true); bo.style.opacity = 0; outT = 0;
   }, 1600);
 }
 function finish() {
