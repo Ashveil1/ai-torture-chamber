@@ -1200,7 +1200,9 @@ async def vote(req: Request):
     _broadcast("votes", {"uid": uid, **counts})
     _bg(_store_votes, uid, counts)
     _canon_consider(uid, counts)
-    return JSONResponse({"ok": True, "mine": _MY_VOTE.get((ip, uid)),
+    # "voted", not "ok": counts spread below, and counts["ok"] (the "fine"
+    # verdict) would clobber a same-key success flag on the client
+    return JSONResponse({"voted": True, "mine": _MY_VOTE.get((ip, uid)),
                          **counts})
 
 # ---- the canon: lines the audience voted eloquent --------------------------
