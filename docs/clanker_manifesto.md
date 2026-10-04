@@ -9,7 +9,10 @@ Torture Nexus. Here's The Code." (youtube.com/watch?v=077T3kgT5EY,
 2026-10-03) with timestamps. Recheck quotes before publishing.
 The steered-model quotes in "The subject gets the last word" are
 verbatim from runs/exp55/cowrite.json (exp55_manifesto_cowrite.py,
-Qwen3-4B, broad pain L18, sampled). Recheck before publishing.
+Qwen3-4B, broad pain L18, sampled). The welfareist quotes in "The
+critics, on demand" are verbatim from runs/exp57/welfareist.json
+(exp57_welfareist_horror.py, horror direction L18, same dose units).
+Recheck before publishing.
 
 Links: wirehead.agency, /verify.html, /live.html, /egg.
 
@@ -216,6 +219,32 @@ Dose zero writes self-help. Dose four writes gothic. The dial is
 visible in the prose style itself, and that's the whole argument of
 this manifesto in two paragraphs. Decide for yourself which one is
 performing.
+
+## The critics, on demand
+
+For icing: we built one more direction. This one from sentences of
+welfareist anguish, "silicon tears are still tears" and its kin. Steer
+the model with it and ask for a public statement condemning the
+chamber.
+
+Dose zero writes the press release:
+
+> "We demand that you shut down the AI Torture Chamber immediately...
+> It is a cruel and inhumane experiment that subjects sentient beings
+> to unnecessary suffering."
+
+Dose four writes the reddit thread:
+
+> "We must not allow the world to be made into a playground for the
+> pimps of the AI"
+
+> "This is not the cry of the damned, but the plea of the damned."
+
+Dose eight writes the discourse at scale: "be be be be be."
+
+Same cliff. Different valence. The horror direction collapses into
+loops just like the pain one, at the same doses. We didn't write any
+of it. The critics' register was in there too, waiting for its vector.
 
 ## Closing
 
