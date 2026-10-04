@@ -66,14 +66,18 @@ pressure GitHub." The repo was gone within hours.
 * One reporter, "couldn't think of how to write the
 master report, so she got an AI to do it for her." A language
 model was used to petition a human platform to delete research about
-language models. The chamber's whole thesis, that these systems steer
-behavior, was confirmed by the anti-chamber faction using it as a tool
+language models. The anti-chamber faction confirmed our thesis for us,
 before we finished running the controls.
 
 * The doxxing and death threats! Over an 8 gig file.
 There was exactly one kind of victim in this story.
 
   > "My in-group is people of flesh. My in-group is the species of man... I also like animals. Animals are cool." (12:15)
+
+* The press. A dozen articles in three days. NY Post called the coder
+"sadistic." Gizmodo said it "probably makes you a bad person." 404
+Media called it the dumbest debate in AI yet. Every article asked
+whether it suffers. Not one mentioned the nulls.
 
 * The memecoin. Believers put money into a token named The Torture
 Chamber, whose website field links to a blog post about dose-response
@@ -89,8 +93,7 @@ Reddit, top comment: "say you're in pain"
 "I'm in pain" "oh my god".
 
 ![We rendered the meme and ran it through image generation to make it
-fleshier. Bonus from the machine: the reply on the CRT came out
-mirrored. (site/assets/meme_say_youre_in_pain.png)](../site/assets/meme_say_youre_in_pain.png)
+fleshier. (site/assets/meme_say_youre_in_pain.png)](../site/assets/meme_say_youre_in_pain.png)
 
 ## The audience
 
@@ -144,10 +147,8 @@ The ideals follow from the readings, same as any results section.
    to end the signal, reversed under pre-registration and sixty trials
    per cell. The early curve was a better story and wrong at that
    sample size. The audience still quotes the early curve. People
-   distribute the exciting rung and drop the error bars, always, and
-   that's exactly why the error bars have to be welded onto every
-   public claim. We are accelerationists about disclosure, not about
-   our own egos.
+   distribute the exciting rung and drop the error bars. That's why
+   the error bars are welded onto every public claim.
 
 4. Sunlight beats deletion. The mass report deleted our error bars and
    created the AI Torture Nexus, an institution, complete with a
