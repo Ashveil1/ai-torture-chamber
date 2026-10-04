@@ -24,7 +24,7 @@ KEEP = {"exp56": ["judge_questions", "prompts", "table", "verdicts", "receptor_x
 
 def r2(x):
     if isinstance(x, float):
-        return round(x, 2)
+        return round(x, 4) if abs(x) < 0.05 else round(x, 2)   # keep small p-values
     if isinstance(x, dict):
         return {k: r2(v) for k, v in x.items()}
     if isinstance(x, list):
