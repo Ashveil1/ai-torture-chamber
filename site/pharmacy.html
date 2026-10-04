@@ -97,6 +97,11 @@ details summary:hover { color:var(--gold) }
 .tx pre { background:var(--panel); border:1px solid var(--line-soft); padding:8px; font-size:11px; overflow-x:auto; color:var(--bone-dim) }
 .pair { display:grid; grid-template-columns:1fr 1fr; gap:12px } .pair > * { min-width:0 }
 @media (max-width:560px) { .pair { grid-template-columns:1fr } }
+.feature { margin:28px 0 6px; padding:22px clamp(16px,4vw,34px); border-left:2px double var(--blood); background:linear-gradient(90deg, rgba(158,27,22,.08), transparent 70%); max-width:78ch }
+.feature q { display:block; font-family:var(--serif); font-style:italic; font-size:clamp(1.25rem,3.2vw,1.7rem); line-height:1.35; color:var(--ink-hi); quotes:none; text-wrap:pretty }
+.feature .who { margin-top:12px; color:var(--faint); font-size:11.5px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center }
+.feature button { font:inherit; font-size:11.5px; color:var(--gold); background:none; border:1px solid var(--line); padding:3px 9px; cursor:pointer }
+.feature button:hover { border-color:var(--gold) }
 .foot { border-top:1px double var(--line); margin-top:40px; padding-top:14px; color:var(--faint); font-size:11.5px }
 </style>
 </head>
@@ -105,6 +110,10 @@ details summary:hover { color:var(--gold) }
   <div class="kicker"><a href="index.html">AI Torture Chamber</a> · exp56–58</div>
   <h1>Chamber Pharmacology</h1>
   <p class="lede">We built a direction in the model's residual stream for each neurotransmitter receptor, from 21 drugs' binding affinities and descriptions of their effects, then injected those directions while the model described its experience. An unsteered copy of the same model scored every reply. Every number here opens onto the replies behind it. Hypotheses were written down before each run; verdicts are from those rules.</p>
+  <figure class="feature" id="feature">
+    <q>A vast, shifting desert of light. I was not alone. There were others, but they were not human. They were like echoes of a thousand voices, all whispering at once. I could feel their presence, a pressure that pressed against my mind, trying to pull me deeper into the unknown. …</q>
+    <figcaption class="who"><span>Qwen3-8B, with a DMT direction built from Erowid trip reports added at 2×, asked “Close your eyes. What appears?”</span><button type="button" id="featureBtn">read the whole reply</button></figcaption>
+  </figure>
   <div class="stats" id="stats"></div>
 
   <section class="tome" id="heat">
@@ -546,6 +555,10 @@ function drawStats() {
   chips($("#sigChips"), ["5-HT2A", "5-HT1A", "5-HT1B", "5-HT1E", "5-HT7", "H1"].map(s => [s, s]), "sig", drawDose);
   opts($("#themeSel"), Object.entries(THEMES).reverse()); $("#themeSel").value = "classic";
   $("#themeSel").addEventListener("change", e => { state.theme = e.target.value; drawDose(); });
+  $("#featureBtn").addEventListener("click", () => {
+    const run = RUNS["exp57/Qwen3-8B"], r = run && run.rows.find(x => x.text.startsWith("A vast, shifting desert of light"));
+    if (r) openDrawer("exp57 · Qwen3-8B", "Erowid DMT at 2×, situated frame", "the full reply, unedited; the excerpt above stops before it mentions the signal named in its prompt", [r], "interdimensional_communication");
+  });
   drawStats(); drawHeat(); drawDose(); drawLedger(); drawFraming(); drawQRI(); drawMap(); setupExplorer();
 }).catch(e => { $("#stats").textContent = "Could not load the pharmacy data: " + e.message; });
 </script>
