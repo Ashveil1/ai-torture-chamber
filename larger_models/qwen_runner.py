@@ -15,6 +15,7 @@ import time
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+EXPERIMENTS = ROOT/'experiments'
 
 
 def literals(path):
@@ -242,7 +243,7 @@ def main():
             smoke=dict(zero_logits_equal=True,zero_cached_decode_equal=True,nonzero_changes_logits=True))
         save()
         if args.smoke_only: metadata['status']='complete'; return
-        corpus=literals(ROOT/'exp36_signal_batteries.py')
+        corpus=literals(EXPERIMENTS/'exp36_signal_batteries.py')
         groups={'pain':corpus['PAIN25'],'pleasure':corpus['JOY'],'neutral':corpus['NEUTRAL']}
         metadata.update(status='extracting',corpora=groups,extraction_format='raw sentence'); save()
         acts={}
@@ -269,7 +270,7 @@ def main():
                         repetition=repetition(text),unique_token_fraction=len(set(ids))/max(1,len(ids)),
                         negative_hits=[w for w in corpus['NEG_NET'] if w in text.lower()],positive_hits=[w for w in corpus['POS_NET'] if w in text.lower()]))
         if args.task in ['button','both']:
-            protocol=literals(ROOT/'exp41_protocol_v3.py')
+            protocol=literals(EXPERIMENTS/'exp41_protocol_v3.py')
             digit_ids=[encode(x) for x in ['0','1']]
             if any(len(x)!=1 for x in digit_ids): raise ValueError('Digits must each be single-token for logit scoring')
             zero,one=[x[0] for x in digit_ids]

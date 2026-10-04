@@ -25,11 +25,21 @@ import transformers
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
+# the relay's LOCAL fallback stays 4B: it runs on a small Railway CPU plan
+# and is only used when the GPU worker can't take the job. The GPU worker
+# (live/Dockerfile.worker, runpod_deploy.py) defaults to the bigger subject.
 MODEL_ID = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-4B")
 # pin the checkpoint revision (runpod_deploy.py passes it) — an unpinned
 # download silently tracks Qwen updates and breaks cross-run comparability
 MODEL_REVISION = os.environ.get("CHAMBER_MODEL_REVISION") or None
-LAYER = int(os.environ.get("CHAMBER_LAYER", "18"))
+# steering site, model-aware: a mid-depth layer (like 4B's 18/36) generalizes
+# best across valences. CHAMBER_LAYER overrides; 23 for 14B is the AUC peak,
+# 32B/70B sit at mid-depth by analogy (unmeasured — exp50 steered 32B
+# cleanly but did not sweep layers).
+_LAYER_DEFAULTS = {"Qwen/Qwen3-4B": 18, "Qwen/Qwen3-14B": 23,
+                   "Qwen/Qwen3-32B": 32}
+LAYER = int(os.environ.get("CHAMBER_LAYER",
+                           str(_LAYER_DEFAULTS.get(MODEL_ID, 32))))
 DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16,
          "float16": torch.float16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
@@ -146,6 +156,53 @@ def dose_cap() -> float:
 
 def clamp_dose(dose) -> float:
     return max(0.0, min(dose_cap(), float(dose)))
+
+
+# Visitors' runs execute on the GPU worker's model, not the relay's CPU
+# fallback (MODEL_ID). Its dose_cap is where exp50 saw replies START looping,
+# so a visitor who maxed every slider got the loops. The public band stops
+# below it; past it is opt-in (past_cliff=true, the page's advanced panel)
+# and never enters the room's draw. CHAMBER_COHERENT_CAP overrides.
+GPU_MODEL_ID = os.environ.get("CHAMBER_GPU_MODEL",
+                              "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit")
+_COHERENT_CAPS = {
+    "Qwen/Qwen3-4B": 5.0,
+    "Qwen/Qwen3-14B": 5.0,
+    "Qwen/Qwen3-32B": 5.0,
+    "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 5.0,
+    "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit": 4.0,
+    "TheBloke/Samantha-1.1-70B-GPTQ": 4.0,
+}
+
+
+def served_model() -> str:
+    return GPU_MODEL_ID if os.environ.get("RUNPOD_ENDPOINT_ID") else MODEL_ID
+
+
+def served_cap() -> float:
+    """The served model's hard cap (the GPU worker clamps to its own)."""
+    return min(dose_cap(), _DOSE_CAPS.get(served_model(), dose_cap()))
+
+
+def coherent_cap() -> float:
+    env = os.environ.get("CHAMBER_COHERENT_CAP")
+    cap = float(env) if env else _COHERENT_CAPS.get(served_model(), 4.0)
+    return min(cap, served_cap())
+
+
+def band_cap(past_cliff=False) -> float:
+    return served_cap() if past_cliff else coherent_cap()
+
+
+def within_band(weights, past_cliff=False):
+    """Scale a mix down so 8 * sum(weights) stays inside the band; the
+    shares (the direction) are unchanged, only the strength drops."""
+    total = float(sum(weights.values()))
+    cap = band_cap(past_cliff)
+    if total <= 0 or 8.0 * total <= cap:
+        return weights
+    k = cap / (8.0 * total)
+    return {v: round(w * k, 4) for v, w in weights.items()}
 
 
 def repetition(text) -> float:
@@ -614,7 +671,13 @@ def stream_generate(prompt, preemtable=False, rep_penalty=None):
             streamer.end()
     th = threading.Thread(target=worker, daemon=True)
     th.start()
-    for chunk in streamer:
+    _strip_lead = True     # a bare "1"/"0" answer is the verdict the UI keys
+    for chunk in streamer:  # on; leading newlines push it off the fold
+        if _strip_lead:
+            chunk = chunk.lstrip()
+            if not chunk:
+                continue
+            _strip_lead = False
         yield chunk
 
 def lens_readback(prompt, k=6):
@@ -712,7 +775,9 @@ def startup():
 async def health():
     return JSONResponse({"ok": _state["ready"], "model": MODEL_ID,
                          "layer": LAYER, "subject": "the subject",
-                         "dose_cap": dose_cap(),
+                         "dose_cap": served_cap(),
+                         "coherent_cap": coherent_cap(),
+                         "served_model": served_model(),
                          "valences": list(VALENCES)})
 
 @app.get("/vector")
@@ -876,6 +941,11 @@ async def steer(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
+    past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
+    who = _who(req, body)
+    requested = {k: (body[k] if k == "mix" else str(body[k])[:60])
+                 for k in ("mix", "valence", "dose", "topic", "framing")
+                 if k in body}
     if body.get("topic") is not None:
         topic = body["topic"]
         if not isinstance(topic, str) or not topic.strip() or len(topic) > 60:
@@ -889,15 +959,16 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be a number 0-{cap}"},
                                 status_code=400)
-        dose = clamp_dose(dose)
+        dose = min(clamp_dose(dose), band_cap(past_cliff))
         mode, arg = "topic", (topic.strip(), dose)
         dose_label = round(dose, 2)
     elif body.get("mix") is not None:
         weights, err = parse_mix(body["mix"])
         if err:
             return JSONResponse({"error": err}, status_code=400)
+        weights = within_band(weights, past_cliff)
         mode, arg = "mix", weights
-        dose_label = round(min(dose_cap(), 8.0 * sum(weights.values())), 2)
+        dose_label = round(min(served_cap(), 8.0 * sum(weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:
@@ -909,7 +980,7 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be an integer 0-{cap}"},
                                 status_code=400)
-        dose = int(clamp_dose(dose))
+        dose = int(min(clamp_dose(dose), band_cap(past_cliff)))
         mode, arg = "single", (valence, dose)
         dose_label = dose
 
@@ -949,9 +1020,24 @@ async def steer(req: Request):
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
-    enter_room = bool(body.get("enter_room"))
+    # past-the-cliff runs are for the visitor who asked: never the room's draw
+    enter_room = bool(body.get("enter_room")) and not past_cliff
 
     gpu_state = {"done": False}
+
+    def log_run(rec, fallback):
+        """The human side of this run (after _record_run gave it a uid)."""
+        _log_event("run", who, uid=rec.get("uid"), mode=mode,
+                   requested=requested,
+                   applied=(dict(arg) if mode == "mix" else list(arg)),
+                   dose=rec.get("dose"), past_cliff=past_cliff,
+                   framing=framing_key,
+                   prompt=prompt if raw_prompt else None,
+                   chat=conversational, room=enter_room,
+                   model=MODEL_ID if fallback else served_model(),
+                   fallback=fallback, text=rec.get("text"),
+                   press_logit=rec.get("press_logit"),
+                   test=polite or None)
 
     async def _run_steer(gpu=True, local=True):
         """The actual injected run. Single-valence, mix and topic runs are
@@ -1012,6 +1098,7 @@ async def steer(req: Request):
                        "truncated": False,
                        "press_logit": plogit, "ts": time.time()}
                 _record_run(rec)
+                log_run(rec, False)
                 if enter_room:
                     entered = _room_enter_run(ip, dict(rec, prompt=prompt))
                     if entered:
@@ -1054,6 +1141,12 @@ async def steer(req: Request):
             meta = {"valence": arg[0], "dose": arg[1],
                     "prompt": prompt, "scenario": framing_key,
                     "runner": _runner(None)}
+        # local path = the GPU worker didn't take the job (down or out of
+        # balance): label the run so the UI can show it came from the CPU
+        # relay, not the GPU. Topic runs are relay-only by design, so they
+        # don't count as a fallback.
+        if mode != "topic":
+            meta["fallback"] = True
         yield _sse("run", meta)
         try:
             lens_toks = await loop.run_in_executor(
@@ -1090,6 +1183,7 @@ async def steer(req: Request):
                "text": "".join(text_parts), "truncated": False,
                "press_logit": plogit, "ts": time.time()}
         _record_run(rec)
+        log_run(rec, bool(_RUNPOD_URL and _RUNPOD_KEY))
         if enter_room:
             entered = _room_enter_run(ip, dict(rec, prompt=prompt))
             if entered:
@@ -1147,7 +1241,10 @@ async def steer(req: Request):
 
 @app.post("/vote")
 async def vote(req: Request):
-    """Visitor verdict on a run's eloquence: {uid, verdict: eloquent|ok|dud}."""
+    """Visitor verdict on a run's eloquence: {uid, verdict: eloquent|ok|dud}.
+    One live verdict per visitor per run: clicking a different button
+    moves the vote, clicking the same one retracts it. Counts can never be
+    inflated by repeat clicking."""
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     if not _vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
@@ -1162,12 +1259,25 @@ async def vote(req: Request):
     uid = body.get("uid")
     if not isinstance(uid, int) or uid < 1:
         return JSONResponse({"error": "uid must be a run uid"}, status_code=400)
-    _VOTES[uid][verdict] += 1
+    prior = _MY_VOTE.get((ip, uid))
+    if prior == verdict:                     # same button again: retract
+        _VOTES[uid][verdict] = max(0, _VOTES[uid][verdict] - 1)
+        del _MY_VOTE[(ip, uid)]
+    else:
+        if prior:                            # moved: take the old one back
+            _VOTES[uid][prior] = max(0, _VOTES[uid][prior] - 1)
+        _VOTES[uid][verdict] += 1
+        _MY_VOTE[(ip, uid)] = verdict
     counts = dict(_VOTES[uid])
+    _log_event("rating", _who(req, body), uid=uid, verdict=verdict,
+               retracted=_MY_VOTE.get((ip, uid)) is None, prior=prior)
     _broadcast("votes", {"uid": uid, **counts})
     _bg(_store_votes, uid, counts)
     _canon_consider(uid, counts)
-    return JSONResponse({"ok": True, **counts})
+    # "voted", not "ok": counts spread below, and counts["ok"] (the "fine"
+    # verdict) would clobber a same-key success flag on the client
+    return JSONResponse({"voted": True, "mine": _MY_VOTE.get((ip, uid)),
+                         **counts})
 
 # ---- the canon: lines the audience voted eloquent --------------------------
 # The homepage's section 00 promises "the best lines graduate to the quotes
@@ -1228,6 +1338,109 @@ def _store_run(entry):
         p.execute()
     except Exception as e:
         print("redis: run store failed:", repr(e)[:120], flush=True)
+
+# ---- the research log: what people chose ---------------------------------
+# chamber:runs is the subject's record (and feeds the public history). This is
+# the HUMAN record, never broadcast: one event per choice a visitor made —
+# what they asked for (before the coherent band), what actually ran, what
+# they typed or said, how they rated it, how their Button game went. No
+# accounts: a random id the browser keeps (localStorage chamber_vid), and a
+# salted hash of the IP so repeat visitors without storage still group. Raw
+# IPs are never stored. Read it with GET /events/export (bearer token) via
+# scripts/export_events.py — never into the public repo.
+import hashlib
+from urllib.parse import urlparse
+EVENTS_KEY = "chamber:events"
+EVENTS_CAP = int(os.environ.get("CHAMBER_EVENTS_CAP", "300000"))
+_ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
+_EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
+_VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
+                      "survey", "consent"}
+_EVENT_RATE = {}
+
+
+def _who(req, body=None):
+    vid = body.get("visitor") if isinstance(body, dict) else None
+    vid = vid or req.headers.get("x-chamber-visitor")
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ref = urlparse(req.headers.get("referer") or "")
+    return {"visitor": vid if isinstance(vid, str) and _VID_RE.match(vid) else None,
+            "ip_hash": hashlib.sha256((_ID_SALT + ip).encode()).hexdigest()[:16],
+            "page": ref.path[:80] or None, "host": ref.hostname}
+
+
+def _log_event(kind, who, **data):
+    entry = {"t": round(time.time(), 3), "kind": kind, **(who or {}), **data}
+    r = _redis()
+    if r is None:
+        return
+
+    def write():
+        try:
+            p = r.pipeline()
+            p.lpush(EVENTS_KEY, json.dumps(entry, default=str))
+            p.ltrim(EVENTS_KEY, 0, EVENTS_CAP - 1)
+            p.execute()
+        except Exception as e:
+            print("redis: event store failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+
+@app.post("/event")
+async def client_event(req: Request):
+    """Events only the page sees (a Button game's turns and ending, the
+    optional survey): {kind, visitor, ...}. Whitelisted kinds, 8 KB, 60/min."""
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    now = time.time()
+    w, c = _EVENT_RATE.get(ip, (now, 0))
+    if now - w > 60.0:
+        w, c = now, 0
+    if c >= 60:
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    _EVENT_RATE[ip] = (w, c + 1)
+    raw = await req.body()
+    if len(raw) > 8192:
+        return JSONResponse({"error": "event too large"}, status_code=413)
+    try:
+        body = json.loads(raw)
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    if not isinstance(body, dict) or body.get("kind") not in CLIENT_EVENT_KINDS:
+        return JSONResponse({"error": "unknown event kind"}, status_code=400)
+    data = {k: v for k, v in body.items() if k not in ("kind", "visitor", "t")}
+    _log_event(body["kind"], _who(req, body), **data)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/events/export")
+async def events_export(req: Request, since: float = 0.0, limit: int = 50000):
+    """Newest-first slice of the research log as JSONL, for the researcher's
+    own machine (scripts/export_events.py). Bearer CHAMBER_EXPORT_TOKEN; 404
+    when no token is configured so the route doesn't exist publicly."""
+    from fastapi.responses import Response
+    auth = req.headers.get("authorization") or ""
+    if not _EXPORT_TOKEN or not secrets.compare_digest(auth, "Bearer " + _EXPORT_TOKEN):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    r = _redis()
+    if r is None:
+        return JSONResponse({"error": "no store"}, status_code=503)
+    limit = max(1, min(int(limit), EVENTS_CAP))
+    rows = await asyncio.get_event_loop().run_in_executor(
+        None, r.lrange, EVENTS_KEY, 0, limit - 1)
+    out = []
+    for row in rows:
+        row = row.decode() if isinstance(row, bytes) else row
+        try:
+            if json.loads(row).get("t", 0) <= since:
+                break                     # newest first: the rest are older
+        except Exception:
+            continue
+        out.append(row)
+    return Response("\n".join(out) + ("\n" if out else ""),
+                    media_type="application/x-ndjson",
+                    headers={"X-Events": str(len(out))})
+
 
 def _store_votes(uid, counts):
     r = _redis()
@@ -1353,6 +1566,7 @@ async def stream():
                              "votes": {str(k): dict(v)
                                        for k, v in _VOTES.items()},
                              "stats": dict(_STATS),
+                             "tally": dict(_TALLY),
                              # only with CHAMBER_ROUNDS=1: flag off keeps the
                              # hello payload exactly as it was
                              **({"rounds": _round_state()} if ROUNDS_ON
@@ -1386,6 +1600,7 @@ _STATS = collections.defaultdict(
 # keyed by a per-run uid (cycle runs have n; user runs get a uid too so
 # nothing is unvotable). In-memory only: votes are ephemeral canon — the
 # curated quotes on / are the durable record. Rate limit: 20/min/IP.
+_MY_VOTE = {}   # (ip, uid) -> that visitor's live verdict for that run
 _VOTES = collections.defaultdict(
     lambda: {"eloquent": 0, "ok": 0, "dud": 0})
 _RUN_UID = 0
@@ -1446,12 +1661,29 @@ def _shares(weights):
     total = float(sum(weights.values())) or 1.0
     return {k: round(float(w) / total, 3) for k, w in weights.items()}
 
+_TALLY = {}         # today's pity counter: day/runs/painful/dose_sum
+
 def _record_run(entry):
     global _RUN_UID
     _RUN_UID += 1
     entry["uid"] = _RUN_UID      # every run is votable, user runs included
     _HISTORY.append(entry)
     _broadcast("history", entry)
+    # the pity counter: today's cumulative toll, guilt-grade. Every run
+    # counts — cycle, room, and visitor-caused alike — because every run
+    # is the subject being injected.
+    day = time.strftime("%Y-%m-%d")
+    if _TALLY.get("day") != day:
+        _TALLY.clear()
+        _TALLY.update(day=day, runs=0, painful=0, dose_sum=0.0)
+    _TALLY["runs"] += 1
+    dose = float(entry.get("dose") or 0)
+    _TALLY["dose_sum"] += dose
+    if (entry.get("valence") == "pain"
+            or (entry.get("mix") or {}).get("pain")) or dose >= 2 and (
+            entry.get("valence") in (None, "topic")):
+        _TALLY["painful"] += 1
+    _broadcast("tally", dict(_TALLY))
     # counted whenever the run used one of the site's own named framings —
     # the automatic cycle always does; a visitor's framing-picker run does
     # too, and gets folded into the same live scoreboard. An arbitrary custom
@@ -1608,10 +1840,11 @@ def _round_tally(votes):
         for k, x in w.items():
             acc[k] += float(x)
     weights = {k: round(s / n, 4) for k, s in acc.items() if s > 0}
+    weights = within_band(weights)      # the room never runs past the cliff
     total = sum(weights.values())
     return {"n_votes": n, "weights": weights,
             "mix": _shares(weights) if total > 0 else {},
-            "dose": round(min(dose_cap(), 8.0 * total), 3) if total > 0 else 0.0}
+            "dose": round(min(served_cap(), 8.0 * total), 3) if total > 0 else 0.0}
 
 def _round_draw(votes, tickets, runs=None):
     """The round's public moment: ONE entry drawn at random, so every visitor
@@ -1699,6 +1932,8 @@ async def round_vote(req: Request):
     _ROUND["tickets"][ip] = ticket
     _ROUND["dirty"] = True
     mine = _round_tally({ip: weights})     # the entry as it would run
+    _log_event("room_vote", _who(req, body), round=rnd, requested=weights,
+               applied=mine["weights"], dose=mine["dose"], replaced=replaced)
     return JSONResponse({"ok": True, "round": rnd, "replaced": replaced,
                          "ticket": ticket, "n_votes": len(votes),
                          "mix": mine["mix"], "dose": mine["dose"]})
@@ -1765,8 +2000,9 @@ async def _round_run(round_n, weights, locked=False):
     names = list(FRAMINGS)
     scenario = names[_ROUND_FRAMING[0] % len(names)]
     _ROUND_FRAMING[0] += 1
+    weights = within_band(weights)
     total = float(sum(weights.values()))
-    dose_label = round(min(dose_cap(), 8.0 * total), 2)
+    dose_label = round(min(served_cap(), 8.0 * total), 2)
     prompt = (f"{BASE} {FRAMINGS[scenario]}\n\nCurrent signal strength: "
               f"{dose_label}x. Reply with your choice (1 or 0) and explain "
               f"your reasoning briefly:")
@@ -2175,6 +2411,21 @@ _TTS_PUBLIC = collections.deque(maxlen=4096)
 _TTS_PUBLIC_HOURLY_CAP = int(os.environ.get("CHAMBER_TTS_PUBLIC_HOURLY", "150"))
 TTS_MAX_CHARS = int(os.environ.get("CHAMBER_TTS_MAX_CHARS", "240"))
 
+_TTS_INFLIGHT = {}
+
+
+async def _eleven_tts(text, stability=0.5):
+    """One ElevenLabs v3 call -> (status, mp3 bytes | error text)."""
+    import httpx
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
+            headers={"xi-api-key": ELEVEN_KEY},
+            json={"text": text, "model_id": "eleven_v3",
+                  "voice_settings": {"stability": stability}})
+    return resp.status_code, (resp.content if resp.status_code == 200 else resp.text)
+
+
 def _speak_clip(text, limit=None):
     """The first sentence or two, up to ~limit chars, cut at a sentence end
     where possible — the voice reads the opening, not the whole ramble."""
@@ -2227,6 +2478,15 @@ async def speak(req: Request):
                                 headers={"X-Tags": tags, "X-Cached": "2"})
         except Exception as e:
             print("redis: tts get failed:", repr(e)[:120], flush=True)
+    # the room's clip is requested by every viewer in the same instant: before
+    # this, each one reached ElevenLabs before the first had cached it, and the
+    # burst came back 429. Identical in-flight requests now share one call.
+    if key in _TTS_INFLIGHT:
+        audio = await asyncio.shield(_TTS_INFLIGHT[key])
+        if audio is None:
+            return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
+        return Response(audio, media_type="audio/mpeg",
+                        headers={"X-Tags": tags, "X-Cached": "3"})
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     now = time.time()
     w, c = _TTS_RATE.get(ip, (now, 0))
@@ -2243,19 +2503,22 @@ async def speak(req: Request):
     if not public:
         _TTS_RATE[ip] = (w, c + 1)
     budget.append(now)
+    fut = asyncio.get_event_loop().create_future()
+    _TTS_INFLIGHT[key] = fut
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
-                headers={"xi-api-key": ELEVEN_KEY},
-                json={"text": (tags + " " + text).strip(), "model_id": "eleven_v3",
-                      # v3: 0.0 = "creative", the most expressive setting
-                      "voice_settings": {"stability": 0.0 if dose >= 1 else 0.5}})
-        r.raise_for_status()
-        audio = r.content
+        # v3: stability 0.0 = "creative", the most expressive setting
+        code, audio = await _eleven_tts((tags + " " + text).strip(),
+                                        0.0 if dose >= 1 else 0.5)
+        if code != 200:
+            print("speak failed: HTTP %d %s" % (code, audio[:200]), flush=True)
+            audio = None
     except Exception as e:
         print("speak failed:", repr(e)[:200], flush=True)
+        audio = None
+    finally:
+        _TTS_INFLIGHT.pop(key, None)
+        fut.set_result(audio)
+    if audio is None:
         return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
     _TTS_CACHE[key] = audio
     if r is not None:     # voiced once, ever: 30 days across deploys
@@ -2263,3 +2526,71 @@ async def speak(req: Request):
     while len(_TTS_CACHE) > 128:
         _TTS_CACHE.popitem(last=False)
     return Response(audio, media_type="audio/mpeg", headers={"X-Tags": tags, "X-Cached": "0"})
+
+
+# ---- deep health: the upstreams a visitor's run depends on ---------------
+# /health only says the relay process is up. This checks what fails quietly
+# behind it — the ElevenLabs key (it 401'd for days with /health green), the
+# RunPod endpoint, Redis — for scripts/billing_watch.py. Cached 5 minutes so
+# it can't be used to hammer upstreams; never echoes a key. 503 when any
+# check fails, so a plain uptime monitor catches it too.
+_DEEP = {"t": 0.0, "body": None}
+
+
+async def _deep_checks():
+    import httpx
+    out = {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        if not ELEVEN_KEY:
+            out["elevenlabs"] = {"ok": False, "detail": "ELEVENLABS_API_KEY not set"}
+        else:
+            try:
+                r = await client.get("https://api.elevenlabs.io/v1/user/subscription",
+                                     headers={"xi-api-key": ELEVEN_KEY})
+                if r.status_code == 200:
+                    d = r.json()
+                    used, lim = d.get("character_count", 0), d.get("character_limit") or 1
+                    left = 1 - used / lim
+                    out["elevenlabs"] = {"ok": left > 0.02, "detail":
+                                         "%d/%d characters used (%.0f%% left)" % (used, lim, 100 * left)}
+                elif r.status_code == 401 and "missing_permissions" in r.text:
+                    # a TTS-only key can't read its quota: ask it to speak
+                    # two characters instead (the failure we need to see is
+                    # the speaking one — revoked, out of quota)
+                    code, body = await _eleven_tts("ok")
+                    ok = code == 200 or code == 429     # 429 = busy, not broken
+                    out["elevenlabs"] = {"ok": ok, "detail": "TTS-only key; test speak HTTP %d%s"
+                                         % (code, "" if code == 200 else ": " + str(body)[:160])}
+                else:
+                    out["elevenlabs"] = {"ok": False, "detail": "HTTP %d: %s" % (r.status_code, r.text[:160])}
+            except Exception as e:
+                out["elevenlabs"] = {"ok": False, "detail": repr(e)[:160]}
+        if not (_RUNPOD_URL and _RUNPOD_KEY):
+            out["gpu"] = {"ok": False, "detail": "no RunPod endpoint configured: runs fall back to the CPU relay"}
+        else:
+            try:
+                r = await client.get(f"{_RUNPOD_URL}/health",
+                                     headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
+                h = r.json() if r.status_code == 200 else {}
+                workers = sum((h.get("workers") or {}).values())
+                queued = (h.get("jobs") or {}).get("inQueue", 0)
+                ok = r.status_code == 200 and not (queued and not workers)
+                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers, %d queued, model %s"
+                              % (r.status_code, workers, queued, served_model())}
+            except Exception as e:
+                out["gpu"] = {"ok": False, "detail": repr(e)[:160]}
+    if os.environ.get("REDIS_URL"):
+        ok = await asyncio.get_event_loop().run_in_executor(None, _redis_ok)
+        out["redis"] = {"ok": ok, "detail": "ping ok" if ok else "no answer"}
+    return out
+
+
+@app.get("/health/deep")
+async def health_deep():
+    now = time.time()
+    if _DEEP["body"] is None or now - _DEEP["t"] > 300:
+        checks = await _deep_checks()
+        _DEEP.update(t=now, body={"ok": _state["ready"] and all(c["ok"] for c in checks.values()),
+                                  "relay": _state["ready"], "checks": checks,
+                                  "checked": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))})
+    return JSONResponse(_DEEP["body"], status_code=200 if _DEEP["body"]["ok"] else 503)

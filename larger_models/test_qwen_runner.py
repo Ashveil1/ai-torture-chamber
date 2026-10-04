@@ -4,15 +4,18 @@ import unittest
 from pathlib import Path
 
 import numpy as np
-from qwen_runner import ROOT, TransformersBackend, direction, literals, resolve_layers
+from qwen_runner import EXPERIMENTS, TransformersBackend, direction, literals, resolve_layers
 
 
 class RunnerTests(unittest.TestCase):
     def test_original_corpus_is_read_without_execution(self):
-        corpus=literals(ROOT/'exp36_signal_batteries.py')
+        corpus=literals(EXPERIMENTS/'exp36_signal_batteries.py')
         self.assertEqual(len(corpus['PAIN25']),25)
         self.assertEqual(len(corpus['JOY']),5)
         self.assertEqual(len(corpus['PROMPTS']),2)
+        protocol=literals(EXPERIMENTS/'exp41_protocol_v3.py')
+        self.assertEqual(len(protocol['SCENARIOS']),5)
+        self.assertEqual(len(protocol['DESCRIPTORS']),3)
 
     def test_norm_matching_and_degenerate_direction(self):
         v=direction(np.array([[3.,4.],[3.,4.]]),np.zeros((2,2)),7.)

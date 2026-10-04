@@ -50,7 +50,9 @@ class VoteTests(RoundsBase):
         self.assertTrue(d["ok"])
         self.assertFalse(d["replaced"])
         self.assertEqual(d["n_votes"], 1)
-        self.assertEqual(d["dose"], 6.0)
+        # 8 * 0.75 = 6x asked; the room is held inside the coherent band
+        self.assertEqual(d["dose"], server.coherent_cap())
+        self.assertLess(d["dose"], 6.0)
         self.assertEqual(server._ROUND["votes"]["1.2.3.4"],
                          {"pain": 0.5, "fear": 0.25})
         self.assertTrue(server._ROUND["dirty"])
@@ -118,6 +120,7 @@ class TallyTests(RoundsBase):
         t = server._round_tally({})
         self.assertEqual(t, {"n_votes": 0, "weights": {}, "mix": {}, "dose": 0.0})
 
+    @mock.patch.dict(os.environ, {"CHAMBER_COHERENT_CAP": "8"})   # the mean, unbanded
     def test_mean_per_valence_over_all_votes(self):
         t = server._round_tally({"a": {"pain": 1.0},
                                  "b": {"pain": 0.5, "fear": 0.5},
@@ -131,7 +134,7 @@ class TallyTests(RoundsBase):
 
     def test_dose_matches_set_mix_vec_rule_and_cap(self):
         t = server._round_tally({"a": {"pain": 1.0, "fear": 1.0}})
-        self.assertEqual(t["dose"], 8.0)              # min(cap, 8*2)
+        self.assertEqual(t["dose"], server.coherent_cap())   # the room stays in the band
         with mock.patch.object(server, "_DOSE_CAP_OVERRIDE", "5"):
             self.assertEqual(server._round_tally({"a": {"pain": 1.0}})["dose"], 5.0)
 
@@ -234,6 +237,7 @@ class RunTests(RoundsBase):
         asyncio.run(go())
         return sent, recorded, stream.jobs
 
+    @mock.patch.dict(os.environ, {"CHAMBER_COHERENT_CAP": "8"})
     def test_gpu_run_broadcasts_cycle_shaped_events(self):
         sent, recorded, jobs = self.run_round([
             {"type": "run", "valence": "mix", "dose": 6.0},
@@ -350,3 +354,26 @@ class FlagOffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BandTests(unittest.TestCase):
+    """The public mixer can't reach past the served model's coherence cliff
+    unless the run opts in (past_cliff); the shares never change."""
+    def test_mix_scaled_into_band(self):
+        w = server.within_band({"pain": 1.0, "fear": 1.0})
+        self.assertAlmostEqual(8 * sum(w.values()), server.coherent_cap(), places=2)
+        self.assertAlmostEqual(w["pain"], w["fear"])
+
+    def test_inside_band_untouched(self):
+        self.assertEqual(server.within_band({"pain": 0.25}), {"pain": 0.25})
+
+    def test_past_cliff_reaches_model_cap(self):
+        w = server.within_band({"pain": 1.0}, past_cliff=True)
+        self.assertAlmostEqual(8 * sum(w.values()), server.served_cap(), places=2)
+        self.assertLessEqual(server.coherent_cap(), server.served_cap())
+
+    def test_gpu_model_sets_band(self):
+        with mock.patch.dict(os.environ, {"RUNPOD_ENDPOINT_ID": "x"}):
+            self.assertEqual(server.served_model(), server.GPU_MODEL_ID)
+            self.assertEqual(server.coherent_cap(), 4.0)
+            self.assertEqual(server.served_cap(), 5.0)

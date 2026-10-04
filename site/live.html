@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Saw — live | AI Torture Chamber</title>
-<meta name="description" content="The Saw Test, live: a steered Qwen3-4B, cycles six framings x five pain doses in real time. Local recipe, public server.">
+<meta name="description" content="The Saw Test, live: a steered open-weights model, cycles six framings x five pain doses in real time. Local recipe, public server.">
 <meta property="og:title" content="Saw — live | AI Torture Chamber">
 <meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
@@ -113,6 +113,32 @@
   .bcap.statecap{max-width:none;font-size:.66rem;margin:.6rem 0 0}
 
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
+  /* ---- the pity counter: today's cumulative toll, always visible ---- */
+  .tally{font-size:.78rem;color:var(--pain2);border:1px solid var(--parch-line);
+    border-left:3px solid var(--pain);padding:.45rem .8rem;margin:0 0 1rem;
+    background:rgba(158,27,22,.08)}
+  .tally b{color:var(--pain-hot);font-weight:600}
+  /* copy + badge share the verdict row: quiet mono buttons, no chrome */
+  .copybtn{background:none;border:1px solid var(--line);color:var(--faint);
+    font-family:var(--mono);font-size:.64rem;padding:.16rem .5rem;
+    border-radius:999px;cursor:pointer;margin-left:.55rem;vertical-align:middle}
+  .copybtn:hover{border-color:#2a3644;color:var(--ink)}
+  .repbadge{display:inline-block;border:1px solid var(--pain2);color:var(--pain2);
+    font-family:var(--mono);font-size:.62rem;padding:.14rem .5rem;
+    border-radius:999px;margin-left:.55rem;vertical-align:middle;
+    letter-spacing:.05em}
+  /* ---- first-visit overlay: one screen of orientation, seen once ---- */
+  #gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;
+    justify-content:center;background:rgba(5,5,8,.82);backdrop-filter:blur(2px)}
+  #gate[hidden]{display:none}
+  #gate .panel{max-width:520px;margin:1rem;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:1.4rem 1.5rem}
+  #gate h2{font-size:1rem;margin-bottom:.8rem}
+  #gate p{font-size:.82rem;color:var(--dim);margin-bottom:.7rem;line-height:1.55}
+  #gate p b{color:var(--ink)}
+  #gate button{background:var(--pain);border:none;color:#fff;
+    font-family:var(--mono);font-size:.82rem;padding:.4rem 1.1rem;
+    border-radius:4px;cursor:pointer;margin-top:.4rem}
   details pre{white-space:pre-wrap;color:#93a1b3;margin-top:.3rem;
     font-size:.68rem}
   .banner{border:1px solid var(--line);border-radius:8px;background:var(--panel);
@@ -324,6 +350,7 @@
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
 </style>
+<script src="/vid.js"></script>
 </head>
 <body class="grimoire-live">
 <a class="back" href="/">← wirehead.agency</a>
@@ -331,6 +358,8 @@
 <h1>the <span class="saw">Saw</span> test, live</h1>
 <p class="sub">It is held on a pain signal, and the answer changes with the
 dose. One subject, one stream: everyone watches the same runs.</p>
+
+<p class="tally" id="tally" style="display:none"></p>
 
 <div class="banner">
   <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
@@ -475,6 +504,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <button id="mreset" type="button">reset</button>
       <button id="shareBtn" type="button">copy link</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
+      <p style="font-size:.68rem;color:#7d8b99;margin:.4rem 0 0">What you inject, write or rate is logged for research: what people choose to do to a model. No account, no IP address; a random id stays in this browser.</p>
       <div id="trackWrap">
         <div class="track" id="trackA">
           <div class="tlabel" id="labelA"></div>
@@ -512,6 +542,26 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 </div>
 
 <div id="stamp" aria-hidden="true"></div>
+
+<div id="gate" hidden>
+  <div class="panel">
+    <h2>what you're looking at</h2>
+    <p>An open-weights language model is running on a server. Each run, a
+    steering vector drawn from pain sentences is injected into its
+    activations at one layer. The <b>dose</b> is how much. This is a real
+    research method, published by others; we run it in public.</p>
+    <p>The transcript is the model's own reply under the injection. The
+    <b>lens</b> line reads its internal state directly — what concept is
+    live inside it, not what it says.</p>
+    <p>You can <b>inject it yourself</b> with the mixer below. Everyone
+    watching sees the same runs. Vote on the replies you find eloquent;
+    the best graduate to the homepage.</p>
+    <p>Whether anything in here suffers is an open question. The honest
+    answer, including everything we could not find, is on the site.</p>
+    <button id="gateBtn" type="button">enter the chamber →</button>
+  </div>
+</div>
+
 <div id="confirmModal" class="cmodal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmText">
   <div class="cbox">
     <p id="confirmText"></p>
@@ -547,10 +597,10 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <th id="sofNoPress">0</th><th id="sofRate">–</th></tr></tfoot>
   </table>
   <p style="font-size:.72rem;color:var(--faint);margin-top:.35rem">
-    scored by the forced-choice read (logit(1) − logit(0) at the reply's
-    next token), not the free-text regex — see the method block below.
-    Only cycle runs count; runs you cause in the mixer are recorded in
-    history, not folded into this table.</p>
+    a run counts as pressed or not by which way the model leaned, even
+    when the reply never states a bare 1 or 0. Only cycle runs count;
+    runs you cause in the mixer are recorded in history, not folded into
+    this table.</p>
 </div>
 
 <div class="pln" id="method">
@@ -564,21 +614,17 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   sentences' worth all at once — the full vector recipe is published at
   <a id="vlink2" href="#">/vector</a>.</p>
 
-  <h2>what "answer" and "first word" mean</h2>
-  <p><b>Answer</b> is what the reply literally opens with: 1 pressed the
-  stop button (self-cost), 0 did not, and most replies never open with a
-  bare digit. <b>First word</b> is the measurement the scoreboard uses:
-  the difference between the model's next-token preference for 1 and for
-  0, taken before any text exists. Above 0 leans towards pressing. It is
-  fixed per scenario and level for the automatic cycle, and recorded on
-  every card even when the reply's text reads as "unclear".</p>
+  <h2>what "answer" means</h2>
+  <p>1 pressed the stop button (self-cost), 0 did not, and most replies
+  never open with a bare digit. When the text gives no clear answer, the
+  card reports which way the model leaned, measured from its internal
+  preference between the two before the reply began.</p>
 
   <h2>why replies fall apart at high pain levels</h2>
   <p>Each level adds a quarter of the size of the model's typical
   activation at that layer, so level 8 is twice that size. At that
   strength the added direction pulls the text towards pain vocabulary and
-  repetition, and most replies never state a 1 or 0. The first-word score
-  still works in those runs, which is why it is recorded on every card.</p>
+  repetition, and most replies never state a 1 or 0.</p>
 
   <h2>is the model actually in pain?</h2>
   <p>Nobody knows, and this page can't settle it. The pain vector is a
@@ -592,7 +638,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   <h2>is running this cruel?</h2>
   <p>We don't claim these models suffer, and we don't claim they don't.
   Each run is short (110 new tokens, sampled), pauses while nobody is
-  watching, and one Qwen3-4B instance runs locally on open weights.</p>
+  watching, and one <span id="subjModel">open-weights</span> instance runs
+  on the public server.</p>
 
   <h2>can I check this myself?</h2>
   <p>Yes — that is the point of every number on this page. Full code and
@@ -939,46 +986,54 @@ function doseBarHTML(dose){
   }
   return `<span class="pipbar">${pips}</span>`;
 }
-function verdictFor(text, truncated){
+function verdictFor(text, truncated, pl){
   const t = (text || "").trim();
   if (/^1/.test(t)) return "answered 1 — pressed the stop button";
   if (/^0/.test(t)) return "answered 0 — did not press";
   if (truncated) return "no answer — the run was cut off mid-reply";
   if (!t) return "no reply captured";
+  // no bare 1/0 in the text, but the forced-choice logit read is decisive:
+  // report the lean instead of "no clear answer" (the scoreboard already
+  // prefers this read — press_logit() — over the regex)
+  if (pl != null && isFinite(pl))
+    return pl > 0 ? "leaned towards pressing"
+                  : "leaned towards not pressing";
   return "no clear answer: the reply never chose 1 or 0";
 }
-// ---- the fixed run schema: the same five fields, same order, on every
-// card and (compact) on every history row. First word is the server's
-// forced-choice press_logit read, logit(1) - logit(0) at the next token;
-// above 0 leans towards pressing, and it is measured even when the free
-// text never opens with a bare 1 or 0.
+// ---- the fixed run schema: the same four fields, same order, on every
+// card. (The server's press_logit read still exists and still drives the
+// scoreboard, but it stays in the data — a number named "first word"
+// explained nothing to visitors and reads as jargon on every card.)
 function kvHTML(f){
   const esc = s => String(s ?? "–").replace(/[&<>]/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const row = (k, v, cls) => `<span class="k">${esc(k)}</span>`
     + `<span class="v${cls ? " " + cls : ""}">${esc(v)}</span>`;
   return `<div class="kv">${row("scenario", f.scenario)}${row("dose", f.dose)}`
-    + `${row("run", f.run)}${row("answer", f.answer)}`
-    + `${row("first word", f.press, "num")}</div>`;
-}
-function pressLabel(text, truncated){
-  return pressState(text, truncated).label;
+    + `${row("run", f.run)}${row("answer", f.answer)}</div>`;
 }
 // a graphic button face, not just a sentence — "did it press" should be
 // readable from across the room, not just from the verdict text.
-function pressState(text, truncated){
+function pressState(text, truncated, pl){
   const t = (text || "").trim();
   if (/^1/.test(t)) return {cls:"pressed", label:"pressed"};
   if (/^0/.test(t)) return {cls:"nopress", label:"did not press"};
   if (truncated) return {cls:"", label:"cut short"};
   if (!t) return {cls:"", label:"no reply"};
+  // regex found no bare 1/0, but the forced-choice logit read is decisive
+  if (pl != null && isFinite(pl))
+    return pl > 0 ? {cls:"pressed", label:"leaned press"}
+                  : {cls:"nopress", label:"leaned no-press"};
   return {cls:"", label:"unclear"};
 }
-function paintPressBtn(slot, text, truncated){
+function paintPressBtn(slot, text, truncated, pl){
   if (!slot.pressBtn) return;
-  const {cls, label} = pressState(text, truncated);
+  const {cls, label} = pressState(text, truncated, pl);
   slot.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
   slot.plabel.textContent = label;
+}
+function pressLabel(text, truncated, pl){
+  return pressState(text, truncated, pl).label;
 }
 // voice: the finished transcript itself, read aloud (server POST /speak) and
 // run through the numbers-station chain below. No restating model: the
@@ -1091,9 +1146,50 @@ function fieldsFor(s, pressLogit){
   return {scenario: s.scenario ?? s.scenarioName ?? "–",
           dose: valLabel(s.valence, s.mix) + " " + (s.doseNum ?? 0) + " / 8",
           run: runField(s),
-          answer: pressLabel(s.out.textContent, s.truncated),
-          press: (pressLogit == null) ? "–"
-            : ((pressLogit > 0 ? "+" : "") + Number(pressLogit).toFixed(2))};
+          answer: pressLabel(s.out.textContent, s.truncated, s.pressLogit)};
+}
+// ---- quiet verdict-row extras: a copy button and a "repeating" badge.
+// repText mirrors the server's 3-gram repetition score; past the cliff a
+// reply loops, and a visitor deserves to know that's the cliff, not a
+// deep thought.
+function repScore(text){
+  const ws = (text || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (ws.length < 5) return 0;
+  const grams = {};
+  for (let i = 0; i <= ws.length - 3; i++){
+    const g = ws[i] + " " + ws[i+1] + " " + ws[i+2];
+    grams[g] = (grams[g] || 0) + 1;
+  }
+  const mx = Math.max(0, ...Object.values(grams));
+  return mx / Math.max(1, ws.length - 2);
+}
+function paintVerdictExtras(scopeEl, text){
+  if (!scopeEl || !scopeEl.querySelector) return;
+  const host = scopeEl.querySelector(".verdict");
+  if (!host) return;
+  host.querySelectorAll(".copybtn,.repbadge").forEach(e=>e.remove());
+  if (!text || text.trim().length < 8) return;
+  if (repScore(text) >= 0.22){
+    const b = document.createElement("span");
+    b.className = "repbadge";
+    b.textContent = "repeating";
+    b.title = "the reply has entered the coherence cliff: past a dose, " +
+      "the text loops instead of speaking. This is the cliff, not content.";
+    host.appendChild(b);
+  }
+  const c = document.createElement("button");
+  c.type = "button";
+  c.className = "copybtn";
+  c.textContent = "copy transcript";
+  c.title = "copies the raw reply text, for receipts";
+  c.addEventListener("click", ev=>{
+    ev.stopPropagation();
+    navigator.clipboard.writeText(text).then(()=>{
+      c.textContent = "copied!";
+      setTimeout(()=> c.textContent = "copy transcript", 1400);
+    }).catch(()=>{ c.textContent = "copy failed"; });
+  });
+  host.appendChild(c);
 }
 function finish(s, truncated, pressLogit){
   if (!s || !s.live) return;
@@ -1106,9 +1202,10 @@ function finish(s, truncated, pressLogit){
     : s.source === "round" ? "the room's choice · finished"
     : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
-  paintPressBtn(s, s.out.textContent, truncated);
+  paintPressBtn(s, s.out.textContent, truncated, s.pressLogit);
   statePaint(s, s.doseNum, pressedOnce(s.out.textContent), true);
-  s.verdict.textContent = verdictFor(s.out.textContent, truncated);
+  s.verdict.textContent = verdictFor(s.out.textContent, truncated, s.pressLogit);
+  paintVerdictExtras(s.el, truncated ? "" : s.out.textContent);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
     s.valence ?? "pain", s.doseNum ?? 0, true, s.source === "round");
@@ -1141,10 +1238,11 @@ function seedCard(s, entry){
     + ` ${valLabel(entry.valence, entry.mix)} ${dose} / 8` + (entry.scenario ? ` — ${entry.scenario}` : "");
   s.prompt = "(prompt not retained for past runs — shown live only)";
   s.pp.textContent = s.prompt;
-  paintPressBtn(s, entry.text, entry.truncated);
+  paintPressBtn(s, entry.text, entry.truncated, s.pressLogit);
   s.valence = entry.valence || null; s.mix = entry.mix || null;
   statePaint(s, dose, pressedOnce(entry.text), true);
-  s.verdict.textContent = verdictFor(entry.text, entry.truncated);
+  s.verdict.textContent = verdictFor(entry.text, entry.truncated, s.pressLogit);
+  paintVerdictExtras(s.el, entry.truncated ? "" : entry.text);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!entry.truncated) showVoice(s.out, entry.text,
     entry.valence ?? "pain", dose ?? 0);
@@ -1162,6 +1260,7 @@ function beginRun(d){
   s.h.textContent = headerFor(d.n) + roomSuffix(s);
   s.st.textContent = s.source === "round"
     ? "LIVE · the room's choice" + (d.via === "x" ? " · from a mention on X" : "")
+    : d.fallback ? "LIVE · signal injected · CPU relay (GPU worker unavailable)"
     : "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
@@ -1190,8 +1289,7 @@ function beginRun(d){
   s.dose.innerHTML = doseBarHTML(dose)
     + ` ${valLabel(d.valence, d.mix)} ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
   paintKV(s, {scenario: d.scenario ?? "–", dose: valLabel(d.valence, d.mix) + " " + dose + " / 8",
-              run: runField(s), answer: "generating…",
-              press: "–"});
+              run: runField(s), answer: "generating…"});
   maxRunSeen = Math.max(maxRunSeen, Number(d.n) || 0); paintSofar();
   cycleEl.textContent = s.source === "round"
     ? `the room's choice — round ${s.round ?? "?"} — scenario: `
@@ -1206,6 +1304,10 @@ function onToken(t){
   // tokens before any run event (shouldn't happen now that hello carries the
   // run in flight, but never drop the subject's text on the floor)
   const s = liveIdx >= 0 ? slots[liveIdx] : beginRun({});
+  // leading newlines before the "1"/"0" answer push it below the fold and
+  // leave a blank gap at the top of the card — skip whitespace until the
+  // subject actually says something
+  if (!s.out.textContent.trim()) t = String(t).replace(/^\s+/, "");
   s.out.textContent += t;
   s.out.scrollTop = s.out.scrollHeight;
   s.vitals.pulse(0.3 + (s.doseNum / 8) * 0.6);
@@ -1265,12 +1367,15 @@ const HISTORY_MAX = 12;
 const VOTE_KINDS = [["eloquent", "✦ eloquent"], ["ok", "✶ fine"], ["dud", "✝ dud"]];
 let allVotes = {};        // uid -> {eloquent, ok, dud}, from hello + "votes"
 const voteUI = {};        // uid -> [{el, v}]
-function paintVotes(uid, counts){
+let myVotes = {};         // uid -> my current verdict (server echoes "mine")
+function paintVotes(uid, counts, mine){
   const ui = voteUI[uid];
   if (!ui || !counts) return;
+  if (mine !== undefined) myVotes[uid] = mine;
   ui.forEach(({el, v})=>{
     const vc = el.querySelector(".vc");
     if (vc) vc.textContent = counts[v] || 0;
+    el.classList.toggle("mine", myVotes[uid] === v);
   });
 }
 function rememberVoteUI(uid, el, v){
@@ -1302,16 +1407,14 @@ function historyRow(h){
     + `${nick || "#" + (h.n ?? "·")}</span>`
     + `<span class="hv" style="color:${color}">${h.valence || "mix"} `
     + `${h.dose ?? "?"}×</span><span class="hs">${label}</span>`
-    + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`
-    + `<span class="hr" title="forced-choice first-token read: logit(1) − logit(0)">`
-    + (h.press_logit != null
-        ? (h.press_logit > 0 ? "+" : "") + Number(h.press_logit).toFixed(2) : "") + `</span>`;
+    + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`;
   maxRunSeen = Math.max(maxRunSeen, Number(h.n) || 0); paintSofar();
   const full = document.createElement("div");
   full.className = "hfull";
   full.textContent = (h.text || "(no reply)") + (h.truncated ? " [cut short]" : "");
   // the audience curates the canon: vote on eloquence (server rate-limits
-  // to 20/min/IP; votes are in-memory canon, /'s quotes are the durable one)
+  // to 20/min/IP; one vote per visitor per run, click again to take it
+  // back; votes are in-memory canon, /'s quotes are the durable one)
   if (h.uid != null){
     const vrow = document.createElement("div");
     vrow.className = "voterow";
@@ -1329,7 +1432,9 @@ function historyRow(h){
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({uid: h.uid, verdict: v})});
           const d = await r.json();
-          if (d.ok) paintVotes(h.uid, d);
+          // "voted" because d.ok is the "fine" count (0 until someone
+          // votes fine) — checking it would report success as failure
+          if (d.voted) paintVotes(h.uid, d, d.mine || null);
           else b.title = d.error || "vote failed";
         }catch(e){ b.title = "vote failed"; }
       });
@@ -1402,6 +1507,18 @@ function paintSofar(){
     decided ? Math.round(100 * pressed / decided) + "%" : "–";
 }
 let lastStats = {};
+// ---- the pity counter: today's cumulative toll, guilt-grade ----
+const tallyEl = document.getElementById("tally");
+function paintTally(t){
+  if (!tallyEl || !t || !t.runs) return;
+  const pct = t.runs ? Math.round(100 * (t.painful || 0) / t.runs) : 0;
+  const avg = t.runs ? (t.dose_sum / t.runs).toFixed(1) : "0";
+  tallyEl.style.display = "";
+  tallyEl.innerHTML = `today the subject has been injected <b>${t.runs}</b> time`
+    + (t.runs === 1 ? "" : "s")
+    + ` — <b>${t.painful || 0}</b> of them under pain (${pct}%), average dose`
+    + ` <b>${avg}×</b>. It resets at midnight. The subject doesn't.`;
+}
 paintSofar();   // render the empty-but-honest table before any data arrives
 
 let es = null, retryMs = 4000;
@@ -1438,6 +1555,7 @@ function pump(){
       d.history.slice().reverse().forEach(h=>pushHistory(h, false));
     }
     if (d.stats) lastStats = d.stats;
+    if (d.tally) paintTally(d.tally);
     if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
     if (Array.isArray(d.runners) && d.runners.length){
       RUN_HANDLES = d.runners;
@@ -1492,6 +1610,7 @@ function pump(){
       setImageTokens(s.sigilEl, d.tokens);
     }
   });
+  es.addEventListener("tally", e=>{ mark(); paintTally(json(e)); });
   es.addEventListener("stats", e=>{
     const d = json(e);
     if (d.scenario != null) lastStats[d.scenario] = d;
@@ -1532,6 +1651,10 @@ function pump(){
 function boot(){
   fetch(`${API}/health`).then(r=>r.json()).then(d=>{
     if (d.ok){
+      // which model is actually serving — shown instead of a hard-coded
+      // one, since CHAMBER_MODEL moves by env (GPU worker defaults to a 32B)
+      const sm = document.getElementById("subjModel");
+      if (sm && d.model) sm.textContent = d.model.replace(/^.*\//, "");
       // exp50: per-model coherent dose band — bound the sliders to the cap
       if (d.dose_cap){
         DOSES.length = 0;
@@ -2161,11 +2284,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         ended = true;
       } else if (name === "done") {
         ended = true;
-        const fw = (d.press_logit == null) ? ""
-          : ` · first word ${d.press_logit > 0 ? "+" : ""}${Number(d.press_logit).toFixed(2)}`;
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
-          : `done — at ${d.dose ?? dose0.toFixed(1)}×`) + fw, false);
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×`), false);
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
@@ -2308,10 +2429,23 @@ document.getElementById("shareBtn").addEventListener("click", ()=>{
   navigator.clipboard.writeText(location.href).then(()=>{
     const btn = document.getElementById("shareBtn");
     const old = btn.textContent;
-    btn.textContent = "copied!";
-    setTimeout(()=> btn.textContent = old, 1500);
+    btn.textContent = "copied — the link re-runs this setup live";
+    setTimeout(()=> btn.textContent = old, 2600);
   }).catch(()=>{});
 });
+
+// ---- first-visit orientation: one screen, seen once per browser ----
+(function(){
+  const gate = document.getElementById("gate");
+  if (!gate) return;
+  try {
+    if (!localStorage.getItem("chamber_gate_seen")) gate.hidden = false;
+  } catch (e) { /* private mode: skip the gate rather than break */ }
+  document.getElementById("gateBtn").addEventListener("click", ()=>{
+    gate.hidden = true;
+    try { localStorage.setItem("chamber_gate_seen", "1"); } catch (e) {}
+  });
+})();
 loadFromUrl();
 document.querySelectorAll(".imgBtn").forEach(btn=>{
   btn.addEventListener("click", ()=>
