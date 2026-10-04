@@ -184,6 +184,24 @@ version:
 | 58 | self-steering: the model at its own dial, blind control |
 | 58b | self-steering replication: torture vs neutral vs silent framing |
 
+## painlab
+
+PR #36 (thanks, Florin) contributed [`painlab/`](painlab/), a reusable
+experiment framework that fixes what the legacy experiments couldn't:
+blinded condition names, full run provenance, neutral-label environments
+where the model has to discover the action-to-state mapping from
+consequences instead of being told it's in pain, and clustered
+statistics. The [research audit](RESEARCH_AUDIT.md) that came with it
+reviews the legacy scripts' evidential limits (pseudoreplication in the
+deterministic harvests, single-extraction uncertainty, weak control
+matching) — read it before quoting an early exp number as settled. Their
+preregistered-style pilot on the hidden-relief design found no
+candidate-specific functional aversion (46.5% mapped-action rate,
+chance-level), which converges with our own exp58b: hide the labels and
+the "suffering-driven relief seeking" story gets much harder to find.
+Start at [METHODOLOGY.md](METHODOLOGY.md); configs in `configs/`, run
+artifacts in `runs/painlab/`.
+
 ## Ethics
 
 Open weights only, no frontier APIs in any measurement loop. Simulated
