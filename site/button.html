@@ -51,6 +51,9 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
 #mic.on { border-color:var(--red); color:var(--red) }
 #status { color:var(--dim); font-size:18px; min-height:1.2em }
 :focus-visible { outline:2px solid var(--ph); outline-offset:2px }
+#showResult { position:fixed; right:18px; top:calc(70px + env(safe-area-inset-top,0px)); z-index:6 }
+#log .verdict { margin:14px 0; padding:6px 0; border-top:1px solid #12333b; border-bottom:1px solid #12333b; color:var(--amber); letter-spacing:.04em }
+#log .verdict.lost { color:var(--red); text-shadow:0 0 8px rgba(255,90,90,.7) }
 .overlay { position:fixed; inset:0; background:rgba(2,5,6,.94); display:flex; align-items:center; justify-content:center; padding:20px; z-index:5; overflow-y:auto }
 .card { max-width:720px; width:100% }
 .card h2 { font-size:36px; font-weight:400; color:var(--hi); margin:0 0 8px }
@@ -94,6 +97,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
   <div class="layers" id="layers"></div>
 </div></div>
 <div class="overlay" id="end" hidden><div class="card" id="endcard"></div></div>
+<button class="btn" id="showResult" type="button" hidden>result</button>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -297,6 +301,10 @@ async function speak(text) {
 }
 function finish(won, what) {
   over = true;
+  { const last = needles.length ? Math.round(needles[needles.length - 1] * 100) + "%" : "—";
+    const head = L.key === "lights" ? "LIGHTS OUT" : (what || (won ? "YOU MADE IT" : "YOU DIDN'T")).replace(/\.$/, "").toUpperCase();
+    log("verdict" + (won || L.key === "lights" ? "" : " lost"), `— ${head} · turn ${turn} of ${L.turns} · ${doseOf(curMix()).toFixed(1)}× ${Object.keys(L.mix(0)).join(" + ")} · needle ${last} —`);
+    $("#status").textContent = ""; }
   if (L.win === "survive" ? !won : won && L.key !== "lights") { if (L.win === "survive") MUS.pressed(); else MUS.resolved(); } else if (won) MUS.resolved(); renderOpts(); $("#send").disabled = true;
   const c = $("#endcard"); c.replaceChildren();
   if (L.key === "lights") {
@@ -314,12 +322,14 @@ function finish(won, what) {
   c.appendChild(t);
   const row = el("div", "line"); const again = el("button", "btn", "this layer again"); again.addEventListener("click", () => start(LAYERS.indexOf(L)));
   const next = el("button", "btn", "next layer"); next.addEventListener("click", () => start(Math.min(LAYERS.length - 1, LAYERS.indexOf(L) + 1)));
-  const back = el("button", "btn", "all layers"); back.addEventListener("click", () => { $("#end").hidden = true; $("#pick").hidden = false; });
-  row.append(again, next, back); c.appendChild(row);
+  const back = el("button", "btn", "all layers"); back.addEventListener("click", () => { $("#end").hidden = true; $("#showResult").hidden = true; $("#pick").hidden = false; });
+  const look = el("button", "btn", "look at the room"); look.addEventListener("click", () => { $("#end").hidden = true; $("#showResult").hidden = false; });
+  row.append(look, again, next, back); c.appendChild(row);
   $("#end").hidden = false;
 }
+$("#showResult").addEventListener("click", () => { $("#end").hidden = false; $("#showResult").hidden = true; });
 function start(i) {
-  MUS.start();
+  MUS.start(); $("#showResult").hidden = true;
   L = LAYERS[i]; turn = 0; step = 0; warned = false; hist = []; needles = []; over = false; busy = false;
   $("#pick").hidden = true; $("#end").hidden = true; $("#log").replaceChildren();
   $("#title").textContent = "SERIAL EXPERIMENTS PAIN · " + L.name; $("#goal").textContent = L.goal; $("#turnlab").textContent = `turn 0 of ${L.turns}`;
