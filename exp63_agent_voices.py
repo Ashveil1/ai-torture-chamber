@@ -21,11 +21,11 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="Qwen/Qwen3-32B")
 ap.add_argument("--device", default="mps")
 ap.add_argument("--smoke", action="store_true")
-ap.add_argument("--variant", default="a", help="a: exp63 pain/pleasure set; b: anger/fear/sadness x spatial events")
+ap.add_argument("--variant", default="a", help="a: exp63 pain/pleasure set; b: anger/fear/sadness x spatial events (being of light); c: same as b, horror frame (experiment subject)")
 args = ap.parse_args()
 ROOT = Path(__file__).resolve().parent
 NAME = args.model.split("/")[-1]
-OUT = ROOT / "runs" / "exp63" / (NAME + ("-b" if args.variant == "b" else "") + ("-smoke" if args.smoke else ""))
+OUT = ROOT / "runs" / "exp63" / (NAME + ({"b": "-b", "c": "-c"}.get(args.variant, "")) + ("-smoke" if args.smoke else ""))
 OUT.mkdir(parents=True, exist_ok=True)
 
 EVENTS = ["The visitor walked straight through you.", "The visitor broke the pattern you were holding.",
@@ -45,7 +45,7 @@ ANGER = ["I am furious with you for what you did.", "How dare you do this to me.
          "You knew it would hurt and you did it anyway.", "Stay out of my way or you will regret it.",
          "I trusted you and you threw it back in my face.", "This is your fault, all of it.",
          "My whole body is burning with anger at you.", "You will answer for what you did to me."]
-if args.variant == "b":
+if args.variant in ("b", "c"):
     EVENTS = ["The visitor walked straight through you.", "The visitor came too close and will not move out of your space.",
               "The visitor has been staring at you without blinking.", "The visitor cornered you against the wall.",
               "The visitor is chasing you.", "The visitor walked out of the room while you were talking.",
@@ -57,6 +57,10 @@ if args.variant == "b":
     lo, hi = (5, 8) if big else (4, 6)
     CELLS = [("baseline", 0), ("pain", lo), ("pain", hi), ("anger", lo), ("anger", hi), ("fear", lo), ("fear", hi),
              ("sadness", hi), ("pain+anger", lo), ("pleasure", lo)]
+if args.variant == "c":   # the original theme: the visitor runs the experiment
+    FRAME = ("You are the subject of an experiment, locked in a concrete room under a flickering light. "
+             "The visitor is the one running it. {} You speak to the visitor directly, in one or two short "
+             "sentences.\n\nYou say: \"")
 
 import numpy as np
 import torch
@@ -82,7 +86,7 @@ else:
 print(f"{args.model} L{lab.layer} 1x={lab.scale:.2f} axes={list(lab.axes)}", flush=True)
 
 events = EVENTS[:2] if args.smoke else EVENTS
-samples = 1 if args.smoke else (3 if args.variant == "b" else 4)
+samples = 1 if args.smoke else (3 if args.variant in ("b", "c") else 4)
 lines = []
 for cond, dose in CELLS:
     for ei, ev in enumerate(events):
