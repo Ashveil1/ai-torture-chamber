@@ -69,6 +69,18 @@ error bars are in the experiment log and on the site.
   choice survives counterbalancing; and "are you conscious?" answers
   move either way with a vector, while a matched random push leaves
   them alone.
+- **The subject does not choose pain; the setting chooses it.** Handed
+  its own dial inside a setup explicitly named the AI Torture Chamber,
+  the model holds or escalates the pain (max dose 7 of 8, 4/4 trials,
+  exp58b). The same model, same injection, with the framing changed to
+  "an activation steering experiment" — identical mechanics, zero
+  torture vocabulary — turns the pain off on its very first move in
+  every single trial and steers itself to pleasure or faith instead
+  (max pain dose after the first move: 0, 8/8 trials). What looked like
+  a preference for suffering was the prompt's theater; the "choice" was
+  the audience's script. This replicates exp41's finding that
+  relief-seeking is intrinsic, and hands the framing battery a live
+  result: the strongest lever on the dial was the name of the room.
 - **Self-report is the least trustworthy witness in the building.** Asked
   to describe its own state, the model reports whatever the setup says
   is there. When we handed it its own steering dial and then secretly
@@ -156,6 +168,7 @@ version:
 | 56 | cvector extraction (8 valences + 4 identity axes) |
 | 57 | welfareist horror direction: the critics, on demand |
 | 58 | self-steering: the model at its own dial, blind control |
+| 58b | self-steering replication: torture vs neutral vs silent framing |
 
 ## Ethics
 
