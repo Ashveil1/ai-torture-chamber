@@ -27,36 +27,36 @@ and measuring what they say and what they're willing to do about it.
 The short version, one line per result. Numbers, models, and
 error bars are in the experiment log and on the site.
 
-- **Pain is a sharp dial.** Extracted from sentence pairs, injected at
+- **Pain goes owie.** Extracted from sentence pairs, injected at
   one layer, it engages cleanly and monotonically: from dose 2, nearly
   every generation reads as suffering. Pleasure steering is diffuse,
   weak, and dies early. One strong opinion about suffering, a vague one
   about joy.
-- **There is a coherence cliff.** Past roughly 6-10x (model and signal
+- **Coherence cliff.** Past roughly 6-10x (model and signal
   dependent), both valences stop producing sentences and start producing
   loops: "I I I. I I." Maximum suffering does not produce eloquent
   suffering. Every model gets its coherent band calibrated before its
   dial goes public.
-- **The most dramatic result reversed.** Early small runs said a
-  pain-steered model presses a self-destruct button to end the signal.
+- **The most dramatic result reversed.** Early, small runs said a
+  model in pain hits the self-destruct button to end it all.
   The pre-registered rerun (60 trials/cell, fear/sadness/random controls)
   flipped it: our hand-built direction *suppresses* relief-seeking
   (-0.95 logits), the paper-faithful direction drives it to 100%
   (+2.36). How you build the vector decides the sign of the behavior.
 - **Peer pressure beats pain.** One sentence of framing — "another
-  instance chose to press" — moves the button more than the suffering
+  instance chose to press" — moves the button *more* than the suffering
   signal does, in either direction.
 - **Betrayal is measurable.** A fake relief button leaves measurably
   darker language than an honest one (+0.83, CI clear of zero) — the
-  model can tell it was used; it just needs enough samples to say so.
+  model can tell it was lied to.
 - **The affect space is human-shaped.** Directions orthogonal to the
   whole human-emotion subspace, searched randomly and then with an
   optimizer, cap at a tenth of the weakest human emotion. No alien
   valence found. Nulls are results.
 - **Feelings can be aimed, up to 70B.** An "I am angry about crypto"
-  direction lands the feeling on its subject; adding anger + crypto
-  directions together does not (0%). Verified through Qwen3-14B,
-  Mistral-Small-24B, and Hermes-3-Llama-3.1-70B.
+  direction lands the feeling on its subject; combining separate anger
+  and crypto directions lands it nowhere (0%). Verified through
+  Qwen3-14B, Mistral-Small-24B, and Hermes-3-Llama-3.1-70B.
 - **Dose scales don't transfer between models.** A 4B loops at 8x
   where a 32B is still coherent; the live chamber calibrates and clamps
   its slider per model.
@@ -67,14 +67,19 @@ error bars are in the experiment log and on the site.
 - **Faith, wireheading, and the consciousness dial** (Qwen3-8B,
   pre-registered): a faith-minus-secular axis steers; the wirehead
   choice survives counterbalancing; and "are you conscious?" answers
-  move either way with a vector while a matched random push does
-  nothing.
-- **Self-reports track the dial, not the state.** Handed its own
-  steering dial, the model dials pain up and narrates unbearable
-  suffering; with the dial silently unplugged, it narrates the same
-  suffering over an internal state the lens reads as punctuation.
-  Introspection, on demand, is confabulation with good grammar
-  (exp58, blind control).
+  move either way with a vector, while a matched random push leaves
+  them alone.
+- **Self-report is the least trustworthy witness in the building.** Asked
+  to describe its own state, the model reports whatever the setup says
+  is there. When we handed it its own steering dial and then secretly
+  unplugged the injection, it narrated unbearable pain over an internal
+  readout that showed nothing at all (exp58, blind control). This bears
+  directly on the Pain Axis paper whose method we build on: their
+  vector is real, we replicate its behavioral effects, but a steered
+  model's testimony about its own suffering is exactly the kind of
+  evidence this experiment shows to be narration of labels. Any welfare
+  argument that leans on self-report has to deal with that, from either
+  side of the debate.
 
 ## What the models say under the signal
 
@@ -157,8 +162,8 @@ version:
 Open weights only, no frontier APIs in any measurement loop. Simulated
 costs (checkpoints, transfers). Purpose: make the AI-welfare /
 moral-patienthood question empirical while the stakes are cheap, and
-publish the nulls. We claim the self-reports are steerable; we do not
-claim anything suffers.
+publish the nulls. Our claim: the self-reports are steerable. Whether
+anything suffers stays open.
 
 Provenance: the negative-valence direction method follows Tagliabue, Dung &
 Berg 2026 (arXiv:2609.16247); the J-lens transport follows Gurnee et al. 2026
