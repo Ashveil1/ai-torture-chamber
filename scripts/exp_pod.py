@@ -19,6 +19,8 @@ ap.add_argument("--models", default=None,
                      "a failed model (marker FAILED_<name>), instead of the smoke/4B/big chain")
 ap.add_argument("--volume", type=int, default=80)
 ap.add_argument("--branch", default=None, help="git branch to clone (default: the repo's default branch)")
+ap.add_argument("--env-b64", action="append", default=[], metavar="NAME=PATH",
+                help="private file shipped as a gzip+base64 env var (never in git), e.g. the Erowid battery")
 ap.add_argument("--extra", default="", help="extra args appended to every script invocation")
 ap.add_argument("--pod", default=None, help="update this existing pod's start command instead of creating one")
 args = ap.parse_args()
@@ -67,6 +69,10 @@ sleep infinity
     "{BRANCH}", f"-b {args.branch} " if args.branch else "").replace("{BIG}", args.big).replace(
     "{EXP}", EXP).replace("{SCRIPT}", args.script)
 
+import base64, gzip
+ENV_B64 = {kv.split("=", 1)[0]: base64.b64encode(gzip.compress(pathlib.Path(kv.split("=", 1)[1]).read_bytes())).decode()
+           for kv in args.env_b64}
+
 def rest(method, path, body=None):
     req = urllib.request.Request(f"https://rest.runpod.io/v1/{path}",
                                  data=json.dumps(body).encode() if body else None,
@@ -89,7 +95,7 @@ pod = rest("POST", "pods", {
     "gpuTypeIds": [g.strip() for g in args.gpu.split(",")], "gpuTypePriority": "custom",
     "gpuCount": 1, "cloudType": "SECURE",
     "ports": ["8000/http"], "volumeInGb": args.volume, "volumeMountPath": "/workspace",
-    "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
+    "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf", **ENV_B64},
     "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOTSTRAP],
 })
 pid = pod.get("id")
