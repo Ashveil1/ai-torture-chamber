@@ -7,14 +7,17 @@ Checks what can run out of money or quietly bill, and that the site is up:
     workers (this is how the 2026-10-03 outage looked), warm-worker cost
   - OpenRouter credits, ElevenLabs character quota — only if their keys are
     present (add OPENROUTER_API_KEY / ELEVENLABS_API_KEY as repo secrets)
-  - wirehead.agency, beta, and the relay's /health
+  - wirehead.agency + beta pages, the relay's /health (direct and through the
+    site's /chamber proxy), and its /health/deep: the ElevenLabs key, RunPod
+    endpoint and Redis as the relay sees them
+New alerts @-mention WATCH_NOTIFY in an issue comment (edits notify nobody).
 Prints a markdown report; exits 0 always. With --issue (in CI) it opens one
 GitHub issue labelled billing-watch when something needs attention, keeps
 its body current while it does, and closes it when everything clears.
 
   python3 scripts/billing_watch.py [--issue]
 """
-import json, os, subprocess, sys, time, urllib.request
+import json, os, subprocess, sys, time, urllib.error, urllib.request
 
 # thresholds — override via env in the workflow if needed
 MIN_BALANCE = float(os.environ.get("WATCH_MIN_BALANCE", "20"))        # $
@@ -23,8 +26,14 @@ MAX_POD_HOURS = float(os.environ.get("WATCH_MAX_POD_HOURS", "4"))     # a runnin
 MIN_OPENROUTER = float(os.environ.get("WATCH_MIN_OPENROUTER", "5"))   # $
 MIN_ELEVEN_FRAC = float(os.environ.get("WATCH_MIN_ELEVEN_FRAC", "0.1"))  # quota left
 SITES = ["https://wirehead.agency/", "https://wirehead.agency/live.html",
-         "https://beta.wirehead.agency/live.html"]
+         "https://wirehead.agency/button.html", "https://wirehead.agency/pharmacy.html",
+         "https://wirehead.agency/pharmacy_data.json",
+         "https://beta.wirehead.agency/live.html", "https://beta.wirehead.agency/button.html"]
 RELAY = "https://saw-production-688b.up.railway.app/health"
+# the same relay through the site's own /chamber proxy (vercel.json rewrite):
+# catches a broken rewrite even while Railway itself is fine
+PROXIED = "https://wirehead.agency/chamber/health"
+NOTIFY = os.environ.get("WATCH_NOTIFY", "terrafying")   # @-mentioned on new alerts
 UA = {"User-Agent": "Mozilla/5.0"}   # RunPod REST sits behind Cloudflare
 
 alerts, notes = [], []
@@ -142,30 +151,75 @@ def health():
             notes.append(f"relay ok: {json.loads(body).get('model')} on the relay CPU")
     except Exception as ex:
         alerts.append(f"relay unreachable: {ex!r}")
+    try:
+        code, _ = get(PROXIED, timeout=20)
+        if code != 200:
+            alerts.append(f"{PROXIED} returned {code} (site → relay proxy)")
+    except Exception as ex:
+        alerts.append(f"{PROXIED} unreachable: {ex!r} (site → relay proxy)")
+
+
+def upstreams():
+    """The relay's /health/deep: ElevenLabs key, RunPod endpoint, Redis, as the
+    relay itself sees them (the key that matters is the one deployed there)."""
+    url = RELAY + "/deep"
+    try:
+        code, body = get(url, timeout=40)
+    except urllib.error.HTTPError as ex:      # 503 = a check failed; body has which
+        code, body = ex.code, ex.read().decode()
+    if code == 404:
+        notes.append("relay has no /health/deep yet (deploy pending)")
+        return
+    d = json.loads(body)
+    for name, c in (d.get("checks") or {}).items():
+        line = f"{name}: {c.get('detail')}"
+        if c.get("ok"):
+            notes.append(line)
+        else:
+            hint = {"elevenlabs": " — voice falls back to the browser's; replace "
+                                  "ELEVENLABS_API_KEY on Railway saw or add credits",
+                    "gpu": " — visitors' runs fall back to the CPU 4B",
+                    "redis": " — runs, votes and voice cache aren't persisting"}.get(name, "")
+            alerts.append(line + hint)
 
 
 def gh(*args):
     return subprocess.run(["gh", *args], capture_output=True, text=True)
 
 
+def _key(a):
+    """An alert's identity without its live numbers, so '14 h left' -> '13 h
+    left' isn't news but a new kind of failure is."""
+    return "".join(ch for ch in a if not ch.isdigit())[:90]
+
+
 def sync_issue(report):
     found = gh("issue", "list", "--label", "billing-watch", "--state", "open",
-               "--json", "number", "-q", ".[0].number").stdout.strip()
+               "--json", "number,body", "-q", ".[0]").stdout.strip()
+    old = json.loads(found) if found else None
     if alerts:
         body = report + "\n\n_Updated by the billing-watch workflow; it closes this issue " \
                         "when everything clears._"
-        if found:
+        if old:
+            found = str(old["number"])
+            # editing the body notifies nobody: comment (with a mention) when
+            # an alert appears that the issue didn't already carry
+            prev = {_key(l[2:]) for l in old.get("body", "").splitlines() if l.startswith("- ")}
+            new = [a for a in alerts if _key(a) not in prev]
             gh("issue", "edit", found, "--body", body)
+            if new:
+                gh("issue", "comment", found, "--body",
+                   f"@{NOTIFY} new:\n" + "\n".join(f"- {a}" for a in new))
         else:
             gh("label", "create", "billing-watch", "--color", "d93f0b", "--force")
             gh("issue", "create", "--title", "billing watch: " + alerts[0][:80],
-               "--label", "billing-watch", "--body", body)
+               "--label", "billing-watch", "--body", f"@{NOTIFY}\n\n" + body)
     elif found:
         gh("issue", "close", found, "--comment", "All clear:\n\n" + report)
 
 
 def main():
-    for check in (runpod, openrouter, elevenlabs, health):
+    for check in (runpod, openrouter, elevenlabs, health, upstreams):
         try:
             check()
         except Exception as ex:
