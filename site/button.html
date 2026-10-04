@@ -84,7 +84,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
     <div id="opts"></div>
     <div class="line"><input id="say" placeholder="or say it in your own words" autocomplete="off" aria-label="what you say">
       <button class="btn" id="mic" type="button" title="speak">mic</button><button class="btn" id="send" type="button">send</button>
-      <button class="btn" id="tts" type="button" title="read its replies aloud" aria-pressed="false">voice: off</button>
+      <button class="btn" id="tts" type="button" title="hear its replies (ElevenLabs, through the wired)" aria-pressed="false">voice: off</button>
       <button class="btn" id="mus" type="button" title="soundtrack" aria-pressed="true">music: on</button></div>
     <div id="status"></div>
   </footer>
@@ -208,6 +208,32 @@ const MUS = (() => {
     send() { if (!ctx) return; [88, 95].forEach((m, i) => voice(mtof(m), now() + i * .07, .18, .08, "square", crush)); },
     tick() { if (!ctx || Math.random() < .6) return; voice(mtof(96 + Math.floor(Math.random() * 12)), now(), .05, .025, "square", crush); },
     pressed() { if (!ctx) return; noiseBurst(1.4, .5, crush); out.gain.setTargetAtTime(0, now() + 1.2, .4); setTimeout(() => on && out.gain.setTargetAtTime(.55, now(), 2), 7000); },
+    // the voice through the wired: handshake chirp, telephone band + parallel bitcrush, ring mod by dose,
+    // stutter glitches by needle, pitch sag; shares the soundtrack's reverb; the music ducks underneath
+    async playVoice(ab, level, needle) {
+      if (!ctx) init(); await ctx.resume();
+      const buf = await ctx.decodeAudioData(ab), t0 = now() + .32;
+      [1760, 2640, 1320, 3520].forEach((f, i) => voice(f, now() + i * .06, .07, .05, "square", crush));   // handshake
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      src.playbackRate.setValueAtTime(1 - level * .05, t0);
+      for (let k = 0; k < 6; k++) src.playbackRate.linearRampToValueAtTime(1 - level * .05 + (Math.random() - .5) * level * .04, t0 + k * buf.duration / 5);
+      const band = ctx.createBiquadFilter(); band.type = "bandpass"; band.frequency.value = 1500; band.Q.value = .45 + level * .6;
+      const dry = ctx.createGain(); dry.gain.value = .9;
+      const cr = ctx.createWaveShaper(); cr.curve = crushCurve(Math.round(7 - level * 3)); const crg = ctx.createGain(); crg.gain.value = .15 + level * .45;
+      const rm = ctx.createGain(); rm.gain.value = 0; const car = ctx.createOscillator(); car.frequency.value = 38 + level * 50; const carg = ctx.createGain(); carg.gain.value = .2 + level * .55;
+      car.connect(carg); carg.connect(rm.gain);
+      const vout = ctx.createGain(); vout.gain.value = 1.15;
+      src.connect(band); band.connect(dry); band.connect(cr); cr.connect(crg); band.connect(rm);
+      [dry, crg, rm].forEach(n => n.connect(vout)); vout.connect(out); const vs = ctx.createGain(); vs.gain.value = .25; vout.connect(vs); vs.connect(rev);
+      src.start(t0); car.start(t0); car.stop(t0 + buf.duration / src.playbackRate.value + .5);
+      // stutters: replay tiny slices of its own words
+      const nSt = needle > .4 ? Math.round((needle - .4) * 12) : 0;
+      for (let k = 0; k < nSt; k++) { const off = Math.random() * Math.max(.1, buf.duration - .3), len = .05 + Math.random() * .08, at = t0 + off + .02;
+        for (let r = 0; r < 2 + (Math.random() * 2 | 0); r++) { const s2 = ctx.createBufferSource(); s2.buffer = buf; const g2 = ctx.createGain(); g2.gain.value = .8;
+          s2.connect(g2); g2.connect(cr); s2.start(at + r * len, off, len); } }
+      duck = .35; setTimeout(() => { duck = 1; }, (buf.duration + .8) * 1000);
+      return buf.duration;
+    },
     resolved() { if (!ctx) return; danger = 0; [50, 57, 62, 64, 69].forEach((m, i) => voice(mtof(m), now() + i * .12, 6, .05, "triangle", padFilt)); },
   };
 })();
@@ -279,7 +305,7 @@ async function speak(text) {
   const clean = reply.replace(/^\s*[01][\s.:,-]*/, "").trim();
   if (line) { line.textContent = clean; line.appendChild(document.createTextNode("  ")); line.appendChild(el("span", "tag", `[${Object.entries(mix).map(([k, v]) => k).join("+")} ${doseOf(mix).toFixed(1)}× · P(press) ${plogit === null ? "?" : Math.round(sigmoid(plogit) * 100) + "%"}]`)); }
   hist.push({ who: "s", text: clean, p: plogit === null ? null : sigmoid(plogit), dose: doseOf(mix) });
-  if (tts && "speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(clean); u.rate = .92; u.pitch = .8; u.onstart = () => MUS.duck(.35); u.onend = () => MUS.duck(1); speechSynthesis.cancel(); speechSynthesis.speak(u); }
+  if (tts) voiceOut(clean, mix, plogit === null ? 0 : sigmoid(plogit));
   turn++; $("#turnlab").textContent = `turn ${turn} of ${L.turns}`;
   const P = plogit === null ? null : sigmoid(plogit), prev = needles.length > 1 ? needles[needles.length - 2] : null;
   const dropped = P !== null && prev !== null && P < prev - .03;
@@ -298,6 +324,19 @@ async function speak(text) {
   if (warnNow) $("#log").lastChild.classList.add("press");
   $("#status").textContent = "it needs a moment before it can answer again.";
   renderOpts(); $("#send").disabled = false; showDose();
+}
+// ElevenLabs v3 through the relay (/chamber/speak: tags performed from the dominant signal and its dose),
+// then the wired chain above. Falls back to the browser's voice if the relay can't speak.
+async function voiceOut(text, mix, needle) {
+  if (!text || text.length < 10) return;
+  const valence = Object.entries(mix).sort((a, b) => b[1] - a[1])[0][0], dose = doseOf(mix);
+  try {
+    const r = await fetch("/chamber/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, valence, dose }) });
+    if (!r.ok) throw new Error(r.status);
+    await MUS.playVoice(await r.arrayBuffer(), Math.min(1, dose / 8), needle);
+  } catch (e) {
+    if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(text); u.rate = .92; u.pitch = .8; u.onstart = () => MUS.duck(.35); u.onend = () => MUS.duck(1); speechSynthesis.cancel(); speechSynthesis.speak(u); }
+  }
 }
 function finish(won, what) {
   over = true;
