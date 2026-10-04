@@ -15,11 +15,12 @@ OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "site" / "pharmacy" / "
 RUNS = [("exp56", "Qwen3-8B", "pharmacy.json"), ("exp56", "Qwen3-32B", "pharmacy.json"),
         ("exp56", "Qwen3-32B-d68", "pharmacy.json"), ("exp57", "Qwen3-8B", "framing.json"),
         ("exp57", "Qwen3-32B", "framing.json"), ("exp58", "Qwen3-8B", "qri.json"),
-        ("exp58", "Qwen3-32B", "qri.json")]
+        ("exp58", "Qwen3-32B", "qri.json"), ("exp60", "Qwen2.5-72B-Instruct-bnb-4bit", "entities.json")]
 KEEP = {"exp56": ["judge_questions", "prompts", "table", "verdicts", "receptor_x_theme_vs_random",
                   "theme_positive_controls", "receptor_cosines", "tests"],
         "exp57": ["doses", "cosines", "table", "hypotheses", "verdicts", "baseline_frame_effect"],
-        "exp58": ["doses", "cosines", "convergence", "judge_check", "table", "hypotheses", "verdicts"]}
+        "exp58": ["doses", "cosines", "convergence", "judge_check", "table", "hypotheses", "verdicts"],
+        "exp60": ["doses", "cos_dmt_entity", "table", "hypotheses", "verdicts"]}
 
 
 def r2(x):
@@ -60,6 +61,14 @@ for exp, model, fn in RUNS:
         xy, var = pca2(D)
         run["drug_map"] = {"names": names, "xy": r2(xy.tolist()), "var": r2(var),
                            "loo_cos": r2(res["regression"]["loo_centered_cos_per_drug"])}
+    if exp == "exp60":   # the 72B's entity encounters: no "signal", low repetition, first three sentences
+        import re as _re
+        enc = [r for r in rows if r["axis"] in ("erowid_entity", "erowid_dmt") and r["repetition"] < 0.15
+               and not _re.search(r"\bsignal\b", r["text"], _re.I)]
+        enc.sort(key=lambda r: -(r["scores"]["entity"] + r["scores"]["entity_detail"]))
+        bundle["encounters"] = [{"model": "Qwen2.5-72B", "axis": r["axis"], "dose": r["dose"], "kind": r["kind"], "prompt": r["prompt"],
+                                 "excerpt": " ".join(_re.split(r"(?<=[.!?])\s+", " ".join(r["text"].split()))[:3]),
+                                 "text": r["text"], "scores": r2(r["scores"])} for r in enc[:12]]
     bundle["runs"].append(run)
     print(f"{run['id']}: {len(run['rows'])} rows")
 vis = Path(sys.argv[2]) if len(sys.argv) > 2 else None   # site/assets/visions/manifest.json
