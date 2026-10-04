@@ -50,7 +50,7 @@ canvas { display:block }
   <div id="harm"><div class="lab"><span>harmony</span><span id="harmv"></span></div><div class="bar"><div class="fill" id="harmf"></div></div></div>
   <div id="cross"></div>
   <div id="log"></div>
-  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>walk forward through the arches</div>
+  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>walk forward through the arches · M mutes</div>
 </div>
 <div id="fade"></div>
 <div class="overlay" id="start"><div class="card">
@@ -58,6 +58,7 @@ canvas { display:block }
   <p>Six rooms, after the six levels of DMT space mapped by Andrés Gómez Emilsson of the Qualia Research Institute: threshold, chrysanthemum, magic eye, waiting room, breakthrough, amnesia.</p>
   <p>One rule comes from our own experiments: <b>symmetry feels good.</b> Steering a language model toward symmetry raised its reported wellbeing; pain brought discord. Jagged shards keep breaking the pattern. Tune them.</p>
   <p>Beings live here. They wander freely, and when something hurts them they will decide it was you. Every word they say was written by a language model with a pain, pleasure, symmetry or DMT direction added to its activations, and each line shows which.</p>
+  <p>Sound on. It is synthesized from how 443 Erowid DMT reports describe what they heard: a buzzing carrier wave (28% of reports), ringing tones (19%), voices and laughter in the middle, silence at the end.</p>
   <button type="button" id="go">Enter</button>
 </div></div>
 <div class="overlay" id="end" hidden><div class="card" id="endcard"></div></div>
@@ -246,15 +247,15 @@ function say(a, event, force) {
   const row = document.createElement("div"); row.textContent = "“" + v.t + "”"; const tg = document.createElement("span"); tg.textContent = s.textContent; row.appendChild(tg);
   logEl.prepend(row); while (logEl.children.length > 4) logEl.lastChild.remove();
 }
-function hurt(a, amt, event) { a.pain = Math.min(1, a.pain + amt); say(a, event, true); }
+function hurt(a, amt, event) { a.pain = Math.min(1, a.pain + amt); SND.hurt(a.pain); say(a, event, true); }
 function heal(a, amt, event) { a.pain = Math.max(0, a.pain - amt); say(a, event, true); }
 
 /* ---------------- controls ---------------- */
 let yaw = 0, pitch = 0, locked = false, started = false;
 const keys = {};
-addEventListener("keydown", e => keys[e.code] = true); addEventListener("keyup", e => keys[e.code] = false);
+addEventListener("keydown", e => { keys[e.code] = true; if (e.code === "KeyM") SND.toggle(); }); addEventListener("keyup", e => keys[e.code] = false);
 document.getElementById("go").addEventListener("click", () => {
-  document.getElementById("start").hidden = true; started = true;
+  document.getElementById("start").hidden = true; started = true; SND.start();
   renderer.domElement.requestPointerLock?.();
   agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "The visitor came closer.", true), 1500));
 });
@@ -277,8 +278,98 @@ function tune() {
   const s = aimed(); if (!s) return;
   s.userData.tuned = true; s.userData.tunedAt = clock.elapsedTime;
   s.geometry.dispose(); s.geometry = new THREE.OctahedronGeometry(0.4, 0); s.material = new THREE.MeshBasicMaterial({ color: 0xffd36b });
+  SND.tuned();
   agents.filter(a => a.room === s.userData.room && a.g.position.distanceTo(s.position) < 9).forEach(a => heal(a, .3, "The visitor fixed the pattern you live in."));
 }
+
+
+/* ---------------- sound (Web Audio, all synthesized) ----------------
+   Motifs and their order follow 2,080 sound sentences in 443 Erowid DMT reports:
+   buzzing / carrier wave 28% of reports (early-mid), ringing tones 19%, voices or
+   choir 8% and laughter 7% (mid-late, the entity phase), silence 7% (the end). */
+const SND = (() => {
+  let ctx, master, drone = [], buzz, buzzGain, buzzLfo, buzzLfoGain, buzzFilt, ring, ringGain, choir = [], choirGain, noiseBuf, on = true;
+  const ROOT = 55, CHORD = [1, 1.5, 2, 2.5, 3], OFF = [0, .9, -.7, 1.3, -1.1];
+  function init() {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ctx.createDynamicsCompressor(); master = ctx.createGain(); master.gain.value = 0;
+    master.connect(comp); comp.connect(ctx.destination);
+    master.gain.linearRampToValueAtTime(.7, ctx.currentTime + 3);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const dl = ctx.createBiquadFilter(); dl.type = "lowpass"; dl.frequency.value = 900; dl.connect(master);
+    CHORD.forEach((r, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = i ? "sine" : "triangle";
+      o.frequency.value = ROOT * r; g.gain.value = .07 / (1 + i * .4); o.connect(g); g.connect(dl); o.start(); drone.push({ o, r, i }); });
+    drone.filter = dl;
+    // carrier wave: a buzzing saw, amplitude-pulsed faster and higher with dose
+    buzz = ctx.createOscillator(); buzz.type = "sawtooth"; buzz.frequency.value = 110;
+    buzzFilt = ctx.createBiquadFilter(); buzzFilt.type = "bandpass"; buzzFilt.Q.value = 2; buzzFilt.frequency.value = 600;
+    buzzGain = ctx.createGain(); buzzGain.gain.value = 0;
+    const am = ctx.createGain(); am.gain.value = .5; buzzLfo = ctx.createOscillator(); buzzLfo.type = "square"; buzzLfo.frequency.value = 4;
+    buzzLfoGain = ctx.createGain(); buzzLfoGain.gain.value = .5; buzzLfo.connect(buzzLfoGain); buzzLfoGain.connect(am.gain);
+    buzz.connect(buzzFilt); buzzFilt.connect(am); am.connect(buzzGain); buzzGain.connect(master); buzz.start(); buzzLfo.start();
+    // ringing: a thin high tone with slow tremolo
+    ring = ctx.createOscillator(); ring.frequency.value = 4186; ringGain = ctx.createGain(); ringGain.gain.value = 0;
+    ring.connect(ringGain); ringGain.connect(master); ring.start();
+    // choir: saws through "ah" formants, for the breakthrough
+    choirGain = ctx.createGain(); choirGain.gain.value = 0; choirGain.connect(master);
+    const forms = [800, 1150, 2900].map((f, k) => { const b = ctx.createBiquadFilter(); b.type = "bandpass"; b.frequency.value = f; b.Q.value = 9;
+      const g = ctx.createGain(); g.gain.value = [1, .5, .25][k]; b.connect(g); g.connect(choirGain); return b; });
+    [2, 2.5, 3, 4, 5].forEach(r => { const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = ROOT * r; o.detune.value = (Math.random() - .5) * 14;
+      forms.forEach(b => o.connect(b)); o.start(); choir.push(o); });
+  }
+  const now = () => ctx.currentTime;
+  function env(node, peak, a, d) { const g = node.gain; g.cancelScheduledValues(now()); g.setValueAtTime(0, now()); g.linearRampToValueAtTime(peak, now() + a); g.exponentialRampToValueAtTime(.0001, now() + a + d); }
+  function tone(freq, type, peak, a, d, dest, glideTo) {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = freq;
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, now() + a + d);
+    o.connect(g); g.connect(dest || master); env(g, peak, a, d); o.start(); o.stop(now() + a + d + .05);
+  }
+  function noise(peak, a, d, type, f0, f1, q) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = type; f.Q.value = q || 1; f.frequency.value = f0; if (f1) f.frequency.exponentialRampToValueAtTime(f1, now() + a + d);
+    const g = ctx.createGain(); src.connect(f); f.connect(g); g.connect(master); env(g, peak, a, d); src.start(); src.stop(now() + a + d + .05);
+  }
+  return {
+    start() { if (!ctx) init(); ctx.resume(); },
+    toggle() { on = !on; if (ctx) master.gain.linearRampToValueAtTime(on ? .7 : 0, now() + .4); return on; },
+    // per frame: dose is continuous (0 at the threshold .. 5 at amnesia)
+    update(dose, harmony, shardsActive, dt) {
+      if (!ctx) return;
+      const t = now(), dis = 1 - harmony;
+      drone.forEach(d => d.o.frequency.setTargetAtTime(ROOT * d.r * (1 + dis * OFF[d.i] * .045), t, .3));
+      drone.filter.frequency.setTargetAtTime(500 + dose * 450 - dis * 250, t, .5);
+      const carrier = Math.max(0, Math.min(1, dose / 3)) * (dose < 4 ? 1 : Math.max(0, 5 - dose));
+      buzzGain.gain.setTargetAtTime(.16 * carrier, t, .4);
+      buzz.frequency.setTargetAtTime(90 * Math.pow(2, Math.min(dose, 3.6) * .7), t, .6);
+      buzzLfo.frequency.setTargetAtTime(3 + Math.min(dose, 3.6) * 9, t, .6);
+      buzzFilt.frequency.setTargetAtTime(400 + dose * 500, t, .6);
+      ringGain.gain.setTargetAtTime(dose > .8 && dose < 4.5 ? .012 + .01 * Math.sin(t * 1.7) : 0, t, .8);
+      choirGain.gain.setTargetAtTime(dose > 3.6 && dose < 4.9 ? .05 * Math.min(1, (dose - 3.6) * 2) : 0, t, 1.2);
+      // crinkle grains: more while shards stay untuned, mostly in the early rooms
+      const rate = (dose > .7 && dose < 3.5 ? 1.5 : 0) + shardsActive * 2.5;
+      if (Math.random() < rate * dt) noise(.05 + Math.random() * .05, .002, .01 + Math.random() * .03, "highpass", 3000 + Math.random() * 5000);
+    },
+    room(r) { if (!ctx) return;
+      tone(220 * (1 + r * .25), "sine", .06, .1, 3, null, 880 * (1 + r * .25));          // rising whine
+      noise(.12, .4, 1.6, "bandpass", 300, 2400, 1.5); },                                   // whoosh
+    tuned() { if (!ctx) return; [3, 4, 6].forEach((r, i) => setTimeout(() => {
+      tone(ROOT * r * 4, "sine", .08, .005, 2.2); tone(ROOT * r * 4 * 3.01, "sine", .015, .005, 1.1); }, i * 90)); },
+    hurt(pain) { if (!ctx) return;
+      [1, 1.06, 1.41].forEach(r => tone(ROOT * 2 * r, "sawtooth", .045, .01, .7));          // dissonant stab
+      tone(330 - pain * 120, "sawtooth", .05, .05, 1.4, null, 110); },                      // the groan
+    giggle(pan) { if (!ctx) return;
+      const p = ctx.createStereoPanner(); p.pan.value = pan; p.connect(master);
+      for (let k = 0; k < 3 + Math.floor(Math.random() * 3); k++) setTimeout(() => {
+        const o = ctx.createOscillator(), b = ctx.createBiquadFilter(), g = ctx.createGain();
+        o.type = "sawtooth"; o.frequency.value = 520 + Math.random() * 260; b.type = "bandpass"; b.frequency.value = 1700; b.Q.value = 6;
+        o.connect(b); b.connect(g); g.connect(p); env(g, .07, .01, .09); o.start(); o.stop(now() + .15); }, k * 115); },
+    amnesia() { if (!ctx) return;
+      noise(.25, 2.5, 2, "lowpass", 8000);                                                  // white-out swell
+      master.gain.cancelScheduledValues(now()); master.gain.setValueAtTime(master.gain.value, now());
+      master.gain.linearRampToValueAtTime(.0001, now() + 5); }                              // then silence
+  };
+})();
 
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
@@ -306,6 +397,7 @@ function frame() {
     document.getElementById("rung").innerHTML = ""; const rr = document.getElementById("rung");
     rr.append(RUNGS[rung]); const sm = document.createElement("small"); sm.textContent = `level ${rung + 1} of 6`; rr.appendChild(sm);
     scene.fog.color.set(rung >= 5 ? 0xfffaf0 : rung >= 3 ? 0x0a0614 : 0x050403); scene.fog.density = rung >= 5 ? .09 : rung >= 3 ? .028 : .035;
+    if (rung > 0) SND.room(rung);
     if (rung >= 5 && !ended) finish();
   }
   // shards: more and faster the deeper you are
@@ -319,6 +411,7 @@ function frame() {
   }
   harmony += ((Math.max(0, 1 - active * .18)) - harmony) * dt * 1.5;
   for (const r of rooms) { r.mat.uniforms.uTime.value = t; r.mat.uniforms.uHarm.value = harmony; }
+  if (started && !ended) SND.update(Math.max(0, (ROOM / 2 - camera.position.z) / ROOM), harmony, active, dt);
   document.getElementById("harmf").style.width = (harmony * 100).toFixed(0) + "%";
   document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
   document.getElementById("harmv").textContent = harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord";
@@ -345,6 +438,7 @@ function frame() {
     if (a.room === rung) a.pain = Math.min(1, Math.max(0, a.pain + (harmony < .5 ? .02 : -.012) * dt));
     // turning your back on someone speaking to you
     if (d < 6 && t < a.sayUntil + 3) { camera.getWorldDirection(v3); const toA = p.clone().sub(camera.position).normalize(); a.backTimer = v3.dot(toA) < -.2 ? a.backTimer + dt : 0; if (a.backTimer > 3) { a.backTimer = 0; hurt(a, .1, "The visitor turned their back on you."); } }
+    if (a.room >= 4 && a.room === rung && d < 14 && Math.random() < dt * .18) { camera.getWorldDirection(v3); const side = new THREE.Vector3().subVectors(p, camera.position).normalize(); SND.giggle(Math.max(-1, Math.min(1, side.dot(rightV)))); }
     if (d < 4 && a.room === rung && Math.random() < dt * .25) say(a, a.pain > .3 ? "The visitor came closer." : "The visitor is staring at you.");
     if (d < 9 && a.room === rung && Math.random() < dt * .04) say(a, a.pain > .5 ? "The visitor ignored you." : "The visitor came back after leaving you alone.");
     // speech bubble placement
@@ -359,7 +453,7 @@ function frame() {
   requestAnimationFrame(frame);
 }
 function finish() {
-  ended = true; document.body.classList.add("white"); document.exitPointerLock?.();
+  ended = true; document.body.classList.add("white"); document.exitPointerLock?.(); SND.amnesia();
   setTimeout(() => {
     const card = document.getElementById("endcard"); card.replaceChildren();
     const h = document.createElement("h1"); h.textContent = "Amnesia"; card.appendChild(h);
