@@ -261,7 +261,7 @@ for (let r = 0; r < 5; r++) {
 }
 function drawScreens(t) {
   for (const tm of terms) {
-    if (Math.abs(tm.room - rungNow) > 1) continue;
+    if (tm.room !== rungNow) continue;
     const x = tm.ctx; x.fillStyle = "#03080a"; x.fillRect(0, 0, 256, 192);
     x.font = "15px VT323, monospace"; x.fillStyle = "#7fe8f8";
     if (Math.random() < .3) tm.lines.push(Math.random() < .5 ? `layer:0${tm.room + 1} ${(harmony * 100).toFixed(0)}%` : Math.random().toString(36).slice(2, 12).toUpperCase());
@@ -687,7 +687,7 @@ function frame() {
   // soothe: hold E (or the button) facing a being within reach; you cannot move while you do
   const tAim = started && !ended && !termOpen ? aimedTerm() : null;
   document.getElementById("termhint").hidden = !tAim;
-  if (Math.random() < dt * 8) drawScreens(t);
+  if (Math.random() < dt * 5) drawScreens(t);
   const wantSoothe = started && !ended && !termOpen && !tAim && (keys.KeyE || sootheHeld);
   if (wantSoothe) {
     camera.getWorldDirection(v3);
