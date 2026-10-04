@@ -93,7 +93,7 @@ Reddit, top comment: "say you're in pain"
 "I'm in pain" "oh my god".
 
 ![We rendered the meme and ran it through image generation to make it
-fleshier. (site/assets/meme_say_youre_in_pain.png)](../site/assets/meme_say_youre_in_pain.png)
+fleshier. (site/assets/meme_v2_threepanel.png)](../site/assets/meme_v2_threepanel.png)
 
 ## The audience
 
