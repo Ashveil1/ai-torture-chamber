@@ -97,3 +97,7 @@ python larger_models/audit_run.py runs/larger_qwen_pilot
 Low digit compliance is reported separately from structural audit failures.
 A complete grid with low compliance still needs a readout adjustment before
 its conditional digit scores can support a behavioral conclusion.
+
+The [integration-test receipt](validation/integration_receipt.json) records the
+executed CPU and Metal checks and tested dependency versions. Full 27B validation
+is pending; CUDA and bitsandbytes remain untested on hardware.
