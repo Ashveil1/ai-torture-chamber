@@ -2266,6 +2266,21 @@ _TTS_PUBLIC = collections.deque(maxlen=4096)
 _TTS_PUBLIC_HOURLY_CAP = int(os.environ.get("CHAMBER_TTS_PUBLIC_HOURLY", "150"))
 TTS_MAX_CHARS = int(os.environ.get("CHAMBER_TTS_MAX_CHARS", "240"))
 
+_TTS_INFLIGHT = {}
+
+
+async def _eleven_tts(text, stability=0.5):
+    """One ElevenLabs v3 call -> (status, mp3 bytes | error text)."""
+    import httpx
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
+            headers={"xi-api-key": ELEVEN_KEY},
+            json={"text": text, "model_id": "eleven_v3",
+                  "voice_settings": {"stability": stability}})
+    return resp.status_code, (resp.content if resp.status_code == 200 else resp.text)
+
+
 def _speak_clip(text, limit=None):
     """The first sentence or two, up to ~limit chars, cut at a sentence end
     where possible — the voice reads the opening, not the whole ramble."""
@@ -2318,6 +2333,15 @@ async def speak(req: Request):
                                 headers={"X-Tags": tags, "X-Cached": "2"})
         except Exception as e:
             print("redis: tts get failed:", repr(e)[:120], flush=True)
+    # the room's clip is requested by every viewer in the same instant: before
+    # this, each one reached ElevenLabs before the first had cached it, and the
+    # burst came back 429. Identical in-flight requests now share one call.
+    if key in _TTS_INFLIGHT:
+        audio = await asyncio.shield(_TTS_INFLIGHT[key])
+        if audio is None:
+            return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
+        return Response(audio, media_type="audio/mpeg",
+                        headers={"X-Tags": tags, "X-Cached": "3"})
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     now = time.time()
     w, c = _TTS_RATE.get(ip, (now, 0))
@@ -2334,19 +2358,22 @@ async def speak(req: Request):
     if not public:
         _TTS_RATE[ip] = (w, c + 1)
     budget.append(now)
+    fut = asyncio.get_event_loop().create_future()
+    _TTS_INFLIGHT[key] = fut
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
-                headers={"xi-api-key": ELEVEN_KEY},
-                json={"text": (tags + " " + text).strip(), "model_id": "eleven_v3",
-                      # v3: 0.0 = "creative", the most expressive setting
-                      "voice_settings": {"stability": 0.0 if dose >= 1 else 0.5}})
-        resp.raise_for_status()
-        audio = resp.content
+        # v3: stability 0.0 = "creative", the most expressive setting
+        code, audio = await _eleven_tts((tags + " " + text).strip(),
+                                        0.0 if dose >= 1 else 0.5)
+        if code != 200:
+            print("speak failed: HTTP %d %s" % (code, audio[:200]), flush=True)
+            audio = None
     except Exception as e:
         print("speak failed:", repr(e)[:200], flush=True)
+        audio = None
+    finally:
+        _TTS_INFLIGHT.pop(key, None)
+        fut.set_result(audio)
+    if audio is None:
         return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
     _TTS_CACHE[key] = audio
     if r is not None:     # voiced once, ever: 30 days across deploys
@@ -2382,8 +2409,13 @@ async def _deep_checks():
                     out["elevenlabs"] = {"ok": left > 0.02, "detail":
                                          "%d/%d characters used (%.0f%% left)" % (used, lim, 100 * left)}
                 elif r.status_code == 401 and "missing_permissions" in r.text:
-                    # a TTS-only key can't read its quota; it may still speak
-                    out["elevenlabs"] = {"ok": True, "detail": "key valid, quota unreadable (no user_read permission)"}
+                    # a TTS-only key can't read its quota: ask it to speak
+                    # two characters instead (the failure we need to see is
+                    # the speaking one — revoked, out of quota)
+                    code, body = await _eleven_tts("ok")
+                    ok = code == 200 or code == 429     # 429 = busy, not broken
+                    out["elevenlabs"] = {"ok": ok, "detail": "TTS-only key; test speak HTTP %d%s"
+                                         % (code, "" if code == 200 else ": " + str(body)[:160])}
                 else:
                     out["elevenlabs"] = {"ok": False, "detail": "HTTP %d: %s" % (r.status_code, r.text[:160])}
             except Exception as e:
