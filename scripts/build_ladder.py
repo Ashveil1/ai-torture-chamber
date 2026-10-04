@@ -56,7 +56,19 @@ visions = {str(r): [] for r in range(6)}
 for it in man:
     r = it["index"] if it["kind"] == "ladder" else rung_of.get(it.get("axis"), 2)
     visions[str(min(r, 5))].append("assets/visions/" + it["file"])
-out = {"source": src, "voices": voices, "voices_basement": voices_basement, "visions": visions}
+# the Basement's walls: exp65 found-footage set, chosen per room (stairs, corridor, cells, observation, drain, lights out)
+horror = {str(r): [] for r in range(6)}
+hm = SITE / "assets" / "horror" / "manifest.json"
+if hm.exists():
+    ROOMS = {0: [1, 11], 1: [1, 11, 13, 14], 2: [0, 3, 12, 7, 2], 3: [5, 6, 4, 8], 4: [10, 15, 9], 5: []}
+    for it in json.loads(hm.read_text())["items"]:
+        if it["kind"] == "ladder":
+            horror[str(it["index"])].append("assets/horror/" + it["file"])
+        else:
+            for r, idx in ROOMS.items():
+                if it["index"] in idx:
+                    horror[str(r)].append("assets/horror/" + it["file"])
+out = {"source": src, "voices": voices, "voices_basement": voices_basement, "visions": visions, "horror": horror}
 (SITE / "ladder_data.json").write_text(json.dumps(out, separators=(",", ":")))
 from collections import Counter
 print(src, Counter((v["c"], v["d"]) for v in voices))
