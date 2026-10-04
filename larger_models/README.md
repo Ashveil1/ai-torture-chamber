@@ -54,7 +54,7 @@ midpoint as an exploratory starting point. Effective layers and dose bands must
 be calibrated per model; equal numeric doses are not evidence of equal states.
 `--format completion` preserves the repository's raw prompts. `--format chat`
 uses the checkpoint's chat template with thinking disabled. Extraction stays raw
-in both modes, and metadata records this difference. Chat digit readout may have
+in both modes, and metadata records this difference. Digit readout may have
 low compliance: examine `digit_mass`, `valid_digit`, and actual top-token choices
 before interpreting conditional digit contrasts.
 
@@ -99,5 +99,18 @@ A complete grid with low compliance still needs a readout adjustment before
 its conditional digit scores can support a behavioral conclusion.
 
 The [integration-test receipt](validation/integration_receipt.json) records the
-executed CPU and Metal checks and tested dependency versions. Full 27B validation
-is pending; CUDA and bitsandbytes remain untested on hardware.
+executed CPU and Metal checks and tested dependency versions. A pinned
+`mlx-community/Qwen3.8-27B-4bit` checkpoint completed the MLX pilot on an M5 Max
+MacBook Pro with 128 GB unified memory: layer 32 of 64, dose 1, 32-token cap,
+8 valence outputs and 480 button scores. Zero-delta logits and cached decoding
+were exactly invariant, a nonzero delta changed logits, and the structural audit
+passed. MLX reported peak device memory of 15,426,540,686 bytes (about 14.4 GiB);
+this excludes other process and system memory.
+
+[Raw outputs, metadata, audit and model identity](validation/qwen38_27b_mlx/)
+are included. Button top-digit compliance was only 13–25 of 60 per cell, including
+the baseline. This validates the intervention and complete runner execution;
+it does not support a behavioral conclusion from this raw-completion readout.
+Affect varies in the short valence examples, including the random control, so
+these examples do not establish specificity. CUDA, bitsandbytes and full-size
+Transformers execution remain untested on hardware.
