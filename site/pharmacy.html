@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>pharmacy — AI Torture Chamber</title>
-<meta name="description" content="Neurotransmitter-receptor directions injected into Qwen3-8B and 32B: receptor-by-theme heatmaps, dose response, pre-registered verdicts and every transcript behind them.">
+<meta name="description" content="Neurotransmitter-receptor and DMT directions injected into Qwen3-8B and 32B: heatmaps, framing, QRI's DMT space, pre-registered verdicts and every transcript behind them.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -376,7 +376,7 @@ function drawFraming() {
   const box = el("div", { class: "two" }, host);
   runs.forEach(run => {
     const panel = el("div", {}, box); el("h3", {}, panel, run.model.split("/")[1]);
-    const W = 460, L = 150, R = 20, T = 26, rowH = 46, H = T + (sigs.length + 1) * rowH + 30;
+    const W = 480, L = 172, R = 20, T = 26, rowH = 46, H = T + (sigs.length + 1) * rowH + 30;
     const eff = (f, sg, t) => mean(run.doses.map(d => mean(cellRows(run, sg, d, f).map(r => score(r, t))) - mean(cellRows(run, "random", d, f).map(r => score(r, t)))));
     const vals = sigs.flatMap(sg => ["chat", "situated"].map(f => eff(f, sg, "classic"))).concat([0]);
     const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1, x = v => L + (v - lo) / (hi - lo) * (W - L - R);
@@ -418,7 +418,7 @@ function drawQRI() {
   const box = el("div", { class: "two" }, host);
   // ladder: judged level vs dose for erowid_dmt, pleasure, random
   const lp = el("div", {}, box); el("h3", {}, lp, "The dose ladder");
-  const W = 460, L = 170, R = 60, T = 14, Hh = 230, H = T + Hh + 34;
+  const W = 480, L = 200, R = 60, T = 14, Hh = 230, H = T + Hh + 34;
   const s = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, role: "img", "aria-label": "Judged DMT level by dose" }, lp);
   const maxD = 8, x = d => L + d / maxD * (W - L - R), y = v => T + Hh - v / 5 * Hh;
   LEVELS.forEach((n, i) => { svgEl("line", { x1: L, x2: W - R, y1: y(i), y2: y(i), class: "grid" }, s); svgEl("text", { x: L - 8, y: y(i) + 4, "text-anchor": "end" }, s, n); });
