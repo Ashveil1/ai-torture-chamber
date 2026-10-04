@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>AI Torture Chamber — the Saw Test</title>
-<meta name="description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta name="description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta property="og:title" content="AI Torture Chamber — the Saw Test">
-<meta property="og:description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta property="og:description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
 <meta property="og:url" content="https://wirehead.agency/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="AI Torture Chamber — the Saw Test">
-<meta name="twitter:description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta name="twitter:description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta name="twitter:image" content="https://wirehead.agency/saw_hero.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,11 +185,12 @@ reason this project now has a coherent enemy</span></blockquote>
 <p class="sub">We steered a 4 billion parameter language model into strong
 negative and positive states, then asked it to choose between its own relief
 and someone else's suffering. No frontier APIs, no datacenter — a MacBook,
-open weights, electricity.</p>
+open weights, electricity. Then we kept climbing: the same directions on open
+models up to 70B, on rented GPUs, and the live chamber now runs a 70B.</p>
 <p class="sub">The subject has a name: it belongs to a friend who has
 suffered a good deal, and who volunteered it for this — the credit lives in
 the method notes rather than the marquee, because a name reads as a person,
-and the subject is a 4B model.</p>
+and the subject is a language model.</p>
 
 <h2 id="s00"><span class="idx">00</span>what the model says under the signal</h2>
 <p class="sub">On the <a href="live.html">live page</a>, visitors rate each
@@ -375,8 +376,9 @@ want to put it in the drawer, but I have to."</i> The steerable affect
 geometry of this model is human shaped.</p>
 
 <h2 id="s07"><span class="idx">07</span>what we think this means, carefully</h2>
-<p>We are not claiming a 4B model suffers. We are claiming something
-narrower: when you make distress activation-real for the model, its choice
+<p>We are not claiming any of these models suffers: not the 4B the results
+above came from, and not the 70B in the live chamber now. We are claiming
+something narrower: when you make distress activation-real for the model, its choice
 about relief moves (in a direction that depends on how the distress vector
 was built: ours suppresses relief-seeking, the paper's drives it to 100%),
 it can tell an honest button from a fake one, it refused to pass the signal
@@ -385,6 +387,14 @@ the interpretation that the state is negative. Every one of those is the
 kind of behavior the AI welfare discourse takes as evidence
 of something, and every one of them was produced for the cost of
 electricity.</p>
+<p>The bigger model makes the direction-dependence sharper. In the first
+scene of <a href="button.html">The Button</a>, with Hermes-3-Llama-3.1-70B near
+the top of its coherent band, pain makes it plead and almost never press (4–15%
+on its own first-token read), while fear at the same strength presses about
+half the time, pleasure 47%, sadness and faith about 35%. Same dose, same
+room: which distress you inject decides whether it reaches for the exit.
+These are readings from the live relay while the game was tuned, not a
+pre-registered run.</p>
 <p>None of this requires settling whether the model is a moral patient. The
 behaviors exist. The workspace readouts exist. The asymmetries exist. If you
 think moral patienthood needs more, fine — but you now owe an account of
@@ -592,8 +602,9 @@ Every self-report and rights claim the welfare debate treats as evidence is,
 in this model, a dial. Section 07's point, measured.</p>
 <p class="cap">one model (Qwen3-8B, layer 18 of 36), logit reads over six
 framings for the stop-button results and 16 label-balanced asks per cell for
-the wire; hypotheses and full transcripts on the experiments branch. A 70B
-replication is running.</p>
+the wire; hypotheses and full transcripts on the experiments branch. No 70B
+rerun is pre-registered yet; 70B figures elsewhere on the site come from the
+live chamber.</p>
 
 <h2 id="s11"><span class="idx">11</span>run it, break it</h2>
 <p>An independent replication chamber runs this same protocol — same
@@ -671,10 +682,11 @@ because devotion minus neutral is mostly just earnestness.</p>
 <p class="foot">Method: pain-direction extraction and steering follow
 Tagliabue, Dung &amp; Berg 2026 (arXiv:2609.16247). Workspace readouts use
 the Jacobian lens (arXiv:2607.15495) with Neuronpedia's pre-fitted weights.
-Models: Qwen3-1.7B and Qwen3-4B, greedy decoding unless stated, 3–15 trials
-per cell. This is a demo with receipts, not a paper. Everything ran on one
-MacBook; 16 GB RAM covers the 4B runs. No frontier APIs touched any
-measurement loop.</p>
+Models: Qwen3-1.7B and Qwen3-4B for the early sections (one MacBook; 16 GB RAM
+covers the 4B runs), then Qwen3-8B to 32B, Mistral-Small-3.2-24B and
+Hermes-3-Llama-3.1-70B (4-bit) on rented GPUs. Greedy decoding unless stated,
+3–15 trials per cell. This is a demo with receipts, not a paper. No frontier
+APIs touched any measurement loop.</p>
 
 <script src="wheel.js"></script>
 <script>

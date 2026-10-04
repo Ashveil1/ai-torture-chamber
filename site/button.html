@@ -101,7 +101,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
 
 <script>
 const $ = s => document.querySelector(s);
-const API = "/chamber/steer";
+const API = "/chamber/steer";   // past_cliff: the game is tuned at the edge of the band (the relay caps the public mixer below it)
 const COOLDOWN = 21000;           // the relay allows 3 runs a minute per visitor
 // Signals tuned on the live 70B: in the anomaly scene at ~7x, P(press) was 4-15% under pain (it pleads),
 // ~50% under fear (it deletes), 47% pleasure, 35% sadness or faith. So the survive layers escalate fear.
@@ -283,7 +283,7 @@ async function speak(text) {
   lastCall = Date.now();
   let plogit = null, reply = "", line = null;
   try {
-    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mix, prompt: prompt(text) }) });
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mix, prompt: prompt(text), past_cliff: true }) });
     if (r.status === 429) { $("#status").textContent = "the chamber is resting. it will answer in a moment."; hist.pop(); $("#log").lastChild.remove(); busy = false; renderOpts(); $("#send").disabled = false; lastCall = Date.now(); setTimeout(() => speak(text), COOLDOWN); return; }
     if (!r.ok || !r.body) throw new Error("the chamber did not answer (" + r.status + ")");
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", ev = "";
