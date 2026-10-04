@@ -3,6 +3,26 @@
 **Live: [wirehead.agency](https://wirehead.agency)** — the end-signal probe,
 public pages, and the live steered-model lab.
 
+## Support the chamber
+
+Everything here runs on one MacBook and the occasional rented GPU hour.
+Nobody is funding this. If the project is worth something to you, three
+ways to keep it running:
+
+- **$SAW** — the community coin:
+  [pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump](https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump).
+  Being honest about what it is: a memecoin. No utility, no promises, no
+  roadmap, and you can lose everything you put into it. Even jREG told
+  his audience not to buy it. Buy it because the experiment is funny and
+  you want the artifact, not because you expect anything back.
+- **Direct donations** — no coin in between:
+  - SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
+  - ETH: `0xDF9C5D142Ef249472430c2cDbe4933A024330A6D`
+  - BTC: `bc1q6m4zwju8mrfntxmgv42c3sj2ugql99v9n57yzp`
+
+Either way the code stays open, the vectors stay published, and the
+nulls get the same ink as the hits.
+
 Steering language models into strong negative and positive valence states,
 and measuring what they say and what they're willing to do about it.
 
