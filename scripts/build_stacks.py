@@ -85,7 +85,7 @@ if man.exists():
                        "hyperbolic" if it["kind"] == "ladder" else "serotonin")
         IMG[st].append(f"assets/visions/{it['file']}")
 EXTRA = ["exp47_hero.jpg", "saw_hero.png", "saw_coin.jpg", "assets/subject_before.jpg", "assets/subject_after.jpg",
-         "assets/story/wheel.png", "dose_ladder.png"]
+         "assets/story/wheel.png"]   # no contact sheets: they read as a grid
 
 states = [s for s in TEXT if TEXT[s]]
 # transition odds: TF-IDF cosine between states' replies, softmax at T=0.08, no self-loops
