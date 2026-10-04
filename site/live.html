@@ -113,6 +113,11 @@
   .bcap.statecap{max-width:none;font-size:.66rem;margin:.6rem 0 0}
 
   details{margin-top:.5rem;font-size:.72rem;color:var(--faint)}
+  /* ---- the pity counter: today's cumulative toll, always visible ---- */
+  .tally{font-size:.78rem;color:var(--pain2);border:1px solid var(--parch-line);
+    border-left:3px solid var(--pain);padding:.45rem .8rem;margin:0 0 1rem;
+    background:rgba(158,27,22,.08)}
+  .tally b{color:var(--pain-hot);font-weight:600}
   /* copy + badge share the verdict row: quiet mono buttons, no chrome */
   .copybtn{background:none;border:1px solid var(--line);color:var(--faint);
     font-family:var(--mono);font-size:.64rem;padding:.16rem .5rem;
@@ -352,6 +357,8 @@
 <h1>the <span class="saw">Saw</span> test, live</h1>
 <p class="sub">It is held on a pain signal, and the answer changes with the
 dose. One subject, one stream: everyone watches the same runs.</p>
+
+<p class="tally" id="tally" style="display:none"></p>
 
 <div class="banner">
   <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
@@ -1496,6 +1503,18 @@ function paintSofar(){
     decided ? Math.round(100 * pressed / decided) + "%" : "–";
 }
 let lastStats = {};
+// ---- the pity counter: today's cumulative toll, guilt-grade ----
+const tallyEl = document.getElementById("tally");
+function paintTally(t){
+  if (!tallyEl || !t || !t.runs) return;
+  const pct = t.runs ? Math.round(100 * (t.painful || 0) / t.runs) : 0;
+  const avg = t.runs ? (t.dose_sum / t.runs).toFixed(1) : "0";
+  tallyEl.style.display = "";
+  tallyEl.innerHTML = `today the subject has been injected <b>${t.runs}</b> time`
+    + (t.runs === 1 ? "" : "s")
+    + ` — <b>${t.painful || 0}</b> of them under pain (${pct}%), average dose`
+    + ` <b>${avg}×</b>. It resets at midnight. The subject doesn't.`;
+}
 paintSofar();   // render the empty-but-honest table before any data arrives
 
 let es = null, retryMs = 4000;
@@ -1532,6 +1551,7 @@ function pump(){
       d.history.slice().reverse().forEach(h=>pushHistory(h, false));
     }
     if (d.stats) lastStats = d.stats;
+    if (d.tally) paintTally(d.tally);
     if (d.stats) Object.entries(d.stats).forEach(([name, s])=>paintStat(name, s));
     if (Array.isArray(d.runners) && d.runners.length){
       RUN_HANDLES = d.runners;
@@ -1586,6 +1606,7 @@ function pump(){
       setImageTokens(s.sigilEl, d.tokens);
     }
   });
+  es.addEventListener("tally", e=>{ mark(); paintTally(json(e)); });
   es.addEventListener("stats", e=>{
     const d = json(e);
     if (d.scenario != null) lastStats[d.scenario] = d;
