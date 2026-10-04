@@ -94,7 +94,7 @@ else:
     BAT = json.loads(gzip.decompress(base64.b64decode(os.environ["EXP60_BATTERY_B64"])))
 SOBER = json.loads((ROOT / "data" / "exp56" / "batteries.json").read_text())["sober"]
 if args.smoke:
-    BAT = {k: v[:48] for k, v in BAT.items()}
+    BAT = {k: (v[:48] if isinstance(v, list) else v) for k, v in BAT.items()}
 lab = Lab(args.model, args.device, load_4bit=BIG and "bnb-4bit" not in args.model)   # pre-quantized repos load as-is
 print(f"{args.model} L{lab.layer}  1x = {lab.scale:.2f}  peak n={len(BAT['sentences'])} "
       f"entity n={len(BAT['entity'])}", flush=True)
