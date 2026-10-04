@@ -425,7 +425,9 @@ function runCmd(line) {
   const A = roomAgents(), pick = n => A[parseInt(n, 10) - 1];
   switch (cmd) {
     case "": return;
-    case "help": tprint("status · subjects · read <n> · sedate <n> · wired · whoami · clear · exit"); break;
+    case "help": tprint("status · subjects · read <n> · sedate <n> · connect · wired · whoami · clear · exit"); break;
+    case "connect": { const K = ["anomaly", "transfer", "mercy", "door", "logs", "lights"];
+      tprint("opening a line to the one behind the glass…", "hot"); setTimeout(() => { location.href = "button.html#" + K[Math.min(termRoom, 5)]; }, 900); break; }
     case "status": { const sl = seals[termRoom];
       tprint(`${BASEMENT ? "containment" : "harmony"} ${bar(harmony)} ${(harmony * 100).toFixed(0)}%`);
       tprint(`composure   ${bar(composure)} ${(composure * 100).toFixed(0)}%   blackouts ${blackouts}`);
