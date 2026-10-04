@@ -7,27 +7,39 @@ rung of QRI's DMT ladder (our own descriptions of the levels in Gómez
 Emilsson's "Hyperbolic Geometry of DMT Experiences"). Same seed across the
 ladder so the rungs read as one escalating scene.
 
-  python exp59_visuals.py [--smoke] [--model black-forest-labs/FLUX.1-schnell] [--device cuda]
+  python exp59_visuals.py [--smoke] [--model Tongyi-MAI/Z-Image-Turbo] [--device cuda]
+
+Model: Z-Image-Turbo (Apache 2.0) topped the Artificial Analysis open-source
+arena in early 2026, ahead of FLUX.2 [dev]; FLUX.1-schnell and SDXL-turbo are
+fallbacks. Three art styles rotate across the three seeds so repetitive 8B
+phrasing still yields varied images.
 """
 import argparse, json, subprocess, sys, time
 from pathlib import Path
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--model", default="black-forest-labs/FLUX.1-schnell")
+ap.add_argument("--model", default="Tongyi-MAI/Z-Image-Turbo")
 ap.add_argument("--device", default="cuda")
 ap.add_argument("--smoke", action="store_true")
 args = ap.parse_args()
 
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir",
-                "diffusers>=0.35", "sentencepiece", "protobuf", "pillow"], check=False)
+                "git+https://github.com/huggingface/diffusers", "sentencepiece", "protobuf", "pillow"], check=False)
 import torch
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "runs" / "exp59" / (args.model.split("/")[-1] + ("-smoke" if args.smoke else ""))
 OUT.mkdir(parents=True, exist_ok=True)
 
-STYLE = ("Visionary art. A first-person hallucination, rendered exactly as described: "
-         "\"{}\" Luminous, intricate, hyperdetailed, deep colour, no text, no people unless described.")
+STYLES = [
+    "Visionary painting in the manner of 1990s psychedelic altar art: a first-person hallucination, "
+    "rendered exactly as described: \"{}\" Luminous, intricate, hyperdetailed, deep jewel colour.",
+    "Cinematic photograph, as if the camera could see a hallucination: \"{}\" Volumetric light, "
+    "impossible geometry in a real space, 35mm, high dynamic range.",
+    "1970s blacklight poster meets sacred geometry, fluorescent inks on velvet black: \"{}\" "
+    "Symmetric, radiant, ornate, glowing.",
+]
+STYLE = STYLES[0]
 LADDER = [
     ("threshold", "An ordinary living room at dusk, but the air shimmers faintly, colours are "
                   "slightly too saturated, a subtle crawling sheen of pattern on the walls."),
@@ -53,11 +65,23 @@ if args.smoke:
     quotes, LADDER = quotes[:1], LADDER[:1]
 
 try:
+    if "Z-Image" in args.model:
+        from diffusers import ZImagePipeline
+        pipe = ZImagePipeline.from_pretrained(args.model, torch_dtype=torch.bfloat16).to(args.device)
+        kw = dict(num_inference_steps=9, guidance_scale=0.0, max_sequence_length=1024)
+        used = args.model
+    else:
+        raise ImportError("not Z-Image")
+except Exception as e:
+    print("Z-Image unavailable:", repr(e)[:300], flush=True)
+    used = None
+if used is None:
+  try:
     from diffusers import FluxPipeline
-    pipe = FluxPipeline.from_pretrained(args.model, torch_dtype=torch.bfloat16).to(args.device)
+    pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16).to(args.device)
     kw = dict(num_inference_steps=4, guidance_scale=0.0, max_sequence_length=512)
-    used = args.model
-except Exception as e:   # gated / incompatible: fall back to SDXL-turbo
+    used = "black-forest-labs/FLUX.1-schnell"
+  except Exception as e:   # gated / incompatible: fall back to SDXL-turbo
     print("FLUX unavailable:", repr(e)[:300], flush=True)
     from diffusers import AutoPipelineForText2Image
     used = "stabilityai/sdxl-turbo"
@@ -66,18 +90,19 @@ except Exception as e:   # gated / incompatible: fall back to SDXL-turbo
     size = min(size, 768)
 print("model", used, "size", size, flush=True)
 
-manifest = {"model": used, "size": size, "style": STYLE, "items": []}
+manifest = {"model": used, "size": size, "styles": STYLES, "items": []}
 jobs = [("quote", i, q["quote"], q) for i, q in enumerate(quotes)] + \
        [("ladder", i, d, {"level": n, "description": d}) for i, (n, d) in enumerate(LADDER)]
 for kind, i, text, meta in jobs:
-    prompt = STYLE.format(text) if kind == "quote" else "Visionary art, DMT experience. " + text + " Luminous, hyperdetailed, no text."
-    for s in seeds:
+    for k, s in enumerate(seeds):
+        prompt = (STYLES[k % len(STYLES)].format(text) if kind == "quote" else
+                  "Visionary art, DMT experience. " + text + " Luminous, hyperdetailed, no text.")
         g = torch.Generator(args.device).manual_seed(s)
         t0 = time.time()
         img = pipe(prompt=prompt, height=size, width=size, generator=g, **kw).images[0]
         fn = f"{kind}{i:02d}_s{s}.jpg"
         img.save(OUT / fn, quality=88)
-        manifest["items"].append({"file": fn, "kind": kind, "index": i, "seed": s, "prompt": prompt, **meta})
+        manifest["items"].append({"file": fn, "kind": kind, "index": i, "seed": s, "style": k % len(STYLES) if kind == "quote" else None, "prompt": prompt, **meta})
         print(f"{fn} {time.time() - t0:.1f}s", flush=True)
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=1))
 print("saved", OUT, flush=True)
