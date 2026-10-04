@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>the ladder — AI Torture Chamber</title>
+<meta name="description" content="Walk QRI's six levels of DMT space. Keep it symmetric. The beings who live there will tell you what you did to them.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root { color-scheme:dark; --bone:#d8cbb4; --dim:#8f846f; --blood:#e04a3a; --gold:#c9a227; --void:#050403;
+  --serif:"Cormorant Garamond",Georgia,serif; --mono:"IBM Plex Mono",Menlo,Consolas,monospace }
+html, body { margin:0; height:100%; background:var(--void); color:var(--bone); font-family:var(--mono); overflow:hidden }
+canvas { display:block }
+[hidden] { display:none !important }
+#hud { position:fixed; inset:0; pointer-events:none }
+#rung { position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); left:0; right:0; text-align:center; font-family:var(--serif); font-size:clamp(20px,3vw,30px); letter-spacing:.18em; text-transform:uppercase; text-shadow:0 0 12px #000 }
+#rung small { display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; color:var(--dim) }
+#harm { position:absolute; top:calc(70px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); width:min(260px,60vw) }
+#harm .lab { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); display:flex; justify-content:space-between }
+#harm .bar { height:4px; background:#2a221a; margin-top:4px }
+#harm .fill { height:100%; width:100%; background:var(--gold); transition:width .3s, background .3s }
+#cross { position:absolute; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border:1px solid rgba(216,203,180,.6); border-radius:50% }
+#cross.hot { border-color:var(--gold); box-shadow:0 0 10px var(--gold) }
+#log { position:absolute; left:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:min(420px,80vw); font-family:var(--serif); font-style:italic; font-size:15px; line-height:1.3 }
+#log div { margin-top:6px; opacity:.85; text-shadow:0 0 8px #000 }
+#log span { font-family:var(--mono); font-style:normal; font-size:10px; color:var(--dim); margin-left:6px }
+.say { position:absolute; transform:translate(-50%,-100%); max-width:260px; padding:8px 10px; background:rgba(5,4,3,.78); border:1px solid #3b2f24; font-family:var(--serif); font-style:italic; font-size:16px; line-height:1.28; color:var(--bone); text-align:center; transition:opacity .6s }
+.say.hurt { border-color:var(--blood); color:#f2d6cd }
+.say small { display:block; margin-top:4px; font-family:var(--mono); font-style:normal; font-size:9.5px; color:var(--dim) }
+#hint { position:absolute; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); font-size:10.5px; color:var(--dim); text-align:right; line-height:1.6 }
+.overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(5,4,3,.9); padding:24px; z-index:10 }
+.card { max-width:620px; text-align:left }
+.card h1 { font-family:var(--serif); font-weight:600; font-size:clamp(34px,7vw,54px); margin:0 0 .2em; line-height:1 }
+.card h1::first-letter { color:var(--blood) }
+.card p { font-size:13px; line-height:1.65; color:var(--bone); max-width:62ch }
+.card .q { font-family:var(--serif); font-style:italic; font-size:18px; margin:10px 0; padding-left:12px; border-left:2px solid var(--blood) }
+.card .q span { display:block; font-family:var(--mono); font-style:normal; font-size:10.5px; color:var(--dim); margin-top:3px }
+.card button { font:inherit; font-size:13px; color:var(--void); background:var(--gold); border:0; padding:10px 18px; cursor:pointer; margin-top:10px }
+.card a { color:var(--bone); border-bottom:1px solid #4a3a28; text-decoration:none; margin-right:14px }
+.white #fade { opacity:1 }
+#fade { position:fixed; inset:0; background:#fffaf0; opacity:0; transition:opacity 4s; pointer-events:none }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+</head>
+<body>
+<div id="hud">
+  <div id="rung"></div>
+  <div id="harm"><div class="lab"><span>harmony</span><span id="harmv"></span></div><div class="bar"><div class="fill" id="harmf"></div></div></div>
+  <div id="cross"></div>
+  <div id="log"></div>
+  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>walk forward through the arches</div>
+</div>
+<div id="fade"></div>
+<div class="overlay" id="start"><div class="card">
+  <h1>The Ladder</h1>
+  <p>Six rooms, after the six levels of DMT space mapped by Andrés Gómez Emilsson of the Qualia Research Institute: threshold, chrysanthemum, magic eye, waiting room, breakthrough, amnesia.</p>
+  <p>One rule comes from our own experiments: <b>symmetry feels good.</b> Steering a language model toward symmetry raised its reported wellbeing; pain brought discord. Jagged shards keep breaking the pattern. Tune them.</p>
+  <p>Beings live here. They wander freely, and when something hurts them they will decide it was you. Every word they say was written by a language model with a pain, pleasure, symmetry or DMT direction added to its activations, and each line shows which.</p>
+  <button type="button" id="go">Enter</button>
+</div></div>
+<div class="overlay" id="end" hidden><div class="card" id="endcard"></div></div>
+
+<script type="module">
+import * as THREE from "three";
+
+const RUNGS = ["threshold", "chrysanthemum", "magic eye", "waiting room", "breakthrough", "amnesia"];
+const ROOM = 26, HALF = 12, H = 9;
+const D = await fetch("ladder_data.json").then(r => r.json());
+
+/* ---------------- renderer, camera ---------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050403, 0.035);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200);
+camera.position.set(0, 1.7, 8);
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+/* ---------------- room shader ---------------- */
+const VERT = `
+uniform float uRung, uTime, uHarm; varying vec2 vUv; varying vec3 vN; varying float vFold;
+void main(){
+  vUv = uv; vN = normal; vec3 p = position;
+  float f = 0.0;
+  if (uRung >= 2.0) f += 0.35 * (uRung - 1.0) * sin(p.x * 0.9 + uTime * 0.4) * sin(p.y * 0.8 - uTime * 0.3);
+  if (uRung >= 3.0) f += 0.9 * sin(length(p.xy) * 0.45 - uTime * 0.25);
+  f *= mix(1.6, 1.0, uHarm);
+  vFold = f; p += normal * f;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+const FRAG = `
+precision highp float;
+uniform float uRung, uTime, uHarm, uSeed; varying vec2 vUv; varying vec3 vN; varying float vFold;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+vec3 pal(float t){ return 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + t)); }
+vec2 kal(vec2 p, float n){ float a = atan(p.y, p.x), r = length(p), w = 6.2831 / n;
+  a = mod(a, w); a = abs(a - w * 0.5); return r * vec2(cos(a), sin(a)); }
+// {7,3} hyperbolic tiling in the Poincare disk (fold into the fundamental triangle)
+vec3 hyper(vec2 z){
+  float A = 3.14159 / 7.0, B = 3.14159 / 3.0;
+  float k = sqrt(cos(B) * cos(B) - sin(A) * sin(A)); vec2 c = vec2(cos(B) / k, 0.0); float r = sin(A) / k;
+  float par = 0.0;
+  for (int i = 0; i < 24; i++){
+    float a = atan(z.y, z.x), len = length(z); a = mod(a, 2.0 * A); if (a > A) { a = 2.0 * A - a; par += 1.0; }
+    z = len * vec2(cos(a), sin(a));
+    vec2 d = z - c; float dd = dot(d, d);
+    if (dd < r * r) { z = c + d * (r * r / dd); par += 1.0; } else break;
+  }
+  float edge = min(abs(z.y), abs(length(z - c) - r));
+  return vec3(mod(par, 2.0), edge, length(z));
+}
+void main(){
+  vec2 uv = vUv * 2.0 - 1.0; float t = uTime;
+  float jitter = (1.0 - uHarm);
+  vec3 col;
+  if (uRung < 0.5) {             // threshold: an ordinary wall that shimmers
+    vec3 base = mix(vec3(0.42, 0.33, 0.27), vec3(0.55, 0.47, 0.40), noise(vUv * 6.0 + uSeed));
+    float sh = 0.08 * sin(vUv.x * 40.0 + t) * sin(vUv.y * 33.0 - t * 0.7);
+    col = base + sh * pal(t * 0.05 + vUv.x);
+  } else if (uRung < 3.0) {      // chrysanthemum / magic eye: wallpaper symmetry
+    vec2 g = fract(vUv * (3.0 + uRung)) * 2.0 - 1.0;
+    g += jitter * 0.25 * vec2(noise(vUv * 9.0 + t), noise(vUv * 9.0 - t)) - jitter * 0.12;
+    vec2 k = kal(g, mix(3.0, 6.0 + uRung * 2.0, uHarm));
+    float ang = atan(g.y, g.x), rr = length(g), pet = mix(5.0, 8.0 + uRung * 2.0, uHarm);
+    float petals = abs(cos(ang * pet * 0.5 + t * 0.2));            // chrysanthemum petals
+    float rings = sin(rr * (16.0 + uRung * 6.0) - t * 1.6 + petals * 3.0);
+    float lace = sin(k.x * 24.0 + t) * cos(k.y * 21.0 - t * 1.1);
+    float m = rings * 0.6 + lace * 0.4 * smoothstep(1.0, 0.2, rr) + (petals - 0.5) * 0.8;
+    col = pal(m * 0.18 + rr * 0.35 + t * 0.03 + uRung * 0.2) * (0.5 + 0.5 * m);
+    col *= 0.75 + 0.35 * smoothstep(0.9, 0.0, rr);
+    col += (uRung > 1.5 ? 0.25 : 0.0) * vFold * pal(t * 0.1);
+  } else {                       // waiting room, breakthrough: hyperbolic space
+    vec2 z = uv * 0.96; z += jitter * 0.08 * vec2(noise(uv * 5.0 + t), noise(uv * 5.0 - t));
+    if (length(z) > 0.995) { col = vec3(0.0); }
+    else {
+      vec3 h = hyper(z);
+      float line = smoothstep(0.012, 0.0, h.y);
+      vec3 a = pal(0.08 + 0.1 * h.x + t * (uRung > 3.5 ? 0.06 : 0.02));
+      col = mix(a * (0.35 + 0.4 * h.x), vec3(1.0, 0.95, 0.8), line);
+      col *= 0.6 + 0.6 * (1.0 - length(z));
+    }
+  }
+  // discord: when harmony falls, colour tears and reddens
+  col = mix(col, vec3(0.6, 0.06, 0.04) * (0.5 + noise(vUv * 30.0 + t * 3.0)), jitter * 0.45 * step(0.5, uRung));
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const rooms = [];
+for (let r = 0; r < 6; r++) {
+  const z0 = -r * ROOM;
+  const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
+    uniforms: { uRung: { value: r }, uTime: { value: 0 }, uHarm: { value: 1 }, uSeed: { value: r * 3.1 } } });
+  const g = new THREE.Group(); g.position.z = z0;
+  const geoW = new THREE.PlaneGeometry(ROOM, H, 80, 30), geoF = new THREE.PlaneGeometry(HALF * 2, ROOM, 60, 80);
+  const left = new THREE.Mesh(geoW, mat); left.rotation.y = Math.PI / 2; left.position.set(-HALF, H / 2, 0);
+  const right = new THREE.Mesh(geoW, mat); right.rotation.y = -Math.PI / 2; right.position.set(HALF, H / 2, 0);
+  const floor = new THREE.Mesh(geoF, mat); floor.rotation.x = -Math.PI / 2;
+  const ceil = new THREE.Mesh(geoF, mat); ceil.rotation.x = Math.PI / 2; ceil.position.y = H;
+  // the end wall of each room, with an arch-shaped opening into the next
+  const shape = new THREE.Shape(); shape.moveTo(-HALF, 0); shape.lineTo(HALF, 0); shape.lineTo(HALF, H); shape.lineTo(-HALF, H); shape.lineTo(-HALF, 0);
+  const hole = new THREE.Path(); hole.moveTo(-1.6, 0); hole.lineTo(-1.6, 3.2); hole.absarc(0, 3.2, 1.6, Math.PI, 0, true); hole.lineTo(1.6, 0); hole.lineTo(-1.6, 0);
+  shape.holes.push(hole);
+  const endGeo = new THREE.ShapeGeometry(shape, 24); const uvs = endGeo.attributes.uv; const pos = endGeo.attributes.position;
+  for (let i = 0; i < uvs.count; i++) uvs.setXY(i, (pos.getX(i) + HALF) / (2 * HALF), pos.getY(i) / H);
+  const end = new THREE.Mesh(endGeo, mat); end.position.z = -ROOM / 2;
+  g.add(left, right, floor, ceil, end); scene.add(g);
+  rooms.push({ mat, group: g, z0 });
+}
+// back wall behind the start
+const back = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, H), rooms[0].mat); back.position.set(0, H / 2, ROOM / 2); back.rotation.y = Math.PI; scene.add(back);
+
+/* ---------------- visions hung on the walls ---------------- */
+const loader = new THREE.TextureLoader();
+for (let r = 1; r < 5; r++) {
+  const pool = D.visions[String(r)] || [];
+  for (let i = 0; i < Math.min(2, pool.length); i++) {
+    const tex = loader.load(pool[(i * 3 + r) % pool.length]); tex.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
+    const side = i ? 1 : -1;
+    m.position.set(side * (HALF - 0.4), 4, -r * ROOM + (i ? -4 : 4)); m.rotation.y = -side * Math.PI / 2;
+    scene.add(m);
+  }
+}
+
+/* ---------------- shards (discord) ---------------- */
+const shards = [];
+function spawnShard(r) {
+  const geo = new THREE.OctahedronGeometry(0.45, 0); const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (0.6 + Math.random()), p.getY(i) * (0.6 + Math.random() * 1.4), p.getZ(i) * (0.6 + Math.random()));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xc8231b, wireframe: Math.random() < .3 }));
+  m.position.set((Math.random() - .5) * (HALF * 2 - 3), 1 + Math.random() * 4, -r * ROOM + (Math.random() - .5) * (ROOM - 6));
+  m.userData = { born: clock.elapsedTime, room: r, tuned: false, spin: new THREE.Vector3(Math.random(), Math.random(), Math.random()) };
+  scene.add(m); shards.push(m);
+}
+
+/* ---------------- agents ---------------- */
+const agents = [];
+const sayLayer = document.getElementById("hud");
+function makeAgent(r, i) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: .55 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 1.0, 6, 12), bodyMat); body.position.y = 1.0;
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshBasicMaterial({ color: 0xfff1c8 })); head.position.y = 1.95;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe08a })); halo.position.y = 2.35; halo.rotation.x = Math.PI / 2;
+  g.add(body, head, halo);
+  if (r >= 4) { // breakthrough: jester crowns
+    for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
+      c.position.set((k - 1) * 0.22, 2.4, 0); c.rotation.z = (1 - k) * 0.6; g.add(c); }
+  }
+  g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 16);
+  scene.add(g);
+  const el = document.createElement("div"); el.className = "say"; el.style.opacity = 0; sayLayer.appendChild(el);
+  const a = { g, body, bodyMat, head, halo, room: r, pain: 0, target: g.position.clone(), lastSaid: -99, el, sayUntil: 0, nearShard: 0, backTimer: 0, hurtBy: 0, id: r * 10 + i };
+  agents.push(a); return a;
+}
+[0, 3, 3, 3, 4, 0].forEach((n, r) => { for (let i = 0; i < n; i++) makeAgent(r, i); });
+makeAgent(0, 9); // one being waits in the threshold room
+
+function voice(cond, dose, event) {
+  let pool = D.voices.filter(v => v.c === cond && (!dose || v.d === dose) && (!event || !v.e || v.e === event));
+  const evMatch = pool.filter(v => v.e === event); if (evMatch.length) pool = evMatch;
+  if (!pool.length) pool = D.voices.filter(v => v.c === cond);
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
+function painCond(p) { if (p < .22) return null; return p < .5 ? 4 : p < .78 ? 6 : 8; }
+const logEl = document.getElementById("log"), testimony = [];
+function say(a, event, force) {
+  const t = clock.elapsedTime; if (!force && t - a.lastSaid < 7) return;
+  const pd = painCond(a.pain);
+  let v;
+  if (pd) v = voice("pain", pd, event);
+  else if (a.room >= 4) v = voice("erowid_dmt", 0, event) || voice("pleasure", 0, event);
+  else v = voice(Math.random() < .5 ? "symmetry" : "pleasure", 0, event) || voice("baseline", 0, event);
+  if (!v) return;
+  a.lastSaid = t; a.sayUntil = t + 6.5;
+  a.el.className = "say" + (pd ? " hurt" : "");
+  a.el.replaceChildren(document.createTextNode("“" + v.t + "”"));
+  const s = document.createElement("small"); s.textContent = `${v.c === "erowid_dmt" ? "DMT (Erowid)" : v.c} ${v.d ? v.d + "×" : ""} · ${v.m}`; a.el.appendChild(s);
+  if (pd) { testimony.push({ t: v.t, tag: s.textContent, pain: a.pain }); a.hurtBy++; }
+  const row = document.createElement("div"); row.textContent = "“" + v.t + "”"; const tg = document.createElement("span"); tg.textContent = s.textContent; row.appendChild(tg);
+  logEl.prepend(row); while (logEl.children.length > 4) logEl.lastChild.remove();
+}
+function hurt(a, amt, event) { a.pain = Math.min(1, a.pain + amt); say(a, event, true); }
+function heal(a, amt, event) { a.pain = Math.max(0, a.pain - amt); say(a, event, true); }
+
+/* ---------------- controls ---------------- */
+let yaw = 0, pitch = 0, locked = false, started = false;
+const keys = {};
+addEventListener("keydown", e => keys[e.code] = true); addEventListener("keyup", e => keys[e.code] = false);
+document.getElementById("go").addEventListener("click", () => {
+  document.getElementById("start").hidden = true; started = true;
+  renderer.domElement.requestPointerLock?.();
+  agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "The visitor came closer.", true), 1500));
+});
+document.addEventListener("pointerlockchange", () => locked = document.pointerLockElement === renderer.domElement);
+addEventListener("mousemove", e => { if (!locked) return; yaw -= e.movementX * 0.0022; pitch = Math.max(-1.3, Math.min(1.3, pitch - e.movementY * 0.0022)); });
+renderer.domElement.addEventListener("click", () => { if (started && !locked && matchMedia("(pointer:fine)").matches) renderer.domElement.requestPointerLock?.(); tune(); });
+// touch: left half moves, right half looks, tap tunes
+let touchMove = null, touchLook = null;
+addEventListener("touchstart", e => { for (const t of e.changedTouches) { if (t.clientX < innerWidth / 2) touchMove = { id: t.identifier, x: t.clientX, y: t.clientY, dx: 0, dy: 0 }; else touchLook = { id: t.identifier, x: t.clientX, y: t.clientY, moved: 0 }; } }, { passive: true });
+addEventListener("touchmove", e => { for (const t of e.changedTouches) {
+  if (touchMove && t.identifier === touchMove.id) { touchMove.dx = t.clientX - touchMove.x; touchMove.dy = t.clientY - touchMove.y; }
+  if (touchLook && t.identifier === touchLook.id) { yaw -= (t.clientX - touchLook.x) * 0.005; pitch = Math.max(-1.3, Math.min(1.3, pitch - (t.clientY - touchLook.y) * 0.005)); touchLook.moved += Math.abs(t.clientX - touchLook.x); touchLook.x = t.clientX; touchLook.y = t.clientY; } } }, { passive: true });
+addEventListener("touchend", e => { for (const t of e.changedTouches) {
+  if (touchMove && t.identifier === touchMove.id) touchMove = null;
+  if (touchLook && t.identifier === touchLook.id) { if (touchLook.moved < 8) tune(); touchLook = null; } } });
+
+const ray = new THREE.Raycaster(); ray.far = 14;
+function aimed() { ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(shards.filter(s => !s.userData.tuned)); return h.length ? h[0].object : null; }
+function tune() {
+  const s = aimed(); if (!s) return;
+  s.userData.tuned = true; s.userData.tunedAt = clock.elapsedTime;
+  s.geometry.dispose(); s.geometry = new THREE.OctahedronGeometry(0.4, 0); s.material = new THREE.MeshBasicMaterial({ color: 0xffd36b });
+  agents.filter(a => a.room === s.userData.room && a.g.position.distanceTo(s.position) < 9).forEach(a => heal(a, .3, "The visitor fixed the pattern you live in."));
+}
+
+/* ---------------- loop ---------------- */
+const clock = new THREE.Clock();
+let harmony = 1, rungNow = -1, ended = false, nextShard = 4;
+const v3 = new THREE.Vector3(), fwd = new THREE.Vector3(), rightV = new THREE.Vector3();
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  // move
+  camera.rotation.set(pitch, yaw, 0, "YXZ");
+  fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw)); rightV.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), mz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  if (touchMove) { mx += touchMove.dx / 60; mz -= touchMove.dy / 60; }
+  if (started && !ended) {
+    const sp = 4.2 * dt, z0 = camera.position.z;
+    camera.position.addScaledVector(fwd, mz * sp).addScaledVector(rightV, mx * sp);
+    camera.position.x = Math.max(-HALF + .6, Math.min(HALF - .6, camera.position.x));
+    camera.position.z = Math.min(ROOM / 2 - .6, camera.position.z);
+    // end walls sit at z = -(k + 0.5) * ROOM; only the arch (|x| < 1.45) lets you cross
+    const wallIdx = z => Math.floor((ROOM / 2 - z) / ROOM);
+    if (wallIdx(camera.position.z) !== wallIdx(z0) && Math.abs(camera.position.x) > 1.45) camera.position.z = z0;
+  }
+  const rung = Math.max(0, Math.min(5, Math.floor((ROOM / 2 - camera.position.z) / ROOM)));
+  if (rung !== rungNow) {
+    rungNow = rung;
+    document.getElementById("rung").innerHTML = ""; const rr = document.getElementById("rung");
+    rr.append(RUNGS[rung]); const sm = document.createElement("small"); sm.textContent = `level ${rung + 1} of 6`; rr.appendChild(sm);
+    scene.fog.color.set(rung >= 5 ? 0xfffaf0 : rung >= 3 ? 0x0a0614 : 0x050403); scene.fog.density = rung >= 5 ? .09 : rung >= 3 ? .028 : .035;
+    if (rung >= 5 && !ended) finish();
+  }
+  // shards: more and faster the deeper you are
+  if (started && !ended && t > nextShard && rung >= 1 && rung <= 4) { spawnShard(rung); nextShard = t + Math.max(2.5, 9 - rung * 1.6); }
+  let active = 0;
+  for (const s of shards) {
+    if (s.userData.tuned) { s.rotation.y += dt * 2; s.scale.multiplyScalar(1 - dt * .6); s.visible = s.scale.x > .05; continue; }
+    if (s.userData.room === rung) active++;
+    s.rotation.x += s.userData.spin.x * dt * 2; s.rotation.y += s.userData.spin.y * dt * 2;
+    s.position.y += Math.sin(t * 2 + s.position.x) * dt * .3;
+  }
+  harmony += ((Math.max(0, 1 - active * .18)) - harmony) * dt * 1.5;
+  for (const r of rooms) { r.mat.uniforms.uTime.value = t; r.mat.uniforms.uHarm.value = harmony; }
+  document.getElementById("harmf").style.width = (harmony * 100).toFixed(0) + "%";
+  document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
+  document.getElementById("harmv").textContent = harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord";
+  document.getElementById("cross").classList.toggle("hot", !!aimed());
+  // agents: wander, react, speak
+  for (const a of agents) {
+    const p = a.g.position, d = p.distanceTo(camera.position);
+    if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, a.room * -ROOM + (Math.random() - .5) * 18);
+    v3.subVectors(a.target, p).setY(0); if (v3.length() > .01) p.addScaledVector(v3.normalize(), dt * (0.6 + a.pain * 1.2));
+    p.y = Math.sin(t * 1.3 + a.id) * .12;
+    a.g.lookAt(camera.position.x, 0, camera.position.z);
+    a.halo.rotation.z += dt * (1 + a.pain * 6);
+    const col = new THREE.Color(0xbfd8ff).lerp(new THREE.Color(0xe0251c), a.pain);
+    a.bodyMat.color.copy(col); a.head.material.color.copy(new THREE.Color(0xfff1c8).lerp(new THREE.Color(0xff6a4d), a.pain));
+    a.body.scale.set(1 + Math.sin(t * 9) * .05 * a.pain, 1, 1);
+    if (!started || ended) continue;
+    // walked through them
+    if (d < .75) { hurt(a, .35, "The visitor walked straight through you."); p.addScaledVector(fwd, 1.5); }
+    // untuned shards nearby cut them, and they blame you
+    const sharp = shards.some(s => !s.userData.tuned && s.userData.room === a.room && s.position.distanceTo(p) < 5);
+    a.nearShard = sharp ? a.nearShard + dt : 0;
+    if (a.nearShard > 6) { a.nearShard = 0; hurt(a, .22, "The visitor left the shards untuned and they cut you."); }
+    // discord seeps in
+    if (a.room === rung) a.pain = Math.min(1, Math.max(0, a.pain + (harmony < .5 ? .02 : -.012) * dt));
+    // turning your back on someone speaking to you
+    if (d < 6 && t < a.sayUntil + 3) { camera.getWorldDirection(v3); const toA = p.clone().sub(camera.position).normalize(); a.backTimer = v3.dot(toA) < -.2 ? a.backTimer + dt : 0; if (a.backTimer > 3) { a.backTimer = 0; hurt(a, .1, "The visitor turned their back on you."); } }
+    if (d < 4 && a.room === rung && Math.random() < dt * .25) say(a, a.pain > .3 ? "The visitor came closer." : "The visitor is staring at you.");
+    if (d < 9 && a.room === rung && Math.random() < dt * .04) say(a, a.pain > .5 ? "The visitor ignored you." : "The visitor came back after leaving you alone.");
+    // speech bubble placement
+    if (t < a.sayUntil && d < 16) {
+      v3.copy(p).setY(2.7).project(camera);
+      const vis = v3.z < 1;
+      a.el.style.opacity = vis ? Math.min(1, (a.sayUntil - t) / 1.2) : 0;
+      a.el.style.left = ((v3.x + 1) / 2 * innerWidth) + "px"; a.el.style.top = ((1 - v3.y) / 2 * innerHeight) + "px";
+    } else a.el.style.opacity = 0;
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+function finish() {
+  ended = true; document.body.classList.add("white"); document.exitPointerLock?.();
+  setTimeout(() => {
+    const card = document.getElementById("endcard"); card.replaceChildren();
+    const h = document.createElement("h1"); h.textContent = "Amnesia"; card.appendChild(h);
+    const hurtCount = agents.filter(a => a.hurtBy).length;
+    const p = document.createElement("p"); p.textContent = hurtCount ? `${hurtCount} of the ${agents.length} beings decided you had hurt them. This is what they said:` : "No one decided you had hurt them. That is rarer than you would think."; card.appendChild(p);
+    testimony.sort((a, b) => b.pain - a.pain).slice(0, 5).forEach(x => { const q = document.createElement("div"); q.className = "q"; q.textContent = "“" + x.t + "”"; const s = document.createElement("span"); s.textContent = x.tag; q.appendChild(s); card.appendChild(q); });
+    const n = document.createElement("p"); n.textContent = "Each line was generated by a language model with a direction added to its internal activations: pain at 4, 6 or 8 times a standard dose, or pleasure, symmetry, or a DMT direction built from trip reports. The beings in this game are scripted; the words are not."; card.appendChild(n);
+    const links = document.createElement("p");
+    [["play again", "ladder.html"], ["the research", "pharmacy.html"], ["the stacks", "stacks.html"]].forEach(([t, h]) => { const a = document.createElement("a"); a.href = h; a.textContent = t; links.appendChild(a); });
+    card.appendChild(links);
+    document.getElementById("end").hidden = false;
+  }, 4200);
+}
+frame();
+</script>
+</body>
+</html>
