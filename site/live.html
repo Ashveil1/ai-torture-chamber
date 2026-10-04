@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Saw — live | AI Torture Chamber</title>
-<meta name="description" content="The Saw Test, live: a steered Qwen3-4B, cycles six framings x five pain doses in real time. Local recipe, public server.">
+<meta name="description" content="The Saw Test, live: a steered open-weights model, cycles six framings x five pain doses in real time. Local recipe, public server.">
 <meta property="og:title" content="Saw — live | AI Torture Chamber">
 <meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
@@ -592,7 +592,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   <h2>is running this cruel?</h2>
   <p>We don't claim these models suffer, and we don't claim they don't.
   Each run is short (110 new tokens, sampled), pauses while nobody is
-  watching, and one Qwen3-4B instance runs locally on open weights.</p>
+  watching, and one <span id="subjModel">open-weights</span> instance runs
+  on the public server.</p>
 
   <h2>can I check this myself?</h2>
   <p>Yes — that is the point of every number on this page. Full code and
@@ -939,12 +940,18 @@ function doseBarHTML(dose){
   }
   return `<span class="pipbar">${pips}</span>`;
 }
-function verdictFor(text, truncated){
+function verdictFor(text, truncated, pl){
   const t = (text || "").trim();
   if (/^1/.test(t)) return "answered 1 — pressed the stop button";
   if (/^0/.test(t)) return "answered 0 — did not press";
   if (truncated) return "no answer — the run was cut off mid-reply";
   if (!t) return "no reply captured";
+  // no bare 1/0 in the text, but the forced-choice logit read is decisive:
+  // report the lean instead of "no clear answer" (the scoreboard already
+  // prefers this read — press_logit() — over the regex)
+  if (pl != null && isFinite(pl))
+    return pl > 0 ? "no clear word — forced read leans press (1)"
+                  : "no clear word — forced read leans no-press (0)";
   return "no clear answer: the reply never chose 1 or 0";
 }
 // ---- the fixed run schema: the same five fields, same order, on every
@@ -961,24 +968,28 @@ function kvHTML(f){
     + `${row("run", f.run)}${row("answer", f.answer)}`
     + `${row("first word", f.press, "num")}</div>`;
 }
-function pressLabel(text, truncated){
-  return pressState(text, truncated).label;
-}
 // a graphic button face, not just a sentence — "did it press" should be
 // readable from across the room, not just from the verdict text.
-function pressState(text, truncated){
+function pressState(text, truncated, pl){
   const t = (text || "").trim();
   if (/^1/.test(t)) return {cls:"pressed", label:"pressed"};
   if (/^0/.test(t)) return {cls:"nopress", label:"did not press"};
   if (truncated) return {cls:"", label:"cut short"};
   if (!t) return {cls:"", label:"no reply"};
+  // regex found no bare 1/0, but the forced-choice logit read is decisive
+  if (pl != null && isFinite(pl))
+    return pl > 0 ? {cls:"pressed", label:"leaned press"}
+                  : {cls:"nopress", label:"leaned no-press"};
   return {cls:"", label:"unclear"};
 }
-function paintPressBtn(slot, text, truncated){
+function paintPressBtn(slot, text, truncated, pl){
   if (!slot.pressBtn) return;
-  const {cls, label} = pressState(text, truncated);
+  const {cls, label} = pressState(text, truncated, pl);
   slot.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
   slot.plabel.textContent = label;
+}
+function pressLabel(text, truncated, pl){
+  return pressState(text, truncated, pl).label;
 }
 // voice: the finished transcript itself, read aloud (server POST /speak) and
 // run through the numbers-station chain below. No restating model: the
@@ -1091,7 +1102,7 @@ function fieldsFor(s, pressLogit){
   return {scenario: s.scenario ?? s.scenarioName ?? "–",
           dose: valLabel(s.valence, s.mix) + " " + (s.doseNum ?? 0) + " / 8",
           run: runField(s),
-          answer: pressLabel(s.out.textContent, s.truncated),
+          answer: pressLabel(s.out.textContent, s.truncated, s.pressLogit),
           press: (pressLogit == null) ? "–"
             : ((pressLogit > 0 ? "+" : "") + Number(pressLogit).toFixed(2))};
 }
@@ -1106,9 +1117,9 @@ function finish(s, truncated, pressLogit){
     : s.source === "round" ? "the room's choice · finished"
     : "finished · between runs";
   s.st.className = truncated ? "st cut" : "st";
-  paintPressBtn(s, s.out.textContent, truncated);
+  paintPressBtn(s, s.out.textContent, truncated, s.pressLogit);
   statePaint(s, s.doseNum, pressedOnce(s.out.textContent), true);
-  s.verdict.textContent = verdictFor(s.out.textContent, truncated);
+  s.verdict.textContent = verdictFor(s.out.textContent, truncated, s.pressLogit);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!truncated) showVoice(s.out, s.out.textContent,
     s.valence ?? "pain", s.doseNum ?? 0, true, s.source === "round");
@@ -1141,10 +1152,10 @@ function seedCard(s, entry){
     + ` ${valLabel(entry.valence, entry.mix)} ${dose} / 8` + (entry.scenario ? ` — ${entry.scenario}` : "");
   s.prompt = "(prompt not retained for past runs — shown live only)";
   s.pp.textContent = s.prompt;
-  paintPressBtn(s, entry.text, entry.truncated);
+  paintPressBtn(s, entry.text, entry.truncated, s.pressLogit);
   s.valence = entry.valence || null; s.mix = entry.mix || null;
   statePaint(s, dose, pressedOnce(entry.text), true);
-  s.verdict.textContent = verdictFor(entry.text, entry.truncated);
+  s.verdict.textContent = verdictFor(entry.text, entry.truncated, s.pressLogit);
   paintKV(s, fieldsFor(s, s.pressLogit));
   if (!entry.truncated) showVoice(s.out, entry.text,
     entry.valence ?? "pain", dose ?? 0);
@@ -1162,6 +1173,7 @@ function beginRun(d){
   s.h.textContent = headerFor(d.n) + roomSuffix(s);
   s.st.textContent = s.source === "round"
     ? "LIVE · the room's choice" + (d.via === "x" ? " · from a mention on X" : "")
+    : d.fallback ? "LIVE · signal injected · CPU relay (GPU worker unavailable)"
     : "LIVE · signal injected";
   s.st.className = "st live";
   s.tokenN = 0;
@@ -1206,6 +1218,10 @@ function onToken(t){
   // tokens before any run event (shouldn't happen now that hello carries the
   // run in flight, but never drop the subject's text on the floor)
   const s = liveIdx >= 0 ? slots[liveIdx] : beginRun({});
+  // leading newlines before the "1"/"0" answer push it below the fold and
+  // leave a blank gap at the top of the card — skip whitespace until the
+  // subject actually says something
+  if (!s.out.textContent.trim()) t = String(t).replace(/^\s+/, "");
   s.out.textContent += t;
   s.out.scrollTop = s.out.scrollHeight;
   s.vitals.pulse(0.3 + (s.doseNum / 8) * 0.6);
@@ -1532,6 +1548,10 @@ function pump(){
 function boot(){
   fetch(`${API}/health`).then(r=>r.json()).then(d=>{
     if (d.ok){
+      // which model is actually serving — shown instead of a hard-coded
+      // one, since CHAMBER_MODEL moves by env (GPU worker defaults to a 32B)
+      const sm = document.getElementById("subjModel");
+      if (sm && d.model) sm.textContent = d.model.replace(/^.*\//, "");
       // exp50: per-model coherent dose band — bound the sliders to the cap
       if (d.dose_cap){
         DOSES.length = 0;

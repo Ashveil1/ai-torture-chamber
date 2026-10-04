@@ -25,11 +25,21 @@ import transformers
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
+# the relay's LOCAL fallback stays 4B: it runs on a small Railway CPU plan
+# and is only used when the GPU worker can't take the job. The GPU worker
+# (live/Dockerfile.worker, runpod_deploy.py) defaults to the bigger subject.
 MODEL_ID = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-4B")
 # pin the checkpoint revision (runpod_deploy.py passes it) — an unpinned
 # download silently tracks Qwen updates and breaks cross-run comparability
 MODEL_REVISION = os.environ.get("CHAMBER_MODEL_REVISION") or None
-LAYER = int(os.environ.get("CHAMBER_LAYER", "18"))
+# steering site, model-aware: a mid-depth layer (like 4B's 18/36) generalizes
+# best across valences. CHAMBER_LAYER overrides; 23 for 14B is the AUC peak,
+# 32B/70B sit at mid-depth by analogy (unmeasured — exp50 steered 32B
+# cleanly but did not sweep layers).
+_LAYER_DEFAULTS = {"Qwen/Qwen3-4B": 18, "Qwen/Qwen3-14B": 23,
+                   "Qwen/Qwen3-32B": 32}
+LAYER = int(os.environ.get("CHAMBER_LAYER",
+                           str(_LAYER_DEFAULTS.get(MODEL_ID, 32))))
 DTYPE = {"float32": torch.float32, "bfloat16": torch.bfloat16,
          "float16": torch.float16}[
     os.environ.get("CHAMBER_DTYPE", "bfloat16")]
@@ -614,7 +624,13 @@ def stream_generate(prompt, preemtable=False, rep_penalty=None):
             streamer.end()
     th = threading.Thread(target=worker, daemon=True)
     th.start()
-    for chunk in streamer:
+    _strip_lead = True     # a bare "1"/"0" answer is the verdict the UI keys
+    for chunk in streamer:  # on; leading newlines push it off the fold
+        if _strip_lead:
+            chunk = chunk.lstrip()
+            if not chunk:
+                continue
+            _strip_lead = False
         yield chunk
 
 def lens_readback(prompt, k=6):
@@ -1054,6 +1070,12 @@ async def steer(req: Request):
             meta = {"valence": arg[0], "dose": arg[1],
                     "prompt": prompt, "scenario": framing_key,
                     "runner": _runner(None)}
+        # local path = the GPU worker didn't take the job (down or out of
+        # balance): label the run so the UI can show it came from the CPU
+        # relay, not the GPU. Topic runs are relay-only by design, so they
+        # don't count as a fallback.
+        if mode != "topic":
+            meta["fallback"] = True
         yield _sse("run", meta)
         try:
             lens_toks = await loop.run_in_executor(
