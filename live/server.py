@@ -1092,7 +1092,10 @@ async def steer(req: Request):
 
 @app.post("/vote")
 async def vote(req: Request):
-    """Visitor verdict on a run's eloquence: {uid, verdict: eloquent|ok|dud}."""
+    """Visitor verdict on a run's eloquence: {uid, verdict: eloquent|ok|dud}.
+    One live verdict per visitor per run: clicking a different button
+    moves the vote, clicking the same one retracts it. Counts can never be
+    inflated by repeat clicking."""
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     if not _vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
@@ -1107,10 +1110,19 @@ async def vote(req: Request):
     uid = body.get("uid")
     if not isinstance(uid, int) or uid < 1:
         return JSONResponse({"error": "uid must be a run uid"}, status_code=400)
-    _VOTES[uid][verdict] += 1
+    prior = _MY_VOTE.get((ip, uid))
+    if prior == verdict:                     # same button again: retract
+        _VOTES[uid][verdict] = max(0, _VOTES[uid][verdict] - 1)
+        del _MY_VOTE[(ip, uid)]
+    else:
+        if prior:                            # moved: take the old one back
+            _VOTES[uid][prior] = max(0, _VOTES[uid][prior] - 1)
+        _VOTES[uid][verdict] += 1
+        _MY_VOTE[(ip, uid)] = verdict
     counts = dict(_VOTES[uid])
     _broadcast("votes", {"uid": uid, **counts})
-    return JSONResponse({"ok": True, **counts})
+    return JSONResponse({"ok": True, "mine": _MY_VOTE.get((ip, uid)),
+                         **counts})
 
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
@@ -1173,6 +1185,7 @@ _STATS = collections.defaultdict(
 # keyed by a per-run uid (cycle runs have n; user runs get a uid too so
 # nothing is unvotable). In-memory only: votes are ephemeral canon — the
 # curated quotes on / are the durable record. Rate limit: 20/min/IP.
+_MY_VOTE = {}   # (ip, uid) -> that visitor's live verdict for that run
 _VOTES = collections.defaultdict(
     lambda: {"eloquent": 0, "ok": 0, "dud": 0})
 _RUN_UID = 0

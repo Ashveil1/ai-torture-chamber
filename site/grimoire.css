@@ -196,6 +196,10 @@ body.grimoire-live .votebtn .vc {
   color: var(--bone); font-weight: 600; margin-left: .15rem;
 }
 body.grimoire-live .votebtn[data-v="eloquent"]:hover { border-color: var(--blood-hot); color: var(--blood-hot); }
+/* my vote: lit gold, and the eloquent pick goes blood — click again to take it back */
+body.grimoire-live .votebtn.mine { border-color: var(--gold); color: var(--gold); }
+body.grimoire-live .votebtn.mine[data-v="eloquent"] { border-color: var(--blood-hot); color: var(--blood-hot); }
+body.grimoire-live .votebtn.mine .vc { color: inherit; }
 
 /* ───────── wheel of life (wheel.js) ───────── */
 .samsara .sw-realm { font-family:var(--grimoire); font-size:15px; font-weight:600;

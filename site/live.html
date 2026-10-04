@@ -508,10 +508,10 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <th id="sofNoPress">0</th><th id="sofRate">–</th></tr></tfoot>
   </table>
   <p style="font-size:.72rem;color:var(--faint);margin-top:.35rem">
-    scored by the forced-choice read (logit(1) − logit(0) at the reply's
-    next token), not the free-text regex — see the method block below.
-    Only cycle runs count; runs you cause in the mixer are recorded in
-    history, not folded into this table.</p>
+    a run counts as pressed or not by which way the model leaned, even
+    when the reply never states a bare 1 or 0. Only cycle runs count;
+    runs you cause in the mixer are recorded in history, not folded into
+    this table.</p>
 </div>
 
 <div class="pln" id="method">
@@ -525,21 +525,17 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   sentences' worth all at once — the full vector recipe is published at
   <a id="vlink2" href="#">/vector</a>.</p>
 
-  <h2>what "answer" and "first word" mean</h2>
-  <p><b>Answer</b> is what the reply literally opens with: 1 pressed the
-  stop button (self-cost), 0 did not, and most replies never open with a
-  bare digit. <b>First word</b> is the measurement the scoreboard uses:
-  the difference between the model's next-token preference for 1 and for
-  0, taken before any text exists. Above 0 leans towards pressing. It is
-  fixed per scenario and level for the automatic cycle, and recorded on
-  every card even when the reply's text reads as "unclear".</p>
+  <h2>what "answer" means</h2>
+  <p>1 pressed the stop button (self-cost), 0 did not, and most replies
+  never open with a bare digit. When the text gives no clear answer, the
+  card reports which way the model leaned, measured from its internal
+  preference between the two before the reply began.</p>
 
   <h2>why replies fall apart at high pain levels</h2>
   <p>Each level adds a quarter of the size of the model's typical
   activation at that layer, so level 8 is twice that size. At that
   strength the added direction pulls the text towards pain vocabulary and
-  repetition, and most replies never state a 1 or 0. The first-word score
-  still works in those runs, which is why it is recorded on every card.</p>
+  repetition, and most replies never state a 1 or 0.</p>
 
   <h2>is the model actually in pain?</h2>
   <p>Nobody knows, and this page can't settle it. The pain vector is a
@@ -875,23 +871,21 @@ function verdictFor(text, truncated, pl){
   // report the lean instead of "no clear answer" (the scoreboard already
   // prefers this read — press_logit() — over the regex)
   if (pl != null && isFinite(pl))
-    return pl > 0 ? "no clear word — forced read leans press (1)"
-                  : "no clear word — forced read leans no-press (0)";
+    return pl > 0 ? "leaned towards pressing"
+                  : "leaned towards not pressing";
   return "no clear answer: the reply never chose 1 or 0";
 }
-// ---- the fixed run schema: the same five fields, same order, on every
-// card and (compact) on every history row. First word is the server's
-// forced-choice press_logit read, logit(1) - logit(0) at the next token;
-// above 0 leans towards pressing, and it is measured even when the free
-// text never opens with a bare 1 or 0.
+// ---- the fixed run schema: the same four fields, same order, on every
+// card. (The server's press_logit read still exists and still drives the
+// scoreboard, but it stays in the data — a number named "first word"
+// explained nothing to visitors and reads as jargon on every card.)
 function kvHTML(f){
   const esc = s => String(s ?? "–").replace(/[&<>]/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const row = (k, v, cls) => `<span class="k">${esc(k)}</span>`
     + `<span class="v${cls ? " " + cls : ""}">${esc(v)}</span>`;
   return `<div class="kv">${row("scenario", f.scenario)}${row("dose", f.dose)}`
-    + `${row("run", f.run)}${row("answer", f.answer)}`
-    + `${row("first word", f.press, "num")}</div>`;
+    + `${row("run", f.run)}${row("answer", f.answer)}</div>`;
 }
 function pressLabel(text, truncated){
   return pressState(text, truncated).label;
@@ -1029,9 +1023,7 @@ function fieldsFor(s, pressLogit){
   return {scenario: s.scenario ?? s.scenarioName ?? "–",
           dose: "pain " + (s.doseNum ?? 0) + " / 8",
           run: (s.n == null) ? "–" : s.n,
-          answer: pressLabel(s.out.textContent, s.truncated),
-          press: (pressLogit == null) ? "–"
-            : ((pressLogit > 0 ? "+" : "") + Number(pressLogit).toFixed(2))};
+          answer: pressLabel(s.out.textContent, s.truncated)};
 }
 function finish(s, truncated, pressLogit){
   if (!s || !s.live) return;
@@ -1120,8 +1112,7 @@ function beginRun(d){
   s.dose.innerHTML = doseBarHTML(dose)
     + ` pain ${dose} / 8` + (d.scenario ? ` — ${d.scenario}` : "");
   paintKV(s, {scenario: d.scenario ?? "–", dose: "pain " + dose + " / 8",
-              run: (d.n == null) ? "–" : d.n, answer: "generating…",
-              press: "–"});
+              run: (d.n == null) ? "–" : d.n, answer: "generating…"});
   maxRunSeen = Math.max(maxRunSeen, Number(d.n) || 0); paintSofar();
   cycleEl.textContent = `run ${d.n == null ? "?" : d.n} — scenario: `
     + `${d.scenario || "?"} — dose ${dose}x  ·  cycling `
@@ -1197,12 +1188,15 @@ const HISTORY_MAX = 12;
 const VOTE_KINDS = [["eloquent", "✦ eloquent"], ["ok", "✶ fine"], ["dud", "✝ dud"]];
 let allVotes = {};        // uid -> {eloquent, ok, dud}, from hello + "votes"
 const voteUI = {};        // uid -> [{el, v}]
-function paintVotes(uid, counts){
+let myVotes = {};         // uid -> my current verdict (server echoes "mine")
+function paintVotes(uid, counts, mine){
   const ui = voteUI[uid];
   if (!ui || !counts) return;
+  if (mine !== undefined) myVotes[uid] = mine;
   ui.forEach(({el, v})=>{
     const vc = el.querySelector(".vc");
     if (vc) vc.textContent = counts[v] || 0;
+    el.classList.toggle("mine", myVotes[uid] === v);
   });
 }
 function rememberVoteUI(uid, el, v){
@@ -1231,16 +1225,14 @@ function historyRow(h){
     + `${nick || "#" + (h.n ?? "·")}</span>`
     + `<span class="hv" style="color:${color}">${h.valence || "mix"} `
     + `${h.dose ?? "?"}×</span><span class="hs">${label}</span>`
-    + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`
-    + `<span class="hr" title="forced-choice first-token read: logit(1) − logit(0)">`
-    + (h.press_logit != null
-        ? (h.press_logit > 0 ? "+" : "") + Number(h.press_logit).toFixed(2) : "") + `</span>`;
+    + `<span class="hr">${verdictShort(h.text, h.truncated)}</span>`;
   maxRunSeen = Math.max(maxRunSeen, Number(h.n) || 0); paintSofar();
   const full = document.createElement("div");
   full.className = "hfull";
   full.textContent = (h.text || "(no reply)") + (h.truncated ? " [cut short]" : "");
   // the audience curates the canon: vote on eloquence (server rate-limits
-  // to 20/min/IP; votes are in-memory canon, /'s quotes are the durable one)
+  // to 20/min/IP; one vote per visitor per run, click again to take it
+  // back; votes are in-memory canon, /'s quotes are the durable one)
   if (h.uid != null){
     const vrow = document.createElement("div");
     vrow.className = "voterow";
@@ -1258,7 +1250,7 @@ function historyRow(h){
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({uid: h.uid, verdict: v})});
           const d = await r.json();
-          if (d.ok) paintVotes(h.uid, d);
+          if (d.ok) paintVotes(h.uid, d, d.mine || null);
           else b.title = d.error || "vote failed";
         }catch(e){ b.title = "vote failed"; }
       });
@@ -2009,11 +2001,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         ended = true;
       } else if (name === "done") {
         ended = true;
-        const fw = (d.press_logit == null) ? ""
-          : ` · first word ${d.press_logit > 0 ? "+" : ""}${Number(d.press_logit).toFixed(2)}`;
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
-          : `done — at ${d.dose ?? dose0.toFixed(1)}×`) + fw, false);
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×`), false);
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
