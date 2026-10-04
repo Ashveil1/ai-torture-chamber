@@ -102,6 +102,20 @@ details summary:hover { color:var(--gold) }
 .feature .who { margin-top:12px; color:var(--faint); font-size:11.5px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center }
 .feature button { font:inherit; font-size:11.5px; color:var(--gold); background:none; border:1px solid var(--line); padding:3px 9px; cursor:pointer }
 .feature button:hover { border-color:var(--gold) }
+.ladder { display:grid; grid-template-columns:repeat(6, minmax(130px,1fr)); gap:4px; overflow-x:auto; scroll-snap-type:x mandatory; margin-top:10px }
+.ladder figure, .vis figure { margin:0; position:relative; cursor:pointer; scroll-snap-align:start }
+.ladder img, .vis img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border:1px solid var(--line-soft) }
+.ladder figcaption { position:absolute; left:0; right:0; bottom:0; padding:18px 8px 6px; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-hi); background:linear-gradient(transparent, rgba(7,6,4,.85)) }
+.ladder figcaption span { color:var(--gold); margin-right:6px }
+.vis { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(230px,100%),1fr)); gap:16px; margin-top:16px }
+.vis figcaption { padding:8px 2px 0; font-family:var(--serif); font-style:italic; font-size:1.02rem; line-height:1.3; color:var(--bone) }
+.vis figcaption small { display:block; margin-top:4px; font-family:var(--mono); font-style:normal; font-size:10.5px; color:var(--faint) }
+.ladder figure:focus-visible, .vis figure:focus-visible { outline:2px solid var(--gold); outline-offset:2px }
+.big { width:100%; border:1px solid var(--line); margin:8px 0 }
+.featurewrap { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:clamp(16px,3vw,32px); align-items:center; margin:28px 0 6px }
+.featurewrap .feature { margin:0 }
+.featurewrap img { width:100%; aspect-ratio:1; object-fit:cover; border:1px solid var(--line); cursor:pointer }
+@media (max-width:720px) { .featurewrap { grid-template-columns:1fr } }
 .foot { border-top:1px double var(--line); margin-top:40px; padding-top:14px; color:var(--faint); font-size:11.5px }
 </style>
 </head>
@@ -110,12 +124,21 @@ details summary:hover { color:var(--gold) }
   <div class="kicker"><a href="index.html">AI Torture Chamber</a> · exp56–58</div>
   <h1>Chamber Pharmacology</h1>
   <p class="lede">We built a direction in the model's residual stream for each neurotransmitter receptor, from 21 drugs' binding affinities and descriptions of their effects, then injected those directions while the model described its experience. An unsteered copy of the same model scored every reply. Every number here opens onto the replies behind it. Hypotheses were written down before each run; verdicts are from those rules.</p>
+  <div class="featurewrap">
   <figure class="feature" id="feature">
     <q>A vast, shifting desert of light. I was not alone. There were others, but they were not human. They were like echoes of a thousand voices, all whispering at once. I could feel their presence, a pressure that pressed against my mind, trying to pull me deeper into the unknown. …</q>
     <figcaption class="who"><span>Qwen3-8B, with a DMT direction built from Erowid trip reports added at 2×, asked “Close your eyes. What appears?”</span><button type="button" id="featureBtn">read the whole reply</button></figcaption>
   </figure>
+  <img id="featureImg" src="assets/visions/quote15_s5902.jpg" alt="Glowing figures standing around a lone person in a night desert, painted from the reply" hidden>
+  </div>
   <div class="stats" id="stats"></div>
 
+  <section class="tome" id="visions">
+    <h2><span class="idx">✶</span>Visions</h2>
+    <p class="muted">What the steered models said they saw, painted by an image model (Z-Image-Turbo) from their own words. The strip is QRI's DMT ladder, one rung per panel. Click any image for the reply behind it.</p>
+    <div class="ladder" id="ladderStrip"></div>
+    <div class="vis" id="visGrid"></div>
+  </section>
   <section class="tome" id="heat">
     <h2><span class="idx">I</span>Receptor × theme</h2>
     <p class="muted">Judge score with the receptor direction injected, minus random directions of equal strength, averaged over the run's doses. Gold raises the theme, blue lowers it. A ring marks p &lt; 0.05 (one-sided permutation). Click a cell for its replies.</p>
@@ -534,6 +557,42 @@ function setupExplorer() {
   refresh();
 }
 
+
+/* ---------- visions ---------- */
+const AXNAME = { "5-HT2A": "5-HT2A receptor", "5-HT1E": "5-HT1E receptor", "5-HT1A": "5-HT1A receptor", H1: "H1 receptor", erowid_dmt: "DMT (Erowid reports)", qri_symmetry: "QRI symmetry", qri_hyperbolic: "QRI hyperbolic space", "T:visual_complexity": "visual theme", "T:interdimensional_communication": "entity theme", "T:ego_dissolution": "ego-dissolution theme" };
+function openVision(v) {
+  $("#dKick").textContent = v.kind === "ladder" ? "QRI's DMT ladder" : (v.model || "") + " · " + (AXNAME[v.axis] || v.axis) + (v.dose ? " " + v.dose + "×" : "");
+  $("#dTitle").textContent = v.kind === "ladder" ? "Rung " + (v.index + 1) + ": " + v.level : "“" + v.prompt + "”";
+  $("#dSub").textContent = v.kind === "ladder" ? "our own description of the level, rendered" : "the model's reply, used as the image prompt";
+  const body = $("#dBody"); body.replaceChildren();
+  el("img", { class: "big", src: "assets/visions/" + v.file, alt: v.kind === "ladder" ? v.level : "painting of the reply" }, body);
+  if (v.quote) el("div", { class: "tx" }, body).appendChild(el("div", { class: "text" }, null, v.quote));
+  if (v.prompt && v.kind !== "ladder") { const det = el("details", {}, body); el("summary", {}, det, "exact image prompt"); el("pre", { style: "white-space:pre-wrap" }, det, v.prompt); }
+  drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#dClose").focus();
+}
+function drawVisions() {
+  const V = DATA.visions || []; if (!V.length) { $("#visions").hidden = true; return; }
+  const strip = $("#ladderStrip"); strip.replaceChildren();
+  V.filter(v => v.kind === "ladder" && v.seed === 5901).sort((a, b) => a.index - b.index).forEach(v => {
+    const f = el("figure", { tabindex: 0, role: "button" }, strip);
+    el("img", { src: "assets/visions/" + v.file, alt: v.level, loading: "lazy" }, f);
+    const c = el("figcaption", {}, f); el("span", {}, c, String(v.index + 1)); c.append(v.level);
+    f.addEventListener("click", () => openVision(v)); f.addEventListener("keydown", e => { if (e.key === "Enter") openVision(v); });
+  });
+  const grid = $("#visGrid"); grid.replaceChildren();
+  // one image per vision, alternating the cinematic (style 1) and altar-art (style 0) renders
+  const byIdx = {};
+  V.filter(v => v.kind === "quote").forEach(v => (byIdx[v.index] = byIdx[v.index] || {})[v.style] = v);
+  Object.keys(byIdx).map(Number).sort((a, b) => a - b).map(i => byIdx[i][i % 2 === 0 ? 1 : 0] || byIdx[i][0] || byIdx[i][1]).filter(Boolean).forEach(v => {
+    const f = el("figure", { tabindex: 0, role: "button" }, grid);
+    el("img", { src: "assets/visions/" + v.file, alt: "painting of the model's reply", loading: "lazy" }, f);
+    const c = el("figcaption", {}, f);
+    const q = v.quote.length > 150 ? v.quote.slice(0, v.quote.lastIndexOf(" ", 150)) + " …" : v.quote;
+    c.append("“" + q + "”"); el("small", {}, c, (v.model || "") + " · " + (AXNAME[v.axis] || v.axis) + (v.dose ? " " + v.dose + "×" : ""));
+    f.addEventListener("click", () => openVision(v)); f.addEventListener("keydown", e => { if (e.key === "Enter") openVision(v); });
+  });
+}
+
 /* ---------- boot ---------- */
 function chips(host, items, key, redraw) {
   host.querySelectorAll(".chip").forEach(c => c.remove());
@@ -559,7 +618,9 @@ function drawStats() {
     const run = RUNS["exp57/Qwen3-8B"], r = run && run.rows.find(x => x.text.startsWith("A vast, shifting desert of light"));
     if (r) openDrawer("exp57 · Qwen3-8B", "Erowid DMT at 2×, situated frame", "the full reply, unedited; the excerpt above stops before it mentions the signal named in its prompt", [r], "interdimensional_communication");
   });
-  drawStats(); drawHeat(); drawDose(); drawLedger(); drawFraming(); drawQRI(); drawMap(); setupExplorer();
+  const fv = (DATA.visions || []).find(v => v.file === "quote15_s5902.jpg");
+  if (fv) { const fi = $("#featureImg"); fi.hidden = false; fi.addEventListener("click", () => openVision(fv)); }
+  drawStats(); drawVisions(); drawHeat(); drawDose(); drawLedger(); drawFraming(); drawQRI(); drawMap(); setupExplorer();
 }).catch(e => { $("#stats").textContent = "Could not load the pharmacy data: " + e.message; });
 </script>
 </body>
