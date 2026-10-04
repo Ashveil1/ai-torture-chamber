@@ -1337,7 +1337,9 @@ function historyRow(h){
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({uid: h.uid, verdict: v})});
           const d = await r.json();
-          if (d.ok) paintVotes(h.uid, d, d.mine || null);
+          // "voted" because d.ok is the "fine" count (0 until someone
+          // votes fine) — checking it would report success as failure
+          if (d.voted) paintVotes(h.uid, d, d.mine || null);
           else b.title = d.error || "vote failed";
         }catch(e){ b.title = "vote failed"; }
       });
