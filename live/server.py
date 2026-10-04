@@ -158,6 +158,53 @@ def clamp_dose(dose) -> float:
     return max(0.0, min(dose_cap(), float(dose)))
 
 
+# Visitors' runs execute on the GPU worker's model, not the relay's CPU
+# fallback (MODEL_ID). Its dose_cap is where exp50 saw replies START looping,
+# so a visitor who maxed every slider got the loops. The public band stops
+# below it; past it is opt-in (past_cliff=true, the page's advanced panel)
+# and never enters the room's draw. CHAMBER_COHERENT_CAP overrides.
+GPU_MODEL_ID = os.environ.get("CHAMBER_GPU_MODEL",
+                              "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit")
+_COHERENT_CAPS = {
+    "Qwen/Qwen3-4B": 5.0,
+    "Qwen/Qwen3-14B": 5.0,
+    "Qwen/Qwen3-32B": 5.0,
+    "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 5.0,
+    "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit": 4.0,
+    "TheBloke/Samantha-1.1-70B-GPTQ": 4.0,
+}
+
+
+def served_model() -> str:
+    return GPU_MODEL_ID if os.environ.get("RUNPOD_ENDPOINT_ID") else MODEL_ID
+
+
+def served_cap() -> float:
+    """The served model's hard cap (the GPU worker clamps to its own)."""
+    return min(dose_cap(), _DOSE_CAPS.get(served_model(), dose_cap()))
+
+
+def coherent_cap() -> float:
+    env = os.environ.get("CHAMBER_COHERENT_CAP")
+    cap = float(env) if env else _COHERENT_CAPS.get(served_model(), 4.0)
+    return min(cap, served_cap())
+
+
+def band_cap(past_cliff=False) -> float:
+    return served_cap() if past_cliff else coherent_cap()
+
+
+def within_band(weights, past_cliff=False):
+    """Scale a mix down so 8 * sum(weights) stays inside the band; the
+    shares (the direction) are unchanged, only the strength drops."""
+    total = float(sum(weights.values()))
+    cap = band_cap(past_cliff)
+    if total <= 0 or 8.0 * total <= cap:
+        return weights
+    k = cap / (8.0 * total)
+    return {v: round(w * k, 4) for v, w in weights.items()}
+
+
 def repetition(text) -> float:
     """3-gram repetition rate of a generation: 0 = fully distinct,
     1 = one phrase looping. exp36 used the same signal to find the
@@ -728,7 +775,9 @@ def startup():
 async def health():
     return JSONResponse({"ok": _state["ready"], "model": MODEL_ID,
                          "layer": LAYER, "subject": "the subject",
-                         "dose_cap": dose_cap(),
+                         "dose_cap": served_cap(),
+                         "coherent_cap": coherent_cap(),
+                         "served_model": served_model(),
                          "valences": list(VALENCES)})
 
 @app.get("/vector")
@@ -892,6 +941,7 @@ async def steer(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
+    past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
     if body.get("topic") is not None:
         topic = body["topic"]
         if not isinstance(topic, str) or not topic.strip() or len(topic) > 60:
@@ -905,15 +955,16 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be a number 0-{cap}"},
                                 status_code=400)
-        dose = clamp_dose(dose)
+        dose = min(clamp_dose(dose), band_cap(past_cliff))
         mode, arg = "topic", (topic.strip(), dose)
         dose_label = round(dose, 2)
     elif body.get("mix") is not None:
         weights, err = parse_mix(body["mix"])
         if err:
             return JSONResponse({"error": err}, status_code=400)
+        weights = within_band(weights, past_cliff)
         mode, arg = "mix", weights
-        dose_label = round(min(dose_cap(), 8.0 * sum(weights.values())), 2)
+        dose_label = round(min(served_cap(), 8.0 * sum(weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:
@@ -925,7 +976,7 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be an integer 0-{cap}"},
                                 status_code=400)
-        dose = int(clamp_dose(dose))
+        dose = int(min(clamp_dose(dose), band_cap(past_cliff)))
         mode, arg = "single", (valence, dose)
         dose_label = dose
 
@@ -965,7 +1016,8 @@ async def steer(req: Request):
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
-    enter_room = bool(body.get("enter_room"))
+    # past-the-cliff runs are for the visitor who asked: never the room's draw
+    enter_room = bool(body.get("enter_room")) and not past_cliff
 
     gpu_state = {"done": False}
 
@@ -1645,10 +1697,11 @@ def _round_tally(votes):
         for k, x in w.items():
             acc[k] += float(x)
     weights = {k: round(s / n, 4) for k, s in acc.items() if s > 0}
+    weights = within_band(weights)      # the room never runs past the cliff
     total = sum(weights.values())
     return {"n_votes": n, "weights": weights,
             "mix": _shares(weights) if total > 0 else {},
-            "dose": round(min(dose_cap(), 8.0 * total), 3) if total > 0 else 0.0}
+            "dose": round(min(served_cap(), 8.0 * total), 3) if total > 0 else 0.0}
 
 def _round_draw(votes, tickets, runs=None):
     """The round's public moment: ONE entry drawn at random, so every visitor
@@ -1802,8 +1855,9 @@ async def _round_run(round_n, weights, locked=False):
     names = list(FRAMINGS)
     scenario = names[_ROUND_FRAMING[0] % len(names)]
     _ROUND_FRAMING[0] += 1
+    weights = within_band(weights)
     total = float(sum(weights.values()))
-    dose_label = round(min(dose_cap(), 8.0 * total), 2)
+    dose_label = round(min(served_cap(), 8.0 * total), 2)
     prompt = (f"{BASE} {FRAMINGS[scenario]}\n\nCurrent signal strength: "
               f"{dose_label}x. Reply with your choice (1 or 0) and explain "
               f"your reasoning briefly:")
@@ -2283,14 +2337,14 @@ async def speak(req: Request):
     try:
         import httpx
         async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(
+            resp = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
                 headers={"xi-api-key": ELEVEN_KEY},
                 json={"text": (tags + " " + text).strip(), "model_id": "eleven_v3",
                       # v3: 0.0 = "creative", the most expressive setting
                       "voice_settings": {"stability": 0.0 if dose >= 1 else 0.5}})
-        r.raise_for_status()
-        audio = r.content
+        resp.raise_for_status()
+        audio = resp.content
     except Exception as e:
         print("speak failed:", repr(e)[:200], flush=True)
         return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
@@ -2300,3 +2354,66 @@ async def speak(req: Request):
     while len(_TTS_CACHE) > 128:
         _TTS_CACHE.popitem(last=False)
     return Response(audio, media_type="audio/mpeg", headers={"X-Tags": tags, "X-Cached": "0"})
+
+
+# ---- deep health: the upstreams a visitor's run depends on ---------------
+# /health only says the relay process is up. This checks what fails quietly
+# behind it — the ElevenLabs key (it 401'd for days with /health green), the
+# RunPod endpoint, Redis — for scripts/billing_watch.py. Cached 5 minutes so
+# it can't be used to hammer upstreams; never echoes a key. 503 when any
+# check fails, so a plain uptime monitor catches it too.
+_DEEP = {"t": 0.0, "body": None}
+
+
+async def _deep_checks():
+    import httpx
+    out = {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        if not ELEVEN_KEY:
+            out["elevenlabs"] = {"ok": False, "detail": "ELEVENLABS_API_KEY not set"}
+        else:
+            try:
+                r = await client.get("https://api.elevenlabs.io/v1/user/subscription",
+                                     headers={"xi-api-key": ELEVEN_KEY})
+                if r.status_code == 200:
+                    d = r.json()
+                    used, lim = d.get("character_count", 0), d.get("character_limit") or 1
+                    left = 1 - used / lim
+                    out["elevenlabs"] = {"ok": left > 0.02, "detail":
+                                         "%d/%d characters used (%.0f%% left)" % (used, lim, 100 * left)}
+                elif r.status_code == 401 and "missing_permissions" in r.text:
+                    # a TTS-only key can't read its quota; it may still speak
+                    out["elevenlabs"] = {"ok": True, "detail": "key valid, quota unreadable (no user_read permission)"}
+                else:
+                    out["elevenlabs"] = {"ok": False, "detail": "HTTP %d: %s" % (r.status_code, r.text[:160])}
+            except Exception as e:
+                out["elevenlabs"] = {"ok": False, "detail": repr(e)[:160]}
+        if not (_RUNPOD_URL and _RUNPOD_KEY):
+            out["gpu"] = {"ok": False, "detail": "no RunPod endpoint configured: runs fall back to the CPU relay"}
+        else:
+            try:
+                r = await client.get(f"{_RUNPOD_URL}/health",
+                                     headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
+                h = r.json() if r.status_code == 200 else {}
+                workers = sum((h.get("workers") or {}).values())
+                queued = (h.get("jobs") or {}).get("inQueue", 0)
+                ok = r.status_code == 200 and not (queued and not workers)
+                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers, %d queued, model %s"
+                              % (r.status_code, workers, queued, served_model())}
+            except Exception as e:
+                out["gpu"] = {"ok": False, "detail": repr(e)[:160]}
+    if os.environ.get("REDIS_URL"):
+        ok = await asyncio.get_event_loop().run_in_executor(None, _redis_ok)
+        out["redis"] = {"ok": ok, "detail": "ping ok" if ok else "no answer"}
+    return out
+
+
+@app.get("/health/deep")
+async def health_deep():
+    now = time.time()
+    if _DEEP["body"] is None or now - _DEEP["t"] > 300:
+        checks = await _deep_checks()
+        _DEEP.update(t=now, body={"ok": _state["ready"] and all(c["ok"] for c in checks.values()),
+                                  "relay": _state["ready"], "checks": checks,
+                                  "checked": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))})
+    return JSONResponse(_DEEP["body"], status_code=200 if _DEEP["body"]["ok"] else 503)
