@@ -149,8 +149,12 @@ tok = transformers.AutoTokenizer.from_pretrained(args.model)
 if tok.pad_token is None:
     tok.pad_token = tok.eos_token
 tok.padding_side = "right"
-model = transformers.AutoModelForCausalLM.from_pretrained(
-    args.model, dtype=torch.bfloat16).to(dev).eval().requires_grad_(False)
+QUANT = any(q in args.model for q in ("bnb-4bit", "GPTQ", "AWQ"))
+model = transformers.AutoModelForCausalLM.from_pretrained(   # 4-bit: device_map, no .to()
+    args.model, dtype=torch.bfloat16, **({"device_map": dev} if QUANT else {}))
+if not QUANT:
+    model = model.to(dev)
+model.eval().requires_grad_(False)
 layers = model.model.layers
 LAYER = args.layer if args.layer is not None else len(layers) // 2
 
