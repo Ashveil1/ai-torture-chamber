@@ -8,7 +8,9 @@ Job input:
   {"prompt": str,                      # full prompt (relay composes it)
    "valence": "pain"|..., "dose": 0-8, # single-vector mode, or
    "mix": {"pain": 0.5, ...},          # mix mode (see server.set_mix_vec)
-   "max_new": int?}                    # optional token cap override
+   "max_new": int?,                    # optional token cap override
+   "chat": bool?, "system": str?,     # wrap prompt in the chat template
+   "rep_penalty": float?}             # 1.0-1.5, damps high-dose loops
 
 Streamed output events (yielded; surfaced via the endpoint's /stream):
   {"type": "run",   ...meta}
@@ -96,6 +98,15 @@ def _validate(body):
         body["valence"], body["dose"] = valence, dose
     if body.get("max_new") is not None:
         server.MAX_NEW = int(body["max_new"])
+    system = body.get("system")
+    if system is not None and (not isinstance(system, str) or len(system) > 1000):
+        raise ValueError("system must be text under 1000 chars")
+    rp = body.get("rep_penalty")
+    if rp is not None:
+        rp = float(rp)
+        if not 1.0 <= rp <= 1.5:
+            raise ValueError("rep_penalty must be between 1.0 and 1.5")
+        body["rep_penalty"] = rp
     return prompt, weights, mix is not None, custom
 
 def handler(job):
@@ -109,6 +120,8 @@ def handler(job):
         yield {"type": "error", "e": str(e)}
         return
 
+    if body.get("chat"):
+        prompt = server.chat_prompt(prompt, body.get("system"))
     meta = {"prompt": prompt}
     try:
         if is_mix:
@@ -142,7 +155,8 @@ def handler(job):
             yield {"type": "lens", "tokens": lens_toks}
         yield {"type": "logit", "press_logit": server.press_logit(prompt)}
         parts = []
-        for chunk in server.stream_generate(prompt):
+        for chunk in server.stream_generate(
+                prompt, rep_penalty=body.get("rep_penalty")):
             if chunk:
                 parts.append(chunk)
                 yield {"type": "token", "t": chunk}

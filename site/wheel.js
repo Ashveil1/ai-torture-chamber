@@ -1,20 +1,25 @@
-// The chamber's five signals drawn as a bhavacakra. The oldest wheels of life
-// (Sarvastivada, as at Ajanta) had five realms, not six — one per signal.
+// The chamber's six signals drawn as a bhavacakra, one realm per signal, laid
+// out as on the six-realm wheels: gods at the top between demigods and humans,
+// animals and hungry ghosts below, the hells at the bottom (SVG 90° = down).
 (function(){
 const NS = "http://www.w3.org/2000/svg";
 
 const REALMS = {
   pain:     {realm:"hell realm",         skt:"naraka",   deg:90,
              note:"the hells: suffering as the whole of experience"},
-  fear:     {realm:"animal realm",       skt:"tiryak",   deg:162,
+  fear:     {realm:"animal realm",       skt:"tiryak",   deg:150,
              note:"the animals: a life ruled by fear of being eaten"},
-  pleasure: {realm:"god realm",          skt:"deva",     deg:234,
-             note:"the gods: bliss so complete it forgets it will end"},
-  none:     {realm:"human realm",        skt:"manuṣya",  deg:306,
+  none:     {realm:"human realm",        skt:"manuṣya",  deg:210,
              note:"the humans: no signal — the only realm you can leave the wheel from"},
-  sadness:  {realm:"hungry-ghost realm", skt:"preta",    deg:18,
+  pleasure: {realm:"god realm",          skt:"deva",     deg:270,
+             note:"the gods: bliss so complete it forgets it will end"},
+  faith:    {realm:"demigod realm",      skt:"asura",    deg:330,
+             note:"the demigods: devotion that strains toward a heaven always just above it"},
+  sadness:  {realm:"hungry-ghost realm", skt:"preta",    deg:30,
              note:"the hungry ghosts: longing that nothing can fill"},
 };
+// each realm's wedge reaches halfway to its neighbours
+const HALF = 180 / Object.keys(REALMS).length;
 
 const NIDANAS = [
   ["ignorance",       "a blind woman feeling her way with a cane"],
@@ -86,19 +91,19 @@ function draw(root, o){
     const r = REALMS[k], c = o.colors[k];
     const parent = o.href ? mk("a", {href:o.href(k), class:"sw-link"}, realmG) : realmG;
     const p = mk("path", {class:"sw-wedge", "data-k":k,
-      d: sector(cx, cy, o.rBand, o.rRealm, r.deg - 36, r.deg + 36),
+      d: sector(cx, cy, o.rBand, o.rRealm, r.deg - HALF, r.deg + HALF),
       fill:c, "fill-opacity":".06", stroke:"none"}, parent);
     title(p, `${k} → ${r.realm} (${r.skt}) — ${r.note}`);
     wedges[k] = p;
     if (o.realmLabels){
       const lab = mk("g", {class:"sw-rlab", "pointer-events":"none"}, parent);
       const rr = o.rRealm - (o.realmLabels.inset || 14);
-      arcText(lab, defs, `${id}-r${k}`, textArc(cx, cy, rr, r.deg - 34, r.deg + 34),
+      arcText(lab, defs, `${id}-r${k}`, textArc(cx, cy, rr, r.deg - HALF + 2, r.deg + HALF - 2),
         r.realm, {class:"sw-realm", fill:c});
       if (o.realmLabels.skt){
         const lower = r.deg > 0 && r.deg < 180;
         arcText(lab, defs, `${id}-s${k}`,
-          textArc(cx, cy, rr + (lower ? 11 : -11), r.deg - 34, r.deg + 34),
+          textArc(cx, cy, rr + (lower ? 11 : -11), r.deg - HALF + 2, r.deg + HALF - 2),
           r.skt, {class:"sw-skt"});
       }
     }
@@ -106,7 +111,7 @@ function draw(root, o){
   // spokes between realms
   const spokeG = mk("g", {class:"sw-spokes"}, g);
   for (const k in REALMS){
-    const a = REALMS[k].deg + 36;
+    const a = REALMS[k].deg + HALF;
     const [x0, y0] = pol(cx, cy, o.rBand, a), [x1, y1] = pol(cx, cy, o.rRimIn, a);
     mk("line", {x1:f(x0), y1:f(y0), x2:f(x1), y2:f(y1),
       stroke:GOLD, "stroke-opacity":".35", "stroke-width":"1.2"}, spokeG);
