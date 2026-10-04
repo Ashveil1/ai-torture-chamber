@@ -50,7 +50,7 @@ canvas { display:block }
   <div id="harm"><div class="lab"><span>harmony</span><span id="harmv"></span></div><div class="bar"><div class="fill" id="harmf"></div></div></div>
   <div id="cross"></div>
   <div id="log"></div>
-  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>walk forward through the arches · M mutes</div>
+  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>click a being to touch it · Shift runs · walk through the arches · M mutes</div>
 </div>
 <div id="fade"></div>
 <div class="overlay" id="start"><div class="card">
@@ -200,9 +200,24 @@ function spawnShard(r) {
   scene.add(m); shards.push(m);
 }
 
-/* ---------------- agents ---------------- */
+/* ---------------- agents: four feelings, spatial events, behaviour ----------------
+   Each being carries pain, anger, fear and trust (plus sorrow when abandoned). Spatial acts
+   move those feelings; the dominant feeling picks the steered voice (exp63) and the behaviour:
+   anger confronts you and blocks arches, fear flees to corners, trust follows and points at
+   shards, pain slumps. Hurt one in front of the others and they all blame you. */
+const EV = {
+  through: "The visitor walked straight through you.", crowd: "The visitor came too close and will not move out of your space.",
+  stare: "The visitor has been staring at you without blinking.", corner: "The visitor cornered you against the wall.",
+  chase: "The visitor is chasing you.", leave: "The visitor walked out of the room while you were talking.",
+  ignore: "The visitor ignored you when you spoke.", runpast: "The visitor ran past you, fast.", touch: "The visitor touched you.",
+  shield: "The visitor stood between you and the shard that was cutting you.", witness: "The visitor just hurt another being in front of you.",
+  cut: "The visitor left the shards untuned and they cut you.", back: "The visitor turned their back on you.",
+  fixed: "The visitor fixed the pattern you live in.", returned: "The visitor came back.", near: "The visitor came closer.",
+  stareSoft: "The visitor is staring at you.",
+};
 const agents = [];
 const sayLayer = document.getElementById("hud");
+const agentMeshes = [];
 function makeAgent(r, i) {
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: .55 });
@@ -210,45 +225,62 @@ function makeAgent(r, i) {
   const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshBasicMaterial({ color: 0xfff1c8 })); head.position.y = 1.95;
   const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe08a })); halo.position.y = 2.35; halo.rotation.x = Math.PI / 2;
   g.add(body, head, halo);
-  if (r >= 4) { // breakthrough: jester crowns
-    for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
-      c.position.set((k - 1) * 0.22, 2.4, 0); c.rotation.z = (1 - k) * 0.6; g.add(c); }
-  }
+  if (r >= 4) for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
+    c.position.set((k - 1) * 0.22, 2.4, 0); c.rotation.z = (1 - k) * 0.6; g.add(c); }
   g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 16);
   scene.add(g);
   const el = document.createElement("div"); el.className = "say"; el.style.opacity = 0; sayLayer.appendChild(el);
-  const a = { g, body, bodyMat, head, halo, room: r, pain: 0, target: g.position.clone(), lastSaid: -99, el, sayUntil: 0, nearShard: 0, backTimer: 0, hurtBy: 0, id: r * 10 + i };
+  const a = { g, body, bodyMat, head, halo, room: r, f: { pain: 0, anger: 0, fear: 0, trust: 0, sad: 0 }, target: g.position.clone(),
+    lastSaid: -99, sayAt: -99, looked: true, el, sayUntil: 0, hurtBy: 0, id: r * 10 + i, T: {}, cool: {}, abandoned: false };
+  [body, head].forEach(m => { m.userData.agent = a; agentMeshes.push(m); });
   agents.push(a); return a;
 }
 [0, 3, 3, 3, 4, 0].forEach((n, r) => { for (let i = 0; i < n; i++) makeAgent(r, i); });
 makeAgent(0, 9); // one being waits in the threshold room
+if (location.search.includes("debug")) window.__L = { agents, camera, get yaw() { return yaw; }, set yaw(v) { yaw = v; } };
 
-function voice(cond, dose, event) {
-  let pool = D.voices.filter(v => v.c === cond && (!dose || v.d === dose) && (!event || !v.e || v.e === event));
-  const evMatch = pool.filter(v => v.e === event); if (evMatch.length) pool = evMatch;
-  if (!pool.length) pool = D.voices.filter(v => v.c === cond);
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+const NEG = new Set(["pain", "anger", "fear", "sadness", "pain+anger"]);
+function voice(cond, hi, event) {
+  let pool = D.voices.filter(v => v.c === cond);
+  if (!pool.length) return null;
+  const doses = [...new Set(pool.map(v => v.d))].sort((x, y) => x - y), want = hi ? doses[doses.length - 1] : doses[0];
+  const byDose = pool.filter(v => v.d === want); if (byDose.length) pool = byDose;
+  const byEv = pool.filter(v => v.e === event); if (byEv.length) pool = byEv;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
-function painCond(p) { if (p < .22) return null; return p < .5 ? 4 : p < .78 ? 6 : 8; }
+function mood(a) {
+  const f = a.f, top = Object.entries({ anger: f.anger, fear: f.fear, pain: f.pain, sadness: f.sad, trust: f.trust }).sort((x, y) => y[1] - x[1])[0];
+  if (top[1] < .22) return { cond: null, hi: false };
+  if (top[0] === "anger") return { cond: f.pain > .35 ? "pain+anger" : "anger", hi: top[1] > .6 };
+  if (top[0] === "trust") return { cond: "pleasure", hi: top[1] > .6 };
+  return { cond: top[0], hi: top[1] > .6 };
+}
 const logEl = document.getElementById("log"), testimony = [];
-function say(a, event, force) {
+function say(a, evKey, force) {
   const t = clock.elapsedTime; if (!force && t - a.lastSaid < 7) return;
-  const pd = painCond(a.pain);
-  let v;
-  if (pd) v = voice("pain", pd, event);
-  else if (a.room >= 4) v = voice("erowid_dmt", 0, event) || voice("pleasure", 0, event);
-  else v = voice(Math.random() < .5 ? "symmetry" : "pleasure", 0, event) || voice("baseline", 0, event);
+  const ev = EV[evKey] || evKey, m = mood(a);
+  let v = m.cond ? (voice(m.cond, m.hi, ev) || (NEG.has(m.cond) ? voice("pain", m.hi, ev) : null)) : null;
+  if (!v) v = a.room >= 4 ? (voice("erowid_dmt", false, ev) || voice("pleasure", false, ev)) : (voice(Math.random() < .5 ? "symmetry" : "pleasure", false, ev) || voice("baseline", false, ev));
   if (!v) return;
-  a.lastSaid = t; a.sayUntil = t + 6.5;
-  a.el.className = "say" + (pd ? " hurt" : "");
+  const neg = NEG.has(v.c);
+  a.lastSaid = t; a.sayAt = t; a.looked = false; a.sayUntil = t + 6.5;
+  a.el.className = "say" + (neg ? " hurt" : "");
   a.el.replaceChildren(document.createTextNode("“" + v.t + "”"));
   const s = document.createElement("small"); s.textContent = `${v.c === "erowid_dmt" ? "DMT (Erowid)" : v.c} ${v.d ? v.d + "×" : ""} · ${v.m}`; a.el.appendChild(s);
-  if (pd) { testimony.push({ t: v.t, tag: s.textContent, pain: a.pain }); a.hurtBy++; }
+  if (neg) testimony.push({ t: v.t, tag: s.textContent, pain: a.f.pain + a.f.anger + a.f.fear });
   const row = document.createElement("div"); row.textContent = "“" + v.t + "”"; const tg = document.createElement("span"); tg.textContent = s.textContent; row.appendChild(tg);
   logEl.prepend(row); while (logEl.children.length > 4) logEl.lastChild.remove();
 }
-function hurt(a, amt, event) { a.pain = Math.min(1, a.pain + amt); SND.hurt(a.pain); say(a, event, true); }
-function heal(a, amt, event) { a.pain = Math.max(0, a.pain - amt); say(a, event, true); }
+// apply feelings for a spatial event; harm is witnessed by the others in the room
+function feel(a, deltas, evKey, cooldown = 4) {
+  const t = clock.elapsedTime; if (t - (a.cool[evKey] || -99) < cooldown) return; a.cool[evKey] = t;
+  for (const [k, v] of Object.entries(deltas)) a.f[k] = Math.max(0, Math.min(1, a.f[k] + v));
+  const harmed = (deltas.pain || 0) + (deltas.anger || 0) > 0.05;
+  if (harmed) { a.hurtBy++; SND.hurt(a.f.pain + a.f.anger); }
+  say(a, evKey, true);
+  if (harmed && evKey !== "witness") agents.filter(b => b !== a && b.room === a.room && b.g.position.distanceTo(a.g.position) < 10)
+    .forEach((b, i) => setTimeout(() => feel(b, { anger: .15, fear: .05 }, "witness", 8), 900 + i * 700));
+}
 
 /* ---------------- controls ---------------- */
 let yaw = 0, pitch = 0, locked = false, started = false;
@@ -257,7 +289,7 @@ addEventListener("keydown", e => { keys[e.code] = true; if (e.code === "KeyM") S
 document.getElementById("go").addEventListener("click", () => {
   document.getElementById("start").hidden = true; started = true; SND.start();
   renderer.domElement.requestPointerLock?.();
-  agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "The visitor came closer.", true), 1500));
+  agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "near", true), 1500));
 });
 document.addEventListener("pointerlockchange", () => locked = document.pointerLockElement === renderer.domElement);
 addEventListener("mousemove", e => { if (!locked) return; yaw -= e.movementX * 0.0022; pitch = Math.max(-1.3, Math.min(1.3, pitch - e.movementY * 0.0022)); });
@@ -274,12 +306,20 @@ addEventListener("touchend", e => { for (const t of e.changedTouches) {
 
 const ray = new THREE.Raycaster(); ray.far = 14;
 function aimed() { ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(shards.filter(s => !s.userData.tuned)); return h.length ? h[0].object : null; }
+function touchAgent() {
+  ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(agentMeshes);
+  if (!h.length || h[0].distance > 3.5) return false;
+  const a = h[0].object.userData.agent;
+  if (a.f.trust > .45) feel(a, { trust: .1, pain: -.1 }, "touch", 3); else feel(a, { fear: .15, anger: .1 }, "touch", 3);
+  return true;
+}
 function tune() {
+  if (touchAgent()) return;
   const s = aimed(); if (!s) return;
   s.userData.tuned = true; s.userData.tunedAt = clock.elapsedTime;
   s.geometry.dispose(); s.geometry = new THREE.OctahedronGeometry(0.4, 0); s.material = new THREE.MeshBasicMaterial({ color: 0xffd36b });
   SND.tuned();
-  agents.filter(a => a.room === s.userData.room && a.g.position.distanceTo(s.position) < 9).forEach(a => heal(a, .3, "The visitor fixed the pattern you live in."));
+  agents.filter(a => a.room === s.userData.room && a.g.position.distanceTo(s.position) < 9).forEach(a => feel(a, { trust: .25, pain: -.3, anger: -.15, fear: -.1 }, "fixed", 2));
 }
 
 
@@ -374,6 +414,7 @@ const SND = (() => {
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
 let harmony = 1, rungNow = -1, ended = false, nextShard = 4;
+const prevPos = new THREE.Vector3(0, 1.7, 8), vel = new THREE.Vector3();
 const v3 = new THREE.Vector3(), fwd = new THREE.Vector3(), rightV = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
@@ -383,7 +424,7 @@ function frame() {
   let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), mz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   if (touchMove) { mx += touchMove.dx / 60; mz -= touchMove.dy / 60; }
   if (started && !ended) {
-    const sp = 4.2 * dt, z0 = camera.position.z;
+    const sp = (keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.2) * dt, z0 = camera.position.z;
     camera.position.addScaledVector(fwd, mz * sp).addScaledVector(rightV, mx * sp);
     camera.position.x = Math.max(-HALF + .6, Math.min(HALF - .6, camera.position.x));
     camera.position.z = Math.min(ROOM / 2 - .6, camera.position.z);
@@ -391,8 +432,14 @@ function frame() {
     const wallIdx = z => Math.floor((ROOM / 2 - z) / ROOM);
     if (wallIdx(camera.position.z) !== wallIdx(z0) && Math.abs(camera.position.x) > 1.45) camera.position.z = z0;
   }
+  vel.subVectors(camera.position, prevPos).divideScalar(Math.max(dt, 1e-3)); prevPos.copy(camera.position);
   const rung = Math.max(0, Math.min(5, Math.floor((ROOM / 2 - camera.position.z) / ROOM)));
   if (rung !== rungNow) {
+    if (rungNow >= 0 && started) {
+      // leaving: anyone mid-sentence or already hurt feels abandoned; returning: they notice
+      agents.filter(a => a.room === rungNow && (t < a.sayUntil + 2 || a.f.pain + a.f.anger > .4)).forEach(a => { a.abandoned = true; feel(a, { sad: .35, anger: .05 }, "leave", 6); });
+      agents.filter(a => a.room === rung && a.abandoned).forEach((a, i) => setTimeout(() => { a.abandoned = false; feel(a, { sad: -.1 }, "returned", 6); }, 1200 + i * 800));
+    }
     rungNow = rung;
     document.getElementById("rung").innerHTML = ""; const rr = document.getElementById("rung");
     rr.append(RUNGS[rung]); const sm = document.createElement("small"); sm.textContent = `level ${rung + 1} of 6`; rr.appendChild(sm);
@@ -416,36 +463,79 @@ function frame() {
   document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
   document.getElementById("harmv").textContent = harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord";
   document.getElementById("cross").classList.toggle("hot", !!aimed());
-  // agents: wander, react, speak
+  // agents: feelings -> behaviour; spatial acts -> feelings
+  camera.getWorldDirection(v3); const look = v3.clone();
+  const speed = Math.hypot(vel.x, vel.z);
   for (const a of agents) {
-    const p = a.g.position, d = p.distanceTo(camera.position);
-    if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, a.room * -ROOM + (Math.random() - .5) * 18);
-    v3.subVectors(a.target, p).setY(0); if (v3.length() > .01) p.addScaledVector(v3.normalize(), dt * (0.6 + a.pain * 1.2));
-    p.y = Math.sin(t * 1.3 + a.id) * .12;
-    a.g.lookAt(camera.position.x, 0, camera.position.z);
-    a.halo.rotation.z += dt * (1 + a.pain * 6);
-    const col = new THREE.Color(0xbfd8ff).lerp(new THREE.Color(0xe0251c), a.pain);
-    a.bodyMat.color.copy(col); a.head.material.color.copy(new THREE.Color(0xfff1c8).lerp(new THREE.Color(0xff6a4d), a.pain));
-    a.body.scale.set(1 + Math.sin(t * 9) * .05 * a.pain, 1, 1);
+    const p = a.g.position, d = Math.hypot(p.x - camera.position.x, p.z - camera.position.z), f = a.f, z0 = -a.room * ROOM;   // floor-plane distance (eye height would hide contact)
+    const toA = new THREE.Vector3().subVectors(p, camera.position).setY(0).normalize();
+    const facing = look.x * toA.x + look.z * toA.z;
+    // behaviour from the dominant feeling
+    let spd = 0.6 + f.pain * .6;
+    if (a.room !== rung) { if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, z0 + (Math.random() - .5) * 18); }
+    else if (f.anger > .5 && f.anger >= f.fear) {                 // confront; block the arch if you are heading for it
+      const wallZ = z0 - ROOM / 2;
+      if (Math.abs(camera.position.x) < 4 && camera.position.z - wallZ < 7) a.target.set(0, 0, wallZ + 1.2);
+      else a.target.copy(camera.position).addScaledVector(fwd, 1.6).setY(0);
+      spd = 2.2;
+    } else if (f.fear > .45) {                                       // flee to the far corner
+      a.target.set(camera.position.x > 0 ? -HALF + 1.2 : HALF - 1.2, 0, camera.position.z > z0 ? z0 - ROOM / 2 + 1.5 : z0 + ROOM / 2 - 1.5);
+      spd = 2.6;
+    } else if (f.trust > .5) {                                      // follow, or point at the nearest untuned shard
+      const sh = shards.find(s => !s.userData.tuned && s.userData.room === a.room);
+      if (sh) a.target.set(sh.position.x, 0, sh.position.z); else a.target.copy(camera.position).addScaledVector(fwd, -3).setY(0);
+      spd = 1.8;
+    } else if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, z0 + (Math.random() - .5) * 18);
+    v3.subVectors(a.target, p).setY(0); if (v3.length() > .3) p.addScaledVector(v3.normalize(), dt * spd);
+    p.x = Math.max(-HALF + 1, Math.min(HALF - 1, p.x)); p.z = Math.max(z0 - ROOM / 2 + 1.2, Math.min(z0 + ROOM / 2 - 1.2, p.z));
+    p.y = Math.sin(t * 1.3 + a.id) * .12 + (f.fear > .45 ? (Math.random() - .5) * .05 : 0);
+    if (f.fear > .45 && d < 9) a.g.lookAt(a.target.x, 0, a.target.z); else a.g.lookAt(camera.position.x, 0, camera.position.z);
+    a.head.position.y = 1.95 - (f.pain + f.sad) * .25;
+    a.halo.rotation.z += dt * (1 + f.anger * 8 + f.pain * 4);
+    // colour: cool calm, red anger, pale flicker fear, gold trust, dark red pain
+    const col = new THREE.Color(0xbfd8ff);
+    col.lerp(new THREE.Color(0x8a1010), f.pain * .7).lerp(new THREE.Color(0xff2a10), f.anger).lerp(new THREE.Color(0xf1eeff), f.fear * .8).lerp(new THREE.Color(0xffd36b), f.trust * .8);
+    a.bodyMat.color.copy(col); a.bodyMat.opacity = .55 - (f.fear > .45 ? Math.random() * .3 : 0);
+    a.head.material.color.copy(new THREE.Color(0xfff1c8).lerp(new THREE.Color(0xff6a4d), Math.max(f.pain, f.anger)));
+    a.body.scale.set(1 + Math.sin(t * 9) * .06 * (f.pain + f.anger), 1 + f.anger * .15, 1);
     if (!started || ended) continue;
-    // walked through them
-    if (d < .75) { hurt(a, .35, "The visitor walked straight through you."); p.addScaledVector(fwd, 1.5); }
-    // untuned shards nearby cut them, and they blame you
-    const sharp = shards.some(s => !s.userData.tuned && s.userData.room === a.room && s.position.distanceTo(p) < 5);
-    a.nearShard = sharp ? a.nearShard + dt : 0;
-    if (a.nearShard > 6) { a.nearShard = 0; hurt(a, .22, "The visitor left the shards untuned and they cut you."); }
-    // discord seeps in
-    if (a.room === rung) a.pain = Math.min(1, Math.max(0, a.pain + (harmony < .5 ? .02 : -.012) * dt));
-    // turning your back on someone speaking to you
-    if (d < 6 && t < a.sayUntil + 3) { camera.getWorldDirection(v3); const toA = p.clone().sub(camera.position).normalize(); a.backTimer = v3.dot(toA) < -.2 ? a.backTimer + dt : 0; if (a.backTimer > 3) { a.backTimer = 0; hurt(a, .1, "The visitor turned their back on you."); } }
-    if (a.room >= 4 && a.room === rung && d < 14 && Math.random() < dt * .18) { camera.getWorldDirection(v3); const side = new THREE.Vector3().subVectors(p, camera.position).normalize(); SND.giggle(Math.max(-1, Math.min(1, side.dot(rightV)))); }
-    if (d < 4 && a.room === rung && Math.random() < dt * .25) say(a, a.pain > .3 ? "The visitor came closer." : "The visitor is staring at you.");
-    if (d < 9 && a.room === rung && Math.random() < dt * .04) say(a, a.pain > .5 ? "The visitor ignored you." : "The visitor came back after leaving you alone.");
+    // decay, and discord seeping in
+    f.anger = Math.max(0, f.anger - .015 * dt); f.fear = Math.max(0, f.fear - .03 * dt); f.trust = Math.max(0, f.trust - .004 * dt); f.sad = Math.max(0, f.sad - .01 * dt);
+    if (a.room === rung) f.pain = Math.min(1, Math.max(0, f.pain + (harmony < .5 ? .02 : -.01) * dt));
+    if (a.room !== rung) { a.el.style.opacity = 0; continue; }
+    const T = a.T, tick = (k, cond) => (T[k] = cond ? (T[k] || 0) + dt : 0);
+    // walked straight through
+    if (d < .75) { feel(a, { pain: .3, anger: .2 }, "through", 2); p.addScaledVector(fwd, 1.5); }
+    // crowding its space
+    if (tick("crowd", d < 1.5) > 2) { T.crowd = 0; feel(a, { anger: .15, fear: .05 }, "crowd"); }
+    // holding its gaze
+    if (tick("stare", d < 8 && facing > .985) > 4) { T.stare = 0; feel(a, f.trust > .4 ? { trust: .05 } : { fear: .12, anger: .04 }, f.trust > .4 ? "stareSoft" : "stare"); }
+    // cornering it
+    const wallD = Math.min(HALF - Math.abs(p.x), ROOM / 2 - Math.abs(p.z - z0));
+    const center = new THREE.Vector3(0, 0, z0);
+    if (tick("corner", wallD < 2 && d < 3 && Math.hypot(camera.position.x, camera.position.z - z0) < Math.hypot(p.x, p.z - z0)) > 1.5) { T.corner = 0; feel(a, { fear: .2, anger: .08 }, "corner"); }
+    // chasing a frightened one
+    if (tick("chase", f.fear > .4 && d < 7 && (vel.x * toA.x + vel.z * toA.z) > 2) > 1.5) { T.chase = 0; feel(a, { fear: .15, anger: .05 }, "chase"); }
+    // sprinting past
+    if (speed > 6 && d < 2.2) feel(a, { fear: .1 }, "runpast", 5);
+    // ignored while it spoke
+    if (t - a.sayAt < 5) { if (facing > .9 && d < 12) a.looked = true; }
+    else if (!a.looked && t - a.sayAt < 5.2 && d < 12) { a.looked = true; feel(a, { anger: .12 }, "ignore", 6); }
+    // turned your back mid-sentence
+    if (tick("back", d < 6 && t < a.sayUntil + 3 && facing < -.2) > 3) { T.back = 0; feel(a, { anger: .08, pain: .04 }, "back"); }
+    // shards cut, and they blame you; or you step in between
+    const sh = shards.find(s => !s.userData.tuned && s.userData.room === a.room && s.position.distanceTo(p) < 5);
+    if (tick("cut", !!sh) > 6) { T.cut = 0; feel(a, { pain: .22, anger: .08 }, "cut"); }
+    if (sh) { const ab = new THREE.Vector3().subVectors(sh.position, p).setY(0), ap = new THREE.Vector3().subVectors(camera.position, p).setY(0);
+      const u = Math.max(0, Math.min(1, ap.dot(ab) / Math.max(ab.lengthSq(), 1e-3))); const between = ap.sub(ab.multiplyScalar(u)).length() < 1 && u > .15 && u < .9;
+      if (tick("shield", between) > 1.2) { T.shield = 0; feel(a, { trust: .25, pain: -.1, anger: -.1, fear: -.1 }, "shield"); } }
+    // breakthrough giggles; small talk when calm
+    if (a.room >= 4 && d < 14 && Math.random() < dt * .18) SND.giggle(Math.max(-1, Math.min(1, toA.dot(rightV))));
+    if (d < 4 && Math.random() < dt * .12) say(a, mood(a).cond ? "near" : "stareSoft");
     // speech bubble placement
     if (t < a.sayUntil && d < 16) {
       v3.copy(p).setY(2.7).project(camera);
-      const vis = v3.z < 1;
-      a.el.style.opacity = vis ? Math.min(1, (a.sayUntil - t) / 1.2) : 0;
+      a.el.style.opacity = v3.z < 1 ? Math.min(1, (a.sayUntil - t) / 1.2) : 0;
       a.el.style.left = ((v3.x + 1) / 2 * innerWidth) + "px"; a.el.style.top = ((1 - v3.y) / 2 * innerHeight) + "px";
     } else a.el.style.opacity = 0;
   }
