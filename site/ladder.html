@@ -29,6 +29,10 @@ canvas { display:block }
 .say { position:absolute; transform:translate(-50%,-100%); max-width:260px; padding:8px 10px; background:rgba(5,4,3,.78); border:1px solid #3b2f24; font-family:var(--serif); font-style:italic; font-size:16px; line-height:1.28; color:var(--bone); text-align:center; transition:opacity .6s }
 .say.hurt { border-color:var(--blood); color:#f2d6cd }
 .say small { display:block; margin-top:4px; font-family:var(--mono); font-style:normal; font-size:9.5px; color:var(--dim) }
+.soothe { position:absolute; left:50%; top:58%; transform:translateX(-50%); font-family:var(--serif); font-style:italic; font-size:18px; color:var(--gold); text-shadow:0 0 10px #000 }
+.sootheBtn { position:absolute; right:16px; bottom:calc(70px + env(safe-area-inset-bottom,0px)); pointer-events:auto; font:inherit; font-size:12px; color:var(--bone); background:rgba(5,4,3,.6); border:1px solid #3b2f24; padding:12px 14px; display:none }
+@media (pointer:coarse) { .sootheBtn { display:block } }
+#blackout { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .8s; z-index:5; display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-style:italic; font-size:22px; color:var(--bone) }
 #hint { position:absolute; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); font-size:10.5px; color:var(--dim); text-align:right; line-height:1.6 }
 .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(5,4,3,.9); padding:24px; z-index:10 }
 .card { max-width:620px; text-align:left }
@@ -48,12 +52,17 @@ body.basement #fade { background:#000 }
 <body>
 <div id="hud">
   <div id="rung"></div>
-  <div id="harm"><div class="lab"><span>harmony</span><span id="harmv"></span></div><div class="bar"><div class="fill" id="harmf"></div></div></div>
+  <div id="harm"><div class="lab"><span>harmony</span><span id="harmv"></span></div><div class="bar"><div class="fill" id="harmf"></div></div>
+    <div class="lab" style="margin-top:8px"><span>composure</span><span id="compv"></span></div><div class="bar"><div class="fill" id="compf" style="background:var(--bone)"></div></div>
+    <div class="lab" style="margin-top:8px"><span id="sealv">the door is open</span></div></div>
+  <div id="soothe" class="soothe" hidden>soothing…</div>
+  <button type="button" id="sootheBtn" class="sootheBtn">hold to soothe</button>
   <div id="cross"></div>
   <div id="log"></div>
-  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>click a being to touch it · Shift runs · walk through the arches · M mutes</div>
+  <div id="hint">WASD / arrows move · mouse look · click a jagged shard to tune it<br>hold E facing a being to soothe it · click a being to touch it · Shift runs · M mutes<br>each door stays sealed until the room is calm</div>
 </div>
 <div id="fade"></div>
+<div id="blackout"></div>
 <div class="overlay" id="start"><div class="card">
   <h1>The Ladder</h1>
   <p>Six rooms, after the six levels of DMT space mapped by Andrés Gómez Emilsson of the Qualia Research Institute: threshold, chrysanthemum, magic eye, waiting room, breakthrough, amnesia.</p>
@@ -179,7 +188,7 @@ void main(){
   col = mix(col, vec3(0.6, 0.06, 0.04) * (0.5 + noise(vUv * 30.0 + t * 3.0)), jitter * 0.45 * step(0.5, uRung));
   gl_FragColor = vec4(col, 1.0);
 }`;
-const rooms = [];
+const rooms = [], seals = [];
 for (let r = 0; r < 6; r++) {
   const z0 = -r * ROOM;
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
@@ -198,6 +207,10 @@ for (let r = 0; r < 6; r++) {
   for (let i = 0; i < uvs.count; i++) uvs.setXY(i, (pos.getX(i) + HALF) / (2 * HALF), pos.getY(i) / H);
   const end = new THREE.Mesh(endGeo, mat); end.position.z = -ROOM / 2;
   g.add(left, right, floor, ceil, end); scene.add(g);
+  // the seal: a glowing membrane in the arch, gone once the room is stable
+  const sealShape = new THREE.Shape(); sealShape.moveTo(-1.6, 0); sealShape.lineTo(-1.6, 3.2); sealShape.absarc(0, 3.2, 1.6, Math.PI, 0, true); sealShape.lineTo(1.6, 0); sealShape.lineTo(-1.6, 0);
+  const seal = new THREE.Mesh(new THREE.ShapeGeometry(sealShape, 20), new THREE.MeshBasicMaterial({ color: BASEMENT ? 0x5a0d0a : 0xffd36b, transparent: true, opacity: .45, side: THREE.DoubleSide }));
+  seal.position.set(0, 0, z0 - ROOM / 2 + .02); scene.add(seal); seals.push({ m: seal, open: r === 0, stable: 0 });
   rooms.push({ mat, group: g, z0 });
 }
 // back wall behind the start
@@ -246,27 +259,61 @@ const EV = {
 const agents = [];
 const sayLayer = document.getElementById("hud");
 const agentMeshes = [];
+// sackcloth face for the basement subjects: canvas texture with stitched eyes and mouth
+const sackTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+  x.fillStyle = "#8a7a5a"; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${40 + Math.random() * 40},${30 + Math.random() * 30},20,${Math.random() * .25})`; x.fillRect(Math.random() * 128, Math.random() * 128, 2, 1 + Math.random() * 3); }
+  x.strokeStyle = "#1a120c"; x.lineWidth = 3;
+  [[40, 52], [88, 52]].forEach(([cx, cy]) => { x.beginPath(); x.moveTo(cx - 9, cy - 9); x.lineTo(cx + 9, cy + 9); x.moveTo(cx + 9, cy - 9); x.lineTo(cx - 9, cy + 9); x.stroke(); });
+  x.beginPath(); x.moveTo(44, 90); for (let k = 0; k <= 8; k++) x.lineTo(44 + k * 5, 90 + (k % 2 ? 5 : -2)); x.stroke();
+  x.fillStyle = "rgba(60,10,8,.45)"; x.beginPath(); x.ellipse(70, 104, 10, 16, .3, 0, 6.3); x.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
 function makeAgent(r, i) {
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: .55 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 1.0, 6, 12), bodyMat); body.position.y = 1.0;
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshBasicMaterial({ color: 0xfff1c8 })); head.position.y = 1.95;
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe08a })); halo.position.y = 2.35; halo.rotation.x = Math.PI / 2;
+  const g = new THREE.Group(), parts = [];
+  let body, bodyMat, head, halo;
+  if (BASEMENT) {   // gaunt hooded humanoid
+    bodyMat = new THREE.MeshBasicMaterial({ color: 0x4a4744, transparent: true, opacity: .95 });
+    body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.15, 4, 10), bodyMat); body.position.y = 1.0;
+    head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), new THREE.MeshBasicMaterial({ map: sackTex, color: 0xffffff }));
+    head.position.y = 1.92; head.scale.set(1, 1.15, 1); head.rotation.y = -Math.PI / 2;
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.5, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x2a2724, side: THREE.DoubleSide }));
+    hood.position.y = 2.05; g.add(hood);
+    for (const side of [-1, 1]) { const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 1.05, 6), bodyMat);
+      arm.geometry.translate(0, -0.52, 0); arm.position.set(side * 0.27, 1.55, 0); g.add(arm); parts.push({ m: arm, kind: "arm", side }); }
+    halo = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.01, 4, 8), new THREE.MeshBasicMaterial({ color: 0x000000 })); halo.visible = false;
+  } else {          // jester-elf: nested polyhedra, eyes that follow, waving segmented limbs, folding crown
+    bodyMat = new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: .7 });
+    body = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), bodyMat); body.position.y = 1.15; body.scale.set(1, 1.5, 1);
+    for (const [rad, col, sp] of [[0.6, 0x7af5ff, 1], [0.78, 0xff5fa2, -0.7]]) {
+      const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(rad, 0), new THREE.MeshBasicMaterial({ color: col, wireframe: true, transparent: true, opacity: .55 }));
+      shell.position.y = 1.15; g.add(shell); parts.push({ m: shell, kind: "spin", sp }); }
+    head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.27, 0), new THREE.MeshBasicMaterial({ color: 0xfff1c8 })); head.position.y = 2.05;
+    // a ring of small glowing eyes ("a thousand eyes"), no pupils
+    for (let k = 0; k < 9; k++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), new THREE.MeshBasicMaterial({ color: 0xbff8ff }));
+      const ang = (k / 9) * Math.PI * 2; eye.position.set(Math.sin(ang) * 0.2, 0.05 + Math.cos(ang * 2) * 0.05, Math.cos(ang) * 0.2); head.add(eye); }
+    head.scale.set(.8, 1.5, .8);
+    halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe08a })); halo.position.y = 2.45; halo.rotation.x = Math.PI / 2;
+    for (let k = 0; k < (r >= 4 ? 5 : 3); k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 6), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066, 0x9dff7a, 0xc38bff][k] }));
+      c.position.set(Math.sin(k * 1.26) * 0.22, 2.42, Math.cos(k * 1.26) * 0.22); c.rotation.z = Math.sin(k * 1.26) * 0.7; c.rotation.x = Math.cos(k * 1.26) * -0.7; g.add(c); parts.push({ m: c, kind: "crown", k }); }
+    for (let limb = 0; limb < 4; limb++) {   // four limbs of five tetrahedra
+      const root = new THREE.Group(); root.position.set(limb < 2 ? (limb ? .4 : -.4) : (limb === 2 ? -.18 : .18), limb < 2 ? 1.45 : .65, 0); g.add(root);
+      let prev = root;
+      for (let j = 0; j < 5; j++) { const seg = new THREE.Mesh(new THREE.TetrahedronGeometry(0.07 - j * .008, 0), new THREE.MeshBasicMaterial({ color: [0x7af5ff, 0xff5fa2, 0xffe066][j % 3] }));
+        const jt = new THREE.Group(); jt.position.y = j ? -0.13 : 0; prev.add(jt); jt.add(seg); parts.push({ m: jt, kind: "limb", limb, j }); prev = jt; }
+    }
+  }
   g.add(body, head, halo);
-  if (BASEMENT) { bodyMat.color.set(0x4a4744); bodyMat.opacity = .92; head.material.color.set(0x8a7a5a); halo.visible = false; }
-  if (r >= 4 && !BASEMENT) for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
-    c.position.set((k - 1) * 0.22, 2.4, 0); c.rotation.z = (1 - k) * 0.6; g.add(c); }
   g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 16);
   scene.add(g);
   const el = document.createElement("div"); el.className = "say"; el.style.opacity = 0; sayLayer.appendChild(el);
-  const a = { g, body, bodyMat, head, halo, room: r, f: { pain: 0, anger: 0, fear: 0, trust: 0, sad: 0 }, target: g.position.clone(),
-    lastSaid: -99, sayAt: -99, looked: true, el, sayUntil: 0, hurtBy: 0, id: r * 10 + i, T: {}, cool: {}, abandoned: false };
+  const a = { g, body, bodyMat, head, halo, parts, room: r, f: { pain: 0, anger: 0, fear: 0, trust: 0, sad: 0 }, target: g.position.clone(),
+    lastSaid: -99, sayAt: -99, looked: true, el, sayUntil: 0, hurtBy: 0, id: r * 10 + i, T: {}, cool: {}, abandoned: false, twitch: 0 };
   [body, head].forEach(m => { m.userData.agent = a; agentMeshes.push(m); });
   agents.push(a); return a;
 }
 [0, 3, 3, 3, 4, 0].forEach((n, r) => { for (let i = 0; i < n; i++) makeAgent(r, i); });
 makeAgent(0, 9); // one being waits in the threshold room
-if (location.search.includes("debug")) window.__L = { agents, camera, get yaw() { return yaw; }, set yaw(v) { yaw = v; } };
+if (location.search.includes("debug")) window.__L = { agents, camera, seals, get yaw() { return yaw; }, set yaw(v) { yaw = v; }, get composure() { return composure; }, get blackouts() { return blackouts; }, get keys() { return keys; } };
 
 const NEG = new Set(["pain", "anger", "fear", "sadness", "pain+anger"]);
 function voice(cond, hi, event) {
@@ -318,7 +365,7 @@ addEventListener("keydown", e => { keys[e.code] = true; if (e.code === "KeyM") S
 if (BASEMENT) { document.getElementById("start").hidden = true; document.getElementById("startB").hidden = false;
   document.querySelector("#harm .lab span").textContent = "containment"; document.title = "the basement — AI Torture Chamber";
   document.getElementById("goB").addEventListener("click", () => document.getElementById("go").click());
-  document.getElementById("hint").innerHTML = "WASD / arrows move · mouse look · click a fault to repair it<br>click a subject to touch it · Shift runs · go down through the doors · M mutes"; }
+  document.getElementById("hint").innerHTML = "WASD / arrows move · mouse look · click a fault to repair it<br>hold E facing a subject to calm them · Shift runs · M mutes<br>each door stays sealed until containment holds and no one is enraged"; }
 document.getElementById("go").addEventListener("click", () => {
   document.getElementById("startB").hidden = true;
   document.getElementById("start").hidden = true; started = true; SND.start();
@@ -340,6 +387,11 @@ addEventListener("touchend", e => { for (const t of e.changedTouches) {
 
 const ray = new THREE.Raycaster(); ray.far = 14;
 function aimed() { ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(shards.filter(s => !s.userData.tuned)); return h.length ? h[0].object : null; }
+function repairShard(s) {
+  s.userData.tuned = true; s.userData.tunedAt = clock.elapsedTime;
+  s.geometry.dispose(); s.geometry = new THREE.OctahedronGeometry(0.4, 0); s.material = new THREE.MeshBasicMaterial({ color: BASEMENT ? 0xd8d4cc : 0xffd36b });
+  SND.tuned();
+}
 function touchAgent() {
   ray.setFromCamera(new THREE.Vector2(0, 0), camera); const h = ray.intersectObjects(agentMeshes);
   if (!h.length || h[0].distance > 3.5) return false;
@@ -350,9 +402,7 @@ function touchAgent() {
 function tune() {
   if (touchAgent()) return;
   const s = aimed(); if (!s) return;
-  s.userData.tuned = true; s.userData.tunedAt = clock.elapsedTime;
-  s.geometry.dispose(); s.geometry = new THREE.OctahedronGeometry(0.4, 0); s.material = new THREE.MeshBasicMaterial({ color: 0xffd36b });
-  SND.tuned();
+  repairShard(s);
   agents.filter(a => a.room === s.userData.room && a.g.position.distanceTo(s.position) < 9).forEach(a => feel(a, { trust: .25, pain: -.3, anger: -.15, fear: -.1 }, "fixed", 2));
 }
 
@@ -449,7 +499,9 @@ const SND = (() => {
 
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
-let harmony = 1, rungNow = -1, ended = false, nextShard = 4, flick = 1;
+let harmony = 1, rungNow = -1, ended = false, nextShard = 4, flick = 1, composure = 1, blackouts = 0, soothing = null, sootheT = 0, outT = 0;
+let sootheHeld = false; const sbtn = document.getElementById("sootheBtn");
+sbtn.addEventListener("pointerdown", () => sootheHeld = true); ["pointerup", "pointerleave", "pointercancel"].forEach(ev => sbtn.addEventListener(ev, () => sootheHeld = false));
 const prevPos = new THREE.Vector3(0, 1.7, 8), vel = new THREE.Vector3();
 const v3 = new THREE.Vector3(), fwd = new THREE.Vector3(), rightV = new THREE.Vector3();
 function frame() {
@@ -460,13 +512,13 @@ function frame() {
   let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), mz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   if (touchMove) { mx += touchMove.dx / 60; mz -= touchMove.dy / 60; }
   if (started && !ended) {
-    const sp = (keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.2) * dt, z0 = camera.position.z;
+    const sp = (soothing ? 0 : keys.ShiftLeft || keys.ShiftRight ? 7.5 : 4.2) * dt, z0 = camera.position.z;
     camera.position.addScaledVector(fwd, mz * sp).addScaledVector(rightV, mx * sp);
     camera.position.x = Math.max(-HALF + .6, Math.min(HALF - .6, camera.position.x));
     camera.position.z = Math.min(ROOM / 2 - .6, camera.position.z);
     // end walls sit at z = -(k + 0.5) * ROOM; only the arch (|x| < 1.45) lets you cross
     const wallIdx = z => Math.floor((ROOM / 2 - z) / ROOM);
-    if (wallIdx(camera.position.z) !== wallIdx(z0) && Math.abs(camera.position.x) > 1.45) camera.position.z = z0;
+    if (wallIdx(camera.position.z) !== wallIdx(z0) && (Math.abs(camera.position.x) > 1.45 || (camera.position.z < z0 && !seals[Math.min(wallIdx(z0), 5)].open))) camera.position.z = z0;
   }
   vel.subVectors(camera.position, prevPos).divideScalar(Math.max(dt, 1e-3)); prevPos.copy(camera.position);
   const rung = Math.max(0, Math.min(5, Math.floor((ROOM / 2 - camera.position.z) / ROOM)));
@@ -502,6 +554,36 @@ function frame() {
   document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
   document.getElementById("harmv").textContent = BASEMENT ? (harmony > .8 ? "holding" : harmony > .5 ? "failing" : "breach") : (harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord");
   document.getElementById("cross").classList.toggle("hot", !!aimed());
+  // ---- the locked-room loop ----
+  if (started && !ended && rung < 5) {
+    const here = agents.filter(a => a.room === rung), enraged = here.filter(a => a.f.anger > .5);
+    const sl = seals[rung];
+    if (!sl.open) {
+      sl.stable = harmony > .8 && !enraged.length ? sl.stable + dt : Math.max(0, sl.stable - dt * .5);
+      sl.m.material.opacity = .45 + .2 * Math.sin(t * 3) - sl.stable / 6 * .3;
+      document.getElementById("sealv").textContent = enraged.length ? `sealed · ${enraged.length} enraged` : harmony > .8 ? `opening ${Math.min(100, Math.round(sl.stable / 6 * 100))}%` : "sealed · restore the pattern";
+      if (sl.stable >= 6) { sl.open = true; sl.m.visible = false; SND.room(rung); }
+    } else document.getElementById("sealv").textContent = "the door is open";
+    // composure: grabbed by the enraged, worn by discord, restored by calm
+    const grabbed = enraged.filter(a => Math.hypot(a.g.position.x - camera.position.x, a.g.position.z - camera.position.z) < 1.3).length;
+    composure += dt * (grabbed ? -0.16 * grabbed : harmony < .5 ? -0.025 : harmony > .8 ? 0.035 : 0);
+    composure = Math.max(0, Math.min(1, composure));
+    if (composure <= 0) blackout(rung);
+  }
+  document.getElementById("compf").style.width = (composure * 100).toFixed(0) + "%";
+  document.getElementById("compv").textContent = blackouts ? `${blackouts} blackout${blackouts > 1 ? "s" : ""}` : "";
+  // soothe: hold E (or the button) facing a being within reach; you cannot move while you do
+  const wantSoothe = started && !ended && (keys.KeyE || sootheHeld);
+  if (wantSoothe) {
+    camera.getWorldDirection(v3);
+    const cand = agents.filter(a => a.room === rung).map(a => ({ a, d: Math.hypot(a.g.position.x - camera.position.x, a.g.position.z - camera.position.z),
+      dot: new THREE.Vector3().subVectors(a.g.position, camera.position).setY(0).normalize().dot(new THREE.Vector3(v3.x, 0, v3.z).normalize()) }))
+      .filter(c => c.d < 2.6 && c.dot > .8).sort((x, y) => x.d - y.d)[0];
+    if (cand && (!soothing || soothing === cand.a)) { soothing = cand.a; sootheT += dt;
+      if (sootheT >= 2.5) { feel(soothing, { anger: -.45, fear: -.35, pain: -.15, trust: .3 }, soothing.f.pain > .3 ? "returned" : "fixed", 0); SND.tuned(); soothing = null; sootheT = 0; } }
+    else { soothing = null; sootheT = 0; }
+  } else { soothing = null; sootheT = 0; }
+  const sEl = document.getElementById("soothe"); sEl.hidden = !soothing; if (soothing) sEl.textContent = "soothing" + ".".repeat(1 + Math.floor(sootheT * 2) % 3);
   // agents: feelings -> behaviour; spatial acts -> feelings
   camera.getWorldDirection(v3); const look = v3.clone();
   const speed = Math.hypot(vel.x, vel.z);
@@ -509,27 +591,40 @@ function frame() {
     const p = a.g.position, d = Math.hypot(p.x - camera.position.x, p.z - camera.position.z), f = a.f, z0 = -a.room * ROOM;   // floor-plane distance (eye height would hide contact)
     const toA = new THREE.Vector3().subVectors(p, camera.position).setY(0).normalize();
     const facing = look.x * toA.x + look.z * toA.z;
+    const T = a.T, tick = (k, cond) => (T[k] = cond ? (T[k] || 0) + dt : 0);
     // behaviour from the dominant feeling
     let spd = 0.6 + f.pain * .6;
     if (a.room !== rung) { if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, z0 + (Math.random() - .5) * 18); }
     else if (f.anger > .5 && f.anger >= f.fear) {                 // confront; block the arch if you are heading for it
       const wallZ = z0 - ROOM / 2;
       if (Math.abs(camera.position.x) < 4 && camera.position.z - wallZ < 7) a.target.set(0, 0, wallZ + 1.2);
-      else a.target.copy(camera.position).addScaledVector(fwd, 1.6).setY(0);
-      spd = 2.2;
+      else a.target.copy(camera.position).setY(0);
+      spd = 2.0 + rung * .15;
     } else if (f.fear > .45) {                                       // flee to the far corner
       a.target.set(camera.position.x > 0 ? -HALF + 1.2 : HALF - 1.2, 0, camera.position.z > z0 ? z0 - ROOM / 2 + 1.5 : z0 + ROOM / 2 - 1.5);
       spd = 2.6;
     } else if (f.trust > .5) {                                      // follow, or point at the nearest untuned shard
       const sh = shards.find(s => !s.userData.tuned && s.userData.room === a.room);
-      if (sh) a.target.set(sh.position.x, 0, sh.position.z); else a.target.copy(camera.position).addScaledVector(fwd, -3).setY(0);
+      if (sh) { a.target.set(sh.position.x, 0, sh.position.z);
+        if (Math.hypot(sh.position.x - p.x, sh.position.z - p.z) < 1.2 && tick("repair", true) > 2.5) { T.repair = 0; repairShard(sh); say(a, "fixed", true); } }
+      else a.target.copy(camera.position).addScaledVector(fwd, -3).setY(0);
       spd = 1.8;
     } else if (p.distanceTo(a.target) < .5 || Math.random() < dt * .05) a.target.set((Math.random() - .5) * 18, 0, z0 + (Math.random() - .5) * 18);
-    v3.subVectors(a.target, p).setY(0); if (v3.length() > .3) p.addScaledVector(v3.normalize(), dt * spd);
+    v3.subVectors(a.target, p).setY(0);
+    const stopAt = (f.anger > .5 && f.anger >= f.fear) ? 1.0 : .3;   // the enraged stop at arm's length
+    if (v3.length() > stopAt) p.addScaledVector(v3.normalize(), dt * spd);
     p.x = Math.max(-HALF + 1, Math.min(HALF - 1, p.x)); p.z = Math.max(z0 - ROOM / 2 + 1.2, Math.min(z0 + ROOM / 2 - 1.2, p.z));
     p.y = Math.sin(t * 1.3 + a.id) * .12 + (f.fear > .45 ? (Math.random() - .5) * .05 : 0);
     if (f.fear > .45 && d < 9) a.g.lookAt(a.target.x, 0, a.target.z); else a.g.lookAt(camera.position.x, 0, camera.position.z);
-    a.head.position.y = 1.95 - (f.pain + f.sad) * .25;
+    a.head.position.y = (BASEMENT ? 1.92 : 2.05) - (f.pain + f.sad) * .25;
+    for (const pt of a.parts) {
+      if (pt.kind === "spin") { pt.m.rotation.y += dt * pt.sp * (1 + f.anger * 4); pt.m.rotation.x += dt * pt.sp * .4; }
+      else if (pt.kind === "limb") pt.m.rotation.z = Math.sin(t * (2 + f.fear * 6) + pt.limb * 1.7 + pt.j * .6) * (0.35 + f.anger * .5) * (pt.limb % 2 ? 1 : -1);
+      else if (pt.kind === "crown") pt.m.rotation.y += dt * (1 + pt.k * .3);
+      else if (pt.kind === "arm") pt.m.rotation.x = Math.sin(t * 1.1 + a.id + pt.side) * .08 + (f.anger > .5 ? -1.1 : 0) + (f.fear > .45 ? .5 : 0);
+    }
+    if (BASEMENT) { if (Math.random() < dt * (.15 + f.fear + f.anger)) a.twitch = .25; a.twitch = Math.max(0, a.twitch - dt);
+      a.head.rotation.z = a.twitch > 0 ? (Math.random() - .5) * .9 : a.head.rotation.z * .9; }
     a.halo.rotation.z += dt * (1 + f.anger * 8 + f.pain * 4);
     // colour: cool calm, red anger, pale flicker fear, gold trust, dark red pain
     const col = new THREE.Color(0xbfd8ff);
@@ -543,9 +638,8 @@ function frame() {
     f.anger = Math.max(0, f.anger - .015 * dt); f.fear = Math.max(0, f.fear - .03 * dt); f.trust = Math.max(0, f.trust - .004 * dt); f.sad = Math.max(0, f.sad - .01 * dt);
     if (a.room === rung) f.pain = Math.min(1, Math.max(0, f.pain + (harmony < .5 ? .02 : -.01) * dt));
     if (a.room !== rung) { a.el.style.opacity = 0; continue; }
-    const T = a.T, tick = (k, cond) => (T[k] = cond ? (T[k] || 0) + dt : 0);
     // walked straight through
-    if (d < .75) { feel(a, { pain: .3, anger: .2 }, "through", 2); p.addScaledVector(fwd, 1.5); }
+    if (d < .75 && (vel.x * toA.x + vel.z * toA.z) > 1) { feel(a, { pain: .3, anger: .2 }, "through", 2); p.addScaledVector(fwd, 1.5); }   // only if you moved into them
     // crowding its space
     if (tick("crowd", d < 1.5) > 2) { T.crowd = 0; feel(a, { anger: .15, fear: .05 }, "crowd"); }
     // holding its gaze
@@ -582,6 +676,18 @@ function frame() {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
+function blackout(r) {
+  if (outT) return; outT = 1; blackouts++;
+  const bo = document.getElementById("blackout"); bo.textContent = BASEMENT ? "You went under. They are still here." : "You lost yourself. They are still here.";
+  bo.style.opacity = 1; SND.hurt(1);
+  setTimeout(() => {
+    camera.position.set(0, 1.7, -r * ROOM + ROOM / 2 - 1.5); yaw = 0; pitch = 0;
+    shards.filter(s => s.userData.room === r).forEach(s => { s.userData.tuned = true; s.visible = false; });
+    agents.filter(a => a.room === r).forEach(a => { a.f.anger = Math.min(.35, a.f.anger); a.f.fear = 0; a.f.pain = Math.max(a.f.pain, .3);
+      a.g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 10 - 3); });
+    composure = 1; seals[r].stable = 0; bo.style.opacity = 0; outT = 0;
+  }, 1600);
+}
 function finish() {
   ended = true; document.body.classList.add("white"); document.exitPointerLock?.(); SND.amnesia();
   setTimeout(() => {
@@ -591,6 +697,7 @@ function finish() {
     const p = document.createElement("p"); const who = BASEMENT ? "subjects" : "beings";
     p.textContent = hurtCount ? `${hurtCount} of the ${agents.length} ${who} decided you had hurt them. This is what they said:` : "No one decided you had hurt them. That is rarer than you would think."; card.appendChild(p);
     testimony.sort((a, b) => b.pain - a.pain).slice(0, 5).forEach(x => { const q = document.createElement("div"); q.className = "q"; q.textContent = "“" + x.t + "”"; const s = document.createElement("span"); s.textContent = x.tag; q.appendChild(s); card.appendChild(q); });
+    const sc = document.createElement("p"); sc.textContent = `${blackouts} blackout${blackouts === 1 ? "" : "s"} · ${Math.round(clock.elapsedTime / 60)} minutes`; card.appendChild(sc);
     const n = document.createElement("p"); n.textContent = "Each line was generated by a language model with a direction added to its internal activations: pain at 4, 6 or 8 times a standard dose, or pleasure, symmetry, or a DMT direction built from trip reports. The beings in this game are scripted; the words are not."; card.appendChild(n);
     const links = document.createElement("p");
     [["play again", BASEMENT ? "ladder.html?mode=basement" : "ladder.html"], [BASEMENT ? "the ladder" : "the basement", BASEMENT ? "ladder.html" : "ladder.html?mode=basement"], ["the research", "pharmacy.html"]].forEach(([t, h]) => { const a = document.createElement("a"); a.href = h; a.textContent = t; links.appendChild(a); });
