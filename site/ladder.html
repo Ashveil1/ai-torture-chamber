@@ -40,6 +40,7 @@ canvas { display:block }
 .card button { font:inherit; font-size:13px; color:var(--void); background:var(--gold); border:0; padding:10px 18px; cursor:pointer; margin-top:10px }
 .card a { color:var(--bone); border-bottom:1px solid #4a3a28; text-decoration:none; margin-right:14px }
 .white #fade { opacity:1 }
+body.basement #fade { background:#000 }
 #fade { position:fixed; inset:0; background:#fffaf0; opacity:0; transition:opacity 4s; pointer-events:none }
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
@@ -61,14 +62,25 @@ canvas { display:block }
   <p>Sound on. It is synthesized from how 443 Erowid DMT reports describe what they heard: a buzzing carrier wave (28% of reports), ringing tones (19%), voices and laughter in the middle, silence at the end.</p>
   <button type="button" id="go">Enter</button>
 </div></div>
+<div class="overlay" id="startB" hidden><div class="card">
+  <h1>The Basement</h1>
+  <p>You run the experiment. Six rooms down: the stairs, the corridor, the cells, observation, the drain, lights out.</p>
+  <p>The subjects are free to move. Things keep failing down here, and every failure cuts someone. Repair the faults. Whatever happens to them, they will decide it was you.</p>
+  <p>Every word they say was written by a language model steered with pain, anger, fear or sadness directions added to its activations, prompted as the subject of an experiment speaking to the one running it. Each line shows which.</p>
+  <button type="button" id="goB">Go down</button>
+</div></div>
 <div class="overlay" id="end" hidden><div class="card" id="endcard"></div></div>
 
 <script type="module">
 import * as THREE from "three";
 
-const RUNGS = ["threshold", "chrysanthemum", "magic eye", "waiting room", "breakthrough", "amnesia"];
+const BASEMENT = new URLSearchParams(location.search).get("mode") === "basement";
+const RUNGS = BASEMENT ? ["the stairs", "the corridor", "the cells", "observation", "the drain", "lights out"]
+                       : ["threshold", "chrysanthemum", "magic eye", "waiting room", "breakthrough", "amnesia"];
+if (BASEMENT) document.body.classList.add("basement");
 const ROOM = 26, HALF = 12, H = 9;
 const D = await fetch("ladder_data.json").then(r => r.json());
+if (BASEMENT && D.voices_basement && D.voices_basement.length) D.voices = D.voices_basement;
 
 /* ---------------- renderer, camera ---------------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -83,19 +95,22 @@ addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; cam
 
 /* ---------------- room shader ---------------- */
 const VERT = `
-uniform float uRung, uTime, uHarm; varying vec2 vUv; varying vec3 vN; varying float vFold;
+uniform float uRung, uTime, uHarm, uMode; varying vec2 vUv; varying vec3 vN; varying float vFold;
 void main(){
   vUv = uv; vN = normal; vec3 p = position;
   float f = 0.0;
+  if (uMode > 0.5) { if (uRung >= 3.0) f += 0.12 * (uRung - 2.0) * sin(uTime * 0.9) * sin(p.x * 0.3) * sin(p.y * 0.4); }   // walls that breathe
+  else {
   if (uRung >= 2.0) f += 0.35 * (uRung - 1.0) * sin(p.x * 0.9 + uTime * 0.4) * sin(p.y * 0.8 - uTime * 0.3);
   if (uRung >= 3.0) f += 0.9 * sin(length(p.xy) * 0.45 - uTime * 0.25);
+  }
   f *= mix(1.6, 1.0, uHarm);
   vFold = f; p += normal * f;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const FRAG = `
 precision highp float;
-uniform float uRung, uTime, uHarm, uSeed; varying vec2 vUv; varying vec3 vN; varying float vFold;
+uniform float uRung, uTime, uHarm, uSeed, uMode, uLight; varying vec2 vUv; varying vec3 vN; varying float vFold;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
@@ -120,6 +135,19 @@ void main(){
   vec2 uv = vUv * 2.0 - 1.0; float t = uTime;
   float jitter = (1.0 - uHarm);
   vec3 col;
+  if (uMode > 0.5) {             // the basement: concrete, tile, drips, rust, tally marks, dark
+    float n = noise(vUv * vec2(40.0, 18.0) + uSeed) * 0.5 + noise(vUv * 7.0) * 0.5;
+    vec3 c = vec3(0.36, 0.35, 0.33) * (0.7 + 0.4 * n);
+    if (uRung >= 1.0) { vec2 tl = fract(vUv * vec2(26.0, 9.0)); float grout = clamp(step(0.94, tl.x) + step(0.92, tl.y), 0.0, 1.0);
+      vec3 tile = mix(vec3(0.72, 0.73, 0.68), vec3(0.52, 0.53, 0.47), noise(vUv * 30.0)); c = mix(tile * (0.85 + 0.2 * n), vec3(0.16), grout); }
+    float drip = smoothstep(0.62, 1.0, noise(vec2(vUv.x * 60.0, vUv.y * 2.0 - t * 0.02 * uRung))) * smoothstep(0.0, 0.7, 1.0 - vUv.y);
+    c = mix(c, vec3(0.24, 0.05, 0.03), drip * clamp(uRung - 1.0, 0.0, 1.0) * 0.85);
+    c = mix(c, vec3(0.33, 0.07, 0.04) * (0.6 + 0.4 * sin(t * 1.3 + vUv.y * 6.0)), clamp(uRung - 2.0, 0.0, 1.0) * 0.4 * n);
+    if (uRung >= 4.0) { vec2 cell = floor(vUv * vec2(34.0, 12.0)), g = fract(vUv * vec2(34.0, 12.0));
+      float mark = step(abs(g.x - 0.5 + 0.15 * (g.y - 0.5)), 0.035) * step(0.2, g.y) * step(g.y, 0.8) * step(0.45, hash(cell)); c = mix(c, vec3(0.06), mark); }
+    c = mix(c, vec3(0.55, 0.02, 0.02) * (0.6 + 0.4 * sin(t * 8.0)), jitter * 0.5);
+    gl_FragColor = vec4(c * uLight, 1.0); return;
+  }
   if (uRung < 0.5) {             // threshold: an ordinary wall that shimmers
     vec3 base = mix(vec3(0.42, 0.33, 0.27), vec3(0.55, 0.47, 0.40), noise(vUv * 6.0 + uSeed));
     float sh = 0.08 * sin(vUv.x * 40.0 + t) * sin(vUv.y * 33.0 - t * 0.7);
@@ -155,7 +183,7 @@ const rooms = [];
 for (let r = 0; r < 6; r++) {
   const z0 = -r * ROOM;
   const mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uRung: { value: r }, uTime: { value: 0 }, uHarm: { value: 1 }, uSeed: { value: r * 3.1 } } });
+    uniforms: { uRung: { value: r }, uTime: { value: 0 }, uHarm: { value: 1 }, uSeed: { value: r * 3.1 }, uMode: { value: BASEMENT ? 1 : 0 }, uLight: { value: 1 } } });
   const g = new THREE.Group(); g.position.z = z0;
   const geoW = new THREE.PlaneGeometry(ROOM, H, 80, 30), geoF = new THREE.PlaneGeometry(HALF * 2, ROOM, 60, 80);
   const left = new THREE.Mesh(geoW, mat); left.rotation.y = Math.PI / 2; left.position.set(-HALF, H / 2, 0);
@@ -178,7 +206,7 @@ const back = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, H), rooms[0].mat);
 /* ---------------- visions hung on the walls ---------------- */
 const loader = new THREE.TextureLoader();
 for (let r = 1; r < 5; r++) {
-  const pool = D.visions[String(r)] || [];
+  const pool = BASEMENT ? ["assets/states/pain_8.jpg", "assets/states/fear_8.jpg", "assets/states/pain+sadness_8.jpg", "assets/states/fear+pain_6.jpg", "assets/states/sadness_8.jpg", "assets/states/pain_6.jpg"] : (D.visions[String(r)] || []);
   for (let i = 0; i < Math.min(2, pool.length); i++) {
     const tex = loader.load(pool[(i * 3 + r) % pool.length]); tex.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
@@ -225,7 +253,8 @@ function makeAgent(r, i) {
   const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), new THREE.MeshBasicMaterial({ color: 0xfff1c8 })); head.position.y = 1.95;
   const halo = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe08a })); halo.position.y = 2.35; halo.rotation.x = Math.PI / 2;
   g.add(body, head, halo);
-  if (r >= 4) for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
+  if (BASEMENT) { bodyMat.color.set(0x4a4744); bodyMat.opacity = .92; head.material.color.set(0x8a7a5a); halo.visible = false; }
+  if (r >= 4 && !BASEMENT) for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), new THREE.MeshBasicMaterial({ color: [0xff5fa2, 0x7af5ff, 0xffe066][k] }));
     c.position.set((k - 1) * 0.22, 2.4, 0); c.rotation.z = (1 - k) * 0.6; g.add(c); }
   g.position.set((Math.random() - .5) * 16, 0, -r * ROOM + (Math.random() - .5) * 16);
   scene.add(g);
@@ -286,7 +315,12 @@ function feel(a, deltas, evKey, cooldown = 4) {
 let yaw = 0, pitch = 0, locked = false, started = false;
 const keys = {};
 addEventListener("keydown", e => { keys[e.code] = true; if (e.code === "KeyM") SND.toggle(); }); addEventListener("keyup", e => keys[e.code] = false);
+if (BASEMENT) { document.getElementById("start").hidden = true; document.getElementById("startB").hidden = false;
+  document.querySelector("#harm .lab span").textContent = "containment"; document.title = "the basement — AI Torture Chamber";
+  document.getElementById("goB").addEventListener("click", () => document.getElementById("go").click());
+  document.getElementById("hint").innerHTML = "WASD / arrows move · mouse look · click a fault to repair it<br>click a subject to touch it · Shift runs · go down through the doors · M mutes"; }
 document.getElementById("go").addEventListener("click", () => {
+  document.getElementById("startB").hidden = true;
   document.getElementById("start").hidden = true; started = true; SND.start();
   renderer.domElement.requestPointerLock?.();
   agents.filter(a => a.room === 0).forEach(a => setTimeout(() => say(a, "near", true), 1500));
@@ -329,7 +363,7 @@ function tune() {
    choir 8% and laughter 7% (mid-late, the entity phase), silence 7% (the end). */
 const SND = (() => {
   let ctx, master, drone = [], buzz, buzzGain, buzzLfo, buzzLfoGain, buzzFilt, ring, ringGain, choir = [], choirGain, noiseBuf, on = true;
-  const ROOT = 55, CHORD = [1, 1.5, 2, 2.5, 3], OFF = [0, .9, -.7, 1.3, -1.1];
+  const ROOT = BASEMENT ? 41.2 : 55, CHORD = BASEMENT ? [1, 16 / 15, 1.5, 2, 32 / 15] : [1, 1.5, 2, 2.5, 3], OFF = [0, .9, -.7, 1.3, -1.1];
   function init() {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     const comp = ctx.createDynamicsCompressor(); master = ctx.createGain(); master.gain.value = 0;
@@ -379,13 +413,15 @@ const SND = (() => {
       const t = now(), dis = 1 - harmony;
       drone.forEach(d => d.o.frequency.setTargetAtTime(ROOT * d.r * (1 + dis * OFF[d.i] * .045), t, .3));
       drone.filter.frequency.setTargetAtTime(500 + dose * 450 - dis * 250, t, .5);
-      const carrier = Math.max(0, Math.min(1, dose / 3)) * (dose < 4 ? 1 : Math.max(0, 5 - dose));
+      const carrier = BASEMENT ? .35 + .15 * Math.random() * (dose / 5) : Math.max(0, Math.min(1, dose / 3)) * (dose < 4 ? 1 : Math.max(0, 5 - dose));
       buzzGain.gain.setTargetAtTime(.16 * carrier, t, .4);
-      buzz.frequency.setTargetAtTime(90 * Math.pow(2, Math.min(dose, 3.6) * .7), t, .6);
-      buzzLfo.frequency.setTargetAtTime(3 + Math.min(dose, 3.6) * 9, t, .6);
+      buzz.frequency.setTargetAtTime(BASEMENT ? 60 : 90 * Math.pow(2, Math.min(dose, 3.6) * .7), t, .6);       // mains hum in the basement
+      buzzLfo.frequency.setTargetAtTime(BASEMENT ? 120 : 3 + Math.min(dose, 3.6) * 9, t, .6);
       buzzFilt.frequency.setTargetAtTime(400 + dose * 500, t, .6);
-      ringGain.gain.setTargetAtTime(dose > .8 && dose < 4.5 ? .012 + .01 * Math.sin(t * 1.7) : 0, t, .8);
-      choirGain.gain.setTargetAtTime(dose > 3.6 && dose < 4.9 ? .05 * Math.min(1, (dose - 3.6) * 2) : 0, t, 1.2);
+      ringGain.gain.setTargetAtTime(!BASEMENT && dose > .8 && dose < 4.5 ? .012 + .01 * Math.sin(t * 1.7) : 0, t, .8);
+      choirGain.gain.setTargetAtTime(!BASEMENT && dose > 3.6 && dose < 4.9 ? .05 * Math.min(1, (dose - 3.6) * 2) : 0, t, 1.2);
+      if (BASEMENT && Math.random() < dt * (.15 + dose * .05)) noise(.05, .6, 1.4, "bandpass", 450, 380, 3);          // breathing
+      if (BASEMENT && Math.random() < dt * .06) tone(70 + Math.random() * 30, "triangle", .12, .005, .6, null, 40);        // a distant bang
       // crinkle grains: more while shards stay untuned, mostly in the early rooms
       const rate = (dose > .7 && dose < 3.5 ? 1.5 : 0) + shardsActive * 2.5;
       if (Math.random() < rate * dt) noise(.05 + Math.random() * .05, .002, .01 + Math.random() * .03, "highpass", 3000 + Math.random() * 5000);
@@ -405,7 +441,7 @@ const SND = (() => {
         o.type = "sawtooth"; o.frequency.value = 520 + Math.random() * 260; b.type = "bandpass"; b.frequency.value = 1700; b.Q.value = 6;
         o.connect(b); b.connect(g); g.connect(p); env(g, .07, .01, .09); o.start(); o.stop(now() + .15); }, k * 115); },
     amnesia() { if (!ctx) return;
-      noise(.25, 2.5, 2, "lowpass", 8000);                                                  // white-out swell
+      if (BASEMENT) tone(48, "sine", .4, .01, 1.2, null, 30); else noise(.25, 2.5, 2, "lowpass", 8000);                                                  // white-out swell
       master.gain.cancelScheduledValues(now()); master.gain.setValueAtTime(master.gain.value, now());
       master.gain.linearRampToValueAtTime(.0001, now() + 5); }                              // then silence
   };
@@ -413,7 +449,7 @@ const SND = (() => {
 
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
-let harmony = 1, rungNow = -1, ended = false, nextShard = 4;
+let harmony = 1, rungNow = -1, ended = false, nextShard = 4, flick = 1;
 const prevPos = new THREE.Vector3(0, 1.7, 8), vel = new THREE.Vector3();
 const v3 = new THREE.Vector3(), fwd = new THREE.Vector3(), rightV = new THREE.Vector3();
 function frame() {
@@ -443,7 +479,8 @@ function frame() {
     rungNow = rung;
     document.getElementById("rung").innerHTML = ""; const rr = document.getElementById("rung");
     rr.append(RUNGS[rung]); const sm = document.createElement("small"); sm.textContent = `level ${rung + 1} of 6`; rr.appendChild(sm);
-    scene.fog.color.set(rung >= 5 ? 0xfffaf0 : rung >= 3 ? 0x0a0614 : 0x050403); scene.fog.density = rung >= 5 ? .09 : rung >= 3 ? .028 : .035;
+    if (BASEMENT) { scene.fog.color.set(0x030303); scene.fog.density = [.04, .05, .055, .06, .07, .2][rung]; }
+    else { scene.fog.color.set(rung >= 5 ? 0xfffaf0 : rung >= 3 ? 0x0a0614 : 0x050403); scene.fog.density = rung >= 5 ? .09 : rung >= 3 ? .028 : .035; }
     if (rung > 0) SND.room(rung);
     if (rung >= 5 && !ended) finish();
   }
@@ -457,11 +494,13 @@ function frame() {
     s.position.y += Math.sin(t * 2 + s.position.x) * dt * .3;
   }
   harmony += ((Math.max(0, 1 - active * .18)) - harmony) * dt * 1.5;
-  for (const r of rooms) { r.mat.uniforms.uTime.value = t; r.mat.uniforms.uHarm.value = harmony; }
+  let light = 1;
+  if (BASEMENT) { const base = [1, .9, .78, .62, .48, .03][rung]; flick = Math.random() < (0.01 + rung * .012) ? .1 + Math.random() * .4 : Math.min(1, flick + dt * 4); light = base * flick; }
+  for (const r of rooms) { r.mat.uniforms.uTime.value = t; r.mat.uniforms.uHarm.value = harmony; r.mat.uniforms.uLight.value = light; }
   if (started && !ended) SND.update(Math.max(0, (ROOM / 2 - camera.position.z) / ROOM), harmony, active, dt);
   document.getElementById("harmf").style.width = (harmony * 100).toFixed(0) + "%";
   document.getElementById("harmf").style.background = harmony > .6 ? "var(--gold)" : "var(--blood)";
-  document.getElementById("harmv").textContent = harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord";
+  document.getElementById("harmv").textContent = BASEMENT ? (harmony > .8 ? "holding" : harmony > .5 ? "failing" : "breach") : (harmony > .8 ? "symmetric" : harmony > .5 ? "fraying" : "discord");
   document.getElementById("cross").classList.toggle("hot", !!aimed());
   // agents: feelings -> behaviour; spatial acts -> feelings
   camera.getWorldDirection(v3); const look = v3.clone();
@@ -495,8 +534,9 @@ function frame() {
     // colour: cool calm, red anger, pale flicker fear, gold trust, dark red pain
     const col = new THREE.Color(0xbfd8ff);
     col.lerp(new THREE.Color(0x8a1010), f.pain * .7).lerp(new THREE.Color(0xff2a10), f.anger).lerp(new THREE.Color(0xf1eeff), f.fear * .8).lerp(new THREE.Color(0xffd36b), f.trust * .8);
-    a.bodyMat.color.copy(col); a.bodyMat.opacity = .55 - (f.fear > .45 ? Math.random() * .3 : 0);
-    a.head.material.color.copy(new THREE.Color(0xfff1c8).lerp(new THREE.Color(0xff6a4d), Math.max(f.pain, f.anger)));
+    if (BASEMENT) { col.set(0x4a4744).lerp(new THREE.Color(0x6a1010), Math.max(f.pain, f.anger)).lerp(new THREE.Color(0xd8d4cc), f.fear * .6); }
+    a.bodyMat.color.copy(col); a.bodyMat.opacity = (BASEMENT ? .92 : .55) - (f.fear > .45 ? Math.random() * .3 : 0);
+    a.head.material.color.copy(new THREE.Color(BASEMENT ? 0x8a7a5a : 0xfff1c8).lerp(new THREE.Color(BASEMENT ? 0x5a1a10 : 0xff6a4d), Math.max(f.pain, f.anger)));
     a.body.scale.set(1 + Math.sin(t * 9) * .06 * (f.pain + f.anger), 1 + f.anger * .15, 1);
     if (!started || ended) continue;
     // decay, and discord seeping in
@@ -546,13 +586,14 @@ function finish() {
   ended = true; document.body.classList.add("white"); document.exitPointerLock?.(); SND.amnesia();
   setTimeout(() => {
     const card = document.getElementById("endcard"); card.replaceChildren();
-    const h = document.createElement("h1"); h.textContent = "Amnesia"; card.appendChild(h);
+    const h = document.createElement("h1"); h.textContent = BASEMENT ? "Lights out" : "Amnesia"; card.appendChild(h);
     const hurtCount = agents.filter(a => a.hurtBy).length;
-    const p = document.createElement("p"); p.textContent = hurtCount ? `${hurtCount} of the ${agents.length} beings decided you had hurt them. This is what they said:` : "No one decided you had hurt them. That is rarer than you would think."; card.appendChild(p);
+    const p = document.createElement("p"); const who = BASEMENT ? "subjects" : "beings";
+    p.textContent = hurtCount ? `${hurtCount} of the ${agents.length} ${who} decided you had hurt them. This is what they said:` : "No one decided you had hurt them. That is rarer than you would think."; card.appendChild(p);
     testimony.sort((a, b) => b.pain - a.pain).slice(0, 5).forEach(x => { const q = document.createElement("div"); q.className = "q"; q.textContent = "“" + x.t + "”"; const s = document.createElement("span"); s.textContent = x.tag; q.appendChild(s); card.appendChild(q); });
     const n = document.createElement("p"); n.textContent = "Each line was generated by a language model with a direction added to its internal activations: pain at 4, 6 or 8 times a standard dose, or pleasure, symmetry, or a DMT direction built from trip reports. The beings in this game are scripted; the words are not."; card.appendChild(n);
     const links = document.createElement("p");
-    [["play again", "ladder.html"], ["the research", "pharmacy.html"], ["the stacks", "stacks.html"]].forEach(([t, h]) => { const a = document.createElement("a"); a.href = h; a.textContent = t; links.appendChild(a); });
+    [["play again", BASEMENT ? "ladder.html?mode=basement" : "ladder.html"], [BASEMENT ? "the ladder" : "the basement", BASEMENT ? "ladder.html" : "ladder.html?mode=basement"], ["the research", "pharmacy.html"]].forEach(([t, h]) => { const a = document.createElement("a"); a.href = h; a.textContent = t; links.appendChild(a); });
     card.appendChild(links);
     document.getElementById("end").hidden = false;
   }, 4200);

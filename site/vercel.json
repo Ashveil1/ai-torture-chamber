@@ -20,6 +20,11 @@
       "source": "/egg",
       "destination": "/egg.html",
       "permanent": false
+    },
+    {
+      "source": "/basement",
+      "destination": "/ladder.html?mode=basement",
+      "permanent": false
     }
   ]
 }
