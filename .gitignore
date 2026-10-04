@@ -8,3 +8,8 @@ SESSION_RESUME.md
 .venv/
 runs/impossible_states/
 .DS_Store
+
+# visitors' choices and words (scripts/export_events.py): never in the public repo
+data/human/
+# private Erowid corpus (written permission, never republished): see exp56 sources
+data/exp56/erowid_dmt/
