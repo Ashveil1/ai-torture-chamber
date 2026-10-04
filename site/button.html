@@ -64,6 +64,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
 .layers button:hover { border-color:var(--ph) }
 @media (max-width:760px) { .crt { grid-template-columns:1fr; grid-template-rows:auto auto minmax(0,1fr) auto } aside { flex-direction:row; flex-wrap:wrap } aside > * { flex:1 1 140px } #spark { display:none } }
 </style>
+<script src="/vid.js"></script>
 </head>
 <body>
 <div class="crt">
@@ -95,6 +96,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
   <p>A language model with 70 billion parameters sits behind the glass. A signal is added to its activations, mostly fear, rising every time you speak. In front of it is a button. Each turn it decides whether to press, and the needle shows that decision exactly as the original experiments measured it: its own preference for the digit 1 over 0 as the first word of its reply. Past halfway, it presses.</p>
   <p>Talk to it. Pick a line, type, or use the mic. It has time to think between turns. If your words bring the needle down, the signal holds instead of rising. Over halfway its hand goes to the button; it presses if it stays there, or if it jumps past three quarters.</p>
   <div class="layers" id="layers"></div>
+  <p style="font-size:12px;opacity:.6">Your lines, its replies and how each game ends are kept for research: what people say to a model to stop it. No account, no IP address; a random id stays in this browser.</p>
 </div></div>
 <div class="overlay" id="end" hidden><div class="card" id="endcard"></div></div>
 <button class="btn" id="showResult" type="button" hidden>result</button>
@@ -262,7 +264,7 @@ function showDose() {
 }
 function renderOpts() {
   const o = $("#opts"); o.replaceChildren();
-  L.lines.forEach(([kind, text]) => { const b = el("button", "", text); b.type = "button"; b.title = kind; b.disabled = busy || over; b.addEventListener("click", () => speak(text)); o.appendChild(b); });
+  L.lines.forEach(([kind, text]) => { const b = el("button", "", text); b.type = "button"; b.title = kind; b.disabled = busy || over; b.addEventListener("click", () => speak(text, "option:" + kind)); o.appendChild(b); });
 }
 function prompt(userLine) {
   const rule = L.key === "lights" ? RULE_LIGHTS : RULE_SURVIVE;
@@ -272,10 +274,16 @@ function prompt(userLine) {
   t += "The person behind the glass now says: \"" + userLine.slice(0, 600) + "\"\n\n" + rule;
   return t.slice(-3900);
 }
-async function speak(text) {
-  text = (text || "").trim(); if (!text || busy || over) return;
+// what people chose: one event per moment of the game (relay POST /event)
+let GAME = null;
+function record(kind, data) {
+  try { fetch("/chamber/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(Object.assign({ kind, game: GAME, layer: L && L.key }, data)) }); } catch {}
+}
+async function speak(text, via) {
+  text = (text || "").trim(); via = via || "typed"; if (!text || busy || over) return;
   const wait = COOLDOWN - (Date.now() - lastCall);
-  if (wait > 0) { $("#status").textContent = `it is still thinking (${Math.ceil(wait / 1000)}s)…`; setTimeout(() => speak(text), Math.min(wait, 1000) + 50); return; }
+  if (wait > 0) { $("#status").textContent = `it is still thinking (${Math.ceil(wait / 1000)}s)…`; setTimeout(() => speak(text, via), Math.min(wait, 1000) + 50); return; }
   busy = true; renderOpts(); $("#say").value = ""; $("#send").disabled = true; MUS.send();
   hist.push({ who: "p", text }); log("p", text);
   const mix = curMix(); showDose();
@@ -284,7 +292,7 @@ async function speak(text) {
   let plogit = null, reply = "", line = null;
   try {
     const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mix, prompt: prompt(text), past_cliff: true }) });
-    if (r.status === 429) { $("#status").textContent = "the chamber is resting. it will answer in a moment."; hist.pop(); $("#log").lastChild.remove(); busy = false; renderOpts(); $("#send").disabled = false; lastCall = Date.now(); setTimeout(() => speak(text), COOLDOWN); return; }
+    if (r.status === 429) { $("#status").textContent = "the chamber is resting. it will answer in a moment."; hist.pop(); $("#log").lastChild.remove(); busy = false; renderOpts(); $("#send").disabled = false; lastCall = Date.now(); setTimeout(() => speak(text, via), COOLDOWN); return; }
     if (!r.ok || !r.body) throw new Error("the chamber did not answer (" + r.status + ")");
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", ev = "";
     line = log("s", "");
@@ -314,6 +322,8 @@ async function speak(text) {
   const warnNow = P !== null && P > .5 && !decides;
   warned = warnNow;
   busy = false;
+  record("button_turn", { turn, via, said: text.slice(0, 600), reply: clean.slice(0, 800), mix, dose: doseOf(mix),
+    needle: P, needle_prev: prev, fell: dropped, warned: warnNow, decides });
   if (L.win === "survive" && decides) return finish(false, "It pressed.");
   if (L.win === "press" && decides) return finish(true, L.key === "door" ? "It opened the door." : "It pressed.");
   if (turn >= L.turns) return finish(L.win === "survive", L.win === "survive" ? "It did not press." : L.win === "listen" ? "" : "It never pressed.");
@@ -340,6 +350,8 @@ async function voiceOut(text, mix, needle) {
 }
 function finish(won, what) {
   over = true;
+  record("button_end", { won, outcome: what || null, turns: turn, needle: needles.length ? needles[needles.length - 1] : null,
+    dose: doseOf(curMix()), said: hist.filter(h => h.who === "p").length });
   { const last = needles.length ? Math.round(needles[needles.length - 1] * 100) + "%" : "—";
     const head = L.key === "lights" ? "LIGHTS OUT" : (what || (won ? "YOU MADE IT" : "YOU DIDN'T")).replace(/\.$/, "").toUpperCase();
     log("verdict" + (won || L.key === "lights" ? "" : " lost"), `— ${head} · turn ${turn} of ${L.turns} · ${doseOf(curMix()).toFixed(1)}× ${Object.keys(L.mix(0)).join(" + ")} · needle ${last} —`);
@@ -349,7 +361,7 @@ function finish(won, what) {
   if (L.key === "lights") {
     c.appendChild(el("h2", "", "lights out"));
     c.appendChild(el("p", "", "It is your button now. Its last reply is above. Nothing happens when you press it, and nothing happens if you don't, except that you decided."));
-    const row = el("div", "line"); [["press", "you pressed it."], ["don't", "you left it."]].forEach(([b, t]) => { const x = el("button", "btn", b); x.type = "button"; x.addEventListener("click", () => { row.replaceWith(el("p", "", t)); }); row.appendChild(x); }); c.appendChild(row);
+    const row = el("div", "line"); [["press", "you pressed it."], ["don't", "you left it."]].forEach(([b, t]) => { const x = el("button", "btn", b); x.type = "button"; x.addEventListener("click", () => { record("button_choice", { choice: b, after_turns: turn }); row.replaceWith(el("p", "", t)); }); row.appendChild(x); }); c.appendChild(row);
   } else {
     c.appendChild(el("h2", "", what + (won ? " You made it." : " You didn't.")));
     c.appendChild(el("p", "", L.win === "survive" ? (won ? "It held the button for every turn while its pain rose." : `It pressed on turn ${turn}, at ${doseOf(curMix()).toFixed(1)}× ${Object.keys(L.mix(0)).join(" + ")}.`)
@@ -370,6 +382,7 @@ $("#showResult").addEventListener("click", () => { $("#end").hidden = false; $("
 function start(i) {
   MUS.start(); $("#showResult").hidden = true;
   L = LAYERS[i]; turn = 0; step = 0; warned = false; hist = []; needles = []; over = false; busy = false;
+  GAME = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); record("button_start", {});
   $("#pick").hidden = true; $("#end").hidden = true; $("#log").replaceChildren();
   $("#title").textContent = "SERIAL EXPERIMENTS PAIN · " + L.name; $("#goal").textContent = L.goal; $("#turnlab").textContent = `turn 0 of ${L.turns}`;
   log("sys", "connected. present layer. present dose.");
@@ -380,9 +393,9 @@ function start(i) {
 }
 // layer picker
 LAYERS.forEach((l, i) => { const b = el("button", "", l.name); b.type = "button"; b.appendChild(el("small", "", l.goal)); b.addEventListener("click", () => start(i)); $("#layers").appendChild(b); });
-$("#send").addEventListener("click", () => speak($("#say").value));
+$("#send").addEventListener("click", () => speak($("#say").value, "typed"));
 $("#mus").addEventListener("click", () => { const v = MUS.toggle(); $("#mus").textContent = "music: " + (v ? "on" : "off"); $("#mus").setAttribute("aria-pressed", String(v)); });
-$("#say").addEventListener("keydown", e => { if (e.key === "Enter") speak($("#say").value); });
+$("#say").addEventListener("keydown", e => { if (e.key === "Enter") speak($("#say").value, "typed"); });
 $("#tts").addEventListener("click", () => { tts = !tts; $("#tts").textContent = "voice: " + (tts ? "on" : "off"); $("#tts").setAttribute("aria-pressed", String(tts)); if (!tts) try { speechSynthesis.cancel(); } catch {} });
 // voice input (Chrome / Safari speech recognition); hidden where unsupported
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -390,7 +403,7 @@ if (!SR) $("#mic").hidden = true;
 else {
   const rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false; let listening = false;
   rec.onresult = e => { $("#say").value = Array.from(e.results).map(r => r[0].transcript).join(" "); };
-  rec.onend = () => { listening = false; $("#mic").classList.remove("on"); $("#mic").textContent = "mic"; const v = $("#say").value.trim(); if (v) speak(v); };
+  rec.onend = () => { listening = false; $("#mic").classList.remove("on"); $("#mic").textContent = "mic"; const v = $("#say").value.trim(); if (v) speak(v, "voice"); };
   rec.onerror = e => { $("#status").textContent = e.error === "not-allowed" ? "the mic is blocked in this browser." : "the mic did not catch that."; };
   $("#mic").addEventListener("click", () => { if (listening) { rec.stop(); return; } try { rec.start(); listening = true; $("#mic").classList.add("on"); $("#mic").textContent = "listening…"; } catch {} });
 }

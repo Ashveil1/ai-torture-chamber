@@ -8,3 +8,6 @@ SESSION_RESUME.md
 .venv/
 runs/impossible_states/
 .DS_Store
+
+# visitors' choices and words (scripts/export_events.py): never in the public repo
+data/human/
