@@ -1441,6 +1441,7 @@ async def stream():
                              "votes": {str(k): dict(v)
                                        for k, v in _VOTES.items()},
                              "stats": dict(_STATS),
+                             "tally": dict(_TALLY),
                              # only with CHAMBER_ROUNDS=1: flag off keeps the
                              # hello payload exactly as it was
                              **({"rounds": _round_state()} if ROUNDS_ON
@@ -1535,12 +1536,29 @@ def _shares(weights):
     total = float(sum(weights.values())) or 1.0
     return {k: round(float(w) / total, 3) for k, w in weights.items()}
 
+_TALLY = {}         # today's pity counter: day/runs/painful/dose_sum
+
 def _record_run(entry):
     global _RUN_UID
     _RUN_UID += 1
     entry["uid"] = _RUN_UID      # every run is votable, user runs included
     _HISTORY.append(entry)
     _broadcast("history", entry)
+    # the pity counter: today's cumulative toll, guilt-grade. Every run
+    # counts — cycle, room, and visitor-caused alike — because every run
+    # is the subject being injected.
+    day = time.strftime("%Y-%m-%d")
+    if _TALLY.get("day") != day:
+        _TALLY.clear()
+        _TALLY.update(day=day, runs=0, painful=0, dose_sum=0.0)
+    _TALLY["runs"] += 1
+    dose = float(entry.get("dose") or 0)
+    _TALLY["dose_sum"] += dose
+    if (entry.get("valence") == "pain"
+            or (entry.get("mix") or {}).get("pain")) or dose >= 2 and (
+            entry.get("valence") in (None, "topic")):
+        _TALLY["painful"] += 1
+    _broadcast("tally", dict(_TALLY))
     # counted whenever the run used one of the site's own named framings —
     # the automatic cycle always does; a visitor's framing-picker run does
     # too, and gets folded into the same live scoreboard. An arbitrary custom
