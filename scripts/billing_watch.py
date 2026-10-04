@@ -25,6 +25,9 @@ MIN_HOURS_LEFT = float(os.environ.get("WATCH_MIN_HOURS_LEFT", "24"))  # at curre
 MAX_POD_HOURS = float(os.environ.get("WATCH_MAX_POD_HOURS", "4"))     # a running pod older than this
 MIN_OPENROUTER = float(os.environ.get("WATCH_MIN_OPENROUTER", "5"))   # $
 MIN_ELEVEN_FRAC = float(os.environ.get("WATCH_MIN_ELEVEN_FRAC", "0.1"))  # quota left
+# hosting budget (user, 2026-10-04): web hosting under ~$60/day; experiments
+# are separate and allowed to add cost, so this only fires with no pod running
+MAX_HOSTING_HR = float(os.environ.get("WATCH_MAX_HOSTING_HR", "2.5"))     # $/hr
 SITES = ["https://wirehead.agency/", "https://wirehead.agency/live.html",
          "https://wirehead.agency/button.html", "https://wirehead.agency/pharmacy.html",
          "https://wirehead.agency/pharmacy_data.json",
@@ -68,6 +71,17 @@ def runpod():
     _, body = get("https://rest.runpod.io/v1/pods", auth)
     pods = json.loads(body)
     now = time.time()
+    running = [p for p in pods if isinstance(p, dict) and p.get("desiredStatus") == "RUNNING"] \
+        if isinstance(pods, list) else []
+    if not running and rate > MAX_HOSTING_HR:
+        alerts.append(f"hosting spend ${rate:.2f}/hr (≈${rate * 24:.0f}/day) with no experiment "
+                      f"pod running — over the ${MAX_HOSTING_HR:.2f}/hr (${MAX_HOSTING_HR * 24:.0f}/day) "
+                      "hosting budget; check the 70B endpoint's workers")
+    stored = sum(p.get("volumeInGb") or 0 for p in pods if isinstance(p, dict)
+                 and p.get("desiredStatus") != "RUNNING")
+    if stored > 500:
+        alerts.append(f"{stored} GB of stopped-pod volumes billing storage "
+                      f"(≈${stored * 0.2 / 30:.0f}/day) — terminate pods whose results are committed")
     for p in pods if isinstance(pods, list) else []:
         name, status = p.get("name", p.get("id")), p.get("desiredStatus")
         cost = float(p.get("costPerHr") or 0)
