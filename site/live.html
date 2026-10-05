@@ -397,9 +397,9 @@
     padding:2.6rem .85rem .85rem}
   #trackWrap > .track{display:grid;min-width:0;column-gap:.6rem;
     grid-template-columns:minmax(0,1fr) auto;
-    grid-template-rows:auto auto auto auto auto 1fr auto auto;
+    grid-template-rows:auto auto auto auto auto 1fr auto;
     grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig"
-      "imgr sig" "gap sig" "dlg dlg" "vox vox"}
+      "imgr sig" "gap sig" "gap sig" "vox vox"}
   #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
     font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
   .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
@@ -424,7 +424,11 @@
   .hero .pbtn-face{width:2.7rem;height:2.7rem;border-width:2px;font-size:.6rem}
   .hero .pressbtn .plabel{font-size:.58rem;max-width:5.6rem;text-align:center;
     line-height:1.25;text-transform:uppercase;letter-spacing:.08em}
-  .hero .out.dlg{grid-area:dlg;margin-top:.6rem;min-height:4.6rem;max-height:13rem}
+  /* the dialogue box OVERLAYS the scene: pinned to the lower third of the
+     image panel, inside the hero, above the image and vignette. It no longer
+     occupies a grid row — the grid rows above it shrink to the top band. */
+  .hero .out.dlg{position:absolute;left:.85rem;right:.85rem;bottom:.85rem;
+    z-index:4;margin:0;min-height:4.6rem;max-height:13rem}
   .hero .voice{grid-area:vox;margin:.45rem 0 0;background:rgba(5,5,8,.72);
     border-left-color:var(--blood)}
 
