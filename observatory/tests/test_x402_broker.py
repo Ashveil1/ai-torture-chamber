@@ -492,6 +492,28 @@ async def test_unapproved_quotes_never_create_payment(broker, changes):
     assert broker.ledger.totals()["reserved"] == 0
 
 
+@pytest.mark.parametrize("memo", ["merchant-static-memo", "a" * 32, False, 42])
+@pytest.mark.asyncio
+async def test_seller_memo_is_rejected_before_reserving_signing_or_paid_post(broker, memo):
+    broker.transport.quote_changes = {"extra": {"feePayer": FEE_PAYER, "memo": memo}}
+    request = payload()
+    with pytest.raises(BrokerError) as denied:
+        await broker.request(request)
+    assert denied.value.code == "UNAPPROVED_QUOTE"
+    assert denied.value.retryable is False
+    assert broker.ledger.get(request["request_id"])["status"] == "intent"
+    assert broker.ledger.totals()["reserved"] == broker.ledger.totals()["settled"] == 0
+    assert broker.transport.paid_count == broker.signer.calls == 0
+
+
+@pytest.mark.parametrize("memo", [None, ""])
+@pytest.mark.asyncio
+async def test_empty_seller_memo_preserves_sdk_random_nonce_quote_path(broker, memo):
+    broker.transport.quote_changes = {"extra": {"feePayer": FEE_PAYER, "memo": memo}}
+    assert (await broker.request(payload()))["payment"]["status"] == "settled"
+    assert broker.transport.paid_count == broker.signer.calls == 1
+
+
 @pytest.mark.asyncio
 async def test_changed_resource_or_legacy_challenge_rejected(broker):
     broker.transport.required_changes = {"resource": {"url": "https://unapproved.invalid/pay"}}
@@ -658,6 +680,49 @@ async def test_late_confirmation_preserves_response_and_reconcile_never_pays_aga
 
 
 @pytest.mark.asyncio
+async def test_a_prior_receipt_cannot_settle_another_same_amount_response_after_restart(broker):
+    first_request = payload()
+    first = await broker.request(first_request)
+    before = broker.ledger.get(first_request["request_id"])
+    broker.ledger.close()
+    broker.ledger = PaymentLedger(broker.config.db_path, broker.config.encryption_key)
+    # The test signer intentionally repeats a memo, and the fake gateway returns
+    # the old transaction: the ledger must independently reject attribution.
+    later_request = payload()
+    with pytest.raises(BrokerError) as replayed:
+        await broker.request(later_request)
+    assert replayed.value.code == "SETTLEMENT_UNKNOWN"
+    later = broker.ledger.get(later_request["request_id"])
+    assert later["status"] == "unknown" and later["tx"] is None
+    assert broker.ledger.get(first_request["request_id"]) == before
+    assert broker.ledger.totals()["reserved"] == broker.ledger.totals()["settled"] == 100000
+    assert await broker.request(first_request) == first
+    with pytest.raises(BrokerError) as blocked:
+        await broker.request(payload())
+    assert blocked.value.code == "SETTLEMENT_UNKNOWN"
+    assert broker.transport.paid_count == broker.signer.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_reconcile_cannot_assign_an_existing_receipt_to_another_same_amount_intent(broker):
+    first_request = payload()
+    await broker.request(first_request)
+    before = broker.ledger.get(first_request["request_id"])
+    later_request = payload()
+    broker.ledger.intent(later_request["request_id"], "authored-fixture-hash", "responses", MODEL)
+    broker.ledger.update(later_request["request_id"], status="unknown", amount=100000,
+                         pay_to=PAY_TO, memo="fixture-unique-memo")
+    later_before = broker.ledger.get(later_request["request_id"])
+    with pytest.raises(BrokerError) as denied:
+        await broker.reconcile(later_request["request_id"], TX)
+    assert denied.value.code == "INVALID_RECONCILIATION"
+    assert broker.ledger.get(later_request["request_id"]) == later_before
+    assert broker.ledger.get(first_request["request_id"]) == before
+    assert broker.ledger.totals()["reserved"] == broker.ledger.totals()["settled"] == 100000
+    assert broker.transport.paid_count == broker.signer.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_missing_receipt_is_unknown_even_when_vendor_json_arrived(broker):
     broker.transport.headers = {"PAYMENT-RESPONSE": "", "X-Payment-Settled": "false"}
     request = payload()
@@ -758,7 +823,42 @@ async def test_official_sdk_signs_only_selected_exact_offer_without_rpc_or_trans
     assert transaction.signatures[1].verify(fixture.pubkey(), b"\x80" + bytes(transaction.message))
     token_instruction = next(item for item in transaction.message.instructions if str(transaction.message.account_keys[item.program_id_index]) == TOKEN_PROGRAM)
     assert bytes(token_instruction.data) == b"\x0c" + (100000).to_bytes(8, "little") + b"\x06"
-    assert signed.memo
+    assert signed.memo and len(signed.memo) == 32 and all(character in "0123456789abcdef" for character in signed.memo)
+    # The pinned SDK uses a new random nonce for absent, null and empty seller
+    # memos, even when amount/recipient/blockhash remain identical.
+    signed_nonces = {signed.memo}
+    for merchant_memo in (None, ""):
+        fresh_required = challenge(extra={"feePayer": FEE_PAYER, "memo": merchant_memo})
+        fresh = await signer.sign(fresh_required, fresh_required["accepts"][0])
+        assert fresh.memo and len(fresh.memo) == 32
+        assert fresh.memo not in signed_nonces
+        signed_nonces.add(fresh.memo)
+        fresh_payload = decode_payment_signature_header(fresh.header)
+        fresh_transaction = VersionedTransaction.from_bytes(base64.b64decode(fresh_payload.payload["transaction"]))
+        assert fresh_transaction.signatures[1].verify(fixture.pubkey(), b"\x80" + bytes(fresh_transaction.message))
+    # A historical transfer absent from this ledger still must not settle a
+    # newer same-amount authorization. Verify against the actual fresh SDK
+    # nonce, not a gateway success flag or a timestamp heuristic.
+    from x402.mechanisms.svm.utils import derive_ata
+    transport = GatewayTransport(config)
+    old_chain_receipt = {"meta": {"err": None, "innerInstructions": []}, "transaction": {"message": {"instructions": [
+        {"programId": TOKEN_PROGRAM, "parsed": {"type": "transferChecked", "info": {
+            "authority": signer.address, "mint": ASSET, "source": derive_ata(signer.address, ASSET),
+            "destination": derive_ata(PAY_TO, ASSET), "tokenAmount": {"amount": "100000", "decimals": 6}}}},
+        {"programId": MEMO_PROGRAM, "parsed": signed.memo}]}}}
+    async def historical_rpc(method, params):
+        assert method == "getTransaction"
+        return old_chain_receipt
+    transport.rpc = historical_rpc
+    try:
+        assert broker.ledger.db.execute("SELECT 1 FROM intents WHERE tx=?", (TX,)).fetchone() is None
+        assert await transport.verify_receipt(TX, signer.address, PAY_TO, 100000, signed.memo)
+        assert not await transport.verify_receipt(TX, signer.address, PAY_TO, 100000, fresh.memo)
+    finally:
+        await transport.close()
+    fixed_required = challenge(extra={"feePayer": FEE_PAYER, "memo": "a" * 32})
+    with pytest.raises(ValueError, match="fresh client nonce"):
+        await signer.sign(fixed_required, fixed_required["accepts"][0])
     assert "PRIVATE" not in repr(signed)
 
 

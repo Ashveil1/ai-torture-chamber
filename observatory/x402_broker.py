@@ -314,6 +314,10 @@ class OfficialSvmSigner:
         from x402.http.utils import encode_payment_signature_header
         from x402.schemas import PaymentRequired
         from solders.transaction import VersionedTransaction
+        # A seller-controlled fixed memo can match an unrelated older transfer.
+        # Keep the SDK's fresh client nonce; never rewrite a merchant's quote.
+        if quote.get("extra", {}).get("memo") not in (None, ""):
+            raise ValueError("Seller-defined payment memos are unsupported; a fresh client nonce is required")
         client = x402ClientSync()
         client.register(NETWORK, ExactSvmScheme(self.signer, rpc_url=self.config.rpc_url))
         client.set_spend_controls({"max_amount_per_payment": "$" + str(Decimal(self.config.max_request_atomic) / 1_000_000)})
@@ -531,6 +535,11 @@ class PaymentBroker:
                     if not isinstance(amount, str) or not re.fullmatch(r"[0-9]{1,16}", amount) or int(amount) < 1:
                         continue
                     if not isinstance(extra, dict) or not ADDRESS.fullmatch(str(extra.get("feePayer", ""))) or extra.get("feePayer") == self.signer.address:
+                        continue
+                    if extra.get("memo") not in (None, ""):
+                        # SDK 2.25.0 otherwise uses this memo verbatim, permitting
+                        # an old unrecorded same-amount receipt to match. Routes
+                        # requiring seller memos need a separately bound adapter.
                         continue
                     if extra.get("paymentFlow") not in {None, "authorization"}:
                         continue
