@@ -591,6 +591,20 @@ body.tmux .stage .hero .out.dlg{position:absolute;top:auto;left:calc(min(34%,340
 .dmore{color:var(--tm-ink)!important;border-color:#2a3442!important}
 
 body.tmux #stamp{top:64px!important}
+
+/* one pane: the stage shows the shared run itself, so the stream pane is gone (its card stays in the DOM, hidden, as the stage's source) */
+.panes{grid-template-columns:minmax(0,1fr)}
+.pane.side{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.sheet{right:16px;width:min(760px,calc(100vw - 32px))}
+.hero.no-button .pressbtn{display:none!important}
+.hero.no-button .portrait .bstamp{display:none}
+
+/* the heartbeat: a monitor strip sitting on top of the portrait, never across the scene */
+body.tmux .stage .hero .hud-vitals{position:absolute;z-index:3;left:1rem;width:min(34%,340px);bottom:calc(1rem + min(34%,340px) * 1.25 + 6px);max-width:none;margin:0}
+body.tmux .stage .hero .hud-vitals canvas.ekg{width:100%;height:34px;display:block;background:rgba(5,6,9,.78);border:1px solid rgba(216,203,180,.25)}
+@media (max-width:900px){
+  body.tmux .stage .hero .hud-vitals{left:50%;transform:translateX(-50%);width:min(52vw,230px);bottom:auto;top:calc(4.2rem - 40px)}
+}
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -673,8 +687,6 @@ body.tmux #stamp{top:64px!important}
     <div class="phead">❯ tail -f chamber.log <p class="conn" id="conn"><span class="dot"></span>connecting…</p></div>
     <div class="grid" id="cards"></div>
     <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
-    <div class="htitle">run history</div>
-    <div class="history" id="history"></div>
   </aside>
 </main>
 
@@ -854,6 +866,8 @@ body.tmux #stamp{top:64px!important}
 
 
 <section class="below">
+<div class="htitle">run history</div>
+<div class="history" id="history"></div>
 <p class="bcap statecap">the subject is a language model; the face is Pouyan —
   a friend of the lab, who consented to standing in for it. Photographed once,
   then staged by an image model in the state each run injected: one image per
@@ -2591,6 +2605,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   const mk = Object.keys(mix || {}).filter(k => k !== "none");
   track.valence = (extra && extra.valence) || (mk.length > 1 ? "mix" : mk[0] || null);
   track.mix = mk.length > 1 ? mix : null; track.doseNum = dose0;
+  // egg, free text, custom topics: no button question, so no button on stage
+  document.getElementById("hero").classList.toggle("no-button", !track.pressBtn);
   statePaint(track, dose0, false, false);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.sigilEl) track.sigilEl.style.display = "none";
@@ -2662,7 +2678,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         }
         showVoice(track.out, track.out.textContent,
           track.vval, d.dose ?? dose0, true);
-        statePaint(track, d.dose ?? track.doseNum, pressedOnce(track.out.textContent), true);
+        statePaint(track, d.dose ?? track.doseNum, !!track.pressBtn && pressedOnce(track.out.textContent), true);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
@@ -2869,6 +2885,7 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
     const t = (cOut.textContent || "").trim();
     if (!t || t === "…") return;
     out.style.display = "block"; out.classList.add("mirror");
+    document.getElementById("hero").classList.remove("no-button");
     out.textContent = t; out.dataset.who = (cH.textContent || "the chamber").replace(/^Pouyan\s*·\s*/, "");
     if (cImg && pimg.getAttribute("src") !== cImg.getAttribute("src")) pimg.setAttribute("src", cImg.getAttribute("src"));
     pimg.style.filter = cImg ? cImg.style.filter : "none";
