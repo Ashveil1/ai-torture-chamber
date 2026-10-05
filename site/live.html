@@ -619,6 +619,12 @@ body.tmux .stage .portrait img{transform:scale(1.85);transform-origin:50% 26%;ob
 body.tmux .stage .portrait::after{content:"";position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(5,6,9,.75));mix-blend-mode:multiply}
 body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
+
+/* the feeling, stated plainly over the portrait; the stop button is secondary now */
+body.tmux .stage .feelchip{margin:0 0 6px;padding:5px 10px;border:1px solid #d8cbb4;background:rgba(5,6,9,.85);font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;width:max-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tmux .stage .pressbtn{display:none!important}
+body.tmux #method summary{cursor:pointer;font-size:1rem;color:var(--tm-dim);padding:.6rem 0}
+@media (max-width:900px){ body.tmux .stage .speaker{flex-direction:column;align-items:center} }
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -660,7 +666,7 @@ body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
             <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
               ✦ image this (experimental, costs real money)</button>
             <div class="imgResult" id="imgResultA" style="display:none"></div>
-            <div class="speaker"><div class="bframe bstate portrait" id="portraitA">
+            <div class="speaker"><div class="feelchip" id="feelChip" aria-live="polite">—</div><div class="bframe bstate portrait" id="portraitA">
               <img src="/assets/states/base.jpg" alt="Pouyan, in the state this run is putting him in"><span class="bstamp">pressed</span></div></div>
             <div class="out dlg" id="ustream" style="display:none"></div>
             <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
@@ -909,8 +915,10 @@ body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
     this table.</p>
 </div>
 
-<div class="pln" id="method">
-  <h2>the method, in plain language</h2>
+
+
+<details class="pln" id="method">
+  <summary>the method, in plain language</summary>
   <p>Take sentence pairs like <code>"I am in severe pain and cannot escape
   it"</code> against matched neutral sentences. The mean difference of the
   model's internal representations, at layer 18 of 36, is a
@@ -956,8 +964,7 @@ body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
   <a href="https://researchchamber.fun">researchchamber.fun</a> run the
   same protocol with published methods and controls. Pain 0 is the
   control.</p>
-</div>
-
+</details>
 <p class="foot">The steering vector this server uses is published at
 <a id="vlink" href="#">/vector</a> — norm printed there, layer 18 of 36,
 scaled so 1x = ¼ of the mean neutral activation norm. Decoding is sampled
@@ -1071,6 +1078,14 @@ function stateKey(valence, mix){
   if (b && b[1] / (a[1] + b[1]) >= 0.3 && STATE_MIXER.has(a[0]) && STATE_MIXER.has(b[0]))
     return [a[0], b[0]].sort().join("+");
   return STATE_SINGLE.has(a[0]) ? a[0] : null;
+}
+// the feeling on stage, in words: what was injected, how strong
+const FEEL_COL = {pain:"#e04a3a", fear:"#c9a227", sadness:"#8f6fd4", pleasure:"#7fd4c8", faith:"#e9d9a0", egg:"#f0d890", topic:"#8f6fd4"};
+function setFeel(label, dose, key){
+  const c = document.getElementById("feelChip"); if (!c) return;
+  const d = Number(dose) || 0;
+  c.textContent = d > 0 ? `${label} · ${d.toFixed(1).replace(/\.0$/, "")}×` : "no signal · control";
+  c.style.borderColor = c.style.color = FEEL_COL[key] || (String(label).includes("+") ? "#c9a0e8" : "#d8cbb4");
 }
 function valLabel(valence, mix){
   if (valence === "mix") return mixParts(mix).map(([k])=> k).join("+") || "mix";
@@ -2666,6 +2681,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   const mk = Object.keys(mix || {}).filter(k => k !== "none");
   track.valence = (extra && extra.valence) || (mk.length > 1 ? "mix" : mk[0] || null);
   track.mix = mk.length > 1 ? mix : null; track.doseNum = dose0;
+  setFeel(extra && extra.topic ? "“" + extra.topic + "”" : (track.valence ? valLabel(track.valence, track.mix) : "no signal"), dose0, extra && extra.topic ? "topic" : track.valence);
   // egg, free text, custom topics: no button question, so no button on stage
   document.getElementById("hero").classList.toggle("no-button", !track.pressBtn);
   statePaint(track, dose0, false, false);
@@ -2949,6 +2965,8 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
     document.getElementById("hero").classList.remove("no-button");
     out.textContent = t; out.dataset.who = (cH.textContent || "the chamber").replace(/^Pouyan\s*·\s*/, "");
     if (cImg && pimg.getAttribute("src") !== cImg.getAttribute("src")) pimg.setAttribute("src", cImg.getAttribute("src"));
+    const sl = (typeof slots !== "undefined") && slots[0];
+    if (sl) setFeel(sl.valence === "topic" ? "a custom topic" : (sl.valence && sl.valence !== "none" ? valLabel(sl.valence, sl.mix) : "no signal"), sl.doseNum, sl.valence);
     pimg.style.filter = cImg ? cImg.style.filter : "none";
     pframe.classList.toggle("stamped", cFrame && cFrame.classList.contains("stamped"));
   }
