@@ -1357,7 +1357,11 @@ _EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
 _VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
                       "checkpoint_start", "checkpoint_decision", "checkpoint_day",
-                      "checkpoint_end", "survey", "consent"}
+                      "checkpoint_end", "final_start", "final_turn",
+                      "final_encounter_start", "final_encounter_end", "final_reward",
+                      "final_choice", "confession_start", "confession_turn",
+                      "confession_act_start", "confession_act_end", "study_consent",
+                      "study_rating", "study_belief", "study_end", "survey", "consent"}
 _EVENT_RATE = {}
 
 
