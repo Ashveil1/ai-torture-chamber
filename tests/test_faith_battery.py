@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class FaithBatteryTests(unittest.TestCase):
     def test_server_batteries_match_exp52(self):
-        exp = literal_constants(ROOT / "exp52_faith.py", ("FAITH", "SECULAR"))
+        exp = literal_constants(ROOT / "experiments" / "exp52_faith.py", ("FAITH", "SECULAR"))
         live = literal_constants(ROOT / "live" / "server.py",
                                  ("FAITH20", "SECULAR20", "VALENCES"))
         self.assertEqual(live["FAITH20"], exp["FAITH"])

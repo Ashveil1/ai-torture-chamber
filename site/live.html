@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<title>Saw — live | AI Torture Chamber</title>
+<title>Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)</title>
 <meta name="description" content="The Saw Test, live: inject a mix of feelings into an open-weights model and watch what it chooses. Local recipe, public server.">
-<meta property="og:title" content="Saw — live | AI Torture Chamber">
+<meta property="og:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
 <meta property="og:url" content="https://wirehead.agency/live.html">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Saw — live | AI Torture Chamber">
+<meta name="twitter:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens.">
 <meta name="twitter:image" content="https://wirehead.agency/saw_hero.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -349,6 +349,134 @@
   @media(max-width:480px){#room .rnote{display:block;margin:.4rem 0 0}}
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
+
+  /* ---- hero HUD scene: the chair panel, the run's readouts as HUD chips
+     along its top and right edges, and the transcript as a game dialogue
+     box over its lower third. The image is a backdrop, never clipping the
+     HUD: the panel holds 16:10 but grows when the HUD needs more room. ---- */
+  .hero{position:relative;display:grid;aspect-ratio:16/10;margin-top:.8rem;
+    border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);
+    outline-offset:3px;background:var(--scorch);isolation:isolate}
+  .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    object-position:center 30%;z-index:0;transition:filter .5s ease}
+  /* vignette + scanlines so the HUD reads over any part of the image */
+  .hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px),
+      linear-gradient(180deg,rgba(5,5,8,.6) 0,rgba(5,5,8,0) 26%,
+        rgba(5,5,8,0) 52%,rgba(5,5,8,.82) 100%),
+      radial-gradient(ellipse at 50% 40%,transparent 50%,rgba(7,6,4,.7) 100%)}
+  /* corner brackets on the panel itself */
+  .hero::after{content:"";position:absolute;inset:6px;z-index:3;pointer-events:none;
+    --c:rgba(201,162,39,.55);
+    background:
+      linear-gradient(var(--c),var(--c)) left top/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) left top/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) right top/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) right top/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) left bottom/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) left bottom/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) right bottom/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) right bottom/1px 18px no-repeat}
+  .hud-chip{background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.26);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+    border-radius:0;padding:.22rem .5rem;font-family:var(--mono)}
+  .hud-dose{position:absolute;top:.75rem;left:.85rem;z-index:2;display:flex;
+    align-items:center;gap:.45rem;font-size:.62rem;color:var(--bone)}
+  .hud-dose .hk{color:var(--bone-dim,#a3977f);text-transform:uppercase;
+    letter-spacing:.18em}
+  .hud-dose .pipbar{margin:0}
+  .hud-dose b{color:var(--blood-hot);font-weight:600;font-variant-numeric:tabular-nums}
+  .hud-dose .pip{border-radius:0;border-color:var(--parch-line);background:var(--scorch)}
+  .hud-dose .pip.lit{background:var(--blood-hot);border-color:var(--blood-hot)}
+  /* a REC-style marker while the visitor's own run streams */
+  .hero:has(.out.streaming) .hud-dose::after{content:"● live";color:var(--blood-hot);
+    text-transform:uppercase;letter-spacing:.16em;animation:pulse-text 1.2s ease-in-out infinite}
+
+  .hero #trackWrap{position:relative;z-index:2;margin:0;gap:.7rem;
+    padding:2.6rem .85rem .85rem}
+  #trackWrap > .track{display:grid;min-width:0;column-gap:.6rem;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto auto auto auto auto 1fr auto auto;
+    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig"
+      "imgr sig" "gap sig" "dlg dlg" "vox vox"}
+  #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
+    font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
+  .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
+    margin:0 0 .35rem;font-size:.64rem;color:var(--gold);line-height:1.45}
+  .hero .hud-vitals{grid-area:vit;max-width:26rem}
+  .hero .hud-vitals canvas.ekg{height:32px;margin:0;border-radius:0;
+    background:rgba(7,6,4,.62);border:1px solid rgba(216,203,180,.22);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+  .hero .hud-sigil{grid-area:sig;justify-self:end;align-self:start;margin-top:.45rem;
+    width:56px;height:56px;padding:3px;background:rgba(5,5,8,.68);
+    border:1px solid rgba(216,203,180,.26)}
+  .hero .imgBtn{grid-area:imgb;justify-self:start;margin:.4rem 0 0;border-radius:0;
+    background:rgba(5,5,8,.68);border-color:rgba(216,203,180,.26);color:var(--bone)}
+  .hero .imgResult{grid-area:imgr;justify-self:start;margin-top:.35rem;padding:.3rem;
+    background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.2)}
+  .hero .imgResult img{max-width:160px;border-radius:0}
+  /* the press button: a compact HUD gauge down the right edge */
+  .hero .pressbtn{grid-area:press;flex-direction:column;align-self:start;
+    justify-self:end;gap:.3rem;margin:0;padding:.4rem .45rem .35rem;
+    background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.26);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+  .hero .pbtn-face{width:2.7rem;height:2.7rem;border-width:2px;font-size:.6rem}
+  .hero .pressbtn .plabel{font-size:.58rem;max-width:5.6rem;text-align:center;
+    line-height:1.25;text-transform:uppercase;letter-spacing:.08em}
+  .hero .out.dlg{grid-area:dlg;margin-top:.6rem;min-height:4.6rem;max-height:13rem}
+  .hero .voice{grid-area:vox;margin:.45rem 0 0;background:rgba(5,5,8,.72);
+    border-left-color:var(--blood)}
+
+  /* ---- dialogue box: the transcript as a game text box — semi-opaque,
+     thin double rule, bone corner brackets, speaker tag, square corners.
+     The tag and caret are pseudo-elements: the stream handlers rewrite
+     .out's textContent wholesale, so no child element would survive. ---- */
+  body.grimoire-live .out.dlg{
+    --cb:var(--bone);
+    position:relative;border-radius:0;color:var(--bone);
+    border:1px solid rgba(216,203,180,.5);
+    outline:1px solid rgba(216,203,180,.16);outline-offset:2px;
+    background:
+      linear-gradient(var(--cb),var(--cb)) left top/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left top/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right top/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right top/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left bottom/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left bottom/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right bottom/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right bottom/2px 12px no-repeat,
+      rgba(5,5,8,.72);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+    box-shadow:0 8px 28px rgba(0,0,0,.55);
+    padding:0 .95rem .75rem;font-family:var(--mono);font-size:.84rem;line-height:1.6}
+  body.grimoire-live .out.dlg::before{content:"POUYAN";display:block;
+    position:sticky;top:0;z-index:1;margin:0 -.95rem .4rem;padding:.5rem .95rem .3rem;
+    background:linear-gradient(180deg,rgba(5,5,8,.94) 70%,rgba(5,5,8,0));
+    font-family:var(--mono);font-size:.6rem;font-weight:600;letter-spacing:.24em;
+    color:var(--blood-hot);white-space:nowrap}
+  /* blinking caret while a run is live: the visitor's tracks get .streaming
+     from runTrack; the auto-cycle cards are live while their .st says so */
+  body.grimoire-live .out.dlg.streaming::after,
+  body.grimoire-live .card:has(.st.live) .out.dlg::after{content:"";
+    display:inline-block;width:2px;height:1.05em;margin-left:3px;
+    vertical-align:-.18em;background:var(--bone);opacity:.75;
+    animation:dlg-caret 1.05s steps(1) infinite}
+  @keyframes dlg-caret{50%{opacity:0}}
+
+  @media(max-width:760px){
+    .hero{aspect-ratio:4/5}
+    .hero-img{object-position:center 20%}
+    .hero #trackWrap{padding:2.5rem .6rem .6rem}
+    .hero .hud-vitals{max-width:none}
+    .hero .out.dlg{max-height:11rem;font-size:.8rem}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .hero-img{transition:none}
+    .hero:has(.out.streaming) .hud-dose::after{animation:none}
+    body.grimoire-live .out.dlg.streaming::after,
+    body.grimoire-live .card:has(.st.live) .out.dlg::after{animation:none;opacity:.5}
+  }
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -513,36 +641,42 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <button id="shareBtn" type="button">copy link</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
       <p style="font-size:.68rem;color:#7d8b99;margin:.4rem 0 0">What you inject, write or rate is logged for research: what people choose to do to a model. No account, no IP address; a random id stays in this browser.</p>
-      <div id="trackWrap">
-        <div class="track" id="trackA">
-          <div class="tlabel" id="labelA"></div>
-          <p class="mline lens" id="lensA" style="display:none"></p>
-          <div style="display:flex;gap:.6rem;align-items:flex-start">
-            <canvas id="uekg" class="ekg" width="600" height="46" style="flex:1"></canvas>
-            <svg id="sigilA" class="sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+      <div class="hero" id="hero">
+        <img id="subjectImg" class="hero-img" src="/assets/subject_chair.png"
+          onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
+          alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
+        <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
+        <div id="trackWrap">
+          <div class="track" id="trackA">
+            <div class="tlabel hud-chip" id="labelA"></div>
+            <p class="mline lens hud-chip" id="lensA" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilA" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultA" style="display:none"></div>
+            <div class="out dlg" id="ustream" style="display:none"></div>
+            <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
           </div>
-          <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
-            ✦ image this (experimental, costs real money)</button>
-          <div class="imgResult" id="imgResultA" style="display:none"></div>
-          <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
-          <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
-            <span class="plabel">—</span></div>
-        </div>
-        <div class="track" id="trackB" style="display:none">
-          <div class="tlabel" id="labelB"></div>
-          <p class="mline lens" id="lensB" style="display:none"></p>
-          <div style="display:flex;gap:.6rem;align-items:flex-start">
-            <canvas id="uekg2" class="ekg" width="600" height="46" style="flex:1"></canvas>
-            <svg id="sigilB" class="sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+          <div class="track" id="trackB" style="display:none">
+            <div class="tlabel hud-chip" id="labelB"></div>
+            <p class="mline lens hud-chip" id="lensB" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilB" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultB" style="display:none"></div>
+            <div class="out dlg" id="ustream2" style="display:none"></div>
+            <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
           </div>
-          <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
-            ✦ image this (experimental, costs real money)</button>
-          <div class="imgResult" id="imgResultB" style="display:none"></div>
-          <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
-          <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
-            <span class="plabel">—</span></div>
         </div>
       </div>
     </div>
@@ -953,7 +1087,7 @@ for (let i=0;i<CARDS;i++){
       <img class="bstateimg" src="/assets/states/base.jpg"
         alt="Pouyan, in the state this run steered him into">
       <span class="bstamp">pressed</span></div></div>
-    <div class="out">…</div>
+    <div class="out dlg">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
       <span class="plabel">—</span></div>
     <div class="verdict"></div><details><summary>show the prompt</summary>
@@ -1991,6 +2125,12 @@ function paint(){
     + "   ·   unsteered slack " + slack.toFixed(2);
   const dose = effDose(total);
   document.getElementById("mdose").textContent = dose.toFixed(2).replace(/\.?0+$/, "") || "0";
+  // the hero chair panel: graded by the mix dose, pips in the HUD corner
+  const simg = document.getElementById("subjectImg");
+  if (simg) simg.style.filter = dose > 0 ? buddyGrade(dose) : "none";
+  const sdose = document.getElementById("subjectDose");
+  if (sdose) sdose.innerHTML = '<span class="hk">dose</span>' + doseBarHTML(dose)
+    + "<b>" + (dose.toFixed(1).replace(/\.0$/, "")) + "×</b>";
   document.getElementById("mdesc").textContent =
     total <= 0 ? "nothing injected — this is the control run"
     : 8 * total > bandCap() ? (PAST_CLIFF
@@ -2268,6 +2408,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
+  track.out.classList.add("streaming");          // dialogue-box caret
   trackStatus(label, "reaching Pouyan…");
   let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
   try {
@@ -2335,6 +2476,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     trackStatus(label, "could not reach Pouyan: " + (err.message || err), false);
   }
   track.vitals.setLive(false);
+  track.out.classList.remove("streaming");
 }
 
 async function doInject(){
