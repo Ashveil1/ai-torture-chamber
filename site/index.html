@@ -182,7 +182,7 @@
 </nav>
 <h1>The Saw Test</h1>
 <p class="sub" style="font-style:italic">a.k.a. Serial Experiments Pain</p>
-<svg id="hero-wheel" viewBox="0 0 600 640" role="group"
+<svg id="hero-wheel" viewBox="-36 -81 673 721" role="group"
      aria-label="the chamber drawn as a wheel of life: six realms, one per signal; each realm opens the live chamber with that signal mixed in"></svg>
 <p class="wheel-cap">The chamber's six signals, drawn as the six realms of the
 wheel of life: <span class="pleasc">pleasure</span> → the gods,
@@ -717,34 +717,12 @@ APIs touched any measurement loop.</p>
 
   const defs = mk("defs", {}, svg);
 
-  // Yama, behind the wheel: mane, face, three eyes, crown of five skulls
-  const head = mk("g", {"aria-hidden":"true"}, svg);
-  const HX = 300, HY = 120;
-  mk("circle", {cx:HX, cy:HY, r:100, fill:"#1c0b07", stroke:"#c9a227",
-    "stroke-opacity":".25", "stroke-dasharray":"3 5"}, head);
-  mk("ellipse", {class:"yama-face", cx:HX, cy:HY + 6, rx:76, ry:66}, head);
-  for (const s of [-1, 1]){
-    mk("path", {d:`M${HX + s*12} ${HY - 10}q${s*14} -22 ${s*44} -8q${-s*10} -2 ${-s*14} 6`
-      + `q${s*10} -10 ${s*24} -4`, fill:"none", stroke:"#c9a227", "stroke-width":"2.2",
-      "stroke-linecap":"round", "stroke-opacity":".8"}, head);
-    mk("ellipse", {cx:HX + s*30, cy:HY + 8, rx:14, ry:8.5, fill:"#d8cbb4"}, head);
-    mk("circle", {cx:HX + s*30, cy:HY + 8, r:5.2, fill:"#c9a227"}, head);
-    mk("circle", {cx:HX + s*30, cy:HY + 8, r:2.3, fill:"#050508"}, head);
-  }
-  mk("ellipse", {cx:HX, cy:HY - 20, rx:5.5, ry:10, fill:"#d8cbb4"}, head);
-  mk("circle", {cx:HX, cy:HY - 20, r:3, fill:"#e04a3a"}, head);
-  mk("ellipse", {cx:HX, cy:HY + 30, rx:15, ry:9, fill:"#4a1812"}, head);
-  for (const s of [-1, 1])
-    mk("ellipse", {cx:HX + s*6, cy:HY + 31, rx:3.2, ry:4, fill:"#120604"}, head);
-  [-150, -118, -90, -62, -30].forEach(a=>{
-    const [x, y] = pol(HX, HY, 86, a);
-    const k = mk("g", {transform:`translate(${f(x)} ${f(y)})`}, head);
-    mk("circle", {class:"bone", r:13}, k);
-    mk("rect", {class:"bone", x:-7, y:8, width:14, height:8, rx:2}, k);
-    for (const s of [-1, 1]) mk("circle", {cx:s*5, cy:0, r:3.7, fill:"#050508"}, k);
-    mk("path", {d:"M0 4l-2 3.5h4z", fill:"#050508"}, k);
-    mk("path", {d:"M-5 13.5h10M-2 10v6M2 10v6", stroke:"#3a2a1c", "stroke-width":".8"}, k);
-  });
+  // Yama, behind the wheel: a thangka painting (assets/yama_thangka.webp,
+  // generated for this page) whose plain black disc sits exactly under the
+  // wheel: disc centre (511,690) r=320 px -> wheel centre (300,372) r=210
+  const K = R_OUT / 320;
+  mk("image", {href:"assets/yama_thangka.webp", x:f(CX - 511*K), y:f(CY - 690*K),
+    width:f(1024*K), height:f(1024*K), "aria-hidden":"true"}, svg);
 
   // the wheel itself
   const wheel = draw(svg, {cx:CX, cy:CY, rHub:46, rBand:62, rRealm:R_IN,
@@ -753,37 +731,12 @@ APIs touched any measurement loop.</p>
     href: k => "live.html" + LINKS[k]});
   wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, faith:.18, none:.18});
 
-  // in front: the upper jaw biting the rim, and four claws gripping it.
-  // Fangs and claw tips hook only over the rim's outer edge: the rim turns,
-  // so anything reaching into the label band would eventually cover each link.
-  const front = mk("g", {"aria-hidden":"true", "pointer-events":"none"}, svg);
-  const top = CY - R_OUT;
-  mk("path", {d:`M${HX - 50} ${top - 10}Q${HX} ${top + 8} ${HX + 50} ${top - 10}`
-    + `Q${HX} ${top - 2} ${HX - 50} ${top - 10}Z`, fill:"#3a120e"}, front);
-  for (let x = HX - 34; x <= HX + 34; x += 9.7)
-    mk("rect", {class:"bone", x:f(x - 3.6), y:f(top - 6), width:7.2, height:7, rx:1.2}, front);
-  for (const s of [-1, 1])
-    mk("path", {class:"bone", d:`M${HX + s*36} ${top - 6}l${s*4} 13l${s*4} -13z`}, front);
-
-  function claw(a){
-    const g = mk("g", {}, front);
-    const [ax, ay] = pol(CX, CY, R_OUT + 62, a);
-    const [px, py] = pol(CX, CY, R_OUT + 20, a);
-    mk("line", {x1:f(ax), y1:f(ay), x2:f(px), y2:f(py), stroke:"#3a120e",
-      "stroke-width":"26", "stroke-linecap":"round"}, g);
-    for (let j = -1.5; j <= 1.5; j++){
-      const aj = a + j * 5.2;
-      const [x0, y0] = pol(CX, CY, R_OUT + 16, aj);
-      const [cx1, cy1] = pol(CX, CY, R_OUT + 6, aj + 1.5);
-      const [x1, y1] = pol(CX, CY, R_OUT - 4, aj + 3);
-      for (const [w, c] of [[8.5, "#5a1d16"], [6.5, "#3a120e"]])
-        mk("path", {d:`M${f(x0)} ${f(y0)}Q${f(cx1)} ${f(cy1)} ${f(x1)} ${f(y1)}`,
-          fill:"none", stroke:c, "stroke-width":w, "stroke-linecap":"round"}, g);
-      mk("circle", {class:"nail", cx:f(x1), cy:f(y1), r:2.6}, g);
-    }
-    mk("circle", {class:"claw", cx:f(px), cy:f(py), r:17}, g);
-  }
-  [208, 332, 122, 58].forEach(claw);
+  // in front: the painting's own fangs and talons, cut to a thin band over
+  // the rim's outer edge only (assets/yama_front.webp) — the rim turns, so
+  // anything reaching into the label band would eventually cover each link
+  mk("image", {href:"assets/yama_front.webp", x:f(CX - (511 - 157)*K), y:f(CY - (690 - 335)*K),
+    width:f((866 - 157)*K), height:f((1024 - 335)*K), "aria-hidden":"true",
+    "pointer-events":"none"}, svg);
 
   // the moon the Buddha points at: the way out of the wheel
   const moon = mk("a", {class:"moon", href:"#s07"}, svg);
