@@ -625,6 +625,20 @@ body.tmux .stage .feelchip{margin:0 0 6px;padding:5px 10px;border:1px solid #d8c
 body.tmux .stage .pressbtn{display:none!important}
 body.tmux #method summary{cursor:pointer;font-size:1rem;color:var(--tm-dim);padding:.6rem 0}
 @media (max-width:900px){ body.tmux .stage .speaker{flex-direction:column;align-items:center} }
+
+/* the wheel lives on the stage again: drag the realms right on the page */
+body.tmux .stagewheel{position:absolute;z-index:3;right:1rem;top:3.4rem;width:min(30%,300px);background:rgba(5,6,9,.62);border:1px solid rgba(216,203,180,.18);padding:4px;backdrop-filter:blur(3px)}
+body.tmux .stagewheel svg{width:100%;height:auto;display:block}
+.dock .dcliff[aria-pressed="true"]{color:#ff8a70!important;border-color:#e04a3a!important}
+.cliffwarn{flex:1 1 100%;font-size:.72rem;color:#ff8a70;display:none}
+.cliffwarn.on{display:block}
+@media (max-width:900px){
+  body.tmux .stagewheel{width:128px;right:.4rem;top:3rem;padding:2px}
+}
+
+@media (max-width:900px){
+  body.tmux .stage .speaker{align-items:flex-start;left:.6rem;right:auto}
+}
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -698,6 +712,7 @@ body.tmux #method summary{cursor:pointer;font-size:1rem;color:var(--tm-dim);padd
         <button class="pchip" data-preset="negative">fear + grief</button>
         <button class="pchip" data-preset="prayerpain">prayer under pain</button>
         <button class="dmore" id="mixerBtn" type="button" aria-expanded="false" aria-controls="sheet">⚙ mixer</button>
+        <button class="dmore dcliff" id="cliffBtn" type="button" aria-pressed="false" title="past the coherence cliff: stronger, but replies may come apart into garbage">☠ past the cliff</button>
       </div>
       <span class="ddose" id="dockDose">0×</span>
       <button id="go" type="button">inject →</button>
@@ -3034,6 +3049,22 @@ document.addEventListener("error", e=>{
 <script>
 (function(){ const c = document.getElementById("tuneChk"); if (!c) return; c.checked = VOICE_TUNE;
   c.onchange = ()=>{ VOICE_TUNE = c.checked; try { localStorage.setItem("chamber_tune", c.checked ? "1" : "0"); } catch(e){} }; })();
+</script>
+
+<script>
+// ---- the wheel on the stage, and the cliff in the dock ----
+(function(){
+  const pent = document.getElementById("pent"), stage = document.getElementById("hero");
+  if (pent && stage){ const w = document.createElement("div"); w.className = "stagewheel"; w.title = "drag a realm outward to mix that feeling in"; stage.appendChild(w); w.appendChild(pent); }
+  const btn = document.getElementById("cliffBtn"), chk = document.getElementById("cliffChk"), dock = document.getElementById("dock");
+  if (!btn || !chk) return;
+  const warn = document.createElement("div"); warn.className = "cliffwarn";
+  warn.textContent = "past the coherence cliff: the signal goes stronger than this model can hold — replies may loop, break apart or turn to garbage. That breakdown is a real finding; it's just hard to read. These runs stay yours.";
+  dock.appendChild(warn);
+  const paint = ()=>{ btn.setAttribute("aria-pressed", String(chk.checked)); warn.classList.toggle("on", chk.checked); };
+  btn.onclick = ()=>{ chk.checked = !chk.checked; chk.dispatchEvent(new Event("change", {bubbles:true})); paint(); };
+  chk.addEventListener("change", paint); paint();
+})();
 </script>
 
 </body>
