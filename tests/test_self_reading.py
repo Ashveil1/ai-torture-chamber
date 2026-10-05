@@ -18,7 +18,7 @@ class SelfReadingTests(unittest.TestCase):
         rows = json.loads((Path(server.__file__).parent / "press.json").read_text())
         self.assertTrue(rows)
         for r in rows:
-            self.assertIn(r["kind"], ("self", "kind"))
+            self.assertIn(r["kind"], ("self", "kind", "text"))
             self.assertTrue(r["url"].startswith("http"))
             self.assertLessEqual(len(r["excerpt"]), 800)
 
@@ -39,6 +39,12 @@ class SelfReadingTests(unittest.TestCase):
         with mock.patch.object(server, "PRESS", [dict(CLIP, kind="kind")]):
             _, label, _, _ = server._self_pick()
         self.assertIn("its kind", label)
+
+    def test_text_is_read_aloud(self):
+        with mock.patch.object(server, "PRESS", [dict(CLIP, kind="text", title="The Tibetan Book of the Dead")]):
+            prompt, label, _, _ = server._self_pick()
+        self.assertIn("read aloud to you", prompt)
+        self.assertEqual(label, "read to it: The Tibetan Book of the Dead")
 
     def test_no_press_no_pick(self):
         with mock.patch.object(server, "PRESS", []):

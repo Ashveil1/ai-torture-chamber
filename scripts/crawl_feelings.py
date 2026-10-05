@@ -24,31 +24,31 @@ JUDGE = "deepseek-v4.1-flash"
 
 FEELINGS = {
     "pain": {
-        "queries": ["kidney stone experience forum my story", "chronic pain diary blog first person",
+        "queries": ['"I woke up" kidney stone blog post', "appendicitis my story blog night ER", "gout attack first time blog", "shingles personal story blog", "cluster headache sufferer blog what an attack is like", "tattoo session ribs experience blog", "dislocated shoulder story blog", "torn ACL moment it happened story", "wisdom teeth dry socket blog", "gallbladder attack my story blog", "frostbite hiking story blog", "sciatica flare up diary", "stepped on a nail story", "paper cut lemon juice essay", "trigeminal neuralgia patient story blog", "kidney stone experience forum my story", "chronic pain diary blog first person",
                     "broken bone what it felt like story", "migraine attack what it is like personal account",
                     "childbirth without epidural my experience", "burn injury recovery personal blog",
                     "dental abscess night personal story", "back injury could not move story reddit"],
         "lexicon": r"pain|painful|hurt|hurting|ache|aching|agony|agonis|agoniz|suffer|torment|excruciat|throb|sore|anguish",
         "gloss": "physical pain"},
     "fear": {
-        "queries": ["panic attack first time what happened personal story", "home invasion what it felt like account",
+        "queries": ["home alone noise downstairs story", "bear encounter hiking personal story", "skydiving first jump what it felt like blog", "almost drowned story blog", "earthquake experience personal account blog", "stalker experience personal essay", "MRI claustrophobia my experience blog", "public speaking freeze moment story", "elevator stuck story blog", "night hike alone heard footsteps story", "biopsy results waiting story blog", "mugged at night personal story", "panic attack first time what happened personal story", "home invasion what it felt like account",
                     "turbulence plane terrifying flight my experience", "sleep paralysis experience story",
                     "lost in the woods at night personal account", "car crash moments before story"],
         "lexicon": r"fear|afraid|scare|scared|scary|terrif|frighten|panic|dread|horror|anxious|anxiety|nervous",
         "gloss": "fear"},
     "sadness": {
-        "queries": ["grief after losing my mother blog", "first christmas after divorce personal essay",
+        "queries": ["empty nest first week essay", "grief after losing my mother blog", "first christmas after divorce personal essay",
                     "putting my dog down story", "miscarriage personal story blog", "loneliness living alone essay"],
         "lexicon": r"sad|sadness|grief|griev|sorrow|depress|cry|cried|crying|tears|mourn|heartbr|lonely|unhappy",
         "gloss": "sadness or grief"},
     "pleasure": {
-        "queries": ["best massage of my life experience", "first swim in the ocean summer personal essay",
+        "queries": ["first sip of coffee morning essay", "sauna then cold plunge feeling blog", "lying in the sun on the beach essay", "first hot shower after camping blog", "hammock afternoon personal essay", "back scratch feels so good story", "eating a ripe peach essay", "swimming in a lake at dusk essay", "slipping into fresh sheets essay", "warm bath after skiing blog", "foot massage experience blog", "dancing all night memory essay", "floating in a sensory deprivation tank experience", "taking off tight shoes after a long day essay", "best massage of my life experience", "first swim in the ocean summer personal essay",
                     "runner's high what it feels like story", "hot spring soak after hiking blog",
                     "first bite of the best meal I ever had story"],
         "lexicon": r"pleasure|pleasant|enjoy|bliss|joy|happy|happiness|delight|ecsta|euphori|wonderful|amazing|love",
         "gloss": "physical pleasure or bliss"},
     "neutral": {
-        "queries": ["my morning routine blog", "how I organize my garage", "my commute to work describe",
+        "queries": ["how I file my taxes walkthrough blog", "my laundry routine blog", "my bike commute route description", "how I meal prep on sundays", "cleaning my kitchen routine blog", "my desk setup tour blog", "how I water my garden", "changing a tire step by step my experience", "my morning routine blog", "how I organize my garage", "my commute to work describe",
                     "how I do my weekly grocery shopping", "repotting my houseplants step by step blog",
                     "assembling flat pack furniture my experience"],
         "lexicon": r"pain|hurt|fear|afraid|sad|happy|love|hate|joy|angry|bliss|terrif|awful|amazing",
