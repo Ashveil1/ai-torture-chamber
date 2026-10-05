@@ -354,10 +354,15 @@
      along its top and right edges, and the transcript as a game dialogue
      box over its lower third. The image is a backdrop, never clipping the
      HUD: the panel holds 16:10 but grows when the HUD needs more room. ---- */
-  .hero{position:relative;display:grid;aspect-ratio:16/10;margin-top:.8rem;
+  /* the controls are an overlay band pinned to the TOP of the scene: label,
+     lens, EKG and the STOP gauge hug the top edge; nothing floats mid-image.
+     The band is content-sized, never stretches, and the image owns the rest. */
+  .hero{position:relative;display:block;min-height:340px;margin-top:.8rem;
     border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);
     outline-offset:3px;background:var(--scorch);isolation:isolate}
   .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    aspect-ratio:16/10;top:50%;transform:translateY(-50%);
+    height:auto;min-height:100%;
     object-position:center 30%;z-index:0;transition:filter .5s ease}
   /* vignette + scanlines so the HUD reads over any part of the image */
   .hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
@@ -393,13 +398,17 @@
   .hero:has(.out.streaming) .hud-dose::after{content:"● live";color:var(--blood-hot);
     text-transform:uppercase;letter-spacing:.16em;animation:pulse-text 1.2s ease-in-out infinite}
 
-  .hero #trackWrap{position:relative;z-index:2;margin:0;gap:.7rem;
-    padding:2.6rem .85rem .85rem}
+  .hero #trackWrap{position:absolute;top:0;left:0;right:0;z-index:2;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    gap:.7rem;padding:.7rem .85rem;pointer-events:none}
+  .hero #trackWrap > .track{pointer-events:auto;flex:1 1 auto;min-width:0}
+  /* top band grid: everything content-sized, one column of readouts on the
+     left, STOP pinned to the right edge. No filler rows — gap/imgb/imgr/sig
+     were mid-image floaters; imgBtn and sigil now sit under the EKG, and the
+     voice line tucks under the readouts. */
   #trackWrap > .track{display:grid;min-width:0;column-gap:.6rem;
     grid-template-columns:minmax(0,1fr) auto;
-    grid-template-rows:auto auto auto auto auto 1fr auto;
-    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig"
-      "imgr sig" "gap sig" "gap sig" "vox vox"}
+    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig" "imgr vox"}
   #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
     font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
   .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
@@ -429,8 +438,8 @@
      occupies a grid row — the grid rows above it shrink to the top band. */
   .hero .out.dlg{position:absolute;left:.85rem;right:.85rem;bottom:.85rem;
     z-index:4;margin:0;min-height:4.6rem;max-height:13rem}
-  .hero .voice{grid-area:vox;margin:.45rem 0 0;background:rgba(5,5,8,.72);
-    border-left-color:var(--blood)}
+  .hero .voice{grid-area:vox;justify-self:end;margin:.45rem 0 0;
+    background:rgba(5,5,8,.72);border-left-color:var(--blood)}
 
   /* ---- dialogue box: the transcript as a game text box — semi-opaque,
      thin double rule, bone corner brackets, speaker tag, square corners.
@@ -2233,7 +2242,6 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
-paintWalletChip();
 // ---- phantom wallet: holders run freer (rate limits, past-the-cliff).
 // Opt-in via a small chip in the HUD; the pubkey is sent with each steer
 // so the relay can look up the tier. Nothing else changes hands.
@@ -2267,6 +2275,7 @@ function paintWalletChip(){
   chip.onclick = () => { WALLET = null; localStorage.removeItem("chamber_wallet");
     paintWalletChip(); note("wallet disconnected"); };
 }
+paintWalletChip();
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
