@@ -3,6 +3,11 @@
 **Live: [wirehead.agency](https://wirehead.agency)** — the end-signal probe,
 public pages, and the live steered-model lab.
 
+An optional [Consciousness Research Observatory](observatory/README.md) adds
+continuous browser agents, a public research notebook, reviewed corpus snapshots
+and scheduled HF adapter training. Inspect `site/observatory.html?preview=1` before
+connecting providers; run it as a separate sidecar from the live Chamber relay.
+
 ## Support the chamber
 
 Everything here runs on one MacBook and the occasional rented GPU hour.

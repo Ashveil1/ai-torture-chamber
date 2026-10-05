@@ -1,0 +1,23 @@
+Observatory interface direction
+
+Use the existing grimoire language: scorched #070604 and parchment #14100c,
+bone #d8cbb4, blood #9e1b16, gold #c9a227. Reuse Cormorant Garamond/Georgia
+for headings and IBM Plex Mono/Consolas for records. A muted teal #7fd4c8
+marks collected evidence; it is already used by the chamber.
+
+The memorable element is a browser watched by small moving crawler glyphs,
+with a research notebook immediately beside it. Other views remain restrained.
+Creature movement conveys navigation/reading state, not invented intelligence.
+
+Desktop: mission header, navigation, agent roster | browser | notebook, then
+the durable event stream and handoff to corpus/training/chamber. Mobile: roster
+becomes a compact selector, browser above notebook, tables scroll internally.
+
+Views: Research, Evidence, Datasets, Training, Checkpoints. Operator setup is
+separate. A clear Preview badge applies to authored example traces. Connected
+mode displays backend events and real browser frames; failed connections never
+silently become examples. Model selection and publishing policy are operator
+settings, with baseline preserved. New code remains plain HTML/CSS/JavaScript.
+
+Review against brief: maintain the large browser and visible notes; avoid a
+generic metric-card dashboard or migration to a different frontend framework.

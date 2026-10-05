@@ -4,8 +4,12 @@ SESSION_RESUME.md
 docs/reddit_post.md
 .vercel
 .env*
+!observatory/.env.example
 SESSION_RESUME.md
 .venv/
+.venv-observatory/
+.observatory/
+observatory-ui-captures/
 runs/impossible_states/
 .DS_Store
 

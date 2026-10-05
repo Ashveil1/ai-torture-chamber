@@ -1,0 +1,12 @@
+.git
+.venv*
+.observatory
+**/__pycache__
+**/.pytest_cache
+.env*
+**/.env
+**/.env.*
+runs
+data/human
+data/exp56/erowid_dmt
+observatory-ui-captures
