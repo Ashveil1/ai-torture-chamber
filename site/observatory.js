@@ -31,6 +31,7 @@
   let ownerToken = "", connected = false, busy = false, connectionError = "", eventSource = null, previewTimer = null, refreshTimer = null, stateTimer = null;
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
   let frameTelemetry = null, highlightedNoteId = "";
+  let previewScrollFrame = null, previewScrollKey = "", previewScrollY = 0;
   let inheritedBaseRevision = false;
   let researchCatalog={status:"unavailable",models:[]}, metadataAt=0, metadataLoading=false, metadataGeneration=0;
   let previousProvider=preferences.research_provider;
@@ -119,11 +120,21 @@
     const scale=Math.min(displayWidth/v.viewport_width,displayHeight/v.viewport_height);
     if(!Number.isFinite(scale) || scale<=0) return null;
     const start=v.scroll_y/v.document_height, extent=v.viewport_height/v.document_height;
-    let rect=null;
-    if(focus && ["supporting_passage","preview_passage"].includes(focus.kind) && ["x","y","width","height"].every(key=>typeof focus[key]==="number" && Number.isFinite(focus[key])) && focus.x>=0 && focus.y>=0 && focus.width>0 && focus.height>0 && focus.x+focus.width<=v.viewport_width && focus.y+focus.height<=v.viewport_height && typeof focus.note_id==="string" && /^[A-Za-z0-9_-]{1,128}$/.test(focus.note_id)) {
-      rect={left:(displayWidth-v.viewport_width*scale)/2+focus.x*scale,top:(displayHeight-v.viewport_height*scale)/2+focus.y*scale,width:focus.width*scale,height:focus.height*scale,note_id:focus.note_id};
+    const validId=value=>typeof value==="string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+    const validRect=value=>value && ["x","y","width","height"].every(key=>typeof value[key]==="number" && Number.isFinite(value[key])) && value.x>=0 && value.y>=0 && value.width>0 && value.height>0 && value.x+value.width<=v.viewport_width && value.y+value.height<=v.viewport_height;
+    const scaleRect=value=>({left:(displayWidth-v.viewport_width*scale)/2+value.x*scale,top:(displayHeight-v.viewport_height*scale)/2+value.y*scale,width:value.width*scale,height:value.height*scale});
+    let rect=null,lines=[],kind="",focus_id="";
+    if(focus && ["supporting_passage","inspection_passage","preview_passage","preview_inspection"].includes(focus.kind) && validRect(focus)) {
+      const saved=["supporting_passage","preview_passage"].includes(focus.kind);
+      const valid=saved?validId(focus.note_id):validId(focus.inspection_id);
+      const requiresLines=!saved || focus.inspection_id!==undefined;
+      const validLines=!requiresLines && focus.lines===undefined || Array.isArray(focus.lines) && focus.lines.length>0 && focus.lines.length<=12 && focus.lines.every(validRect);
+      if(valid && validLines && (focus.inspection_id===undefined || validId(focus.inspection_id))) {
+        rect={...scaleRect(focus),kind:focus.kind,note_id:saved?focus.note_id:"",inspection_id:focus.inspection_id || ""};
+        lines=(focus.lines || []).map(scaleRect);kind=focus.kind;focus_id=focus.inspection_id || focus.note_id;
+      }
     }
-    return {start,extent,end:Math.min(1,start+extent),rect};
+    return {start,extent,end:Math.min(1,start+extent),rect,lines,kind,focus_id};
   }
   function frameMetadata(headers,id) {
     if(headers.get("X-Observatory-Agent")!==id || !/^[a-f0-9]{64}$/.test(headers.get("X-Observatory-Frame-SHA256") || "")) return null;
@@ -131,8 +142,11 @@
       const raw=headers.get("X-Observatory-Viewport"), rawFocus=headers.get("X-Observatory-Focus");
       if(!raw || raw.length>2048 || rawFocus && rawFocus.length>2048) return null;
       const viewport=JSON.parse(raw), focus=rawFocus?JSON.parse(rawFocus):null;
+      const context=headers.get("X-Observatory-Document") || "";
+      if(context && !/^[a-f0-9]{64}$/.test(context)) return null;
       // A connected feed never accepts the preview's authored highlight type.
-      return {viewport,focus:focus?.kind==="supporting_passage"?focus:null};
+      const allowed=(focus?.kind==="supporting_passage" || focus?.kind==="inspection_passage") && (!(focus.kind==="inspection_passage" || focus.inspection_id!==undefined) || !!context);
+      return {viewport,focus:allowed?focus:null,frameKey:headers.get("X-Observatory-Frame-SHA256"),documentKey:context};
     } catch (_) { return null; }
   }
   function resetFrameTelemetry() {
@@ -144,7 +158,7 @@
   function renderFrameTelemetry() {
     const display=$("browser-display"), geometry=viewportGeometry(frameTelemetry?.viewport,frameTelemetry?.focus,display.clientWidth,display.clientHeight);
     highlightedNoteId="";
-    $("passage-focus").hidden=!geometry?.rect;$("agent-scroll-track").hidden=!geometry;
+    $("passage-focus").hidden=!geometry?.rect || !!geometry.lines.length;$("agent-scroll-track").hidden=!geometry;
     if(!geometry) {text("viewport-position","Page position unavailable");window.ObservatoryMotion?.stop(true);return;}
     const start=Math.floor(geometry.start*100),end=Math.min(100,Math.ceil(geometry.end*100));
     text("viewport-position",(mode==="preview"?"Example viewport":"Agent viewport")+" · "+start+"–"+end+"% of page");
@@ -153,11 +167,15 @@
     if(geometry.rect) {
       const rect=geometry.rect, overlay=$("passage-focus");
       overlay.style.left=rect.left+"px";overlay.style.top=rect.top+"px";overlay.style.width=rect.width+"px";overlay.style.height=rect.height+"px";
-      text("passage-focus-caption",mode==="preview"?"Example passage":"Saved note passage");
-      highlightedNoteId=rect.note_id;
+      text("passage-focus-caption",mode==="preview"?"Example passage":rect.note_id?"Saved note passage":"Selected for inspection");
+      highlightedNoteId=rect.note_id || "";
     }
-    const selected=agent(), latest=[...state.events].reverse().find(item=>String(item.agent_id)===String(selected?.id));
-    window.ObservatoryMotion?.update({geometry,viewport:frameTelemetry.viewport,selected,event:latest,preview:mode==="preview",running:state.mission.status==="running" && (mode==="preview" || connected),visible:currentView==="research" && !document.hidden});
+    const selected=agent(), events=[...state.events].reverse().filter(item=>String(item.agent_id)===String(selected?.id));
+    const latest=events.find(item=>{
+      const age=Date.now()-new Date(item.created_at).getTime();
+      return item.type==="note.saved" && item.data?.note_id===geometry.rect?.note_id && (!geometry.rect?.inspection_id || item.data?.inspection_id===geometry.rect.inspection_id) && (mode==="preview" || Number.isFinite(age) && age>=-5000 && age<=30000);
+    }) || events.find(item=>item.type!=="note.saved");
+    window.ObservatoryMotion?.update({geometry,viewport:frameTelemetry.viewport,selected,event:latest,preview:mode==="preview",running:state.mission.status==="running" && (mode==="preview" || connected),visible:currentView==="research" && !document.hidden,frameKey:frameTelemetry.frameKey,documentKey:frameTelemetry.documentKey});
   }
   function lockObserverViewport(display) {
     // A wheel or touch gesture over the spectator pane cannot alter its page.
@@ -169,6 +187,7 @@
   function disconnect() {
     if(eventSource) eventSource.close();
     eventSource=null;clearInterval(stateTimer);clearTimeout(refreshTimer);stateTimer=null;connected=false;
+    cancelPreviewScroll(true);
     clearLiveFrame();
     metadataGeneration++;metadataAt=0;metadataLoading=false;researchCatalog={status:"unavailable",models:[]};
   }
@@ -234,7 +253,7 @@
         const record=JSON.parse(event.data);
         if(!state.events.some(item=>String(item.id)===String(record.id))) state.events.push(record);
         state.events=state.events.slice(-100);state.cursor=Math.max(state.cursor || 0,record.seq || 0);
-        renderEvents();renderNotebook();
+        renderEvents();renderNotebook();renderFrameTelemetry();
         clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refreshState(true),650);
       } catch (_) { toast("An event could not be read. The next state refresh will resynchronize the record."); }
     };
@@ -270,7 +289,7 @@
       const capturedTime=capturedAt ? new Date(capturedAt).getTime() : NaN;
       const stale=Number.isFinite(capturedTime) && Date.now()-capturedTime>15000;
       text("frame-description","Actual browser capture · "+(Number.isFinite(capturedTime)?clock(capturedAt):"capture time not reported")+(stale?" · stale capture":"")+" · public view is read-only");
-      frameTelemetry=stale?null:frameMetadata(response.headers,id);renderFrameTelemetry();renderNotebook();
+      frameTelemetry=stale?null:frameMetadata(response.headers,id);renderNotebook();renderFrameTelemetry();renderNotebook();
       $("frame-stamp").hidden=false;
       if(previous) URL.revokeObjectURL(previous);
     } catch(error) { if(generation===frameGeneration){resetFrameTelemetry();renderNotebook();text("frame-description",frameObjectUrl?"Last actual capture · browser feed temporarily unavailable":"Waiting for browser worker · no simulated frame");} }
@@ -284,7 +303,7 @@
     if(!state.jobs.some(item=>String(item.id)===String(selectedJob))) selectedJob=state.jobs.at(-1)?.id || "";
     document.body.classList.toggle("connected",mode==="connected");
     document.body.classList.toggle("is-paused",state.mission.status!=="running" || mode==="connected" && !connected);
-    renderMode();renderMission();renderAgents();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();
+    renderMode();renderMission();renderAgents();renderNotebook();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();
     if($("notes-dialog").open) renderAllNotes();
   }
   function renderMode() {
@@ -322,24 +341,65 @@
   function illustrativeArticle(source) {
     if(!source) return '<div class="preview-page"><p class="preview-meta">No example source selected.</p></div>';
     const arxiv=sourceUrl(source).includes("arxiv.org"), header=arxiv?"arXiv":"Research archive";
-    return '<div class="preview-page"><div class="preview-document-header"><b>'+header+'</b><span>Illustrative article</span></div><article class="preview-article"><div class="preview-meta">'+esc(source.version || "Example source")+'<br>Public reference · '+esc(source.license || "Rights unknown")+'</div><h1 class="preview-title" data-preview-section="0">'+esc(source.title)+'</h1><p class="preview-authors">'+esc(source.authors || "Authors recorded at source")+'</p><h2>Research summary</h2><p data-preview-section="1">'+esc(source.summary || "No source summary recorded.")+'</p><div class="preview-callout" data-preview-section="2"><strong>Question for the record</strong><p>'+esc(source.limitation || "Which observations would distinguish the claim from a competing explanation?")+'</p></div><h2>Provenance before conclusions</h2><p data-preview-section="3">The research record keeps the document version, source URL and licensing decision together. Agent notes are separate from original source text.</p><p class="preview-document-footer">Simulated browser. This is an original illustrative layout. Summaries are paraphrases; source full text is not reproduced.</p></article></div>';
+    return '<div class="preview-page"><div class="preview-document-header"><b>'+header+'</b><span>Illustrative article</span></div><article class="preview-article"><div class="preview-meta">'+esc(source.version || "Example source")+'<br>Public reference · '+esc(source.license || "Rights unknown")+'</div><h1 class="preview-title" data-preview-section="0">'+esc(source.title)+'</h1><p class="preview-authors">'+esc(source.authors || "Authors recorded at source")+'</p><h2>Research summary</h2><p data-preview-section="1">'+esc(source.summary || "No source summary recorded.")+'</p><div class="preview-callout"><strong>Question for the record</strong><p data-preview-section="2">'+esc(source.limitation || "Which observations would distinguish the claim from a competing explanation?")+'</p></div><h2>Provenance before conclusions</h2><p data-preview-section="3">The research record keeps the document version, source URL and licensing decision together. Agent notes are separate from original source text.</p><p class="preview-document-footer">Simulated browser. This is an original illustrative layout. Summaries are paraphrases; source full text is not reproduced.</p></article></div>';
+  }
+  function cancelPreviewScroll(reset=false) {
+    if(previewScrollFrame!==null)cancelAnimationFrame(previewScrollFrame);
+    previewScrollFrame=null;
+    if(reset){previewScrollKey="";previewScrollY=0;}
+  }
+  function previewPassageLines(target,display) {
+    if(!target || typeof document.createRange!=="function")return [];
+    const range=document.createRange();range.selectNodeContents(target);
+    const origin=display.getBoundingClientRect(),lines=[];
+    for(const rect of Array.from(range.getClientRects()).slice(0,128)) {
+      const x=Math.max(0,rect.left-origin.left),y=Math.max(0,rect.top-origin.top);
+      const right=Math.min(display.clientWidth,rect.right-origin.left),bottom=Math.min(display.clientHeight,rect.bottom-origin.top);
+      if(right>x && bottom>y && bottom-y>=5)lines.push({x,y,width:right-x,height:bottom-y});
+      if(lines.length===12)break;
+    }
+    return lines;
+  }
+  function paintPreviewViewport(page,target,scroll,phase,settled=true) {
+    const display=$("browser-display"),selected=agent(),height=Math.max(display.clientHeight,page.scrollHeight);
+    page.style.transform="translateY(-"+scroll+"px)";
+    const lines=settled?previewPassageLines(target,display):[];
+    let focus=null;
+    if(lines.length && selected?.preview_inspection_id) {
+      const largest=lines.reduce((best,line)=>line.width*line.height>best.width*best.height?line:best);
+      const note_id=phase===2?selected.preview_focus_note_id:null;
+      focus={...largest,lines,kind:note_id?"preview_passage":"preview_inspection",inspection_id:selected.preview_inspection_id};
+      if(note_id)focus.note_id=note_id;
+    }
+    frameTelemetry={viewport:{viewport_width:display.clientWidth,viewport_height:display.clientHeight,scroll_x:0,scroll_y:scroll,document_width:display.clientWidth,document_height:height},focus,
+      frameKey:"preview-"+String(selected?.id)+"-"+String(selected?.step)+"-"+scroll,documentKey:"preview-"+String(selected?.id)+"-"+String(selected?.source_id)};
+    renderFrameTelemetry();
   }
   function renderPreviewViewport() {
     if(mode!=="preview" || currentView!=="research") return;
     const display=$("browser-display"), page=$("preview-frame").querySelector(".preview-page");
     if(!page || !display.clientWidth || !display.clientHeight) {resetFrameTelemetry();return;}
-    const phase=Math.max(0,Math.min(3,Number(agent()?.preview_scroll_phase) || 0));
-    const height=Math.max(display.clientHeight,page.scrollHeight), scroll=Math.round(Math.max(0,height-display.clientHeight)*[0,.38,.72,1][phase]);
-    page.style.transform="translateY(-"+scroll+"px)";
-    const target=page.querySelector('[data-preview-section="'+phase+'"]');
-    let focus=null;
-    if(target && phase===2 && agent()?.preview_focus_note_id) {
-      const y=Math.max(0,target.offsetTop-scroll), bottom=Math.min(display.clientHeight,target.offsetTop-scroll+target.offsetHeight);
-      const x=Math.max(0,target.offsetLeft), right=Math.min(display.clientWidth,target.offsetLeft+target.offsetWidth);
-      if(bottom>y && right>x) focus={x,y,width:right-x,height:bottom-y,kind:"preview_passage",note_id:agent().preview_focus_note_id};
+    const selected=agent(),phase=Math.max(0,Math.min(3,Number(selected?.preview_scroll_phase) || 0));
+    const target=page.querySelector('[data-preview-section="'+[1,2,2,3][phase]+'"]');
+    const height=Math.max(display.clientHeight,page.scrollHeight),scroll=Math.round(Math.max(0,Math.min(height-display.clientHeight,(target?.offsetTop || 0)-95)));
+    const key=[selected?.id,selected?.source_id,phase,height,display.clientWidth,display.clientHeight].join(":");
+    if(previewScrollFrame!==null && previewScrollKey===key)return;
+    const moving=state.mission.status==="running" && !document.hidden && !(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if(moving && Math.abs(scroll-previewScrollY)>2) {
+      cancelPreviewScroll();previewScrollKey=key;
+      const from=Math.max(0,Math.min(height-display.clientHeight,previewScrollY)),started=performance.now();
+      const tick=now=>{
+        if(mode!=="preview" || currentView!=="research" || state.mission.status!=="running" || document.hidden){cancelPreviewScroll();return;}
+        const p=Math.min(1,Math.max(0,(now-started)/650)),eased=p*p*(3-2*p);
+        previewScrollY=Math.round(from+(scroll-from)*eased);
+        paintPreviewViewport(page,target,previewScrollY,phase,p===1);
+        if(p<1)previewScrollFrame=requestAnimationFrame(tick);else previewScrollFrame=null;
+      };
+      previewScrollFrame=requestAnimationFrame(tick);
+    } else {
+      cancelPreviewScroll();previewScrollKey=key;previewScrollY=scroll;
+      paintPreviewViewport(page,target,scroll,phase);
     }
-    frameTelemetry={viewport:{viewport_width:display.clientWidth,viewport_height:display.clientHeight,scroll_x:0,scroll_y:scroll,document_width:display.clientWidth,document_height:height},focus};
-    renderFrameTelemetry();
   }
   function renderBrowser() {
     const selected=agent(), source=currentSource(), index=Math.max(0,state.agents.findIndex(item=>String(item.id)===String(selectedAgent)));
@@ -358,7 +418,7 @@
     text("frame-stamp",mode==="preview" ? "Simulated article layout" : "Actual browser capture");
     if(mode==="preview") {
       $("live-frame").hidden=true;$("browser-empty").hidden=true;
-      if(lastPreviewSource!==(source?.id || "")) { $("preview-frame").innerHTML=illustrativeArticle(source);lastPreviewSource=source?.id || ""; }
+      if(lastPreviewSource!==(source?.id || "")) { cancelPreviewScroll(true);$("preview-frame").innerHTML=illustrativeArticle(source);lastPreviewSource=source?.id || ""; }
       renderPreviewViewport();
       text("frame-description","Example agent-controlled scroll · no browser session");
     } else {
@@ -377,6 +437,11 @@
     $("note-form").querySelector("button").disabled=!source || !canMutate();
     $("note-text").disabled=!source || !canMutate();
     $("note-text").placeholder=mode==="connected" && !ownerToken ? "Owner access is required to add a note." : "A question, caveat, or observation…";
+    const capturedId=frameTelemetry?.focus?.note_id;
+    const capture=state.notes.find(note=>note.id===capturedId && String(note.agent_id)===String(selectedAgent) && (mode==="preview" || note.support_verified===true)) || [...state.notes].reverse().find(note=>String(note.agent_id)===String(selectedAgent) && note.source_id===source?.id && (mode==="preview" || note.support_verified===true));
+    const receipt=$("notebook-capture");receipt.hidden=!capture;receipt.dataset.noteId=capture?String(capture.id):"";
+    text("capture-label",mode==="preview"?"Example saved note":"Latest evidence note");
+    text("capture-text",capture?capture.passage || capture.supporting_passage || capture.text:"");
     let entries=[];
     if(notebook==="decisions") {
       entries=[...state.events].reverse().filter(event=>event.agent_id===selectedAgent && /decision|action|memory/.test(event.type || "")).slice(0,7).map(event=>({text:event.message || event.text,created_at:event.created_at,label:mode==="preview"?"Example decision":"Action explanation",source_id:event.data?.source_id}));
@@ -385,9 +450,10 @@
       entries=[...state.notes].reverse().filter(note=>note.agent_id===selectedAgent).slice(0,7).map(note=>({...note,label:titleCase(note.type || "Note")+(mode==="preview"?" · example":"")}));
     } else {
       entries=[...state.notes].reverse().filter(note=>note.agent_id===selectedAgent && (note.passage || note.supporting_passage || note.evidence_passage)).map(note=>({...note,text:note.passage || note.supporting_passage || note.evidence_passage,label:note.support_verified?"Passage provenance checked":"Unverified passage"}));
-      if(mode==="preview" && source) entries=[{text:source.summary,label:"Paraphrased summary · example",source_id:source.id}];
+      if(mode==="preview")entries=entries.map(entry=>({...entry,label:"Illustrated passage · example paraphrase"}));
+      if(mode==="preview" && source && !entries.length)entries=[{text:source.summary,label:"Paraphrased summary · example",source_id:source.id}];
     }
-    $("notebook-content").innerHTML=entries.length ? entries.map(entry=>'<article class="notebook-entry'+(entry.id===highlightedNoteId?' is-visible-passage':'')+'"><div class="entry-meta"><span>'+esc(entry.label)+(entry.id===highlightedNoteId?' · shown in browser':'')+'</span><time>'+esc(clock(entry.created_at))+'</time></div><p>'+esc(entry.text || "No authored text.")+'</p>'+(sourceById(entry.source_id)?'<button class="source-ref" data-source="'+esc(entry.source_id)+'">'+esc(short(sourceById(entry.source_id).title,48))+'</button>':"")+'</article>').join("") : '<p class="empty-notebook">'+(notebook==="extracts"?"No public source passages are attached to this agent. Full documents remain in the private corpus; a summary is not a quotation.":"This agent has not recorded "+esc(notebook)+" yet.")+'</p>';
+    $("notebook-content").innerHTML=entries.length ? entries.map(entry=>'<article class="notebook-entry'+(entry.id===highlightedNoteId?' is-visible-passage':'')+'"'+(entry.id?' data-note-id="'+esc(entry.id)+'"':'')+'><div class="entry-meta"><span>'+esc(entry.label)+(entry.id===highlightedNoteId?' · shown in browser':'')+'</span><time>'+esc(clock(entry.created_at))+'</time></div><p>'+esc(entry.text || "No authored text.")+'</p>'+(sourceById(entry.source_id)?'<button class="source-ref" data-source="'+esc(entry.source_id)+'">'+esc(short(sourceById(entry.source_id).title,48))+'</button>':"")+'</article>').join("") : '<p class="empty-notebook">'+(notebook==="extracts"?"No public source passages are attached to this agent. Full documents remain in the private corpus; a summary is not a quotation.":"This agent has not recorded "+esc(notebook)+" yet.")+'</p>';
     all("[data-notebook]").forEach(button=>{button.classList.toggle("active",button.dataset.notebook===notebook);button.setAttribute("aria-selected",String(button.dataset.notebook===notebook));});
   }
   function renderEvents() {
@@ -599,7 +665,7 @@
   }
   function updatePreviewTimer() {
     clearInterval(previewTimer);previewTimer=null;
-    if(mode==="preview" && state.mission.status==="running") previewTimer=setInterval(()=>{window.ObservatoryPreview.step(state,selectedAgent);render();},4200);
+    if(mode==="preview" && state.mission.status==="running") previewTimer=setInterval(()=>{window.ObservatoryPreview.step(state,selectedAgent);render();},6000);
   }
   async function missionAction(action) {
     if(mode==="preview"){window.ObservatoryPreview.mission(state,action);if(action==="start" || action==="resume")window.ObservatoryPreview.step(state,selectedAgent);updatePreviewTimer();render();toast("Preview "+action+" simulated. No real browser was started.");}
@@ -843,10 +909,11 @@
   $("training-job-select").addEventListener("change",()=>{selectedJob=$("training-job-select").value;renderTraining();});
   $("confirm-accept").addEventListener("click",async()=>{const callback=confirmation;confirmation=null;$("confirm-dialog").close();if(callback)await callback();});
   window.addEventListener("beforeunload",()=>{disconnect();clearInterval(previewTimer);ownerToken="";});
-  document.addEventListener("visibilitychange",()=>{if(document.hidden)window.ObservatoryMotion?.stop();else if(mode==="connected")refreshState(true);});
+  document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelPreviewScroll();window.ObservatoryMotion?.stop();}else if(mode==="connected")refreshState(true);else renderPreviewViewport();});
   lockObserverViewport($("browser-display"));
   window.addEventListener("resize",()=>{if(mode==="preview")renderPreviewViewport();else renderFrameTelemetry();});
   installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");
   if(mode==="connected")refreshState();
+  if(mode==="preview" && parameters.get("motion")==="1")missionAction("start");
   setInterval(refreshFrame,2000);
 })();

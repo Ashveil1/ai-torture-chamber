@@ -1,12 +1,16 @@
 """Bounded, read-only geometry observation for a spectator browser frame.
 
 The page contributes only numbers. Source passages and page text are never
-returned by the observer. A focus rectangle means a saved, verified quotation is
+returned by the observer. A focus rectangle means a selected literal quotation is
 visible; it does not claim to expose the model's attention or internal reasoning.
 """
 from __future__ import annotations
 
 import math
+import re
+
+
+MAX_PASSAGE_LINES = 12
 
 
 VIEWPORT_OBSERVER = r"""(passage) => {
@@ -19,7 +23,7 @@ VIEWPORT_OBSERVER = r"""(passage) => {
         document_height: Math.max(document.documentElement?.scrollHeight || 0, document.body?.scrollHeight || 0, window.innerHeight)
     };
     const result = {url: window.location.href, document_key: performance.timeOrigin,
-                    viewport, focus: null};
+                    viewport, focus: null, lines: [], passage_visible: false};
     const needle = String(passage || '').replace(/\s+/gu, ' ').trim();
     if (needle.length < 40 || needle.length > 4000) return result;
     const articles = document.querySelectorAll('article');
@@ -68,17 +72,21 @@ VIEWPORT_OBSERVER = r"""(passage) => {
         const range = document.createRange();
         range.setStart(pieces[start.partIndex].node, start.offset);
         range.setEnd(pieces[end.partIndex].node, end.offset + 1);
-        const rectangles = Array.from(range.getClientRects()).slice(0, 128);
+        const allRectangles = Array.from(range.getClientRects());
+        const rectangles = allRectangles.slice(0, 128);
         const quoteParents = new Set(pieces.slice(start.partIndex, end.partIndex + 1).map(part => part.node.parentElement));
         // A clipped line rectangle is more faithful than a box spanning columns,
         // whitespace or an offscreen portion of a multi-line quotation.
-        let largest = null;
+        let largest = null, entirelyVisible = allRectangles.length <= 128;
+        const lines = [];
         for (const rect of rectangles) {
+            if (rect.right <= rect.left || rect.bottom <= rect.top) continue;
             const left = Math.max(0, rect.left), top = Math.max(0, rect.top);
             const right = Math.min(viewport.viewport_width, rect.right);
             const bottom = Math.min(viewport.viewport_height, rect.bottom);
             const width = right - left, height = bottom - top;
-            if (width <= 0 || height <= 0) continue;
+            if (width <= 0 || height <= 0) { entirelyVisible = false; continue; }
+            if (left !== rect.left || top !== rect.top || right !== rect.right || bottom !== rect.bottom) entirelyVisible = false;
             // Range rectangles can survive ancestor overflow clipping or another
             // surface covering the text. Check the painted surface without any
             // visitor/agent interaction before publishing the rectangle.
@@ -87,10 +95,25 @@ VIEWPORT_OBSERVER = r"""(passage) => {
             for (let depth = 0; hit && depth < 40; hit = hit.parentElement, ++depth) {
                 if (quoteParents.has(hit)) { paintedQuote = true; break; }
             }
-            if (!paintedQuote) continue;
+            if (!paintedQuote) { entirelyVisible = false; continue; }
+            const line = {x:left, y:top, width, height};
+            const previous = lines[lines.length - 1];
+            // Adjacent inline fragments on one painted text line form a single
+            // trace, without spanning columns or vertical whitespace.
+            if (previous && Math.abs(previous.y - top) <= 1 && Math.abs(previous.height - height) <= 1
+                && left >= previous.x && left <= previous.x + previous.width + 3) {
+                previous.width = Math.max(previous.width, right - previous.x);
+            } else if (!lines.some(item => item.x === left && item.y === top && item.width === width && item.height === height)) {
+                lines.push(line);
+            }
             if (!largest || width * height > largest.width * largest.height) largest = {x:left, y:top, width, height};
         }
-        if (largest) { result.focus = largest; break; }
+        if (largest) {
+            result.focus = largest;
+            result.lines = lines.slice(0, 12);
+            result.passage_visible = entirelyVisible && lines.length > 0 && lines.length <= 12;
+            break;
+        }
     }
     return result;
 }"""
@@ -119,10 +142,13 @@ def viewport_geometry(value: object) -> dict | None:
     return result
 
 
-def passage_focus(value: object, viewport: dict | None, note_id: str | None) -> dict | None:
+def _identifier(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value) is not None
+
+
+def _rectangle(value: object, viewport: dict | None) -> dict | None:
     """Clip an observer rectangle again at the trust boundary and round pixels."""
-    if (not viewport or not isinstance(note_id, str) or not 1 <= len(note_id) <= 200
-            or not isinstance(value, dict)):
+    if not viewport or not isinstance(value, dict):
         return None
     if any(not _number(value.get(key), minimum=-10_000_000) for key in ("x", "y", "width", "height")):
         return None
@@ -134,11 +160,40 @@ def passage_focus(value: object, viewport: dict | None, note_id: str | None) -> 
     bottom = min(viewport["viewport_height"], round(value["y"] + value["height"]))
     if right <= left or bottom <= top:
         return None
-    return {"x": left, "y": top, "width": right - left, "height": bottom - top,
-            "kind": "supporting_passage", "note_id": note_id}
+    return {"x": left, "y": top, "width": right - left, "height": bottom - top}
 
 
-def stable_frame_geometry(before: object, after: object, *, url: str, note_id: str | None) -> tuple[dict | None, dict | None]:
+def passage_focus(value: object, viewport: dict | None, note_id: str | None = None, *,
+                  inspection_id: str | None = None, lines: object = None) -> dict | None:
+    """Allowlist a selected or saved literal passage and bounded painted lines."""
+    if not _identifier(note_id) and not _identifier(inspection_id):
+        return None
+    if note_id is not None and not _identifier(note_id):
+        return None
+    if inspection_id is not None and not _identifier(inspection_id):
+        return None
+    if inspection_id is not None and lines is None:
+        return None
+    rectangle = _rectangle(value, viewport)
+    if not rectangle:
+        return None
+    result = {**rectangle, "kind": "supporting_passage" if note_id else "inspection_passage"}
+    if note_id:
+        result["note_id"] = note_id
+    if inspection_id:
+        result["inspection_id"] = inspection_id
+    if lines is not None:
+        if not isinstance(lines, list) or not 1 <= len(lines) <= MAX_PASSAGE_LINES:
+            return None
+        safe_lines = [_rectangle(line, viewport) for line in lines]
+        if any(line is None for line in safe_lines):
+            return None
+        result["lines"] = safe_lines
+    return result
+
+
+def stable_frame_geometry(before: object, after: object, *, url: str, note_id: str | None = None,
+                          inspection_id: str | None = None) -> tuple[dict | None, dict | None]:
     """Publish metadata only when the same document and geometry bracket capture."""
     if not isinstance(before, dict) or not isinstance(after, dict):
         return None, None
@@ -151,6 +206,8 @@ def stable_frame_geometry(before: object, after: object, *, url: str, note_id: s
     viewport = viewport_geometry(before.get("viewport"))
     if not viewport or viewport != viewport_geometry(after.get("viewport")):
         return None, None
-    first = passage_focus(before.get("focus"), viewport, note_id)
-    second = passage_focus(after.get("focus"), viewport, note_id)
+    first = passage_focus(before.get("focus"), viewport, note_id, inspection_id=inspection_id,
+                          lines=before.get("lines"))
+    second = passage_focus(after.get("focus"), viewport, note_id, inspection_id=inspection_id,
+                           lines=after.get("lines"))
     return viewport, first if first == second else None

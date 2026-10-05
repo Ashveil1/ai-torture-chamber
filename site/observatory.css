@@ -393,45 +393,50 @@ body.grimoire-live.grimoire-observatory {
 
 .grimoire-observatory .dataset-downloads { display:flex; flex-wrap:wrap; gap:8px; }
 
-/* The saw accompanies observed browser activity; it never masks the document. */
+/* The character follows frame-bound text lines. Its hub stays upright. */
 .saw-svg { width:100%; height:100%; fill:none; stroke:currentColor; stroke-width:1.3; }
 .saw-blade { transform-origin:50px 50px; }
-.saw-blade polygon { fill:#211b12; stroke:#c9a227; stroke-width:1.4; }
+.saw-blade polygon { fill:#b89a53; stroke:#66502c; stroke-width:1.4; }
 .saw-blade circle { stroke:#8a7137; }
 .saw-hub { fill:#15110d; stroke:#e0c982; }
 .saw-mark { fill:currentColor; stroke:none; }
+.saw-body { transform-origin:50px 50px; }
+.saw-feeler { fill:none; stroke:#302518; stroke-width:2.7; stroke-linecap:round; }
+.saw-eye { stroke:#e0c982; stroke-width:2; }
+.saw-sensor { fill:#eadac0; stroke:none; }
 .saw-svg text { font:9px var(--mono); fill:currentColor; stroke:none; }
 .grimoire-observatory .creature-overlay {
   width:52px; height:52px; right:auto; bottom:auto; left:30px; top:45px;
-  transform:translate(-50%,-50%); transition:left .7s cubic-bezier(.2,.7,.2,1),top .7s cubic-bezier(.2,.7,.2,1);
+  transform:translate(-50%,-50%); transition:none; animation:none;
   z-index:5; color:#c9a227; filter:drop-shadow(0 2px 3px #0008); opacity:1;
+  pointer-events:none; will-change:left,top;
 }
 .grimoire-observatory .creature-overlay::before { content:none; }
-.creature-overlay.is-working .saw-blade { animation:saw-turn .8s linear infinite; }
+.creature-overlay .saw-blade { animation:none; }
 .creature-overlay.is-saving .saw-hub { fill:#c9a227; }
-.creature-overlay.is-saving::after { content:"+"; position:absolute; right:-4px; top:-6px; color:#e0c982; font:22px var(--mono); }
-.browser-display.is-scanning::after {
-  content:""; position:absolute; inset:0 20px auto 20px; height:2px; pointer-events:none; z-index:3;
-  background:linear-gradient(90deg,transparent,#b18b4080,#e0c982,transparent);
-  box-shadow:0 -8px 24px #c9a22718; animation:viewport-sweep 1.5s ease-out both;
-}
-.browser-display.is-saving-evidence .passage-focus { animation:evidence-ink .8s ease-out both; }
+.creature-overlay.is-saving::after { content:none; }
+.browser-display.is-scanning::after { content:none; }
+.passage-trail { position:absolute; inset:0; pointer-events:none; z-index:2; overflow:hidden; }
+.passage-trail-line { position:absolute; background:rgba(201,162,39,.28); border-radius:2px; }
+.evidence-seal { position:absolute; z-index:4; pointer-events:none; color:#60491c; border:1px solid #9f7d35; background:#d5c39dcc; padding:3px 6px; font:.62rem/1.2 var(--mono); }
+.research-workspace { position:relative; }
+.evidence-packet { position:absolute; top:0; left:0; z-index:30; pointer-events:none; padding:5px 8px; color:#211a12; background:#c9a227; border:1px solid #e0c982; font:.64rem/1.3 var(--mono); will-change:transform,opacity; }
+.notebook-capture { margin:0 0 16px; padding:11px 12px; border-left:2px solid var(--gold); background:#c9a2270a; }
+.notebook-capture>span { display:block; font:.64rem/1.5 var(--mono); color:var(--gold); margin-bottom:7px; }
+.notebook-capture>p { font:.9rem/1.45 var(--grimoire); color:var(--bone); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.notebook-capture.is-receiving,.notebook-capture.evidence-arrived { background:#c9a22718; }
 .crawler-readout { display:flex; align-items:center; gap:8px; padding:10px 0 4px; color:var(--gold); font:.68rem var(--mono); }
 .activity-light { width:5px; height:5px; background:currentColor; border-radius:50%; flex:none; }
 .motion-legend { margin-left:auto; text-align:right; color:var(--bone-dim); font:.62rem var(--mono); max-width:34ch; }
 .grimoire-observatory .agent-avatar .saw-svg { max-height:35px; }
 .grimoire-observatory .agent-entry[aria-pressed=true] .saw-hub { stroke:var(--gold); }
-@keyframes saw-turn { to { transform:rotate(360deg); } }
-@keyframes viewport-sweep { from { top:15%; opacity:0; } 20% { opacity:1; } to { top:82%; opacity:0; } }
-@keyframes evidence-ink { from { box-shadow:0 0 0 3px #c9a22780; } to { box-shadow:0 0 0 0 transparent; } }
 @media(max-width:760px) {
   .motion-legend { display:none; }
   .grimoire-observatory .creature-overlay { width:44px; height:44px; }
 }
 @media(prefers-reduced-motion:reduce) {
-  .browser-display.is-scanning::after { display:none; }
-  .creature-overlay.is-working .saw-blade { animation:none; }
   .grimoire-observatory .creature-overlay { transition:none; }
+  .evidence-packet { display:none; }
 }
 
 .quality-review-fields { border:1px solid var(--parch-line); padding:16px; margin:12px 0; min-width:0; }

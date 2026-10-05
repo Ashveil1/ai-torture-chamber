@@ -33,6 +33,7 @@ _PRIVATE_FIELDS = {
     "live_url", "live_view_url", "control_url", "browser_control_url",
     "text", "fulltext", "raw_html", "html", "original_text", "synthetic_sft", "records",
     "payment_signature", "signed_payment", "payment_payload", "signed_transaction",
+    "passage", "supporting_passage", "document_key", "expires_monotonic",
 }
 _PUBLIC_KINDS = ("agents", "sources", "notes", "datasets", "jobs", "checkpoints", "connections")
 

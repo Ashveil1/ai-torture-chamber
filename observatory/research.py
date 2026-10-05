@@ -19,6 +19,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 from uuid import uuid4
+from weakref import WeakKeyDictionary
 
 import httpx
 
@@ -39,6 +40,7 @@ ROLES = (
     ("archivist", "The Archivist", "Find original source versions, article licensing statements and trustworthy provenance; unknown rights stay unverified."),
     ("curator", "The Curator", "Investigate coverage gaps, evidence quality and useful instruction-example drafts; drafts need independent owner review."),
 )
+INSPECTION_TTL_SECONDS = 30
 SYSTEM = """You are a public-web research agent studying AI consciousness, sentience,
 pain and moral patienthood. Choose your own searches and follow promising public
 links. Compare competing accounts and actively seek contradictory evidence.
@@ -47,8 +49,12 @@ post, purchase, download executables or bypass site access restrictions. Do not
 infer consciousness from an AI's self-report or a training loss improvement.
 Use save_research_note for concise public observations, uncertainties and leads.
 Always attach an exact passage from the page for an evidence claim.
-Inspect relevant sections by scrolling the browser viewport. Save supported
-observations when you find useful evidence as you proceed through the document;
+Inspect relevant sections by scrolling the browser viewport.
+Before comparing or saving a passage, call inspect_visible_section with its exact
+visible text. This verifies a selected section and lets spectators follow it; it
+does not expose neural attention, internal reasoning or proof of understanding.
+Use short visible passages, then scroll with the normal browser scroll action.
+Save supported observations when you find useful evidence as you proceed through the document;
 a scroll itself is not evidence and does not require a new note. Spectators watch
 your viewport, so keep important passages in view when recording their notes.
 Original documents and your synthesized notes are separate. Unknown-rights content remains
@@ -170,7 +176,8 @@ def save_document(store: Store, *, url: str, title: str, text: str, html: str = 
 
 
 def save_note(store: Store, source: dict | None, agent_id: str, note: str, passage: str = "",
-              question: str = "", answer: str = "", confidence: str = "uncertain") -> dict:
+              question: str = "", answer: str = "", confidence: str = "uncertain", *,
+              inspection_id: str | None = None) -> dict:
     """A literal passage match verifies provenance, never the truth of a claim."""
     if not note.strip():
         raise ValueError("A public research note needs text")
@@ -187,9 +194,14 @@ def save_note(store: Store, source: dict | None, agent_id: str, note: str, passa
               "generated_by": "frontier_research_agent", "prompt_version": "research-v1",
               "review_status": "pending", "question": question[:2000] if supported else "",
               "answer": answer[:6000] if supported else ""}
+    if supported and inspection_id:
+        record["inspection_id"] = inspection_id
     saved = store.put("notes", record)
+    data = {"note_id": saved["id"], "source_id": record["source_id"], "supported": supported}
+    if record.get("inspection_id"):
+        data["inspection_id"] = record["inspection_id"]
     store.event("note.saved", note[:800], agent_id=agent_id,
-                data={"note_id": saved["id"], "source_id": record["source_id"], "supported": supported})
+                data=data)
     return saved
 
 
@@ -348,6 +360,10 @@ class ResearchSupervisor:
         self.closed = False
         self.next_funding_check = 0.0
         self.release_mission_id: str | None = None
+        # Selections belong to this exact live Playwright page and document, not
+        # a URL. Private persisted records are audit data, never resumed markers.
+        self.inspections: dict[str, dict] = {}
+        self._page_contexts = WeakKeyDictionary()
 
     async def start(self):
         sessions = [item for item in self.store.list_records("browser_sessions") if item.get("status") in {"creating", "creation_unknown", "active"}]
@@ -628,12 +644,28 @@ class ResearchSupervisor:
                                                        html=html, agent_id=agent_id, scope=scope, extraction=extracted)
                         return current_source
 
+                @tools.action("Select an exact 40–4000 character passage currently visible in the focused browser for inspection. This verifies literal visible text and reports the selection; it never scrolls, navigates or reveals internal reasoning.")
+                async def inspect_visible_section(supporting_passage: str):
+                    async with capture_lock:
+                        page = await current_page()
+                        try:
+                            selected = await self._inspect_visible_section(agent_id, page, supporting_passage, current_page)
+                        except ValueError as exc:
+                            return ActionResult(error=str(exc))
+                    return ActionResult(extracted_content=f"Selected visible passage {selected['id']} for inspection. This is a section selection, not proof of understanding. Save an observation using the same exact passage when appropriate.")
+
                 @tools.action("Save a concise public research observation or lead with an exact supporting passage from the current page. Optional question/answer drafts are kept separate from original documents.")
                 async def save_research_note(note: str, supporting_passage: str = "", question: str = "", answer: str = "", confidence: str = "uncertain", source_id: str = ""):
                     source = self.store.get("sources", source_id) if source_id else await capture_document()
                     if source_id and not source:
                         return ActionResult(error="Source id does not exist; collect the original document first")
-                    saved = save_note(self.store, source, agent_id, note, supporting_passage, question, answer, confidence)
+                    async with capture_lock:
+                        page = await current_page()
+                        inspected = await self._inspection_for_note(agent_id, page, supporting_passage, source, current_page)
+                        saved = save_note(self.store, source, agent_id, note, supporting_passage, question, answer, confidence,
+                                          inspection_id=inspected["id"] if inspected else None)
+                        if inspected and saved.get("support_verified"):
+                            self._promote_inspection(agent_id, inspected["id"], saved["id"])
                     return ActionResult(extracted_content=f"Saved note {saved['id']}; passage provenance verified={saved['support_verified']}. Rights and dataset review remain separate.")
 
                 @tools.action("Collect a public PDF or HTML document as original text. The URL must be public and permitted by robots.txt. This never verifies its conclusions or grants training rights.")
@@ -701,6 +733,7 @@ class ResearchSupervisor:
                 finally:
                     self.in_step.discard(agent_id)
                     self.active.pop(agent_id, None)
+                    self._clear_inspection(agent_id, "browser_pass_finished")
                     frames.cancel()
                     with suppress(asyncio.CancelledError):
                         await frames
@@ -724,6 +757,88 @@ class ResearchSupervisor:
             await route.continue_()
         except (ValueError, OSError, httpx.HTTPError):
             await route.abort("blockedbyclient")
+
+    def _clear_inspection(self, agent_id: str, reason: str):
+        selected = self.inspections.pop(agent_id, None)
+        if selected:
+            self.store.put("inspections", {**selected["record"], "status": "inactive", "inactive_reason": reason})
+
+    def _active_inspection(self, agent_id: str, page, url: str) -> dict | None:
+        selected = self.inspections.get(agent_id)
+        if not selected:
+            return None
+        if time.monotonic() >= selected["expires_monotonic"]:
+            self._clear_inspection(agent_id, "expired")
+            return None
+        if selected["page"] is not page or selected["record"]["url"] != url:
+            self._clear_inspection(agent_id, "page_changed")
+            return None
+        return selected
+
+    async def _inspect_visible_section(self, agent_id: str, page, supporting_passage: str, current_page) -> dict:
+        """Verify an agent-selected quotation on the exact focused page, read only."""
+        if not isinstance(supporting_passage, str) or len(supporting_passage) > 20_000:
+            raise ValueError("Select an exact visible passage of 40–4000 normalized characters")
+        passage = normalize(supporting_passage)
+        if not 40 <= len(passage) <= 4000:
+            raise ValueError("Select an exact visible passage of 40–4000 normalized characters")
+        if not page or await current_page() is not page:
+            raise ValueError("The focused research page is unavailable; inspect after navigation finishes")
+        url = page.url
+        if not url.startswith(("http://", "https://")) or not await self.policy.allowed(url):
+            raise ValueError("Only a permitted public research page can be inspected")
+        identifier = "inspection-" + uuid4().hex
+        before = await page.evaluate(VIEWPORT_OBSERVER, passage)
+        after = await page.evaluate(VIEWPORT_OBSERVER, passage)
+        viewport, focus = stable_frame_geometry(before, after, url=url, inspection_id=identifier)
+        if (page.url != url or await current_page() is not page or not viewport or not focus
+                or before.get("passage_visible") is not True or after.get("passage_visible") is not True):
+            raise ValueError("The entire selected passage must be literally visible and stable in the focused page; scroll first or select a shorter passage")
+        self._clear_inspection(agent_id, "replaced")
+        record = self.store.put("inspections", {"id": identifier, "agent_id": agent_id,
+            "url": url, "passage": passage, "document_key": before["document_key"], "status": "selected",
+            "verification": "literal_visible_passage", "ttl_seconds": INSPECTION_TTL_SECONDS})
+        self.inspections[agent_id] = {"record": record, "page": page,
+                                     "expires_monotonic": time.monotonic() + INSPECTION_TTL_SECONDS}
+        self.store.event("agent.inspection", "Selected a verified visible passage for inspection", agent_id=agent_id,
+                         data={"inspection_id": identifier, "url": url})
+        return record
+
+    async def _inspection_for_note(self, agent_id: str, page, passage: str, source: dict | None, current_page) -> dict | None:
+        if not page or not source:
+            return None
+        selected = self._active_inspection(agent_id, page, page.url)
+        if not selected or normalize(passage) != selected["record"]["passage"]:
+            return None
+        try:
+            if canonical_url(source.get("canonical_url", source.get("url", ""))) != canonical_url(page.url):
+                return None
+        except (ValueError, TypeError):
+            return None
+        record = selected["record"]
+        before = await page.evaluate(VIEWPORT_OBSERVER, record["passage"])
+        after = await page.evaluate(VIEWPORT_OBSERVER, record["passage"])
+        _, focus = stable_frame_geometry(before, after, url=record["url"], inspection_id=record["id"])
+        if (await current_page() is not page or page.url != record["url"]
+                or not isinstance(before, dict) or before.get("document_key") != record["document_key"]):
+            self._clear_inspection(agent_id, "document_changed")
+            return None
+        if (not focus or before.get("passage_visible") is not True or after.get("passage_visible") is not True
+                or self._active_inspection(agent_id, page, page.url) is not selected):
+            return None
+        return record
+
+    def _promote_inspection(self, agent_id: str, inspection_id: str, note_id: str):
+        selected = self.inspections.get(agent_id)
+        if selected and selected["record"]["id"] == inspection_id:
+            selected["record"] = self.store.put("inspections", {**selected["record"], "note_id": note_id, "status": "saved"})
+
+    def _frame_context(self, page, document_key: int | float) -> str:
+        nonce = self._page_contexts.get(page)
+        if nonce is None:
+            nonce = uuid4().hex
+            self._page_contexts[page] = nonce
+        return hashlib.sha256((nonce + ":" + str(document_key)).encode()).hexdigest()
 
     def _frame_passage(self, agent_id: str, url: str) -> tuple[str, str | None]:
         """Only the newest note's verified, current-page source can get a marker."""
@@ -752,9 +867,15 @@ class ResearchSupervisor:
     async def _capture_frame(self, agent_id: str, page) -> dict | None:
         """Observe and capture one identical spectator/agent page, never scroll it."""
         url = page.url
+        selected = self._active_inspection(agent_id, page, url)
         if not url.startswith(("http://", "https://")) or not await self.policy.allowed(url):
             return None
-        passage, note_id = self._frame_passage(agent_id, url)
+        if selected:
+            passage, note_id = selected["record"]["passage"], selected["record"].get("note_id")
+            inspection_id = selected["record"]["id"]
+        else:
+            passage, note_id = self._frame_passage(agent_id, url)
+            inspection_id = None
         before = await page.evaluate(VIEWPORT_OBSERVER, passage)
         data = await page.screenshot(type="jpeg", quality=65, full_page=False, timeout=5000)
         after = await page.evaluate(VIEWPORT_OBSERVER, passage)
@@ -763,9 +884,16 @@ class ResearchSupervisor:
         if (page.url != url or not isinstance(before, dict) or not isinstance(after, dict)
                 or before.get("url") != url or after.get("url") != url):
             return None
-        viewport, focus = stable_frame_geometry(before, after, url=url, note_id=note_id)
+        viewport, focus = stable_frame_geometry(before, after, url=url, note_id=note_id, inspection_id=inspection_id)
+        if selected and (before.get("document_key") != selected["record"]["document_key"]
+                         or after.get("document_key") != selected["record"]["document_key"]):
+            self._clear_inspection(agent_id, "document_changed")
+            focus = None
+        elif selected and self._active_inspection(agent_id, page, url) is not selected:
+            focus = None  # A replacement selection or expiry happened during capture.
         return {"data": data, "frame_sha256": hashlib.sha256(data).hexdigest(),
-                "frame_viewport": viewport, "frame_focus": focus}
+                "frame_viewport": viewport, "frame_focus": focus,
+                "frame_context": self._frame_context(page, before["document_key"]) if viewport else None}
 
     async def _frames(self, agent_id: str, browser, current_page):
         root = (self.store.path.parent / "frames").resolve()
@@ -774,8 +902,11 @@ class ResearchSupervisor:
         while True:
             try:
                 page = await current_page()
+                if not page:
+                    self._clear_inspection(agent_id, "focused_page_unavailable")
                 capture = await self._capture_frame(agent_id, page) if page else None
                 if capture and await current_page() is not page:
+                    self._clear_inspection(agent_id, "page_changed")
                     capture = None  # The agent switched tabs while its frame was being captured.
                 if not capture:
                     await asyncio.sleep(2)

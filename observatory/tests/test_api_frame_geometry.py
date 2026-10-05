@@ -93,7 +93,7 @@ def test_invalid_viewport_omits_all_geometry_without_breaking_frame(db, updates)
     {"x": -1}, {"y": 700}, {"width": 1300}, {"height": 0},
     {"x": True}, {"y": float("nan")}, {"width": float("inf")},
     {"height": "64"}, {"note_id": "note\r\nprivate"}, {"note_id": None},
-    {"kind": "guessed_gaze"},
+    {"kind": "guessed_gaze"}, {"kind": []}, {"kind": {}},
 ])
 def test_invalid_focus_cannot_render_but_valid_scroll_metadata_remains(db, updates):
     agent(db, frame_focus={**FOCUS, **updates})
@@ -189,3 +189,78 @@ def test_removed_file_during_load_is_reported_without_private_path(db, monkeypat
     monkeypatch.setattr(Path, "open", vanished)
     result = get_frame(db)
     assert result.status_code == 404 and "private" not in result.text
+
+
+def inspection_focus(**updates):
+    return {"x": 110, "y": 210, "width": 880, "height": 64, "kind": "inspection_passage",
+            "inspection_id": "inspection-1", "lines": [{"x": 110, "y": 210, "width": 880, "height": 24}], **updates}
+
+
+def test_verified_inspection_header_requires_exact_bound_document_identity_and_no_private_text(db):
+    focus = inspection_focus(passage="PRIVATE QUOTATION")
+    focus["lines"][0]["text"] = "PRIVATE LINE"
+    agent(db, frame_context="a" * 64, frame_focus=focus)
+    result = get_frame(db)
+    assert result.headers["x-observatory-document"] == "a" * 64
+    assert json.loads(result.headers["x-observatory-focus"]) == inspection_focus()
+    assert "PRIVATE" not in str(result.headers)
+    assert len(result.headers["x-observatory-focus"].encode("ascii")) <= 2048
+
+
+@pytest.mark.parametrize("context", [None, "invalid", "A" * 64, "a" * 63, "a" * 64 + "\r\n", 7])
+def test_new_inspection_without_valid_document_context_never_attaches_focus(db, context):
+    agent(db, frame_context=context, frame_focus=inspection_focus())
+    result = get_frame(db)
+    assert "x-observatory-focus" not in result.headers
+    assert "x-observatory-document" not in result.headers
+    assert "x-observatory-viewport" in result.headers
+
+
+def test_document_header_is_not_reused_for_mismatched_screenshot_hash(db):
+    agent(db, frame_context="a" * 64, frame_focus=inspection_focus(), frame_sha256="0" * 64)
+    result = get_frame(db)
+    assert "x-observatory-document" not in result.headers and "x-observatory-focus" not in result.headers
+
+
+@pytest.mark.parametrize("lines", [None, [], {}, "invalid", [{"x": 0, "y": 0, "width": 20, "height": 1}] * 13,
+    [{"x": 0, "y": 0, "width": True, "height": 1}],
+    [{"x": 0, "y": 0, "width": 20, "height": float("nan")}],
+    [{"x": -1, "y": 0, "width": 20, "height": 1}],
+    [{"x": 0, "y": 0, "width": 1281, "height": 1}],
+    [{"x": 0, "y": 0, "width": 20, "height": 0}],
+    [{"x": 0, "y": 0, "width": 20, "height": 1}, None]])
+def test_any_invalid_inspection_line_omits_entire_focus_without_losing_frame(db, lines):
+    agent(db, frame_context="a" * 64, frame_focus=inspection_focus(lines=lines))
+    result = get_frame(db)
+    assert result.content == FRAME and "x-observatory-viewport" in result.headers
+    assert "x-observatory-focus" not in result.headers
+
+
+def test_saved_inspection_focus_has_note_and_inspection_identity(db):
+    focus = inspection_focus(kind="supporting_passage", note_id="note_1")
+    agent(db, frame_context="a" * 64, frame_focus=focus)
+    result = get_frame(db)
+    assert json.loads(result.headers["x-observatory-focus"]) == focus
+
+
+def test_twelve_line_focus_stays_under_header_bound(db):
+    lines = [{"x": 110, "y": 100 + index * 26, "width": 880, "height": 24} for index in range(12)]
+    agent(db, frame_context="a" * 64, frame_focus=inspection_focus(lines=lines))
+    result = get_frame(db)
+    assert len(json.loads(result.headers["x-observatory-focus"])["lines"]) == 12
+    assert len(result.headers["x-observatory-focus"].encode("ascii")) <= 2048
+
+
+def test_header_byte_limit_discards_large_but_otherwise_numeric_metadata(db, monkeypatch):
+    monkeypatch.setattr(app_module, "MAX_FOCUS_HEADER_BYTES", 20)
+    agent(db, frame_context="a" * 64, frame_focus=inspection_focus())
+    result = get_frame(db)
+    assert "x-observatory-focus" not in result.headers and "x-observatory-viewport" in result.headers
+
+
+def test_inspection_kind_requires_real_observed_line_array(db):
+    focus = inspection_focus()
+    focus.pop("lines")
+    agent(db, frame_context="a" * 64, frame_focus=focus)
+    result = get_frame(db)
+    assert "x-observatory-focus" not in result.headers

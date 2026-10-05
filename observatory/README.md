@@ -15,7 +15,9 @@ container execution and managed-browser credentials have not been validated.
 
 ## Inspect the interface first
 
-Serve `site/` with a static server and open `observatory.html?preview=1`. Preview
+Serve `site/` with a static server and open `observatory.html?preview=1`. Use
+`observatory.html?preview=1&motion=1#research` to start the motion demonstration
+automatically. Preview
 mode contains explicitly authored example traces, browser facsimiles, datasets,
 training receipts and checkpoints. It makes no provider calls. Switching to a
 connected endpoint never silently substitutes those examples for a failed API.
@@ -31,18 +33,23 @@ the inspected Queen artifacts and the distinction from this 70B adapter recipe.
 
 The browser pane is a fixed, view-only window. Visitors cannot scroll its article;
 agent scrolling changes the incoming viewport capture. A gold position bar shows
-the visible portion of the document. A saved note's supporting passage is marked
-only when it can be matched to visible page text in that exact screenshot; a
-matching notebook entry is identified. This is source geometry, not a measure of
-attention or consciousness. Stale captures or missing geometry clear the marker.
-A brass saw replaces the fixed bug illustration. It moves with observed viewport
-progress, docks beside screenshot-bound saved evidence and spins briefly on a
-new action. Repeated unchanged frames do not restart its motion; pause, stale
-frames and hidden views stop it. The scan sweep illustrates browser activity,
-not a measured gaze path. Reduced-motion preferences are respected.
-The preview demonstrates agent-controlled scrolling in a noninteractive local
-article surface, with explicitly simulated notes. The surrounding website and
-notebook remain available to scroll normally.
+the visible portion of the document. The agent can select an exact visible
+passage with `inspect_visible_section` before saving a note. Its painted text lines
+are matched to the focused browser document and exact screenshot. A brass saw
+approaches those lines, traverses them, and progressively reveals gold highlights.
+Its blade spins with movement while its hub stays upright. A matching saved-note
+event stamps the passage and sends an evidence packet to the notebook receipt.
+Original supporting text stays private; the public receipt shows the authored note.
+
+The path represents verified text geometry and the agent's explicit selection,
+not measured attention, understanding or consciousness. Missing geometry creates
+no invented scan path. Unchanged frames do not replay completed motion. Document,
+tab or viewport changes cancel obsolete paths; pause, stale frames and hidden
+views stop animation. Reduced-motion preferences use static highlights.
+The preview demonstrates smooth agent-controlled scrolling and the same sequence
+in a noninteractive local article, with explicitly simulated inspections and
+notes. The surrounding website and notebook remain available to scroll normally.
+See [motion and inspection contracts](MOTION.md) for behavior and verification.
 
 ## Run the real sidecar
 
@@ -312,7 +319,7 @@ license URLs, separate permission for social-domain subdomains and standalone
 navigation. Docker persistence instructions were corrected; container execution
 remains unverified.
 
-The x402 implementation passed **628 combined tests**, with three skips: the
+The integrated implementation passed **696 combined tests**, with three skips: the
 optional browser fixture and two official-SDK tests omitted in the research
 environment. Those SDK cases pass in the separate payments environment's
 **77-test payment suite**. The suite covers real offline SDK construction/signature,
@@ -320,10 +327,13 @@ funding state/control races, explicit capability records, quote/receipt handling
 sealed export, immutable GPU images and adapter-specific dose receipt bindings.
 Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
 caller restart records, owner-only inspection and delayed-request cancellation.
-Source-only UI checks pass 157 assertions. The dedicated viewer checks cover
-scroll locking, passage alignment, preview steps and late-response races.
-`ui-motion.cjs` exercises scroll/evidence animation, repeated-frame idleness,
-pause/stale clearing and reduced-motion behavior without a browser or network.
+Source-only UI checks pass 158 assertions. The dedicated viewer checks cover
+scroll locking, letterbox/line geometry, inspection document identity, recent
+matching note events, smooth preview scrolling and late-response races.
+`ui-motion.cjs` passes 143 runtime assertions for finite line traversal,
+progressive highlights, exact inspection-to-note promotion, packet delivery,
+repeated-frame idleness, context cancellation, pause/stale clearing and
+reduced-motion behavior without a browser or network.
 JS syntax/CSS parsing and compose
 isolation assertions pass, and both Python environments pass dependency checks.
 There was no new browser visual review, paid gateway call, transfer, Docker build
@@ -336,7 +346,7 @@ python -m pytest observatory/tests -q
 
 That command runs the sidecar suite; its tiny-model test is skipped without the
 optional model stack. `requirements-test.txt` also supplies the repository's
-NumPy/PyYAML dependencies. The reported 628-test handoff used the combined
+NumPy/PyYAML dependencies. The reported 696-test handoff used the combined
 `tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
 reproduce that scope in the separate test environment, add the CPU model stack
 while retaining the sidecar's Hub pin:
@@ -361,7 +371,7 @@ memory requirements also depend on sequence length and batch settings.
 
 To include the real-browser fixture, set `OBSERVATORY_TEST_CHROMIUM` to an existing
 Chromium executable. With the sidecar running and Node Playwright available,
-`node observatory/tests/ui-smoke.cjs` checks six desktop/mobile views and writes
+`node observatory/tests/ui-smoke.cjs` checks five desktop/mobile views and writes
 screenshots. `node observatory/tests/ui-scroll.cjs` exercises viewer geometry and scroll
 controls without a browser. `node observatory/tests/ui-contract.cjs` checks live-by-default state,
 authenticated secret submission, explicit paid-job retry confirmation and the

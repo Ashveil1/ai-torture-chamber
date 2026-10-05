@@ -64,12 +64,15 @@
     agent.status=state.mission.status==="running"?"preview_browsing":"preview_ready";
     agent.current_url=source.canonical_url;agent.source_id=source.id;agent.goal=goals[n%goals.length];
     agent.preview_scroll_phase=phase;agent.preview_focus_note_id=null;
-    agent.last_action=["Example page opened","Example scroll to summary","Example note from visible passage","Example scroll to provenance"][phase];agent.step++;
+    const section=["summary","caveat","caveat","provenance"][phase];
+    agent.preview_inspection_id="preview-inspection-"+agent.id+"-"+Math.floor(agent.step/4)+"-"+section;
+    agent.last_action=["Example inspection of summary","Example scroll and inspection of caveat","Example note from selected passage","Example scroll and inspection of provenance"][phase];agent.step++;
     agent.last_observation=source.limitation;
     event(state,"agent.decision",agent.goal,agent.id,{source_id:source.id,step:agent.step});
+    if(phase!==2)event(state,"agent.inspection","Example passage selected for inspection.",agent.id,{source_id:source.id,inspection_id:agent.preview_inspection_id});
     if(phase===2) {
-      const note={id:"preview-note-"+state.cursor,agent_id:agent.id,source_id:source.id,type:"lead",text:source.limitation+" Follow-up: compare at least one competing interpretation.",support_verified:false,generated_by:"preview_fixture",review_status:"pending",bookmarked:false,created_at:stamp()};
-      state.notes.push(note);event(state,"note.saved","Example source-linked uncertainty saved.",agent.id,{source_id:source.id,note_id:note.id});
+      const note={id:"preview-note-"+state.cursor,agent_id:agent.id,source_id:source.id,type:"lead",text:source.limitation+" Follow-up: compare at least one competing interpretation.",passage:source.limitation,inspection_id:agent.preview_inspection_id,support_verified:false,generated_by:"preview_fixture",review_status:"pending",bookmarked:false,created_at:stamp()};
+      state.notes.push(note);event(state,"note.saved","Example source-linked uncertainty saved.",agent.id,{source_id:source.id,note_id:note.id,inspection_id:agent.preview_inspection_id});
       agent.preview_focus_note_id=note.id;
     }
     state.mission.open_questions=4+Math.floor(n/6);

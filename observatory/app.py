@@ -28,6 +28,8 @@ SITE = Path(__file__).resolve().parents[1] / "site"
 SOLANA_NETWORKS = {"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"}
 USDC_MINTS = {"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"}
 MAX_FRAME_BYTES = 10 * 1024 * 1024
+MAX_FOCUS_HEADER_BYTES = 2048
+MAX_FOCUS_LINES = 12
 
 
 def _frame_headers(agent: dict, data: bytes) -> dict[str, str]:
@@ -68,21 +70,56 @@ def _frame_headers(agent: dict, data: bytes) -> dict[str, str]:
     safe_viewport = {key: viewport[key] for key in viewport_fields}
     headers["X-Observatory-Viewport"] = json.dumps(safe_viewport, separators=(",", ":"), allow_nan=False)
 
+    document = agent.get("frame_context")
+    if isinstance(document, str) and re.fullmatch(r"[a-f0-9]{64}", document):
+        headers["X-Observatory-Document"] = document
+
     focus = agent.get("frame_focus")
-    if not isinstance(focus, dict) or focus.get("kind") != "supporting_passage":
+    if (not isinstance(focus, dict) or not isinstance(focus.get("kind"), str)
+            or focus.get("kind") not in {"supporting_passage", "inspection_passage"}):
         return headers
     note_id = focus.get("note_id")
-    if not isinstance(note_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", note_id):
+    inspection_id = focus.get("inspection_id")
+    def identifier(value):
+        return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value)
+    if focus["kind"] == "supporting_passage" and not identifier(note_id):
         return headers
-    if (not number(focus.get("x"), 0, viewport["viewport_width"])
-            or not number(focus.get("y"), 0, viewport["viewport_height"])
-            or not number(focus.get("width"), 0.001, viewport["viewport_width"])
-            or not number(focus.get("height"), 0.001, viewport["viewport_height"])
-            or focus["x"] + focus["width"] > viewport["viewport_width"]
-            or focus["y"] + focus["height"] > viewport["viewport_height"]):
+    if focus["kind"] == "inspection_passage" and not identifier(inspection_id):
         return headers
-    safe_focus = {key: focus[key] for key in ("x", "y", "width", "height", "kind", "note_id")}
-    headers["X-Observatory-Focus"] = json.dumps(safe_focus, separators=(",", ":"), allow_nan=False)
+    if inspection_id is not None and (not identifier(inspection_id) or "X-Observatory-Document" not in headers):
+        return headers
+    if inspection_id is not None and "lines" not in focus:
+        return headers
+
+    def rectangle(value):
+        if (not isinstance(value, dict) or not number(value.get("x"), 0, viewport["viewport_width"])
+                or not number(value.get("y"), 0, viewport["viewport_height"])
+                or not number(value.get("width"), 0.001, viewport["viewport_width"])
+                or not number(value.get("height"), 0.001, viewport["viewport_height"])
+                or value["x"] + value["width"] > viewport["viewport_width"]
+                or value["y"] + value["height"] > viewport["viewport_height"]):
+            return None
+        return {key: value[key] for key in ("x", "y", "width", "height")}
+
+    safe_rectangle = rectangle(focus)
+    if not safe_rectangle:
+        return headers
+    safe_focus = {**safe_rectangle, "kind": focus["kind"]}
+    if focus["kind"] == "supporting_passage":
+        safe_focus["note_id"] = note_id
+    if inspection_id:
+        safe_focus["inspection_id"] = inspection_id
+    if "lines" in focus:
+        lines = focus["lines"]
+        if not isinstance(lines, list) or not 1 <= len(lines) <= MAX_FOCUS_LINES:
+            return headers
+        safe_lines = [rectangle(line) for line in lines]
+        if any(line is None for line in safe_lines):
+            return headers
+        safe_focus["lines"] = safe_lines
+    encoded = json.dumps(safe_focus, separators=(",", ":"), allow_nan=False)
+    if len(encoded.encode("ascii")) <= MAX_FOCUS_HEADER_BYTES:
+        headers["X-Observatory-Focus"] = encoded
     return headers
 
 

@@ -332,7 +332,9 @@ def test_real_observer_matches_normalized_quote_across_inline_nodes():
     ])["result"]
     assert result["focus"] == RECTANGLE
     assert PASSAGE not in json.dumps(result)
-    assert set(result) == {"url", "document_key", "viewport", "focus"}
+    assert result["lines"] == [RECTANGLE]
+    assert result["passage_visible"] is True
+    assert set(result) == {"url", "document_key", "viewport", "focus", "lines", "passage_visible"}
 
 
 @pytest.mark.parametrize("node", [
@@ -352,6 +354,7 @@ def test_real_observer_checks_next_visible_match_and_clips_the_line():
         {"value": PASSAGE, "rect": rect(left=-30, top=888)},
     ])["result"]
     assert result["focus"] == {"x": 0, "y": 888, "width": 660, "height": 12}
+    assert result["passage_visible"] is False
 
 
 def test_real_observer_does_not_highlight_text_under_unrelated_surface():
