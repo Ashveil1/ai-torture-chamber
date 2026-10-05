@@ -13,7 +13,8 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-from .curation_receipts import EVIDENCE_STANCES, REQUIRED_PERSPECTIVES, SOURCE_TYPES, automated_review_reasons
+from .curation_receipts import (EVIDENCE_STANCES, REQUIRED_PERSPECTIVES, SOURCE_TYPES,
+                               automated_review_reasons, classification_reasons)
 
 SCIENTIFIC_SOURCE_TYPES = {"empirical_paper", "theoretical_paper", "review_paper", "technical_report"}
 
@@ -114,6 +115,7 @@ def quality_review_reasons(source: dict) -> list[str]:
         reasons.append("invalid_reviewed_perspective_coverage")
     if review.get("evidence_stance") in REQUIRED_PERSPECTIVES and covered and set(covered) != {review["evidence_stance"]}:
         reasons.append("perspective_coverage_conflicts_with_reviewed_stance")
+    reasons.extend(classification_reasons(review))
     if review.get("reviewer_kind", "human") == "automated":
         reasons.extend(automated_review_reasons(source, review))
     elif review.get("reviewer_kind", "human") != "human":
@@ -136,9 +138,21 @@ def extraction_reasons(source: dict) -> list[str]:
 
 def reviewed_perspectives(source: dict) -> list[str]:
     review = source["quality_review"]
+    if review.get("evidence_stance") == "not_applicable":
+        return []
+    if ("topic_domains" in review or "evidence_kind" in review) and "machine_consciousness" not in review.get("topic_domains", []):
+        return []
     if review["evidence_stance"] in REQUIRED_PERSPECTIVES:
         return [review["evidence_stance"]]
     return sorted(set(review.get("covered_stances", [])))
+
+
+def _scientific_original(review: dict) -> bool:
+    if review.get("source_type") not in SCIENTIFIC_SOURCE_TYPES:
+        return False
+    if "topic_domains" not in review and "evidence_kind" not in review:
+        return True  # Historical reviews retain their explicit legacy semantics.
+    return review.get("evidence_kind") in {"empirical", "scientific_theory"}
 
 
 def coverage_audit(records: list[dict]) -> dict:
@@ -155,27 +169,52 @@ def coverage_audit(records: list[dict]) -> dict:
         types = Counter(row["quality_review"]["source_type"] for row in rows)
         chars = Counter()
         perspectives = Counter()
+        domains, kinds, domain_chars, kind_chars = Counter(), Counter(), Counter(), Counter()
+        legacy_perspectives = Counter()
+        scientific_documents, legacy_scientific_documents = 0, 0
         for row in rows:
-            chars[row["quality_review"]["evidence_stance"]] += len(row["text"])
+            review, size = row["quality_review"], len(row["text"])
+            chars[review["evidence_stance"]] += size
             perspectives.update(row["reviewed_perspectives"])
+            legacy = "topic_domains" not in review and "evidence_kind" not in review
+            row_domains = ["legacy_unspecified"] if legacy else review["topic_domains"]
+            kind = "legacy_unspecified" if legacy else review["evidence_kind"]
+            domains.update(row_domains)
+            kinds.update([kind])
+            domain_chars.update({domain: size for domain in row_domains})
+            kind_chars[kind] += size
+            if legacy:
+                legacy_perspectives.update(row["reviewed_perspectives"])
+            if _scientific_original(review):
+                scientific_documents += 1
+                legacy_scientific_documents += int(legacy)
         total_chars = sum(chars.values())
         splits[split] = {"documents": len(rows), "stances": dict(sorted(stances.items())),
                          "source_types": dict(sorted(types.items())), "perspectives": dict(sorted(perspectives.items())),
+                         "legacy_perspectives": dict(sorted(legacy_perspectives.items())),
+                         "topic_domains": dict(sorted(domains.items())), "evidence_kinds": dict(sorted(kinds.items())),
+                         "topic_domain_characters": dict(sorted(domain_chars.items())), "evidence_kind_characters": dict(sorted(kind_chars.items())),
+                         "topic_domain_character_shares": {domain: round(count / total_chars, 6) for domain, count in sorted(domain_chars.items())} if total_chars else {},
+                         "evidence_kind_character_shares": {kind: round(count / total_chars, 6) for kind, count in sorted(kind_chars.items())} if total_chars else {},
+                         "scientific_documents": scientific_documents, "legacy_scientific_documents": legacy_scientific_documents,
                          "stance_characters": dict(sorted(chars.items())),
                          "stance_character_shares": {stance: round(count / total_chars, 6) for stance, count in sorted(chars.items())} if total_chars else {}}
     missing = [stance for stance in REQUIRED_PERSPECTIVES if not splits["train"]["perspectives"].get(stance)]
     reasons = ["missing_train_perspective:" + stance for stance in missing]
-    if not any(splits["train"]["source_types"].get(kind) for kind in SCIENTIFIC_SOURCE_TYPES):
+    if not splits["train"]["scientific_documents"]:
         reasons.append("missing_train_scientific_source")
     warnings = []
     if len(splits["train"]["stances"]) == 1 and splits["train"]["documents"]:
         warnings.append("single_stance_training_corpus")
     if len(splits["train"]["source_types"]) == 1 and splits["train"]["documents"]:
         warnings.append("single_source_type_training_corpus")
-    return {"version": "consciousness-coverage-v1", "required_train_perspectives": list(REQUIRED_PERSPECTIVES),
+    return {"version": "consciousness-coverage-v2", "required_train_perspectives": list(REQUIRED_PERSPECTIVES),
             "coverage_ready": not reasons, "reasons": reasons, "warnings": warnings, "splits": splits,
-            "selection": "all_unique_reviewed_originals_interleaved_by_stance_and_source_type",
+            "selection": "all_unique_reviewed_originals_interleaved_by_domain_evidence_stance_and_source_type",
             "weighting": "one_representative_per_near_duplicate_cluster; no_synthetic_upsampling",
+            "scope": "consciousness_science_mind_reality_religion_welfare_and_machine_consciousness",
+            "legacy_classifications": "reported_as_legacy_unspecified; existing_machine_perspective_and_scientific_counts_retained",
+            "domain_shares": "documents_may_have_multiple_domains;_domain_character_shares_can_sum_above_one",
             "balance_claim": "presence_floor_only; inspect_counts_and_character_shares"}
 
 
@@ -183,7 +222,9 @@ def interleave_originals(records: list[dict]) -> list[dict]:
     """Include every distinct accepted original once; alternate reviewed strata."""
     pools = defaultdict(list)
     for row in records:
-        pools[(row["split"], row["quality_review"]["evidence_stance"], row["quality_review"]["source_type"])].append(row)
+        review = row["quality_review"]
+        pools[(row["split"], tuple(review.get("topic_domains", ["legacy_unspecified"])),
+               review.get("evidence_kind", "legacy_unspecified"), review["evidence_stance"], review["source_type"])].append(row)
     queues = {key: deque(sorted(rows, key=lambda row: row["id"])) for key, rows in pools.items()}
     output = []
     while any(queues.values()):

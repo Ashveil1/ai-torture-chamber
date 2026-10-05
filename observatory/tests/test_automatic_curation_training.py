@@ -64,6 +64,7 @@ async def test_accepted_original_enters_cpt_and_worker_rechecks_receipt(tmp_path
         "provenance": {"method": "authored_test_fixture"}, "extraction": {"quality": "passed"}, "review_status": "pending"}
     verdict = {"decision": "accept", "topic_relevance": "relevant", "evidence_stance": "methodological",
         "source_type": "theoretical_paper", "covered_stances": ["supportive", "skeptical", "uncertain"],
+        "topic_domains": ["machine_consciousness"], "evidence_kind": "scientific_theory",
         "quotes": [text[:110]], "rationale": "Authored fixture covers the three relevant perspectives."}
     class Model:
         calls = 0
@@ -72,7 +73,7 @@ async def test_accepted_original_enters_cpt_and_worker_rechecks_receipt(tmp_path
             return SimpleNamespace(completion=output_format.model_validate(verdict))
     try:
         store.save_settings({"research_provider": "openai", "research_model": "fixture-model",
-            "auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v1"})
+            "auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v2"})
         store.set_mission({"id": "fixture-mission", "status": "running"})
         # Explicit train assignment keeps this boundary fixture independent of hash buckets.
         from observatory.curation import family_id

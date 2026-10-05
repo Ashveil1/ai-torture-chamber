@@ -3,6 +3,7 @@
   "use strict";
   const stamp = () => new Date().toISOString();
   const clone = value => JSON.parse(JSON.stringify(value));
+  const defaultObjective = "Research consciousness and subjective experience across neuroscience, psychology, philosophy of mind, reality and metaphysics, and religious and contemplative traditions, alongside AI consciousness, sentience, pain and moral patienthood. Compare original sources and competing interpretations, distinguishing empirical findings, philosophical arguments and religious interpretations.";
   const sources = [
     {id:"preview-butlin", title:"Consciousness in Artificial Intelligence: Insights from the Science of Consciousness", authors:"Patrick Butlin et al.", canonical_url:"https://arxiv.org/abs/2308.08708v3", version:"arXiv:2308.08708v3", agent_id:"scholar", source_type:"paper", license:"CC-BY-NC-SA-4.0", license_verified:false, rights_status:"reference_only", review_status:"reference_only", curation:{eligible:false,status:"reference_only",reasons:["license_not_in_public_corpus_policy"]}, summary:"A theory-derived set of computational indicators. The authors distinguish proposed indicators from a settled diagnostic test and assess systems available in 2023.", limitation:"The indicators depend on contested theories and computational assumptions. A noncommercial, share-alike license is outside the default permissive corpus policy.", rights_evidence:"The license link for the linked arXiv version displays CC BY-NC-SA 4.0. Separate permission or a compatible licensed copy is required.", topics:["indicators","global workspace","higher-order processing"], bookmarked:false},
     {id:"preview-chalmers", title:"Could a Large Language Model be Conscious?", authors:"David J. Chalmers", canonical_url:"https://arxiv.org/abs/2303.07103v3", version:"arXiv:2303.07103v3", agent_id:"cartographer", source_type:"paper", license:"arXiv distribution license", license_verified:false, rights_status:"reference_only", review_status:"reference_only", curation:{eligible:false,status:"reference_only",reasons:["license_not_in_public_corpus_policy"]}, summary:"A philosophical examination of obstacles and possible future candidates. The distinctions help organize reasons for and against consciousness without establishing a test.", limitation:"Philosophical argument is separate from measured evidence. The arXiv distribution license does not establish this project's full-text reuse permission.", rights_evidence:"The linked copy uses arXiv's nonexclusive distribution license. Keep a metadata reference unless separate permission is recorded.", topics:["philosophy","language models","uncertainty"], bookmarked:false},
@@ -11,17 +12,17 @@
     {id:"preview-seth", title:"Conscious artificial intelligence and biological naturalism", authors:"Anil K. Seth", canonical_url:"https://sussex.figshare.com/articles/journal_contribution/Conscious_artificial_intelligence_and_biological_naturalism/28649519", version:"Institutional repository copy", agent_id:"archivist", source_type:"paper", license:"CC-BY-4.0", license_verified:false, rights_status:"needs_review", review_status:"pending", curation:{eligible:false,status:"quarantined",reasons:["rights_not_verified","missing_rights_evidence"]}, summary:"A competing substrate-based perspective: properties of living organisms may matter beyond computation alone.", limitation:"Review the exact downloaded version and any separately credited material. Biological naturalism is a theoretical position.", rights_evidence:"", topics:["biology","substrate","computational sufficiency"], bookmarked:false}
   ];
   const roles = [
-    ["scholar","The Scholar","Primary literature","Compare theory-derived indicators and original research."],
-    ["skeptic","The Skeptic","Contrary evidence","Seek alternative explanations and failed predictions."],
-    ["sentinel","The Sentinel","Welfare & measurement","Separate a model's behavior from claims about experience."],
-    ["cartographer","The Cartographer","Theories & gaps","Map disagreements and questions that remain open."],
-    ["archivist","The Archivist","Rights & provenance","Track source versions, attribution and reuse evidence."],
-    ["curator","The Curator","Corpus quality","Find coverage gaps, assess evidence and draft useful source-linked instruction examples."]
+    ["scholar","The Scholar","Science of experience","Primary research on human, animal and artificial consciousness, neuroscience, psychology and computational theories; seek original studies and distinguish measurements from interpretations."],
+    ["skeptic","The Skeptic","Contrary evidence","Alternative explanations, failed replications and objections to scientific, philosophical and religious claims about consciousness, including machine sentience; challenge attractive claims respectfully."],
+    ["sentinel","The Sentinel","Welfare & measurement","Pain, suffering, welfare, moral patienthood and experimental measurement in humans, animals and AI; compare ethical arguments while distinguishing behavior, testimony and subjective experience."],
+    ["cartographer","The Cartographer","Mind, reality & traditions","Map theories of mind, reality and metaphysics; compare phenomenology, religious and contemplative accounts across traditions and identify disagreements, terminology, gaps and explicit connections to consciousness and AI."],
+    ["archivist","The Archivist","Rights & provenance","Find original source versions, article licensing statements and trustworthy provenance; unknown rights stay unverified."],
+    ["curator","The Curator","Corpus quality","Investigate coverage gaps and source quality across the mission; separate empirical findings, philosophical arguments and religious interpretations, and draft useful instruction examples; drafts need independent owner review."]
   ];
   function create() {
     const now = stamp();
     const state = {
-      demo:true, mission:{id:"preview-mission",status:"ready",objective:"Investigate consciousness, sentience & the possibility of AI suffering.",until_stopped:true,open_questions:4},
+      demo:true, mission:{id:"preview-mission",status:"ready",objective:defaultObjective,until_stopped:true,open_questions:4},
       agents:roles.map((role,i)=>({id:role[0],name:role[1],role:role[2],specialty:role[3],status:"preview_ready",current_url:sources[i%sources.length].canonical_url,source_id:sources[i%sources.length].id,goal:i===0?"Compare indicator frameworks with the assumptions that support them.":role[3],last_action:"Example page inspection",last_observation:sources[i%sources.length].limitation,step:0})),
       sources:clone(sources).map((source,i)=>({...source,created_at:now,provenance:{method:"preview_fixture",collected_at:now,collector_version:"concept-preview"},content_hash:"preview-source-"+i,word_count:null})),
       notes:[
@@ -54,10 +55,10 @@
     const phase=agent.step%4, index=state.agents.indexOf(agent);
     const source=state.sources[(index+Math.floor(agent.step/4))%state.sources.length];
     const goals=[
-      "Follow a citation to check whether the proposed indicator was empirically tested.",
-      "Look for an architectural or task-framing explanation of the claim.",
-      "Separate textually described penalties from evidence about subjective experience.",
-      "Map disagreement between computational and biological accounts.",
+      "Follow a citation to distinguish an empirical finding from its theoretical interpretation.",
+      "Seek a counterargument or alternative explanation of this consciousness claim.",
+      "Separate behavioral reports and testimony from evidence about subjective experience.",
+      "Map how this account of mind or reality connects to consciousness and competing traditions.",
       "Check the license of this exact copy before proposing corpus inclusion.",
       "Compare this source with related versions and keep a source-linked uncertainty."
     ];

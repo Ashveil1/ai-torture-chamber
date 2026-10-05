@@ -34,6 +34,14 @@ def test_automatic_curation_requires_an_explicit_policy_choice(store):
     assert store.get_settings()["auto_curation_enabled"] is False
 
 
+def test_legacy_ack_is_not_silently_upgraded_to_broad_scope(store):
+    from observatory.automatic_curation import enabled
+    store.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v1"})
+    assert not enabled(store.get_settings(private=True))
+    store.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v2"})
+    assert enabled(store.get_settings(private=True))
+
+
 def test_x402_settings_and_environment_signer_isolation(store, monkeypatch):
     store.save_settings({"research_provider": "x402", "research_protocol": "responses", "research_model": "openai/gpt-6-astra", "agent_count": "3"})
     assert store.get_settings()["agent_count"] == 3

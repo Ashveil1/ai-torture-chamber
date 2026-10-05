@@ -1,6 +1,6 @@
 # Corpus review and original-document training
 
-Policy `consciousness-corpus-v2` trains continued pretraining (CPT) on reviewed,
+Policy `consciousness-corpus-v3` trains continued pretraining (CPT) on reviewed,
 eligible original document text. Screenshots, action logs and free-form agent
 observations remain research records. Separately reviewed, source-supported
 instruction conversations can enter SFT only after the existing owner and
@@ -21,7 +21,9 @@ The owner can supply that review directly:
     "rationale": "Reviewed the paper's scope, argument and evidence limitations.",
     "topic_relevance": "relevant",
     "evidence_stance": "uncertain",
-    "source_type": "empirical_paper"
+    "source_type": "empirical_paper",
+    "topic_domains": ["machine_consciousness", "consciousness_science"],
+    "evidence_kind": "empirical"
   }
 }
 ```
@@ -34,8 +36,8 @@ They are not presented as human reviews. Deterministic rights, extraction and
 contamination requirements still apply. The worker cannot approve unknown rights,
 override failed extraction, remove evaluation exclusions or authorize teacher output.
 
-`evidence_stance` is one of `supportive`, `skeptical`, `uncertain`, `mixed`, or
-`methodological`. It classifies the document's argument about machine
+`evidence_stance` is one of `supportive`, `skeptical`, `uncertain`, `mixed`,
+`methodological`, or `not_applicable`. It classifies the document's argument about machine
 consciousness/experience; it is not a truth label, a judgment of an author's
 personality, or proof that a model experiences anything. Unknown classification
 remains discovery-only. `source_type` is `empirical_paper`, `theoretical_paper`,
@@ -45,6 +47,18 @@ For a mixed or methodological document, an owner may explicitly supply
 `covered_stances: ["supportive", "skeptical", "uncertain"]` when the document
 actually treats those perspectives. Omitting that field does not infer coverage.
 A document with a single stance cannot claim a contradictory coverage list.
+
+New broad reviews pair `topic_domains` with `evidence_kind`. Research areas cover
+machine consciousness, consciousness science, philosophy of mind, reality and
+metaphysics, religion and contemplation, and welfare and ethics. The basis of claims
+is `empirical`, `scientific_theory`, `philosophical_argument`,
+`religious_contemplative`, or `mixed`. General sources without a machine-consciousness
+argument use `not_applicable` with empty covered perspectives. Supporting machine
+perspectives requires the `machine_consciousness` area; philosophical or religious
+views are not silently turned into evidence for AI sentience. The two automatic
+review passes must agree on these classifications as well as the existing fields.
+Historical manual reviews without either field retain their legacy classification;
+new partial or inconsistent classifications are rejected.
 
 Rights, attribution, provenance, a canonical URL and sufficient original text
 are still required. Social content additionally requires documented permission;
@@ -90,14 +104,19 @@ from being relabeled as fresh validation data; conflicts quarantine the group.
 ## Coverage audit and selection
 
 Every unique eligible original is selected once. The export deterministically
-interleaves reviewed stance/source-type strata without fabricating examples,
+interleaves reviewed area, claim-basis, stance and source-type strata without fabricating examples,
 repeating scarce documents or claiming equal proportions. Training consumers
 may shuffle examples; interleaving does not impose a target distribution.
 
-`coverage_audit` reports document counts, source types, perspective counts and
-character shares for train and validation separately. The launch floor requires
+`coverage_audit` reports document counts, research areas, basis of claims, source
+types, machine perspectives and character shares for train and validation separately.
+Area labels can overlap, so their counts/shares need not sum to the document total
+or one. Legacy unclassified material is identified explicitly. The launch floor requires
 the **training** split to cover supportive, skeptical and uncertain arguments,
-plus at least one scientific source. Held-out coverage cannot fill a training
+plus at least one scientific source. Newly classified scientific formats also need
+an empirical or scientific-theory basis: a theoretical theology paper cannot fill
+that floor just because it is a paper. Legacy contributions are counted separately
+in the audit. Held-out coverage cannot fill a training
 gap. `quality_gate.ready` is false until the floor is met, with explicit reasons.
 
 This is a presence floor, **not statistical balance**. A four-to-one stance
@@ -129,8 +148,10 @@ comparison; learning the language of pain is not evidence of subjective pain.
 ## Snapshot compatibility
 
 Previously sealed snapshots remain immutable and retain their historical
-policy version. They are not silently upgraded or re-reviewed. New v2 snapshots
-must pass the v2 gates; old corpus input should be re-imported and explicitly
-reviewed before making a new training candidate. Test fixtures state their
+policy version. They are not silently upgraded or re-reviewed. New v3 snapshots
+must pass the v3 gates. Archived v2 manifests remain loadable under their historical
+contract. Existing approved records retain their original meaning; untagged reviews
+are reported as `legacy_unspecified`, not assigned guessed areas. Re-review them to
+add new classifications. Test fixtures state their
 review and extraction approval explicitly rather than enabling a production
 quality bypass.

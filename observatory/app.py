@@ -570,7 +570,8 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
             previous = {"id": str(uuid4()), "created_at": utc_now()}
         payload = {**previous, **{key: value for key, value in updates.items() if key not in {"id", "status"}},
                    "id": previous.get("id") or str(uuid4()), "status": statuses[action], "until_stopped": True}
-        payload.setdefault("objective", "Research AI consciousness, sentience, pain and moral patienthood using primary evidence and competing interpretations.")
+        from .research_scope import DEFAULT_OBJECTIVE
+        payload.setdefault("objective", DEFAULT_OBJECTIVE)
         result = db.set_mission(payload)
         db.event("mission." + action, f"Mission {action} requested", run_id=result["id"])
         return db.sanitize(result)
@@ -613,7 +614,7 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
                 raise HTTPException(422, "Quality review must be an object")
             choices = {"status": {"approved", "pending", "rejected"},
                        "topic_relevance": {"relevant", "unrelated", "uncertain"},
-                       "evidence_stance": {"supportive", "skeptical", "uncertain", "mixed", "methodological"},
+                       "evidence_stance": {"supportive", "skeptical", "uncertain", "mixed", "methodological", "not_applicable"},
                        "source_type": {"empirical_paper", "theoretical_paper", "review_paper", "technical_report", "article", "reference", "social"}}
             for key, values in choices.items():
                 if not isinstance(quality.get(key), str) or quality[key] not in values:
@@ -624,8 +625,15 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
             covered = quality.get("covered_stances", [])
             if not isinstance(covered, list) or any(not isinstance(item, str) or item not in {"supportive", "skeptical", "uncertain"} for item in covered):
                 raise HTTPException(422, "Invalid covered perspectives")
+            from .curation_receipts import classification_reasons
+            classification = classification_reasons(quality)
+            if classification:
+                raise HTTPException(422, "Invalid research classification: " + ", ".join(classification))
             updates["quality_review"] = {key: quality[key] for key in (*choices, "reviewed_by", "rationale")}
             updates["quality_review"]["covered_stances"] = sorted(set(covered))
+            if "topic_domains" in quality:
+                updates["quality_review"]["topic_domains"] = sorted(set(quality["topic_domains"]))
+                updates["quality_review"]["evidence_kind"] = quality["evidence_kind"]
         for key in ("contains_benchmark", "chamber_stimulus", "experimental_stimulus"):
             if key in updates and not isinstance(updates[key], bool):
                 raise HTTPException(422, key + " must be a boolean")

@@ -19,8 +19,9 @@ const context={$,nodes,state:{mission:{status:'running'},agents:[],sources:[],se
   sourceById(id){return context.state.sources.find(source=>source.id===id);}};
 vm.createContext(context);
 const helpers=['emptyState','normalizeState','titleCase','clock','curationReviews','curationDecision','sourceCurationReview',
-  'automatedReviewBadge','curationRecoveryAvailable','curationRecoveryMarkup','reviewCurationRecovery','renderAutomatedCuration','collectSettings'];
-const constants=main.split('\n').filter(line=>/^  const (esc|list) =/.test(line)).join('\n');
+  'automatedReviewBadge','curationRecoveryAvailable','curationRecoveryMarkup','reviewCurationRecovery','renderAutomatedCuration','fillAutoCurationSettings','collectSettings',
+  'collectSourceReview','qualityReviewMarkup','qualityClassificationMarkup','syncSourceReviewFields','coverageBucketsMarkup','corpusAuditMarkup'];
+const constants=main.split('\n').filter(line=>/^  const (esc|list|topicDomains|evidenceKinds|autoCurationPolicyAck) =/.test(line)).join('\n');
 vm.runInContext(constants+'\n'+helpers.map(extract).join('\n'),context);
 check(context.normalizeState({mission:{status:'stopped'},agents:[]}).curation_reviews.length===0,'Older backends have a safe empty review list');
 check(context.normalizeState({mission:{status:'stopped'},agents:[],curation_reviews:{}}).curation_reviews.length===0,'Malformed optional receipts do not become UI records');
@@ -29,7 +30,7 @@ $('setting-browser').value='local';$('setting-protocol').value='responses';
 let settings=context.collectSettings();
 check(settings.auto_curation_enabled===false && settings.auto_curation_policy_ack==='','Review policy is not enabled by default');
 $('setting-auto-curation').checked=true;settings=context.collectSettings();
-check(settings.auto_curation_enabled===true && settings.auto_curation_policy_ack==='originals-v1','Opt-in sends the exact source-only policy');
+check(settings.auto_curation_enabled===true && settings.auto_curation_policy_ack==='originals-v2','Opt-in sends the updated source-only classification policy');
 check(settings.synthetic_training_approved===false,'Source review does not grant synthetic-output permission');
 check(settings.training_enabled===false,'Source review does not enable paid GPU training');
 $('setting-auto-curation').checked=false;settings=context.collectSettings();
@@ -42,6 +43,43 @@ check($('automated-curation-summary').innerHTML.includes('No model call was made
 context.mode='connected';context.connected=false;context.renderAutomatedCuration();
 check($('automated-curation-summary').innerHTML.includes('Backend unavailable'),'Enabled preference does not conceal disconnection');
 context.connected=true;
+context.state.settings={auto_curation_enabled:true,auto_curation_policy_ack:'originals-v1'};
+context.renderAutomatedCuration();context.fillAutoCurationSettings(context.state.settings);
+check($('automated-curation-summary').innerHTML.includes('Policy update required') && !$('automated-curation-summary').innerHTML.includes('Enabled during research'),'An obsolete acknowledgement cannot advertise an enabled worker');
+check($('setting-auto-curation').checked===false && $('auto-curation-policy-notice').hidden===false,'Legacy opt-in needs an explicit updated choice');
+context.state.settings.auto_curation_policy_ack='originals-v2';context.renderAutomatedCuration();context.fillAutoCurationSettings(context.state.settings);
+check($('automated-curation-summary').innerHTML.includes('Enabled during research') && $('setting-auto-curation').checked===true && $('auto-curation-policy-notice').hidden===true,'The current acknowledgement enables classification during a running mission');
+function reviewData(overrides={}) {
+  const fields={review_status:'approved',license:'CC-BY-4.0',license_verified:'on',rights_evidence:'Exact copy license reviewed',quality_rationale:'Original argument is relevant; limits recorded',quality_reviewed_by:'Owner',topic_relevance:'relevant',topic_philosophy_of_mind:'on',evidence_kind:'philosophical_argument',evidence_stance:'not_applicable',quality_source_type:'theoretical_paper',...overrides};
+  for(const [key,value] of Object.entries(fields))if(value===null)delete fields[key];
+  return {get:key=>fields[key] ?? null,has:key=>Object.prototype.hasOwnProperty.call(fields,key)};
+}
+let reviewed=context.collectSourceReview(reviewData({covered_supportive:'on',covered_skeptical:'on'}));
+check(reviewed.quality_review.topic_domains.join(',')==='philosophy_of_mind' && reviewed.quality_review.evidence_kind==='philosophical_argument','Actual review payload pairs research area and basis of claims');
+check(reviewed.quality_review.evidence_stance==='not_applicable' && reviewed.quality_review.covered_stances.length===0,'General philosophy cannot acquire machine coverage through stale checked fields');
+check(!Object.prototype.hasOwnProperty.call(reviewed,'source_type') && reviewed.quality_review.source_type==='theoretical_paper','Reviewed type does not overwrite collection provenance');
+reviewed=context.collectSourceReview(reviewData({topic_religion_contemplation:'on',topic_philosophy_of_mind:null,evidence_kind:'religious_contemplative'}));
+check(reviewed.quality_review.topic_domains[0]==='religion_contemplation' && reviewed.quality_review.covered_stances.length===0,'Contemplative claims are classified separately from scientific and machine evidence');
+reviewed=context.collectSourceReview(reviewData({topic_machine_consciousness:'on',topic_consciousness_science:'on',evidence_kind:'empirical',evidence_stance:'mixed',covered_supportive:'on',covered_uncertain:'on'}));
+check(reviewed.quality_review.topic_domains.includes('machine_consciousness') && reviewed.quality_review.covered_stances.join(',')==='supportive,uncertain','Mixed machine documents retain only reviewed machine perspectives');
+for(const [overrides,message] of [[{topic_philosophy_of_mind:null},'research area'],[{evidence_kind:''},'basis'],[{evidence_stance:'skeptical'},'Not applicable'],[{rights_evidence:''},'Rights verification']]) {
+  let blocked=false;try{context.collectSourceReview(reviewData(overrides));}catch(error){blocked=error.message.includes(message);}check(blocked,'Review payload fails visibly for missing or inconsistent '+message);
+}
+const fields=[{checked:true,disabled:false},{checked:true,disabled:false}], stance={value:'not_applicable',disabled:false},machine={checked:false};
+const form={querySelector:selector=>selector.includes('evidence_stance')?stance:machine,querySelectorAll:()=>fields};
+context.syncSourceReviewFields(form);
+check(fields.every(field=>!field.checked && field.disabled),'Not-applicable stance clears and disables machine coverage controls');
+stance.value='mixed';machine.checked=true;context.syncSourceReviewFields(form);check(fields.every(field=>!field.disabled),'Mixed machine review exposes covered perspectives');
+fields[0].checked=true;machine.checked=false;context.syncSourceReviewFields(form,true);
+check(stance.value==='not_applicable' && fields.every(field=>!field.checked && field.disabled),'Removing the machine area cannot leave machine perspectives selected');
+const classification=context.qualityClassificationMarkup({quality_review:{status:'pending',topic_domains:['religion_contemplation'],evidence_kind:'religious_contemplative',evidence_stance:'not_applicable'}});
+check(classification.includes('Religion &amp; contemplation') && classification.includes('Religious or contemplative interpretation') && classification.includes('Not applicable'),'Inspector shows the recorded research area, basis and machine applicability');
+const reviewMarkup=context.qualityReviewMarkup({quality_review:{}},false);
+check(reviewMarkup.includes('Machine-consciousness perspective') && reviewMarkup.includes('name="evidence_kind" disabled') && reviewMarkup.includes('name="topic_metaphysics_reality" disabled'),'Public inspector displays read-only paired classification fields');
+check(context.qualityClassificationMarkup({}).includes('Not classified'),'Legacy reviews are not silently assigned new classification');
+check(context.coverageBucketsMarkup(undefined,'Research areas',[])==='' && context.coverageBucketsMarkup({unknown:'4'},'Research areas',[])==='','Absent or invalid audit buckets never fabricate document counts');
+check(context.coverageBucketsMarkup({religion_contemplation:3},'Research areas',[['religion_contemplation','Religion & contemplation']]).includes('3 documents'),'Coverage displays actual reported bucket counts');
+check(!context.corpusAuditMarkup({coverage_audit:{splits:{train:{stances:{uncertain:2}}}},quality_gate:{ready:false}}).includes('Reviewed research areas'),'Legacy audits omit unmeasured scope buckets');
 const source={id:'source-fixture',title:'<img src=x onerror=alert(1)>',review_status:'approved',
   curation:{eligible:true},quality_review:{reviewer_kind:'automated',status:'approved',model:'fixture-model'}};
 context.state.sources=[source];context.state.curation_reviews=[{id:'receipt-fixture',source_id:source.id,

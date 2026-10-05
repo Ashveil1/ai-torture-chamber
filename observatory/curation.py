@@ -12,7 +12,7 @@ from .corpus_policy import (contamination_reasons, coverage_audit, extraction_re
                             evaluation_reservations, interleave_originals, quality_review_reasons, reviewed_perspectives)
 from .store import Store, utc_now
 
-POLICY_VERSION = "consciousness-corpus-v2"
+POLICY_VERSION = "consciousness-corpus-v3"
 ALLOWED_LICENSES = {"cc0", "cc0-1.0", "public-domain", "cc-by", "cc-by-4.0", "cc-by-3.0"}
 
 

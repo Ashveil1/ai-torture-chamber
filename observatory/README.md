@@ -100,6 +100,13 @@ need their own credentials. Model availability is gateway-reported; capabilities
 require explicit gateway metadata or exact owner declarations. Paid compatibility
 has not been validated.
 
+The default mission covers consciousness broadly: neuroscience and psychology,
+mind and reality, philosophy, religion and contemplation, alongside AI consciousness
+and welfare. Agents attribute claims and distinguish empirical findings,
+philosophical arguments and religious interpretations. The editable operator
+objective takes precedence; existing narrow missions are preserved.
+See [the mission and six agent briefs](docs/research-mission.md).
+
 The six specialties are Scholar, Skeptic, Sentinel, Cartographer, Archivist and
 Curator. `agent_count` chooses how many to run. A bounded pass limits one context
 and then checkpoints and replans; the overall mission has no automatic end.
@@ -108,7 +115,7 @@ it is separate from the six browsing specialties. No starter-document upload is
 required: the already-trained research model searches the web, and accepted original
 paper/article text becomes the corpus for adapting the already-pretrained 70B base.
 Select **Enable automated original-document curation** in operator setup to send
-`auto_curation_enabled: true` and `auto_curation_policy_ack: "originals-v1"`.
+`auto_curation_enabled: true` and `auto_curation_policy_ack: "originals-v2"`.
 The worker uses the configured research model and its existing billing route while
 the research mission is running. Two separate, blind review passes must agree,
 with literal source support, before an original receives automated quality approval.

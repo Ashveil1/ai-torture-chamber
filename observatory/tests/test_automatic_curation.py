@@ -17,7 +17,7 @@ QUOTE = "The paper compares mechanistic theories of machine consciousness and di
 def store(tmp_path, monkeypatch):
     monkeypatch.setenv("OBSERVATORY_SECRET_KEY", Fernet.generate_key().decode())
     db = Store(tmp_path / "curation.sqlite3")
-    db.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v1",
+    db.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v2",
                       "research_provider": "x402", "research_model": "openai/review-fixture", "research_protocol": "responses"})
     db.set_mission({"status": "running", "objective": "Research machine consciousness"})
     yield db
@@ -34,7 +34,8 @@ def source(identifier="paper", **updates):
 
 def verdict(**updates):
     return {"decision": "accept", "topic_relevance": "relevant", "evidence_stance": "uncertain", "source_type": "empirical_paper",
-            "covered_stances": [], "quotes": [QUOTE], "rationale": "Substantive comparison distinguishes behavior from phenomenal experience.", **updates}
+            "covered_stances": [], "topic_domains": ["machine_consciousness"], "evidence_kind": "empirical",
+            "quotes": [QUOTE], "rationale": "Substantive comparison distinguishes behavior from phenomenal experience.", **updates}
 
 
 class FakeModel:
@@ -400,7 +401,7 @@ async def test_disabled_policy_or_stopped_mission_never_spends(store):
     worker, model = AutomaticCurationWorker(store), FakeModel()
     store.save_settings({"auto_curation_enabled": False})
     assert (await worker.tick(model=model))["status"] == "idle"
-    store.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v1"})
+    store.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v2"})
     store.set_mission({**store.get_mission(), "status": "stopped"})
     assert (await worker.tick(model=model))["status"] == "idle"
     assert not model.calls

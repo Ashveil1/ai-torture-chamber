@@ -34,9 +34,9 @@ def validate_payload(payload: dict, stage: str, *, require_quality: bool = False
     policy_version = payload.get("manifest", {}).get("policy_version", payload.get("policy_version"))
     if require_quality and not payload.get("manifest"):
         raise ValueError("sealed_reviewed_corpus_manifest_required")
-    if require_quality and policy_version != "consciousness-corpus-v2":
+    if require_quality and policy_version not in {"consciousness-corpus-v2", "consciousness-corpus-v3"}:
         raise ValueError("current_reviewed_corpus_policy_required")
-    if policy_version == "consciousness-corpus-v2":
+    if policy_version in {"consciousness-corpus-v2", "consciousness-corpus-v3"}:
         gate = payload.get("manifest", {}).get("quality_gate", payload.get("quality_gate", {}))
         if payload.get("manifest") and payload.get("quality_gate", gate) != gate:
             raise ValueError("quality_gate_differs_from_sealed_manifest")

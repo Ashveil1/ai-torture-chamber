@@ -9,10 +9,10 @@ def validate_research_updates(updates: dict) -> dict:
     if "auto_curation_enabled" in result and not isinstance(result["auto_curation_enabled"], bool):
         raise ValueError("auto_curation_enabled must be a boolean")
     if "auto_curation_policy_ack" in result and (not isinstance(result["auto_curation_policy_ack"], str)
-            or result["auto_curation_policy_ack"] not in {"", "originals-v1"}):
-        raise ValueError("auto_curation_policy_ack must select the originals-v1 policy")
-    if result.get("auto_curation_enabled") is True and result.get("auto_curation_policy_ack") != "originals-v1":
-        raise ValueError("Automated curation requires the originals-v1 policy acknowledgement")
+            or result["auto_curation_policy_ack"] not in {"", "originals-v1", "originals-v2"}):
+        raise ValueError("auto_curation_policy_ack must select a supported originals policy")
+    if result.get("auto_curation_enabled") is True and result.get("auto_curation_policy_ack") not in {"originals-v1", "originals-v2"}:
+        raise ValueError("Automated curation requires an explicit originals policy acknowledgement")
     choices = {
         "research_provider": {"x402", "openai", "anthropic"},
         "research_protocol": {"responses", "messages"},

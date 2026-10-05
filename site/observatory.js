@@ -5,6 +5,9 @@
   const all = selector => Array.from(document.querySelectorAll(selector));
   const esc = value => String(value == null ? "" : value).replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const list = value => Array.isArray(value) ? value : [];
+  const topicDomains = [["machine_consciousness","Machine consciousness"],["consciousness_science","Consciousness science"],["philosophy_of_mind","Philosophy of mind"],["metaphysics_reality","Reality & metaphysics"],["religion_contemplation","Religion & contemplation"],["welfare_ethics","Welfare & ethics"]];
+  const evidenceKinds = [["empirical","Empirical findings"],["scientific_theory","Scientific theory"],["philosophical_argument","Philosophical argument"],["religious_contemplative","Religious or contemplative interpretation"],["mixed","Several forms of evidence or argument"]];
+  const autoCurationPolicyAck = "originals-v2";
   const storageKey = "wirehead.observatory.preferences.v1";
   const bookmarkKey = "wirehead.observatory.bookmarks.v1";
   const defaults = {api_base:"/observatory-api",research_provider:"x402",research_model:"",research_protocol:"responses",reasoning_effort:"high",browser_provider:"local",agent_count:6,auto_curation_enabled:false,auto_curation_policy_ack:"",hf_namespace:"",hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_enabled:false,training_continue_from_previous:true,synthetic_training_approved:false,provider_policy_reference:""};
@@ -509,13 +512,13 @@
     return '<div class="curation-recovery"><div><strong>Interrupted review needs operator attention</strong><p>'+esc(runtime.active_stage?'Stage: '+titleCase(runtime.active_stage)+'. ':"")+'Reconcile any pending payment before authorizing another review attempt. Completed review receipts are preserved.</p>'+(source?'<button class="text-button" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button>':"")+'</div><button type="button" class="quiet-button" data-curation-recover="'+esc(runtime.review_id || "")+'"'+(enabled?"":" disabled")+'>Review recovery</button></div>';
   }
   function renderAutomatedCuration() {
-    const reviews=curationReviews(), enabled=state.settings?.auto_curation_enabled===true, running=state.mission.status==="running";
+    const reviews=curationReviews(), requested=state.settings?.auto_curation_enabled===true, enabled=requested && state.settings?.auto_curation_policy_ack===autoCurationPolicyAck, needsUpdate=requested && !enabled, running=state.mission.status==="running";
     const runtime=state.curation_runtime || {}, interrupted=["in_flight","awaiting_operator"].includes(runtime.call_state) && ["paused","faulted","stopped"].includes(state.mission.status);
-    const status=mode==="preview"?"Simulated review":!connected?"Backend unavailable":interrupted?"Operator attention required":!enabled?"Disabled":running?"Enabled during research":"Waiting for research";
+    const status=mode==="preview"?"Simulated review":!connected?"Backend unavailable":interrupted?"Operator attention required":needsUpdate?"Policy update required":!enabled?"Disabled":running?"Enabled during research":"Waiting for research";
     const counts={accepted:0,manual_review:0,rejected:0};
     reviews.forEach(review=>{if(Object.prototype.hasOwnProperty.call(counts,review.decision))counts[review.decision]++;});
     const latest=reviews[0], source=latest && sourceById(latest.source_id), [style,label]=curationDecision(latest?.decision);
-    const explanation=mode==="preview"?"These are simulated records. Changing the setup toggle does not run a real review.":!connected?"Connect the backend to see original-document review receipts.":enabled?"The Curator and a separate critique pass review originals while the mission runs. Source rights, extraction and corpus exclusions still apply. Q&A approval remains separate.":"Enable automated original-document curation in Operator setup. Collected sources remain available for manual review.";
+    const explanation=mode==="preview"?"These are simulated records. Changing the setup toggle does not run a real review.":!connected?"Connect the backend to see original-document review receipts.":needsUpdate?"The saved review policy needs renewal for the broader consciousness scope. Automated review is idle. Open Operator setup, enable the updated policy and save setup.":enabled?"Two blind review passes classify original documents by subject and evidence type while the mission runs. Scientific findings, philosophical arguments and religious interpretations stay distinct. Source rights, extraction and corpus exclusions still apply. Q&A approval remains separate.":"Enable automated original-document curation in Operator setup. Collected sources remain available for manual review.";
     $("automated-curation-summary").innerHTML='<div class="section-top"><h3 id="automated-curation-title">Automated original-document review</h3><span class="tag '+(enabled && mode!=="preview" && connected && !interrupted?"eligible":"review")+'">'+esc(status)+'</span></div><p class="curation-explanation">'+esc(explanation)+'</p><div class="curation-counts"><span><strong>'+counts.accepted+'</strong> accepted receipts</span><span><strong>'+counts.manual_review+'</strong> await review</span><span><strong>'+counts.rejected+'</strong> rejected receipts</span></div>'+(latest?'<div class="curation-latest"><span class="tag '+style+'">'+esc((mode==="preview"?"Simulated · ":"")+label)+'</span><span>'+esc(latest.model || "Reviewer model not recorded")+' · '+esc(clock(latest.created_at))+'</span>'+(source?'<button class="text-button" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button>':"")+'<p>'+esc(latest.rationale || list(latest.reasons).map(titleCase).join("; ") || "No review rationale recorded.")+'</p></div>':'<p class="curation-empty">'+esc(mode==="preview"?"No simulated automated review receipts. No model call was made.":"No automated review receipts have been recorded.")+'</p>');
     $("automated-curation-summary").insertAdjacentHTML("beforeend",curationRecoveryMarkup(runtime));
   }
@@ -534,10 +537,16 @@
   function corpusAuditMarkup(dataset) {
     if(!dataset)return '<p class="method-note">The next snapshot will report perspective coverage, duplicate removal and quality exclusions.</p>';
     const audit=dataset.coverage_audit || dataset.manifest?.coverage_audit, gate=dataset.quality_gate || dataset.manifest?.quality_gate;
-    if(mode==="preview" || !audit)return '<h3>Review before training</h3><p class="method-note">'+esc(mode==="preview"?"This simulated metadata snapshot contains no original training text or measured coverage. Real snapshots require reviewed supporting, skeptical and uncertain perspectives, scientific sources and extraction checks.":"This older snapshot has no current quality audit. Create a new reviewed snapshot before training.")+'</p>';
+    if(mode==="preview" || !audit)return '<h3>Review before training</h3><p class="method-note">'+esc(mode==="preview"?"This simulated metadata snapshot contains no original training text or measured coverage. Real snapshots distinguish consciousness science, philosophy, metaphysics, contemplation and AI. The machine-consciousness coverage floor requires reviewed supporting, skeptical and uncertain perspectives; scientific material and extraction checks are also required.":"This older snapshot has no current quality audit. Create a new reviewed snapshot before training.")+'</p>';
     const train=audit.splits?.train || audit.train || {}, stances=train.stances || {}, shares=train.stance_character_shares || {};
     const rows=['supportive','skeptical','uncertain','mixed','methodological'].map(stance=>'<div class="coverage-row"><span>'+esc(titleCase(stance))+'</span><div class="coverage-meter"><i style="width:'+Math.max(0,Math.min(100,Number(shares[stance] || 0)*100))+'%"></i></div><span>'+esc(stances[stance] || 0)+' copies</span></div>').join('');
-    return '<div class="section-top"><h3>Corpus quality</h3><span class="tag '+(gate?.ready?'eligible':'review')+'">'+esc(gate?.ready?'Coverage floor met':'Coverage needs review')+'</span></div>'+rows+'<p class="method-note">Bars show original-text character share in the training split. Coverage is a presence check, not equal weighting or scientific validation. '+esc(dataset.counts?.deduplicated_sources || 0)+' duplicate copies removed; their source lineage remains recorded.</p>'+(list(gate?.reasons).length?'<p class="rights-explanation">'+esc(list(gate.reasons).map(titleCase).join('; '))+'</p>':'');
+    return '<div class="section-top"><h3>Corpus quality</h3><span class="tag '+(gate?.ready?'eligible':'review')+'">'+esc(gate?.ready?'Coverage floor met':'Coverage needs review')+'</span></div><h4 class="coverage-heading">Machine-consciousness perspectives</h4>'+rows+coverageBucketsMarkup(train.topic_domains,'Reviewed research areas',topicDomains)+coverageBucketsMarkup(train.evidence_kinds,'Basis of claims',evidenceKinds)+'<p class="method-note">Bars show machine-perspective original-text character share in the training split. General philosophy or religious accounts do not supply machine perspectives automatically. Coverage is a presence check, not equal weighting or scientific validation. '+esc(dataset.counts?.deduplicated_sources || 0)+' duplicate copies removed; their source lineage remains recorded.</p>'+(list(gate?.reasons).length?'<p class="rights-explanation">'+esc(list(gate.reasons).map(titleCase).join('; '))+'</p>':'');
+  }
+  function coverageBucketsMarkup(buckets,heading,labels) {
+    if(!buckets || typeof buckets!=="object" || Array.isArray(buckets))return "";
+    const entries=Object.entries(buckets).filter(([,count])=>Number.isSafeInteger(count) && count>=0);
+    if(!entries.length)return "";
+    return '<div class="scope-coverage"><h4 class="coverage-heading">'+esc(heading)+'</h4><dl>'+entries.map(([key,count])=>'<div><dt>'+esc(labels.find(([id])=>id===key)?.[1] || titleCase(key))+'</dt><dd>'+esc(count)+' documents</dd></div>').join('')+'</dl></div>';
   }
   function renderDatasets() {
     text("dataset-count",state.datasets.length);text("snapshot-create",mode==="preview" ? "Create preview snapshot" : "Create curated snapshot");
@@ -660,16 +669,31 @@
     const checkbox=(name,label,checked)=>'<label><input type="checkbox" name="'+name+'"'+(checked?' checked':'')+disabled+'> '+label+'</label>';
     return '<fieldset class="quality-review-fields"><legend>Corpus quality</legend><p class="review-help">Review the exact document. Classify its argument, not whether consciousness is established.</p>'+
       '<label>Topic relevance'+select('topic_relevance',q.topic_relevance || 'uncertain',[['uncertain','Needs assessment'],['relevant','Relevant to the mission'],['unrelated','Unrelated']])+'</label>'+
-      '<label>Perspective'+select('evidence_stance',q.evidence_stance || 'uncertain',[['supportive','Arguments supporting possible consciousness'],['skeptical','Arguments questioning consciousness'],['uncertain','Uncertainty and unresolved evidence'],['mixed','Several competing perspectives'],['methodological','Methods and measurement']])+'</label>'+
+      '<fieldset class="review-topic-domains"><legend>Research areas · choose at least one</legend>'+topicDomains.map(([id,label])=>checkbox('topic_'+id,label,list(q.topic_domains).includes(id))).join('')+'</fieldset>'+
+      '<label>Basis of claims'+select('evidence_kind',q.evidence_kind || '',[['','Choose after reviewing the document'],...evidenceKinds])+'</label>'+
+      '<label>Machine-consciousness perspective'+select('evidence_stance',q.evidence_stance || 'uncertain',[['not_applicable','Not applicable · no machine-consciousness claim'],['supportive','Arguments supporting possible machine consciousness'],['skeptical','Arguments questioning machine consciousness'],['uncertain','Unresolved evidence about machine consciousness'],['mixed','Several machine-consciousness perspectives'],['methodological','Machine-consciousness methods and measurement']])+'</label>'+
+      '<p class="review-help">Use Not applicable for documents that make no machine-consciousness claim. General philosophy, metaphysics or contemplative accounts can inform the mission without fulfilling the machine-perspective coverage floor.</p>'+
       '<label>Document type'+select('quality_source_type',q.source_type || 'article',[['empirical_paper','Empirical paper'],['theoretical_paper','Theoretical paper'],['review_paper','Review paper'],['technical_report','Technical report'],['article','Article'],['reference','Reference'],['social','Social post']])+'</label>'+
       '<label>Operator reviewer<input name="quality_reviewed_by" value="'+esc(q.reviewer_kind==="automated"?'Operator':q.reviewed_by || 'Operator')+'" maxlength="4000"'+disabled+'></label>'+
       '<label>Quality rationale<textarea name="quality_rationale" rows="3"'+disabled+' placeholder="Relevance, evidence limitations, extraction checks and why this copy belongs in the corpus">'+esc(q.rationale || '')+'</textarea></label>'+
-      '<div class="covered-perspectives"><span>For mixed or methodological documents, perspectives actually covered:</span>'+['supportive','skeptical','uncertain'].map(stance=>checkbox('covered_'+stance,titleCase(stance),list(q.covered_stances).includes(stance))).join('')+'</div>'+
+      '<div class="covered-perspectives"><span>For mixed or methodological documents, machine perspectives actually covered:</span>'+['supportive','skeptical','uncertain'].map(stance=>checkbox('covered_'+stance,titleCase(stance),q.evidence_stance!=='not_applicable' && list(q.covered_stances).includes(stance))).join('')+'</div>'+
       checkbox('contains_benchmark','Contains evaluation questions or benchmark answers',source.contains_benchmark || source.contamination_status && source.contamination_status!=='clear')+
       checkbox('chamber_stimulus','Contains Chamber experiment prompts or stimuli',source.chamber_stimulus || source.experimental_stimulus)+
       '<p class="review-help">Extraction: '+esc(source.extraction?.method || 'Legacy capture')+' / '+esc(source.extraction?.quality || 'Unverified')+'. '+esc(list(source.extraction?.warnings).join('; '))+'</p>'+
       checkbox('extraction_review_approved','I checked the extracted text against the original copy',source.extraction_review_status==='approved')+
       '<label>Extraction review evidence<textarea name="extraction_review_evidence" rows="2"'+disabled+' placeholder="Record checks of reading order, tables, formulas and missing pages">'+esc(source.extraction_review_evidence || '')+'</textarea></label></fieldset>';
+  }
+  function qualityClassificationMarkup(source) {
+    const q=source.quality_review || {}, domains=list(q.topic_domains).map(id=>topicDomains.find(([key])=>key===id)?.[1] || titleCase(id));
+    const kind=evidenceKinds.find(([id])=>id===q.evidence_kind)?.[1];
+    return '<div class="record-block reviewed-classification"><h3>Reviewed classification</h3><dl class="record-grid"><div><dt>Research areas</dt><dd>'+esc(domains.length?domains.join(' · '):'Not classified')+'</dd></div><div><dt>Basis of claims</dt><dd>'+esc(kind || 'Not classified')+'</dd></div><div><dt>Machine-consciousness perspective</dt><dd>'+esc(q.evidence_stance==='not_applicable'?'Not applicable':q.evidence_stance?titleCase(q.evidence_stance):'Not classified')+'</dd></div><div><dt>Review status</dt><dd>'+esc(q.status?titleCase(q.status):'Pending assessment')+(mode==='preview'?' · simulated':'')+'</dd></div></dl><p class="review-help">A research area identifies what the document discusses. The basis of claims identifies the kind of argument; neither establishes its truth.</p></div>';
+  }
+  function syncSourceReviewFields(form,domainsChanged=false) {
+    const stance=form.querySelector('[name="evidence_stance"]'), machine=form.querySelector('[name="topic_machine_consciousness"]');
+    if(!stance)return;
+    if(domainsChanged && !machine?.checked)stance.value='not_applicable';
+    const active=['mixed','methodological'].includes(stance.value), readOnly=stance.disabled;
+    form.querySelectorAll('[name^="covered_"]').forEach(input=>{if(!active)input.checked=false;input.disabled=readOnly || !active;});
   }
   function inspectSource(id) {
     const source=sourceById(id);if(!source) return;
@@ -677,6 +701,8 @@
     text("source-dialog-tag",mode==="preview"?"Example source record":"Collected source record");
     $("source-dialog-content").innerHTML='<h2>'+esc(source.title || sourceUrl(source))+'</h2>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+' ↗</a>':"")+'<div class="record-grid"><div><dt>Collected by</dt><dd>'+esc(agentName(source.agent_id))+'</dd></div><div><dt>Version / family</dt><dd>'+esc(source.version || source.family_id || "Not recorded")+'</dd></div><div><dt>Rights</dt><dd><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><br>'+esc(source.license || "Unknown")+'</dd></div><div><dt>Capture method</dt><dd>'+esc(mode==="preview"?"Illustrative fixture":provenance.method || "Not recorded")+'<br>'+esc(dateLabel(provenance.collected_at || source.created_at))+'</dd></div><div><dt>Content fingerprint</dt><dd>'+esc(short(source.content_hash || provenance.content_sha256,34))+'</dd></div><div><dt>Original document</dt><dd>'+esc(mode==="preview"?"Not reproduced in the preview":source.word_count?source.word_count+" words · full text stored privately":"Full text is private; only metadata is public")+'</dd></div></div><p class="record-summary">'+esc(source.summary || "No public summary recorded.")+'</p>'+(source.limitation?'<div class="record-excerpt">'+esc(source.limitation)+'</div>':"")+sourceAutomatedReviewMarkup(source)+'<div class="record-block"><h3>Rights &amp; corpus review</h3><p class="rights-explanation">'+esc(evidenceText(source.rights_evidence || source.permission_evidence))+'</p>'+(list(source.curation?.reasons).length?'<p class="rights-explanation">Excluded because: '+esc(list(source.curation.reasons).map(titleCase).join("; "))+'</p>':"")+'<form class="review-form" data-review-source="'+esc(id)+'"><label>Review decision<select name="review_status" '+(!canReview?"disabled":"")+'><option value="approved">Approve relevance</option><option value="pending">Keep pending</option><option value="quarantined">Reference only / exclude</option><option value="rejected">Reject</option></select></label><label>License for this exact copy<input name="license" value="'+esc(source.license || "unknown")+'" '+(!canReview?"disabled":"")+'></label><label><input name="license_verified" type="checkbox" '+(source.license_verified?"checked ":"")+(!canReview?"disabled":"")+'> Verified training-compatible rights for this exact copy</label><label>Rights evidence<textarea name="rights_evidence" rows="3" '+(!canReview?"disabled":"")+' placeholder="License URL, version and permission evidence">'+esc(source.rights_evidence?evidenceText(source.rights_evidence):"")+'</textarea></label><label>Review note<textarea name="review_note" rows="2" '+(!canReview?"disabled":"")+' placeholder="Attribution, exclusions, relevance or caveats">'+esc(source.review_note || "")+'</textarea></label>'+qualityReviewMarkup(source,canReview)+'<p class="review-help">'+esc(mode==="preview"?"This records a simulated review. It grants no real rights.":canReview?"The backend validates eligibility; checking a box alone does not clear a source.":"Public inspection is read-only. Open Operator setup to authenticate.")+'</p><button class="primary-button" type="submit" '+(!canReview?"disabled":"")+'>'+esc(mode==="preview"?"Save preview review":"Save source review")+'</button></form></div><div class="dialog-actions"><button class="quiet-button" data-bookmark-source="'+esc(id)+'">'+(sourceBookmarks.has(String(id)) || source.bookmarked?"Remove bookmark":"Bookmark source")+'</button></div>';
     $("source-dialog-content").querySelector('[name="review_status"]').value=["approved","pending","quarantined","rejected"].includes(source.review_status)?source.review_status:incompatible?"quarantined":"pending";
+    $("source-dialog-content").querySelector('.record-summary').insertAdjacentHTML('afterend',qualityClassificationMarkup(source));
+    syncSourceReviewFields($("source-dialog-content").querySelector('[data-review-source]'));
     openDialog("source-dialog");
   }
   function renderAllNotes() {
@@ -748,7 +774,7 @@
     });
   }
   function installExtraSettings() {
-    $("setting-hf").closest("label").insertAdjacentHTML("beforebegin",'<div class="setup-divider"><h3>Original-document curation</h3><span>Opt-in model review</span></div><label class="checkbox-label"><input id="setting-auto-curation" type="checkbox"><span>Enable automated original-document curation<small>Curator and a separate critique pass review collected source text. Verified rights, passed extraction, and existing exclusions remain required. Uncertain cases await review. Runs while research mission is running; uses research model billing. Q&amp;A approval remains separate.</small></span></label>');
+    $("setting-hf").closest("label").insertAdjacentHTML("beforebegin",'<div class="setup-divider"><h3>Original-document curation</h3><span>Opt-in model review</span></div><label class="checkbox-label"><input id="setting-auto-curation" type="checkbox"><span>Enable automated original-document curation<small>Two blind review passes classify consciousness research by research area and basis of claims. Scientific findings, philosophy and religious interpretations stay distinct. Verified rights, passed extraction and existing exclusions remain required. Uncertain cases await review. Runs during the research mission; uses research model billing. Q&amp;A approval remains separate.</small></span></label><p id="auto-curation-policy-notice" class="settings-note" role="status" hidden></p>');
     $("setting-browser").innerHTML='<option value="browseruse">Browser Use Cloud</option><option value="local">Local Chromium</option><option value="cdp">Existing CDP · including Steel</option>';
     const divider=$("setting-browser").closest("label");
     divider.insertAdjacentHTML("afterend",'<label id="browser-key-label">Browser Use API key<input id="setting-browser-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Sent only to the authenticated backend. Never saved locally.</small></label><label id="cdp-label" hidden>CDP connection URL<input id="setting-cdp" type="password" autocomplete="off" spellcheck="false" placeholder="Private connection endpoint · not stored locally"></label><label id="chromium-label" hidden>Local Chromium executable<input id="setting-chromium" type="text" spellcheck="false" placeholder="Optional · backend filesystem path"></label>');
@@ -781,7 +807,7 @@
     $("setting-effort").value=settings.reasoning_effort || "high";$("setting-agent-count").value=settings.agent_count || 6;
     $("setting-base-model").value=settings.hf_base_model || defaults.hf_base_model;
     $("setting-training-enabled").checked=!!settings.training_enabled;$("setting-synthetic-approved").checked=!!settings.synthetic_training_approved;
-    $("setting-auto-curation").checked=settings.auto_curation_enabled===true;
+    fillAutoCurationSettings(settings);
     $("setting-continue-training").checked=settings.training_continue_from_previous!==false;
     $("setting-policy-reference").value=settings.provider_policy_reference || "";$("setting-chromium").value=settings.chromium_executable || "";
     $("setting-cdp-ack").checked=!!settings.cdp_isolated_ack;
@@ -794,12 +820,18 @@
     toggleBrowserFields();
     syncResearchFields(settings.research_model);
   }
+  function fillAutoCurationSettings(settings) {
+    const needsUpdate=settings.auto_curation_enabled===true && settings.auto_curation_policy_ack!==autoCurationPolicyAck;
+    $("setting-auto-curation").checked=settings.auto_curation_enabled===true && !needsUpdate;
+    $("auto-curation-policy-notice").hidden=!needsUpdate;
+    $("auto-curation-policy-notice").textContent=needsUpdate?'Your saved review policy predates the broader consciousness classification. Automated review remains idle. Enable the updated policy above and save setup to authorize it.':'';
+  }
   function collectSettings() {
     clearInheritedBaseRevision();
     const settings={objective:$("setting-objective").value.trim(),research_provider:$("setting-provider").value,research_model:$("setting-model").value.trim(),reasoning_effort:$("setting-effort").value,agent_count:Math.max(1,Math.min(6,Number($("setting-agent-count").value) || 6)),browser_provider:$("setting-browser").value,hf_namespace:$("setting-hf").value.trim(),hf_base_model:$("setting-base-model").value.trim(),training_enabled:$("setting-training-enabled").checked,training_continue_from_previous:$("setting-continue-training").checked,synthetic_training_approved:$("setting-synthetic-approved").checked,provider_policy_reference:$("setting-policy-reference").value.trim(),chromium_executable:$("setting-chromium").value.trim()};
     settings.research_protocol=$("setting-protocol").value;
     settings.auto_curation_enabled=$("setting-auto-curation").checked;
-    settings.auto_curation_policy_ack=settings.auto_curation_enabled?"originals-v1":"";
+    settings.auto_curation_policy_ack=settings.auto_curation_enabled?autoCurationPolicyAck:"";
     if(settings.research_provider==="x402") {
       settings.research_model=$("setting-catalog-model").value;
       if(settings.research_model && !compatibleResearchModels(settings.research_protocol).some(item=>item.id===settings.research_model))throw new Error("Select a compatible model from the live broker catalog before changing x402 research setup.");
@@ -859,18 +891,31 @@
       render();
     } catch(error) {text("setup-result",error.message);toast(error.message);}
   }
-  async function reviewSource(form) {
-    const id=form.dataset.reviewSource, source=sourceById(id), data=new FormData(form);
-    if(!source || !canMutate()) return;
+  function collectSourceReview(data) {
     const verified=data.has("license_verified"), evidence=String(data.get("rights_evidence") || "").trim(), license=String(data.get("license") || "unknown").trim();
-    if(verified && !evidence){toast("Rights verification requires recorded evidence for the exact copy.");return;}
+    if(verified && !evidence)throw new Error("Rights verification requires recorded evidence for the exact copy.");
     const payload={review_status:data.get("review_status"),license,license_verified:verified,rights_evidence:evidence,review_note:String(data.get("review_note") || "").trim(),rights_status:verified?"license_verified":data.get("review_status")==="quarantined"?"reference_only":"needs_review"};
     const rationale=String(data.get("quality_rationale") || "").trim();
-    if(payload.review_status==="approved" && !rationale){toast("Record a quality rationale before approving corpus inclusion.");return;}
-    if(rationale)payload.quality_review={status:payload.review_status==="approved"?"approved":payload.review_status==="rejected"?"rejected":"pending",reviewed_by:String(data.get("quality_reviewed_by") || "").trim(),rationale,topic_relevance:data.get("topic_relevance"),evidence_stance:data.get("evidence_stance"),source_type:data.get("quality_source_type"),covered_stances:['supportive','skeptical','uncertain'].filter(stance=>data.has('covered_'+stance))};
+    if(payload.review_status==="approved" && !rationale)throw new Error("Record a quality rationale before approving corpus inclusion.");
+    if(rationale) {
+      const domains=topicDomains.map(([id])=>id).filter(id=>data.has('topic_'+id)), kind=data.get('evidence_kind'), stance=data.get('evidence_stance');
+      if(!domains.length)throw new Error("Select at least one research area for this document.");
+      if(!evidenceKinds.some(([id])=>id===kind))throw new Error("Choose the basis of this document's claims.");
+      if(!domains.includes('machine_consciousness') && stance!=='not_applicable')throw new Error("Use Not applicable when this document does not address machine consciousness.");
+      const covered=['mixed','methodological'].includes(stance)?['supportive','skeptical','uncertain'].filter(item=>data.has('covered_'+item)):[];
+      payload.quality_review={status:payload.review_status==="approved"?"approved":payload.review_status==="rejected"?"rejected":"pending",reviewed_by:String(data.get("quality_reviewed_by") || "").trim(),rationale,topic_relevance:data.get("topic_relevance"),topic_domains:domains,evidence_kind:kind,evidence_stance:stance,source_type:data.get("quality_source_type"),covered_stances:covered};
+    }
     payload.contains_benchmark=data.has("contains_benchmark");payload.chamber_stimulus=data.has("chamber_stimulus");
     payload.extraction_review_status=data.has("extraction_review_approved")?"approved":"pending";
     payload.extraction_review_evidence=String(data.get("extraction_review_evidence") || "").trim();
+    return payload;
+  }
+  async function reviewSource(form) {
+    const id=form.dataset.reviewSource, source=sourceById(id);
+    if(!source || !canMutate()) return;
+    let payload;
+    try {payload=collectSourceReview(new FormData(form));}catch(error){toast(error.message);return;}
+    const verified=payload.license_verified, evidence=payload.rights_evidence, license=payload.license;
     if(mode==="preview") {
       Object.assign(source,payload);
       const compatible=/^(cc-by(?:-4\.0|-3\.0)?|cc0(?:-1\.0)?|public-domain)$/i.test(license);
@@ -963,6 +1008,7 @@
     const cancel=event.target.closest("[data-cancel-job]");if(cancel){confirmAction("Cancel the GPU job?","Cancellation is sent to the provider. Partial logs and the immutable dataset remain in the record.","Cancel job",()=>mutate("admin/train/"+encodeURIComponent(cancel.dataset.cancelJob)+"/cancel",{}));}
   });
   document.addEventListener("submit",event=>{const form=event.target.closest("[data-review-source]");if(form){event.preventDefault();reviewSource(form);}});
+  document.addEventListener("change",event=>{const form=event.target.closest("[data-review-source]"), domainChanged=topicDomains.some(([id])=>event.target.name==='topic_'+id);if(form && (event.target.name==='evidence_stance' || domainChanged))syncSourceReviewFields(form,domainChanged);});
   all("dialog").forEach(dialog=>{dialog.addEventListener("click",event=>{if(event.target===dialog){const box=dialog.getBoundingClientRect();if(event.clientX<box.left || event.clientX>box.right || event.clientY<box.top || event.clientY>box.bottom)dialog.close();}});});
   all("[data-view]").forEach(button=>button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();const buttons=all("[data-view]"),index=buttons.indexOf(button),next=event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowRight"?1:-1)+buttons.length)%buttons.length;showView(buttons[next].dataset.view,true);}));
   $("setup-open").addEventListener("click",openSetup);$("connect-open").addEventListener("click",openSetup);
@@ -972,7 +1018,7 @@
   $("setting-protocol").addEventListener("change",()=>syncResearchFields(""));
   $("setting-catalog-model").addEventListener("change",()=>{const model=compatibleResearchModels($("setting-protocol").value).find(item=>item.id===$("setting-catalog-model").value);text("research-catalog-status",mode==="preview"?"Simulated selection. No model call or payment occurs.":(model?.capability_source==="owner_declared"?"Owner-declared controls.":"Gateway-advertised controls.")+" Paid compatibility remains untested. Validate the chosen model with a bounded acceptance test before continuous research.");});
   $("connection-check").addEventListener("click",async()=>{try{preferences.api_base=validateEndpoint($("setting-api").value);const payload=normalizeState(await request("state"));text("setup-result","Backend reachable. "+payload.agents.length+" actual agents, "+payload.sources.length+" source records. Save setup to enter connected mode.");if(mode==="connected"){state=payload;connected=true;connectionError="";render();}}catch(error){text("setup-result",error.message+" Preview mode was not substituted.");}});
-  $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearTimeout(previewTimer);state=window.ObservatoryPreview.create();selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
+  $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearTimeout(previewTimer);state=window.ObservatoryPreview.create();state.settings=mergeSettings(state.settings,preferences);if(preferences.objective)state.mission.objective=preferences.objective;selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
   $("mission-toggle").addEventListener("click",()=>missionAction(state.mission.status==="running"?"pause":["paused","funding_paused","faulted"].includes(state.mission.status)?"resume":"start"));
   $("mission-stop").addEventListener("click",()=>confirmAction(mode==="preview"?"Stop the preview?":"Stop the research mission?",mode==="preview"?"The simulation stops. Example notes, sources and snapshots remain available.":"The worker stops research and releases its owned browser sessions. Source records, notes and datasets remain durable.",mode==="preview"?"Stop preview":"Stop mission",()=>missionAction("stop")));
   $("mission-step").addEventListener("click",()=>{

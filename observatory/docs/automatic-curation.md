@@ -14,7 +14,7 @@ authenticated settings request must explicitly select both:
 ```json
 {
   "auto_curation_enabled": true,
-  "auto_curation_policy_ack": "originals-v1"
+  "auto_curation_policy_ack": "originals-v2"
 }
 ```
 
@@ -23,6 +23,9 @@ one review in flight. It uses the configured research model and the existing
 direct-provider or x402 billing route. There is no new wallet or browser session.
 The existing daily/request payment limits still apply. Pause/Stop and disabling
 automatic curation prevent new acceptance; provider/funding faults remain visible.
+The broadened policy is `automatic-originals-v2`. Existing v1 acknowledgements
+leave this worker idle until the owner explicitly enables the new policy. Historical
+v1 receipts retain their original schema and scope; they are not relabeled.
 
 ## What it accepts
 
@@ -38,6 +41,12 @@ They classify relevance, source type and argument stance, record reasons and cit
 literal supporting passages. Acceptance requires agreement and valid source
 passages, in addition to the code checks. A model confidence score alone cannot
 approve a document. Agreement does not certify scientific truth or consciousness.
+The expanded mission includes consciousness science, philosophy of mind, reality
+and metaphysics, and religious/contemplative perspectives as well as AI and welfare.
+Both passes must also agree on reviewed research areas and the basis of claims.
+General material without an AI-consciousness argument uses a `not_applicable`
+machine stance with no machine-perspective coverage. Religious and philosophical
+accounts can be accepted as attributed arguments or interpretations.
 
 The two passes use separate prompts with the configured model; the critique is not
 shown the primary verdict. They are separate checks, not proof of statistically
