@@ -36,11 +36,13 @@ The corpus also excludes identified Chamber stimuli. A domain corpus can contain
 research about experiments; it must not teach the model the evaluation questions
 and preferred answers that will later be used to judge it.
 
-Legacy immutable snapshots cannot bypass the current review policy: the
-coordinator and provisioned worker require a newly sealed
-`consciousness-corpus-v2` snapshot with a ready quality and perspective-coverage
-gate. Old snapshots remain inspectable; review their sources and build a new
-snapshot before training.
+New snapshots use `consciousness-corpus-v3`, including research-area and claim-basis
+classifications. The coordinator and provisioned worker require a ready quality
+and perspective-coverage gate. Compatible archived `consciousness-corpus-v2`
+snapshots retain their strict original contract; they are not silently relabelled
+or rejected solely for their version. Earlier unreviewed snapshots cannot bypass
+these gates: review their sources and seal a current snapshot before training.
+See [corpus quality](docs/corpus-quality.md) for legacy review and coverage rules.
 
 ## Comparison and publication gates
 

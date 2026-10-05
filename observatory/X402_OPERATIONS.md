@@ -66,7 +66,8 @@ Enabling payments is explicit. Once
 the owner configures the broker, set `X402_ENABLED=true` and restart that
 service. Its public funding response supplies the derived spending address;
 the owner funds that address with Solana native USDC. Public visitors can inspect
-the ledger but cannot change limits, sign payments or start missions.
+read-only funding and receipt metadata through the sidecar API, but cannot change
+limits, sign payments or start missions. There is no public Funding page.
 
 ## Choose a researcher model
 
@@ -115,12 +116,13 @@ alternate inference route for compatibility testing, not the default.
 
 ## Funds, reservations and uncertain settlement
 
-The Funding view shows verified balance, reserved payments, settled spending,
-daily headroom and public transaction links. It never publishes prompt bodies,
-payment authorization headers, signatures, broker credentials or the wallet
-key. Read-only balance/catalog errors are displayed as unknown or unavailable,
-never as fabricated funds or preview records. Preview funding is authored and
-has no depositable wallet address.
+The read-only `GET /api/funding` endpoint reports balance, reserved payments,
+settled spending, daily headroom and public transaction identifiers when the
+broker supplies them. The website has no Funding view. This public response
+never publishes prompt bodies, payment authorization headers, signing payloads,
+broker credentials or the wallet key. Balance/catalog errors return unknown or
+unavailable status, not fabricated funds or preview records. Any authored preview
+funding fixture has no depositable wallet address.
 
 Before opening a browser, x402 research checks broker health, the chosen model
 and funding. Funding readiness conservatively requires capacity for one request
@@ -187,6 +189,13 @@ review them rather than replaying them in a newly opened page. Explicitly resume
 the mission after review is complete. Recovery output remains owner-only and is
 never added automatically to a training dataset or public notebook.
 
+An interrupted automatic original-document review also has a durable review
+marker. Payment reconciliation alone does not clear that marker. After reviewing
+the payment outcome, use the authenticated **Review recovery** control while the
+mission is paused, stopped or faulted, then explicitly resume. Completed review
+verdicts are preserved; retrying an unfinished stage may incur another charge.
+See [automatic curation recovery](docs/automatic-curation.md).
+
 ## Research, datasets and 70B training
 
 Continuous missions choose searches and links, save original text and publish
@@ -194,16 +203,22 @@ concise evidence-linked notes. Agents explore until stopped, using checkpointed
 bounded passes. Public observations and next actions are displayed; hidden model
 reasoning is not a notebook feed. Site access rules still apply.
 The public browser pane is view-only: agent scrolling determines its captures,
-and a position bar reports the captured viewport. A passage marker requires a
-saved supporting note, visible matching text and the same screenshot hash.
-Visitor wheel/touch input cannot scroll the agent's document. A marker records
-source correspondence rather than proving that the model is attending to it.
+and a position bar reports the captured viewport. An agent can select an exact
+visible passage with `inspect_visible_section` before saving a note. The saw and
+highlights require verified painted text lines bound to the focused document and
+same screenshot hash. A matching saved-note event promotes the inspection and
+delivers its public authored note to the notebook. Visitor wheel/touch input cannot
+scroll the agent's document. This records source correspondence, not measured
+attention or proof of understanding. The preview demonstrates the sequence using
+authored local fixtures; it is not a recording of a real research session.
 
 Original-text rights and source-family holdouts govern corpus admission. Generated
 notes do not silently become CPT text. Unknown rights stay quarantined, social
 sources need separately recorded permission, and SFT examples need individual
 approval plus an applicable teacher-output agreement. x402 payment does not
-grant data or model-output training rights.
+grant data or model-output training rights. The owner must verify the selected
+teacher's actual contract permits the intended use; a settings checkbox or
+policy-reference URL is not permission from a provider.
 
 The owner can seal and download an actual dataset ZIP through authenticated
 controls. It contains CPT/SFT train and validation JSONL, the sealed manifest,
@@ -235,15 +250,22 @@ against the branch commit and exact model/image revisions:
    Solana receipt. This is a real paid acceptance test, not the fixture suite.
 3. Verify funding pause/resume and operator Stop precedence. Exercise uncertain
    settlement in a staging fixture, not by authorizing duplicate mainnet payments.
-4. Seal eligible original documents; inspect exclusions, persistent holdouts and
-   the downloaded ZIP's hashes. Review corpus topic relevance and reserve an
-   independent consciousness-understanding/general-retention benchmark. These
-   latter scientific quality gates are not enforced by the current scheduler.
+4. Seal eligible original documents; inspect reviewed research areas and basis of
+   claims, perspective coverage, duplicate lineage, exclusions, persistent
+   holdouts and the downloaded ZIP's hashes. Corpus review gates, registered
+   evaluation-source exclusions and a separately sealed domain/general evaluation
+   suite are enforced before training. The bundled sixteen tasks are engineering
+   smoke checks, not a validated scientific benchmark. Freeze an independently
+   reviewed suite and retain untouched test material before making claims about
+   consciousness understanding or general-capability retention.
 5. Build/push the GPU image, record its actual SHA256 digest, verify gated model
    access and run one real 70B QLoRA job with bounded timeout. Record memory use,
    tokenizer counts, measured holdout comparisons and the revision-pinned Hub
-   artifacts before enabling recurring submissions. The default loss gate allows
-   up to 5% regression; passing it does not establish domain improvement.
+   artifacts before enabling recurring submissions. The default held-out loss
+   ratio is `training_max_loss_ratio=1.0`; the independent accuracy/loss gates
+   also require non-regression against the unadapted base and incoming adapter.
+   Passing these measured gates does not establish scientific validity or domain
+   improvement.
 6. Validate separately approved SFT, then load the candidate on a separate Chamber
    worker. Its fresh-vector smoke screen is distinct from a dose sweep. Adapted
    workers serve dose zero until the owner supplies a matching dose-calibration

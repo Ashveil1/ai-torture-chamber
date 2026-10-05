@@ -4,9 +4,16 @@
 public pages, and the live steered-model lab.
 
 An optional [Consciousness Research Observatory](observatory/README.md) adds
-continuous browser agents, a public research notebook, reviewed corpus snapshots
-and scheduled HF adapter training. Inspect `site/observatory.html?preview=1` before
-connecting providers; run it as a separate sidecar from the live Chamber relay.
+autonomous browser research, a public notebook, reviewed original-document datasets
+and scheduled QLoRA adaptation of a pinned Llama 3.1 70B base. Its interface follows
+the existing Wirehead design, with agent-controlled scrolling and passage scanning.
+Run it as a separate sidecar from the live Chamber relay.
+
+Start with the [deployment and operator guide](observatory/docs/deployment-guide.md)
+and the [data-to-training-to-experiments guide](observatory/docs/data-training-experiments.md).
+The integration is an alpha with offline tests; funded provider, container and real
+70B GPU acceptance remain before unattended use. Preview mode uses simulated
+activity, and selecting a checkpoint does not deploy it into the Chamber.
 
 ## Support the chamber
 

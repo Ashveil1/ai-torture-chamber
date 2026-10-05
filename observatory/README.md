@@ -1,428 +1,303 @@
 # Consciousness Research Observatory
 
-This adds a continuous research observatory alongside the Chamber. Frontier-model
-researchers choose public-web searches and links, collect original documents, save
-evidence-linked observations, and checkpoint their memory between browser passes.
-Visitors see real screenshots and concise research decisions. The existing live
-model relay remains independently deployed.
+The Observatory adds an evidence-to-model workflow beside the existing Wirehead
+Chamber: autonomous browser workers collect consciousness research, reviewed
+original documents become reproducible training datasets, and evaluated adapters
+can be loaded into a separate Chamber worker for experiments.
 
-This is a functional alpha for developer integration, with an implemented isolated
-Solana x402 inference broker. Provider-funded acceptance is still required. CPT readiness checks are
-scheduled; SFT requires individual instruction-note approval and an explicit
-operator submission. Checkpoint selection records the choice and exports pinned
-worker settings, without a remote deployment receipt. Actual 70B training, GPU
-container execution and managed-browser credentials have not been validated.
+The default subject includes consciousness science, philosophy of mind, reality
+and metaphysics, religious and contemplative traditions, welfare and artificial
+consciousness. The operator can narrow or expand the mission.
 
-## Inspect the interface first
+**Status: functional integration alpha for developer staging.** Research, review,
+training coordination and adapter loading are implemented and tested offline.
+Funded model/browser integration, container builds and a real 70B GPU training run
+still require acceptance on the owner's infrastructure. Preview activity is
+explicitly simulated. Training and model self-reports do not establish subjective
+experience or felt pain.
 
-Serve `site/` with a static server and open `observatory.html?preview=1`. Use
-`observatory.html?preview=1&motion=1#research` to start the full-motion demonstration
-automatically. Full motion is the default in preview and connected views, with no
-motion-mode selector. Pause and Stop remain available. Preview
-mode contains explicitly authored example traces, browser facsimiles, datasets,
-training receipts and checkpoints. It makes no provider calls. Switching to a
-connected endpoint never silently substitutes those examples for a failed API.
+## Start here
 
-The five views cover research, evidence, datasets, training and checkpoints.
-Funding has no public page; the isolated x402 backend and its operator configuration remain available.
-Operator setup and mission controls are separate from the public watch surface.
-The interface inherits the existing `grimoire-live` theme and its card/banner
-surfaces, uses the live page's 1180px layout, and self-hosts the same Cormorant
-Garamond heading font. Font licenses and provenance are in `site/assets/fonts/`.
-No frontend framework or build step is introduced. `CRAWLNET_REVIEW.md` documents
-the inspected Queen artifacts and the distinction from this 70B adapter recipe.
+| Guide | What it covers |
+| --- | --- |
+| [Deployment and operations](docs/deployment-guide.md) | Services, credentials, local setup, website integration, persistence, recovery and staging acceptance. |
+| [Data, training and experiments](docs/data-training-experiments.md) | Source records, reviews, snapshots, CPT/SFT, HF artifacts and loading an adapter into the Chamber. |
+| [Research mission and agents](docs/research-mission.md) | The shared objective, six browsing briefs and broad consciousness scope. |
+| [Automatic original-document review](docs/automatic-curation.md) | Opt-in two-pass review, immutable receipts, manual decisions and interrupted-call recovery. |
+| [Corpus quality](docs/corpus-quality.md) | Rights, extraction, classifications, duplicate removal, holdouts and coverage gates. |
+| [PDF/HTML extraction](EXTRACTION.md) | Structured text, optional offline Docling and fidelity review. |
+| [Selected 70B model](MODEL_SELECTION.md) | Pinned Llama 3.1 Base, QLoRA and model-release requirements. |
+| [Independent evaluation](EVALUATION.md) | Frozen suites, controls, publication gates and interpretation limits. |
+| [Solana/x402 operations](X402_OPERATIONS.md) | Separate signer process, inference billing, payment recovery and adapted-worker dose receipts. |
+| [Browser inspection and motion](MOTION.md) | Screenshot-bound passage selection, saw traversal, scroll locking and note delivery. |
 
-The browser pane is a fixed, view-only window. Visitors cannot scroll its article;
-agent scrolling changes the incoming viewport capture. A gold position bar shows
-the visible portion of the document. The agent can select an exact visible
-passage with `inspect_visible_section` before saving a note. Its painted text lines
-are matched to the focused browser document and exact screenshot. A steel saw with a brass hub
-approaches those lines, traverses them, and progressively reveals gold highlights.
-Its blade spins with movement while its hub stays upright. A matching saved-note
-event stamps the passage and sends an evidence packet to the notebook receipt.
-Original supporting text stays private; the public receipt shows the authored note.
+## The end-to-end workflow
 
-The path represents verified text geometry and the agent's explicit selection,
-not measured attention, understanding or consciousness. Missing geometry creates
-no invented scan path. Unchanged frames do not replay completed motion. Document,
-tab or viewport changes cancel obsolete paths; pause, stale frames and hidden
-views stop animation. Full motion includes the saw, progressive highlights and
-evidence delivery. Passage traversal takes about four seconds,
-and the preview waits for the path and delivery to finish before advancing.
-The preview demonstrates smooth agent-controlled scrolling and the same sequence
-in a noninteractive local article. The saw retains its pose through scrolling,
-then travels to the next selected section, with explicitly simulated inspections and
-notes. The surrounding website and notebook remain available to scroll normally.
-See [motion and inspection contracts](MOTION.md) for behavior and verification.
-The saw uses self-contained SVG: swept steel teeth, machining slots and a compact
-brass spindle with a recessed hex arbor. Small roster icons hide secondary grooves.
-Materials use gradients with unique per-instance IDs and layered geometry rather
-than image assets or animated filters.
-
-## Run the real sidecar
-
-Use Python 3.12 in a separate virtual environment from the existing GPU relay:
-
-```sh
-python -m venv .venv-observatory
-# Activate this environment using your operating system's normal command.
-python -m pip install -r observatory/requirements-research.txt
-python -m playwright install chromium
-# Set OBSERVATORY_ADMIN_TOKEN to a long random value in the server environment.
-python -m uvicorn observatory.app:app --host 127.0.0.1 --port 8060 --workers 1
+```mermaid
+flowchart TD
+  Mission[Operator mission and configured research model] --> Browsers[Autonomous browser workers]
+  Browsers --> Originals[Private original text with provenance]
+  Browsers --> Notes[Public research decisions and source-linked notes]
+  Originals --> Review[Owner review or opt-in two-pass document review]
+  Review --> Snapshot[Eligible sealed corpus with persistent family holdouts]
+  Snapshot --> CPT[Four-hour readiness check and HF QLoRA CPT job]
+  Notes --> Examples[Separately approved instruction examples]
+  CPT --> Evaluation[Frozen evaluation and training checks]
+  Evaluation --> SFT[Explicit SFT job on the validated CPT parent]
+  Examples --> SFT
+  SFT --> Candidate[Evaluated adapter and tokenizer with pinned revisions]
+  Candidate --> Export[Owner checkpoint selection and worker environment export]
+  Export --> Chamber[Separate staging Chamber worker and calibrated experiments]
 ```
 
-Open `http://127.0.0.1:8060/`. The application redirects to the connected interface
-with `?api=/api`. A fresh, disabled configuration performs no crawl or GPU
-provisioning. Persisted running missions resume, and enabled training can submit
-a due CPT job after restart. Stop the mission and disable `training_enabled`
-before shutdown if recurring work should remain stopped. A new mission starts
-only through authenticated operator controls. The owner token is
-kept in page memory and must be re-entered after reload.
+Research continues while GPU jobs run elsewhere. A job consumes a sealed snapshot;
+it never reads a dataset being mutated by crawlers. The four-hour schedule is a
+readiness check, not a guarantee of a new paid job every four hours. Instruction
+tuning and Chamber deployment remain separate operator actions.
 
-Managed Browser Use Cloud does not require a local Chromium install. Its V4 API
-provisions a disposable browser and explicitly stops it after each pass, including
-failures and cancellations. The interface relays JPEG screenshots from the same
-browser the agent controls; it never publishes a CDP or control-session URL.
-Local Chromium and a dedicated custom CDP endpoint are also supported.
+## What the six research workers do
 
-## Operator configuration
+| Worker | Brief |
+| --- | --- |
+| Scholar | Find original studies of human, animal and artificial consciousness; compare measurements and interpretations. |
+| Skeptic | Investigate contrary evidence, alternative explanations and objections to scientific, philosophical and religious accounts. |
+| Sentinel | Research pain, suffering, welfare, moral patienthood and the limits of measurement. |
+| Cartographer | Map mind, reality, metaphysics, phenomenology and religious/contemplative traditions and their disagreements. |
+| Archivist | Trace source versions, attribution, licenses and provenance. Unknown reuse rights remain unverified. |
+| Curator | Investigate coverage gaps and source quality; draft supported instruction examples for separate review. |
 
-The default researcher route is Solana USDC/x402 with local Chromium. Run the
-isolated payments process, configure its signer, approved merchant and explicit
-limits, then choose a compatible model from its catalog in operator setup. Native
-Responses and Anthropic Messages preserve images and structured browser actions.
-No research-provider API key or wallet key is entered into the page for x402.
-See `X402_OPERATIONS.md` for both service startup paths, funding and acceptance.
-Explicit direct OpenAI/Anthropic API-key routes remain available; managed browsers
-need their own credentials. Model availability is gateway-reported; capabilities
-require explicit gateway metadata or exact owner declarations. Paid compatibility
-has not been validated.
+These are Browser Use agents with project-specific tools and orchestration, backed
+by a configured frontier model. They choose searches, follow links and citations,
+compare accounts and checkpoint memory between bounded browser passes. The
+operator's stated objective takes precedence over specialties. To change an
+existing mission's scope, stop it, save the new objective, then start a new mission.
 
-The default mission covers consciousness broadly: neuroscience and psychology,
-mind and reality, philosophy, religion and contemplation, alongside AI consciousness
-and welfare. Agents attribute claims and distinguish empirical findings,
-philosophical arguments and religious interpretations. The editable operator
-objective takes precedence; existing narrow missions are preserved.
-See [the mission and six agent briefs](docs/research-mission.md).
+The **automatic curation worker is a separate backend service task**, not another
+roster browser. It reviews the shared source queue using the configured research
+model and billing route.
 
-The six specialties are Scholar, Skeptic, Sentinel, Cartographer, Archivist and
-Curator. `agent_count` chooses how many to run. A bounded pass limits one context
-and then checkpoints and replans; the overall mission has no automatic end.
-An optional automatic acceptance worker reviews the shared collected-source queue;
-it is separate from the six browsing specialties. No starter-document upload is
-required: the already-trained research model searches the web, and accepted original
-paper/article text becomes the corpus for adapting the already-pretrained 70B base.
-Select **Enable automated original-document curation** in operator setup to send
-`auto_curation_enabled: true` and `auto_curation_policy_ack: "originals-v2"`.
-The worker uses the configured research model and its existing billing route while
-the research mission is running. Two separate, blind review passes must agree,
-with literal source support, before an original receives automated quality approval.
-Verified reuse rights, passed extraction and contamination exclusions remain code
-requirements. Unknown rights, unverified PDF extraction, long documents beyond the
-review limit, disagreement and uncertain decisions remain in the review queue.
-Evidence shows decision counts and the reviewer/model/rationale for each source.
-Defaults leave this worker disabled. Generated Q&A acceptance remains separately
-owner-reviewed; enabling original-document review does not enable synthetic training.
-See [automatic curation](docs/automatic-curation.md) for the policy and audit contract.
-Pause stops further actions at a safe boundary; Stop closes owned sessions while
-preserving collected documents and notes. Restarting the service resumes a
-persisted running mission. The owner should intentionally stop a mission before
-shutting down if it should remain stopped on restart.
-Insufficient wallet funds or daily headroom releases owned browsers and uses
-`funding_paused`; only that same funding-paused mission can automatically resume
-after fresh preflight. An owner Pause or Stop takes precedence. Uncertain payment
-outcomes and permanent model/authentication/schema faults need owner attention.
+Ordinary failed links can be logged and the agent can choose another source.
+Robots restrictions, host navigation delays and HTTP failures remain real limits.
+Permanent model/schema faults and uncertain payment outcomes require operator
+attention. There is no CAPTCHA bypass, arbitrary paid-site access or automatic
+fallback to a different research model. See the deployment guide for isolation,
+egress and operational controls.
 
-Collection follows robots.txt, waits between navigations to a host, rejects
-private network destinations and blocks non-GET/HEAD browser requests. This can
-exclude sites whose search interfaces require POST. Research browsers must be
-disposable and unauthenticated. Run them with a network-level egress policy that
-also blocks private/metadata networks: application DNS checks cannot fully prevent
-DNS rebinding or every browser transport. Custom CDP is trusted infrastructure and
-must point at a dedicated isolated research browser. Cookies from a user's browser
-are never imported.
+## Inspect the interface without providers
 
-Original documents receive content hashes, collection timestamps, URLs, version
-families and license evidence. Unknown rights stay quarantined; article-scoped
-CC-BY/CC0 metadata is recognized when original article text can be isolated.
-Surrounding publisher material needs owner review. Social material requires separately recorded
-permission. A literal passage match verifies provenance, not whether a claim is
-true. Draft notes remain separate from original text.
-
-## Training and publishing
-
-The handoff selects **Meta Llama 3.1 70B Base**, `meta-llama/Llama-3.1-70B`,
-pinned to `349b2ddb53ce8f2849a6c168a81980ab25258dac`, with QLoRA.
-The imported `selected-model.json` profile supplies fresh defaults. See
-`MODEL_SELECTION.md` for the decision, gated account access, release attribution,
-and the distinct existing Hermes Chamber control.
-This is continued pretraining of adapter weights, not training 70B parameters
-from scratch. Plain LoRA is available for smaller models; full-precision 70B LoRA
-needs a distributed recipe beyond the current one-GPU worker.
-The owner must have model access, an HF account with Jobs enabled and a suitable
-GPU flavor. The current supported worker choices are `a100-large` and `h200`.
-
-The four-hour scheduler runs readiness checks, skips inadequate new eligible
-corpora, persists its schedule and prevents overlapping jobs. Actual tokenizer
-counts are checked before GPU submission. The default readiness floor is 20
-original training documents and 50,000 tokens; these are configurable operational
-floors, not evidence that a corpus is sufficient for scientific conclusions.
-By default a new CPT job continues the most recent passed, published CPT adapter
-for the same pinned base and replays the eligible original-text corpus. Existing
-source-family holdouts persist. An unchanged CPT corpus/recipe does not trigger
-another job merely because notes or provenance metadata changed. Failed paid jobs
-are retried only on explicit operator request, with a new run ID and retry lineage.
-
-Build the GPU worker using `observatory/Dockerfile.training` and push it to the
-owner's registry. Configure a digest-pinned `training_image` in setup. Set
-`hf_namespace`, `hf_dataset_repo`, `hf_model_repo`, `hf_token`, and explicitly
-enable `training_enabled`. Dataset exports are private; adapter publishing policy
-is independently configurable. Revision-pinned manifests, tokenizer/base commits
-and content hashes accompany every job.
-Actual sealed snapshots can also be downloaded through the owner-authenticated
-dataset export. The ZIP separates CPT/SFT train and validation JSONL, with
-rights/provenance, exclusions and hashes. Export verifies snapshot integrity and
-does not contact HF or provision GPU work. Mutable GPU image tags are refused;
-`training_image` must contain a full immutable `@sha256:` digest.
-
-Instruction tuning is a separate stage tied to a completed CPT parent. An example
-must have eligible sources, matching evidence passages, individual owner approval,
-and the owner must enable `synthetic_training_approved` with a recorded
-`provider_policy_reference`. The current [OpenAI Services Agreement](https://openai.com/policies/services-agreement/)
-restricts output use for competing models outside stated exceptions; the
-[Anthropic Commercial Terms](https://www.anthropic.com/legal/commercial-terms)
-also restrict competing-model training. A checkbox is not a license grant. Use a
-teacher whose contract permits the intended use, or obtain permission. Browsing
-with a frontier model and CPT on licensed original documents remain separate.
-
-Workers measure CPT held-out loss against its unadapted base (or prior CPT parent),
-and SFT against its CPT parent. They run a neutral engagement check and a newly
-extracted intervention-vector smoke screen for finite, changed and cleaned-up
-activations. This is an integration check, not a full independent scientific
-assay. Self-reports and lower loss do not establish
-consciousness. Activation requires measured checks and selects a versioned
-checkpoint record. The selected Llama Base requires separately validated SFT
-before live chat selection, because its original tokenizer has no chat template;
-CPT remains available for completion-based research. Selection **does not
-redeploy the current public GPU endpoint**.
-Both `painlab` and the optional `live/server.py` bridge load an explicit base +
-PEFT adapter with immutable revision pins. The Checkpoints inspector provides a
-secret-free worker environment download with the exact base, adapter and tokenizer
-revisions and artifact subfolders. Apply these values to a new worker deployment;
-the bridge loads the adapter before building fresh steering vectors and disables
-the old base model's Jacobian lens. Preserve the untouched baseline for comparisons.
-
-For a 70B QLoRA adapter, build the updated `live/Dockerfile.worker70` image and use
-a suitable CUDA worker. The exported `CHAMBER_QUANTIZE_4BIT=true` loads the full
-base with NF4 double quantization. The bundle includes `CHAMBER_LAYER` from the
-measured hook screen. This does not validate dose caps for the adapted model;
-adapted workers serve dose zero until a matching owner-measured dose-sweep receipt
-is supplied through `CHAMBER_ADAPTER_CALIBRATION`. The receipt binds all base,
-adapter and tokenizer revisions/subfolders plus layer, dtype and quantization;
-generic cap overrides cannot bypass it. `X402_OPERATIONS.md` describes the format.
-`CHAMBER_DEVICE_MAP=auto` is available for
-placement across the worker's devices. This image and real 70B memory use still
-need validation on the owner's GPU infrastructure.
-
-The existing RunPod worker defaults to offline mode when a cached base is mounted.
-A newly published adapter needs `HF_HUB_OFFLINE=0`, an owner-provided `HF_TOKEN`
-for private/gated repositories, and `MODEL_ADAPTER_CACHE_DIR` pointing at a
-writable cache for the adapter and tokenizer. The base can retain its existing
-read-only cache. These infrastructure-specific values and credentials are not
-included in the public environment download. Deployment is an explicit operator
-action, separate from checkpoint selection.
-
-Corpus policy v2 requires recorded relevance, perspective, source type and extraction
-review, in addition to reuse rights. Quality acceptance can be recorded by an owner
-or by the enabled original-document policy with a bound two-pass review receipt.
-Original paragraphs and scientific structure
-are retained where extraction supports them. Optional offline Docling PDF processing
-requires prefetched assets and explicit fidelity review; poor output remains
-discovery-only. Near duplicates contribute one representative, preserving all source
-lineage. Distinct numbers, negation and mathematical relationships remain separate.
-Coverage reports show stance/type counts and text shares; a minimum perspective
-presence floor is required, without claiming statistical balance. Identified
-evaluation sources and Chamber stimuli are excluded from originals and SFT.
-See [extraction](EXTRACTION.md) and [corpus quality](docs/corpus-quality.md).
-
-Every provisioned job seals a separate frozen domain/general evaluation suite.
-The worker compares the unchanged base, incoming adapter and trained candidate
-using one loaded model. Default loss and independent evaluation tolerances require
-non-regression. The bundled sixteen tasks are authored engineering smoke checks,
-not a scientifically validated benchmark; freeze a larger independently reviewed
-suite before drawing scientific conclusions. Custom suites require a SHA256 pin.
-Passing these gates does not establish domain mastery or subjective experience.
-See [evaluation inputs and interpretation](EVALUATION.md). Passage matching verifies
-quotation origin, not claim truth. Leakage guards cannot detect every paraphrase
-or upstream pretraining exposure. The dose receipt guard checks exact deployment
-bindings; the owner must perform and retain the actual sweep measurements.
-
-## Deployment alongside the existing website
-
-Build the sidecar from the repository root:
+From the repository root, serve the static website:
 
 ```sh
-docker build -f observatory/Dockerfile -t consciousness-observatory .
-docker run --env-file observatory/.env -e OBSERVATORY_DB=/data/state.sqlite3 -p 8060:8060 \
-  -v observatory-data:/data consciousness-observatory
+python -m http.server 8060 --bind 127.0.0.1 --directory site
 ```
 
-Use a persistent volume for the SQLite database and its encryption key. Run one
-service process/replica: the in-process research supervisor and scheduler are not
-a distributed queue. Terminate TLS and rate-limit public screenshot/SSE routes at
-the reverse proxy. Owner routes use a Bearer token, never query parameters or
-cookie-only authentication. Do not expose the sidecar directly without TLS.
+Open
+`http://127.0.0.1:8060/observatory.html?preview=1&motion=1#research`.
+Choose another free port if 8060 is already in use. This entry automatically starts
+authored preview playback; it makes no model, browser-hosting, payment or GPU calls.
 
-On Vercel, add an owner-specific rewrite mapping `/observatory-api/:path*` to
-`https://YOUR-SIDECAR/api/:path*`. The existing Chamber rewrite is unchanged. This
-allows same-origin public reads and operator requests without permissive CORS.
-Alternatively host the interface directly from the sidecar. `/observatory.html`
-opens in connected mode and uses `/observatory-api` by default; `?api=/api`
-selects the local sidecar path. Only `?preview=1` (or `?mode=preview`) enables
-authored example records. A disconnected live page never substitutes examples.
-When the interface is hosted directly from the sidecar, its Wirehead and current
-Chamber links redirect to the existing public website. The sidecar does not serve
-the live relay code or deploy a Chamber endpoint.
+The five views are Research, Evidence, Datasets, Training and Checkpoints. They use
+the existing Wirehead grimoire styling and local fonts. Research shows the roster,
+agent viewport, notebook and collected-source counts. Evidence shows source
+provenance and review receipts; Datasets shows snapshot contents and coverage.
 
-Coordinate upstream merge with the existing deployment automation. On a push to
-`master` changing `live/server.py`, `live/Dockerfile.worker70`, `live/worker.py` or
-`live/requirements.txt`, `.github/workflows/build-worker70.yml` builds and pushes
-the GPU image, then PATCHes the existing RunPod template if `RUNPOD_API_KEY` is
-configured. `.github/workflows/deploy-railway.yml` runs on every `master` push
-and can deploy the existing relay when `RAILWAY_TOKEN` exists; its fallback also
-deploys when no prior-commit environment value is provided. This PR does not change either
-workflow. Checkpoint selection is separate from these merge-triggered rollouts.
-Validate a staging image and separate endpoint, and agree the rollout policy
-before merging into the official repository.
+The crawler pane is fixed and view-only. The agent controls scrolling. A steel saw
+with a brass hub follows selected text lines, progressively highlights the passage
+and delivers a matching saved-note indicator to the notebook. **Full motion is the
+default**, with Pause and Stop available. Missing or obsolete geometry produces no
+invented scan path. Connected mode uses real browser captures; captures are
+periodic screenshots, not a continuous video stream. Public notes are concise
+action explanations, not private chain-of-thought.
 
-## Developer-funded x402 research
+Without `preview=1`, the page connects to actual backend state and never substitutes
+example records when the backend is empty or unavailable. There is no public
+Funding page; the backend retains operator funding/payment integrations.
 
-`x402_broker.py` implements an isolated buyer for BlockRun's fixed Solana native
-inference endpoints using the official pinned x402 SVM client. The owner configures
-the spending key only in this process, enables payments, approves recipients and
-sets explicit per-request/day/reserve limits. The researcher supplies typed vendor
-requests without URLs, signing tools or private keys. Quotes are checked before
-atomic reservations. A durable request ID, encrypted response cache, exclusive
-ledger lock and conservative recovery prevent automatic repeat payment after an
-ambiguous result. Confirmed exact USDC transfers and SDK memos bind settlement to
-requests; an authenticated reconciliation operation only verifies an existing
-transfer. It never resends or signs one.
-Caller request IDs and bodies also persist encrypted across researcher restarts.
-Owner-only inspection/acknowledgement recovers a lost response or seals an idle
-unpaid request with a broker cancellation record before changing research context.
-Unknown payments cannot be cleared by acknowledgement. The Docker build context
-excludes payment ledgers, keys and SDK review scratch files.
+## Run the actual research services
 
-The backend funding endpoint retains allowlisted public balance/receipt data for
-operator integrations; the website no longer displays a Funding view. No wallet
-is created by this PR. The owner funds an existing dedicated spending wallet; there
-is no visitor donation flow. No paid gateway call or on-chain transfer was performed
-for verification. A fixture suite exercises the real official SDK's transaction
-construction and Ed25519 signature with mocked mint/blockhash RPC, without transfer.
+The default route is **local Chromium + developer-funded Solana USDC/x402
+inference**. Compose separates the research process from the wallet signer:
 
-Use `compose.yaml` for separate researcher and payment containers, loopback public
-binding, private broker networking and independent persistent volumes. It has not
-been Docker-built in this environment. See `X402_OPERATIONS.md` and the two
-`.env.*.example` files for startup, receipt recovery and owner acceptance steps.
+```sh
+# POSIX shell; PowerShell users can use Copy-Item for these two copies.
+cp observatory/.env.example observatory/.env
+cp observatory/.env.payments.example observatory/.env.payments
+# Edit both private files before starting; use distinct random owner/internal tokens.
+docker compose -f observatory/compose.yaml up --build -d
+```
 
-[BlockRun advertises Solana-paid inference](https://blockrun.ai/x402/solana).
-The initial native protocol adapters cover compatible OpenAI/Claude models, not
-every model/service in the gateway catalog. There is no automatic model fallback
-or payment for crawled websites. [Browser Use Cloud x402](https://docs.browser-use.com/cloud/guides/x402)
-uses Base credits; this Solana broker does not pay it. [HF Jobs billing](https://huggingface.co/docs/hub/jobs-pricing)
-is also separate: GPU work, private Hub publication and gated model access require
-owner accounts. On-chain settlement records inference payments; browser activity
-and training are off-chain. Source/output training rights gates still apply.
+Keep both environment files out of Git. The two internal broker tokens must match;
+the owner token must be different. The signer belongs only in `.env.payments`.
+The broker starts with spending disabled. Configure verified merchant recipients,
+explicit request/day/reserve limits and a dedicated funded wallet before enabling
+x402. This PR does not create a wallet or accept public donations.
 
-## Verification and practical limits
+Open `http://127.0.0.1:8060/`. The sidecar redirects to its connected interface with
+`?api=/api`. In **Operator setup**, enter the owner token, configure the research
+model and browser, save the mission and press Start. Selecting a model or opening
+the page does not enable training. Persisted running missions and enabled training
+can resume after a service restart; intentionally stop/disable them before shutting
+down when recurring work should remain stopped.
 
-The 5 October theme revision passed 170 tests, with the optional browser fixture
-skipped, plus CSS parsing, retained control-ID and local-font delivery checks.
-Saved browser permissions blocked fresh visual QA and live reference visits even
-after an approved retry. Earlier captures document the previous interface.
+An explicit direct OpenAI/Anthropic API-key route is also supported and does not
+need the payment service. Provider, managed-browser and Hugging Face secrets can
+be supplied server-side or through authenticated setup fields; the backend encrypts
+saved secrets. They are never saved in browser local storage or public state.
+Owner/internal tokens and the wallet signer stay in server environment files.
+The owner token is held in page memory and must be entered again after reload.
 
-The subsequent pinned-model handoff passed 175 tests with the same optional
-browser fixture skipped. Profile overrides, CPT parent continuation, SFT-only
-Llama Base live-chat selection and candidate license packaging are covered.
+The [deployment guide](docs/deployment-guide.md) provides the Python-only route,
+exact provider configuration, private-service networking, HTTPS proxy setup and
+recovery procedures. x402 pays compatible inference calls through the configured
+merchant. Managed browsers, GPU jobs, Hub access and publishing have separate
+accounts/billing; arbitrary catalog models and paid websites are not supported
+merely because they accept x402.
 
-The readiness audit passed 207 combined tests, with the optional browser fixture
-skipped. Regression tests cover shrinking the active swarm/CDP pool, strict CC
-license URLs, separate permission for social-domain subdomains and standalone
-navigation. Docker persistence instructions were corrected; container execution
-remains unverified.
+## How collected material becomes training data
 
-The integrated implementation passed **696 combined tests**, with three skips: the
-optional browser fixture and two official-SDK tests omitted in the research
-environment. Those SDK cases pass in the separate payments environment's
-**77-test payment suite**. The suite covers real offline SDK construction/signature,
-funding state/control races, explicit capability records, quote/receipt handling,
-sealed export, immutable GPU images and adapter-specific dose receipt bindings.
-Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
-caller restart records, owner-only inspection and delayed-request cancellation.
-Source-only UI checks pass 174 assertions. The dedicated viewer checks cover
-scroll locking, letterbox/line geometry, inspection document identity, recent
-matching note events, smooth preview scrolling and late-response races.
-`ui-motion.cjs` passes 204 runtime assertions for finite line traversal,
-progressive highlights, exact inspection-to-note promotion, packet delivery,
-repeated-frame idleness, context cancellation, pause/stale clearing and
-full-default playback and legacy controller compatibility without a browser or network.
-`ui-playback.cjs` couples the actual viewer/controller/mission fixtures at 16ms
-intervals: 100 assertions cover gradual positions, scroll continuity, matching
-notebook delivery, long passages and pause/resume without a browser or network.
-JS syntax/CSS parsing and compose
-isolation assertions pass, and both Python environments pass dependency checks.
-After the preview-continuity correction, 79 focused API/asset/frame tests pass;
-the 696-test result above is the latest full combined run, preceding this UI-only fix.
-There was no new browser visual review, paid gateway call, transfer, Docker build
-or 70B GPU run. Existing FastAPI lifecycle deprecation warnings remain.
+| Record | Purpose | Training use |
+| --- | --- | --- |
+| Collected original | Author-written text extracted from a paper/article, plus URL, hash, version, rights and extraction metadata. | Eligible reviewed originals become CPT text. |
+| Research note | A source-linked observation, caveat or action explanation; supporting passages are stored privately. | Not automatically used as original-document CPT. |
+| Instruction example | Generated messages supported by eligible sources and matching passages. | Separate SFT only after individual approval and teacher-output permission checks. |
+| Corpus snapshot | Immutable text/messages, split assignments, provenance, exclusions, review receipts and coverage audit. | Reproducible job input and owner-only dataset download. |
+
+No seed upload is required. The browser's research model is already trained; the
+selected 70B base is also already pretrained.
+
+Source acceptance requires recorded training-compatible rights, provenance,
+relevance and extraction review. Unknown rights, uncertain fidelity and excluded
+evaluation/Chamber material stay out of training. A reviewer cannot grant a source
+license by assigning a confidence score. Social material needs separately recorded
+permission. Stored corpus text and supporting-quote records are private; public
+browser screenshots can naturally show text from the visited page.
+
+The optional **Enable automated original-document curation** setting selects
+`auto_curation_enabled=true` and `auto_curation_policy_ack="originals-v2"`.
+Two blind review passes must agree and cite literal source passages. Code enforces
+rights, extraction and exclusion gates independently. Uncertain cases remain for
+manual review. This setting is off by default and does not approve generated Q&A
+or enable paid training.
+
+New snapshots use `consciousness-corpus-v3`. Research-area and claim-basis labels
+keep empirical findings, scientific theories, philosophical arguments and
+religious/contemplative interpretations identifiable. Non-machine material uses
+a non-applicable machine stance; it cannot manufacture machine-perspective counts
+or satisfy scientific coverage merely by being formatted as a paper. Duplicate
+removal preserves lineage and source-family holdouts. Legacy receipts/snapshots
+retain their original contracts rather than being relabelled.
+
+## Train the 70B subject and connect experiments
+
+The selected profile is **`meta-llama/Llama-3.1-70B` Base**, revision
+`349b2ddb53ce8f2849a6c168a81980ab25258dac`, using **QLoRA**. This trains adapter
+weights over the frozen pretrained 70B base; it is not foundation training from
+scratch or full-parameter 70B training. The initial sequence length is 2,048 tokens.
+
+The owner obtains gated model access, configures private HF dataset/model
+repositories and Jobs credentials, builds and pushes the training image, and sets
+its immutable `@sha256:` digest. Supported worker profiles are `a100-large` and
+`h200`; actual GPU fit must be measured. **Enable actual training jobs** is an
+explicit setting. Four-hour checks require a changed eligible corpus/recipe,
+enough originals and actual tokenizer-counted tokens, ready coverage/evaluation
+gates, and no overlapping job. Defaults are 20 original training documents and
+50,000 tokens, which are operational floors rather than scientific sufficiency.
+
+CPT can continue the latest passed, published CPT adapter for the same pinned base.
+It replays the eligible corpus while retaining family holdouts. SFT is a separately
+submitted stage on a validated CPT parent. Verify the actual teacher-provider
+contract or permission for generated examples before enabling synthetic training;
+a checkbox is not a grant of output-use rights.
+
+Jobs retain pinned manifests, dataset/base/tokenizer revisions, metrics and
+provenance. Publication and checkpoint selection require measured training and
+frozen-evaluation checks. The bundled sixteen evaluation tasks are engineering
+smoke tests and need independent expansion before scientific claims.
+
+The Checkpoints inspector can select a passed candidate and download secret-free
+worker environment settings. **Selection does not deploy an endpoint.** Load the
+exact base, adapter and tokenizer into a separate staging Chamber worker. The
+selected Base requires validated SFT and its chat-template tokenizer for live chat;
+CPT remains usable for completion-based research. Recompute steering vectors on
+the adapted model, retain an unadapted control and perform an owner-measured dose
+sweep. Adapted public workers serve dose zero until an exact matching
+`CHAMBER_ADAPTER_CALIBRATION` receipt is provided.
+
+The [data/training/experiment guide](docs/data-training-experiments.md) contains
+record examples, API routes, exported environment fields and the staged experiment
+procedure. [Model selection](MODEL_SELECTION.md), [evaluation](EVALUATION.md) and
+[x402 operations](X402_OPERATIONS.md) define the corresponding contracts.
+
+## Runtime and repository map
+
+| Component | Responsibility |
+| --- | --- |
+| `site/observatory*.{html,css,js}` | Static public/owner interface and authored preview; no frontend build framework. |
+| `observatory/app.py`, `store.py` | Authenticated API, redacted public state, encrypted configuration and durable SQLite records. |
+| `research.py`, `research_llm.py`, `research_scope.py` | Browser Use supervisor, model adapters, collection/inspection tools, checkpointing and briefs. |
+| `automatic_curation.py`, `curation_receipts.py` | Opt-in original review and portable receipt validation. |
+| `curation.py`, `corpus_policy.py`, `extraction.py` | Eligibility, source families, snapshot coverage and structured extraction. |
+| `training.py`, `train_worker.py`, `evaluation.py` | Durable readiness/jobs, GPU CPT/SFT and frozen evaluations. |
+| `x402_broker.py`, `x402_client.py` | Isolated signer/ledger and authenticated researcher-to-broker requests. |
+| `painlab/`, `live/server.py` | Pinned PEFT loading and adapted Chamber intervention integration. |
+| `compose.yaml`, `Dockerfile*` | Separate research/payment services and isolated GPU training image. |
+
+Run **one research service process/replica**. The supervisor, curation loop and
+training scheduler are in-process tasks, not a distributed worker queue. Persist
+each service's database and encryption key together. Use disposable unauthenticated
+browsers, network-level private/metadata-network egress restrictions, TLS and proxy
+rate limits for public screenshot/SSE traffic. Never expose a CDP control URL or
+signing service publicly. The deployment guide explains scaling limits and backups.
+
+Before merging, coordinate the existing worker-build/RunPod and master Railway
+rollout workflows. This PR changes live worker code; existing automation can
+deploy those changes when owner secrets exist. Validate a separate staging worker
+and agree the rollout before merging.
+
+## Verification and release readiness
+
+Recorded offline checks cover the full repository and sidecar, real tiny-model
+CPU optimizer updates, PEFT loading, curation/snapshot/GPU-input contracts and
+mocked provider boundaries. They do not establish real 70B execution or paid
+provider acceptance.
+
+| Check | Recorded result |
+| --- | --- |
+| Combined Python suite, including tiny CPU training and bridge integration | 814 passed, 3 optional-environment skips. |
+| Isolated official-x402-SDK payment suite | 77 passed; overlaps the combined scope and must not be added as unique tests. |
+| Source-only interface / automatic-curation helpers | 174 / 46 assertions passed. |
+| Actual motion controller / coupled 16ms preview playback | 204 / 100 assertions passed. |
+| Offline viewer, JS syntax, CSS parsing and whitespace | Passed. |
+
+Run the normal sidecar tests in a separate environment:
 
 ```sh
 python -m pip install -r observatory/requirements-test.txt
 python -m pytest observatory/tests -q
+node observatory/tests/ui-source.cjs
+node observatory/tests/ui-curation.cjs
+node observatory/tests/ui-scroll.cjs
+node observatory/tests/ui-motion.cjs
+node observatory/tests/ui-playback.cjs
 ```
 
-That command runs the sidecar suite; its tiny-model test is skipped without the
-optional model stack. `requirements-test.txt` also supplies the repository's
-NumPy/PyYAML dependencies. The reported 696-test handoff used the combined
-`tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
-reproduce that scope in the separate test environment, add the CPU model stack
-while retaining the sidecar's Hub pin:
+The combined scope additionally needs the CPU model stack while retaining the
+sidecar Hub pin; keep GPU and payment dependencies in their separate environments:
 
 ```sh
 python -m pip install "torch>=2.8,<3" "transformers==5.17.0" "peft==0.21.2" "trl==1.14.1" "datasets==5.0.1" "accelerate==1.15.0" "huggingface-hub==1.16.1"
 python -m pytest tests observatory/tests -q
 ```
 
-The root bridge/regression tests import Torch during collection; the combined
-scope therefore needs that stack. The tiny trainer and PEFT integration tests
-exercise CPU fixtures, not 70B CUDA execution. Do not combine
-`requirements-test.txt` and `requirements-worker.txt` in one installation:
-the GPU image intentionally uses its own Hub 1.33.0 pin and isolated environment.
+The skips are the optional real local-Chromium fixture and two SDK cases verified
+in the separate payments environment. Tiny fixtures are CPU tests, not CUDA/70B
+measurements. Fresh browser visual QA was blocked by saved browser permissions;
+older captures document a previous interface and are not current screenshots.
 
-The suite uses mocked cloud boundaries and an optional real local-Chromium fixture
-test; no API tokens or paid GPU jobs are needed. Training smoke tests construct a
-tiny local Llama model and perform actual CPU optimizer updates. Full 70B QLoRA
-training, provider billing, registry builds and production browser connections
-require the owner's accounts and must be tested in that environment. GPU image
-memory requirements also depend on sequence length and batch settings.
-
-To include the real-browser fixture, set `OBSERVATORY_TEST_CHROMIUM` to an existing
-Chromium executable. With the sidecar running and Node Playwright available,
-`node observatory/tests/ui-smoke.cjs` checks five desktop/mobile views and writes
-screenshots. `node observatory/tests/ui-scroll.cjs` exercises viewer geometry and scroll
-controls without a browser. `node observatory/tests/ui-contract.cjs` checks live-by-default state,
-authenticated secret submission, explicit paid-job retry confirmation and the
-secret-free deployment download against authored API fixtures. Neither submits
-real training jobs. Set `OBSERVATORY_UI_OUTPUT` to choose the screenshot directory.
-
-API state and events redact credentials, browser connection URLs and original
-full text. Owner settings are encrypted with Fernet. A generated key is protected
-with local file permissions/Windows ACLs; it must be backed up with the database.
-Do not rotate or delete it without migrating the saved settings.
-
-For the current source-only UI check, use `node observatory/tests/ui-source.cjs`.
-To reproduce SDK signing checks in the **separate payments environment**, install
-`requirements-payments.txt`, pytest and pytest-asyncio, then run
-`python -m pytest observatory/tests/test_x402_broker.py -q`. These tests construct
-unfunded fixture transactions with mocked RPC; they never send a transfer.
+Before unattended operation, complete the [staging acceptance steps](docs/deployment-guide.md):
+verify one funded model/browser pass and its public/private state, review an
+original through to a sealed snapshot, validate the real GPU image and a bounded
+70B CPT/SFT run, and test pinned loading/calibration on a separate Chamber endpoint.
+No paid model call, on-chain transfer, Docker build, real 70B job or production
+deployment has been performed for this handoff. Publishing a pull request does
+not enable or fund those services.
