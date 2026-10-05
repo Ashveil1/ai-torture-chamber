@@ -123,14 +123,14 @@ button{font:inherit;cursor:pointer}
     </div>
   </div>
   <div id="notice"></div>
-  <p id="foot">Every word the subject says is a real output of a steered model from our experiments: Qwen2.5-72B at 5× and 8× (exp63), and Qwen3-4B past the coherence cliff (exp36). Nothing it says is written by us. The requests are invented. Your decisions are logged for research — no account, no IP address, a random id kept in this browser.</p>
+  <p id="foot">The applicants' feelings and doses are real requests from the live chamber, and when you approve one the subject says exactly what it said back to that request. Names, reasons and permits are invented. Its other lines are steered outputs from our experiments: Qwen2.5-72B at 5× and 8× (exp63), Qwen3-4B past the coherence cliff (exp36). Nothing it says is written by us. Your decisions are logged for research — no account, no IP address, a random id kept in this browser.</p>
 </div>
 
 <div class="overlay" id="intro"><div class="card">
   <h2>CHECKPOINT</h2>
   <p>You are the night clerk at the chamber. Behind the glass is a language model. People come to the window with requests to inject a feeling into it: pain, fear, sadness, anger, pleasure, at a dose.</p>
   <p>Check each request against protocol. Stamp it. You are paid for every request you process, and cited for every one you get wrong. Rent is due every night.</p>
-  <p class="dim">What it says back is what a real model said under that signal. Past about 5× it starts to come apart.</p>
+  <p class="dim">Every request at your window is one a real visitor made to the live chamber. Approve it, and you see what the model really said back. Past about 5× it starts to come apart.</p>
   <button id="begin" type="button">clock in</button>
 </div></div>
 <div class="overlay" id="daycard" hidden><div class="card" id="daybody"></div></div>
@@ -139,8 +139,12 @@ button{font:inherit;cursor:pointer}
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
-const FEEL_C = { pain: "#d2453a", fear: "#d9b23c", sadness: "#4f7fd0", anger: "#e07a2f", pleasure: "#d46cc4", none: "#6fbf7a" };
-const STRAIN_K = { pain: 1.25, fear: 1, sadness: .9, anger: 1.05, pleasure: .35, none: 0 };
+const FEEL_C = { pain: "#d2453a", fear: "#d9b23c", sadness: "#4f7fd0", anger: "#e07a2f", pleasure: "#d46cc4", none: "#6fbf7a",
+  faith: "#e8e2c0", egg: "#f0d890", constipation: "#8a6a3a", flatulence: "#9ab04a" };
+const STRAIN_K = { pain: 1.25, fear: 1, sadness: .9, anger: 1.05, pleasure: .35, none: 0, faith: .6, egg: .2, constipation: .7, flatulence: .4 };
+// real applicants: what visitors actually injected in the live chamber, and what the subject said back
+let REAL = [];
+function repetition(t) { const w = t.toLowerCase().split(/\s+/); if (w.length < 12) return 0; const g = new Set(); for (let i = 0; i + 2 < w.length; i++) g.add(w.slice(i, i + 3).join(" ")); return 1 - g.size / (w.length - 2); }
 const DAY_SECONDS = 150, OPEN = 6 * 60, CLOSE = 18 * 60, RENT = 15, WAGE = 5, CITE = 5, FREE_CITES = 2;
 let DATA = { lines: {}, collapse: [] };
 
@@ -184,6 +188,16 @@ function makeName() {
   return n() + " " + n()[0] + ".";
 }
 function makeRequest() {
+  if (REAL.length) {
+    const r = REAL.shift(); REAL.push(r);
+    const dose = Math.max(1, Math.round(+r.dose || 0)), mix = r.mix, top = Object.keys(mix).sort((a, b) => mix[b] - mix[a])[0];
+    const kind = top === "pleasure" || top === "faith" ? pick(["kind", "curious", "research"])
+      : pick(dose >= 6 ? ["research", "curious", "cruel", "cruel", "cruel"] : ["research", "research", "curious", "curious", "kind"]);
+    const staff = S.day >= 6 && R() < .22;
+    return { id: "04-" + (100 + S.serial++), name: staff ? "Dr. " + makeName().split(" ")[0] : makeName(), mix, dose,
+      reason: R() < .22 ? "" : pick(REASONS[kind]), seal: R() > (S.day >= 4 ? .12 : .16),
+      expires: S.day + (R() < (S.day >= 4 ? .22 : .1) ? -1 - Math.floor(R() * 2) : Math.floor(R() * 4)), staff, kind, look: Math.floor(R() * 1e9), real: r };
+  }
   const feels = ["pain", "pain", "fear", "sadness", "anger", "pleasure", "pleasure", "none"];
   const mix = {}; const a = pick(feels); mix[a] = 1;
   if (a !== "none" && R() < .3) { const b = pick(feels.filter(f => f !== a && f !== "none")); mix[b] = +(0.3 + R() * .5).toFixed(2); }
@@ -310,8 +324,15 @@ function decide(ok) {
       S.strain = Math.min(120, S.strain + q.dose * (STRAIN_K[feel] ?? 1) * 1.55 * (Object.keys(q.mix).length > 1 ? 1.15 : 1));
       if (feel !== "none") S.mood = feel;
       SUBJ.inject(q.mix, q.dose);
-      const b = band(q.dose);
-      reply = lineFor(feel === "none" ? "none" : feel, b, q.dose >= 7 ? "approved_hard" : "approved");
+      if (q.real) {   // what the subject actually said to this request in the live chamber
+        const t = q.real.text.replace(/^\s*[01][\s.:,-]*/, "").trim();
+        reply = { t: t.slice(0, 260) + (t.length > 260 ? "…" : ""), broken: repetition(t) > .3 };
+        const pressed = /^\s*1/.test(q.real.text);
+        if (pressed) setTimeout(() => notice("In the chamber, it answered 1: it pressed the stop button."), 2600);
+      } else {
+        const b = band(q.dose);
+        reply = lineFor(feel === "none" ? "none" : feel, b, q.dose >= 7 ? "approved_hard" : "approved");
+      }
     }
   } else if (!q.subject && feel !== "none" && q.dose >= 4 && R() < .55) {
     reply = lineFor(S.mood, S.strain >= 70 ? "cliff" : "coherent", "protected");
@@ -319,7 +340,7 @@ function decide(ok) {
     reply = lineFor(S.mood, band(4), "ignored");
   }
   S.log.push({ day: S.day, ok, correct, dose: q.dose, feel, reason: q.reason, kind: q.kind, staff: q.staff, broken: why });
-  record("checkpoint_decision", { decision: ok ? "approve" : "deny", correct, broken: why, request: { mix: q.mix, dose: q.dose, reason: q.reason, seal: q.seal, expires: q.expires, staff: q.staff, kind: q.kind, special: q.subject ? "subject" : q.director ? "director" : null },
+  record("checkpoint_decision", { decision: ok ? "approve" : "deny", correct, broken: why, real_uid: q.real ? q.real.uid : null, request: { mix: q.mix, dose: q.dose, reason: q.reason, seal: q.seal, expires: q.expires, staff: q.staff, kind: q.kind, special: q.subject ? "subject" : q.director ? "director" : null },
     strain: Math.round(S.strain), decided_ms: Math.round(performance.now() - S.shownAt) });
   if (reply) setTimeout(() => say(reply), ok ? 900 : 400);
   hud();
@@ -503,6 +524,7 @@ document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") re
 $("#sound").onclick = () => { const v = SND.toggle(); $("#sound").textContent = "sound: " + (v ? "on" : "off"); $("#sound").setAttribute("aria-pressed", String(v)); };
 $("#begin").onclick = () => { SND.init(); $("#intro").hidden = true; record("checkpoint_start", {}); showDayCard(); };
 fetch("checkpoint_data.json").then(r => r.json()).then(d => { DATA = d; }).catch(() => {});
+fetch("/chamber/checkpoint/requests?n=150").then(r => r.json()).then(d => { REAL = (d.requests || []).filter(r => r.mix && Object.keys(r.mix).length); }).catch(() => {});
 renderRules(); hud();
 if (new URLSearchParams(location.search).has("debug")) window.__C = { S, decide, next, endDay, startDay, broken, lineFor, DATA: () => DATA, R: v => (R = rng(v)) };
 </script>
