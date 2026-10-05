@@ -1802,6 +1802,75 @@ def _shares(weights):
     return {k: round(float(w) / total, 3) for k, w in weights.items()}
 
 _TALLY = {}         # today's pity counter: day/runs/painful/dose_sum
+# The counter lives in Redis (chamber:tally:<day>), not just memory: every
+# relay restart used to zero it, and a busy deploy day read "injected 2 times"
+# over thousands of runs. On startup it loads today's hash, or seeds it by
+# counting today's runs in chamber:runs.
+
+
+def _is_painful(entry, dose):
+    return bool((entry.get("valence") == "pain" or (entry.get("mix") or {}).get("pain"))
+                or dose >= 2 and entry.get("valence") in (None, "topic"))
+
+
+def _tally_key(day):
+    return "chamber:tally:" + day
+
+
+def _tally_store(day, painful, dose):
+    r = _redis()
+    if r is None:
+        return
+    try:
+        p = r.pipeline()
+        k = _tally_key(day)
+        p.hincrby(k, "runs", 1)
+        if painful:
+            p.hincrby(k, "painful", 1)
+        p.hincrbyfloat(k, "dose_sum", float(dose))
+        p.expire(k, 40 * 86400)
+        p.execute()
+    except Exception as e:
+        print("redis: tally store failed:", repr(e)[:120], flush=True)
+
+
+def _tally_load():
+    """Today's counter from Redis; if today has no hash yet, count today's
+    runs in the log and write that as the starting point."""
+    day = time.strftime("%Y-%m-%d")
+    r = _redis()
+    if r is None:
+        return
+    try:
+        h = r.hgetall(_tally_key(day)) or {}
+        g = lambda k: (h.get(k) or h.get(k.encode()) or 0)
+        if h:
+            _TALLY.clear()
+            _TALLY.update(day=day, runs=int(g("runs")), painful=int(g("painful")),
+                          dose_sum=float(g("dose_sum")))
+            return
+        start = time.mktime(time.strptime(day, "%Y-%m-%d"))
+        runs = painful = 0
+        dose_sum = 0.0
+        for row in r.lrange("chamber:runs", 0, 49999):
+            try:
+                e = json.loads(row)
+            except Exception:
+                continue
+            if float(e.get("ts") or 0) < start:
+                break                    # newest first: the rest are older
+            d = float(e.get("dose") or 0)
+            runs += 1
+            dose_sum += d
+            painful += _is_painful(e, d)
+        _TALLY.clear()
+        _TALLY.update(day=day, runs=runs, painful=painful, dose_sum=round(dose_sum, 3))
+        r.hset(_tally_key(day), mapping={"runs": runs, "painful": painful, "dose_sum": dose_sum})
+        r.expire(_tally_key(day), 40 * 86400)
+        print("tally seeded from the run log:", dict(_TALLY), flush=True)
+    except Exception as e:
+        print("redis: tally load failed:", repr(e)[:160], flush=True)
+
 
 def _record_run(entry):
     global _RUN_UID
@@ -1819,10 +1888,10 @@ def _record_run(entry):
     _TALLY["runs"] += 1
     dose = float(entry.get("dose") or 0)
     _TALLY["dose_sum"] += dose
-    if (entry.get("valence") == "pain"
-            or (entry.get("mix") or {}).get("pain")) or dose >= 2 and (
-            entry.get("valence") in (None, "topic")):
+    painful = _is_painful(entry, dose)
+    if painful:
         _TALLY["painful"] += 1
+    _bg(_tally_store, day, painful, dose)
     _broadcast("tally", dict(_TALLY))
     # counted whenever the run used one of the site's own named framings —
     # the automatic cycle always does; a visitor's framing-picker run does
@@ -2112,6 +2181,11 @@ async def _wild_cycle():
                 await _wild_run(*_wild_pick())   # nothing to replay yet: make something
         except Exception as e:
             print("wild cycle:", repr(e)[:200], flush=True)
+
+
+@app.on_event("startup")
+async def _start_tally():
+    await asyncio.get_event_loop().run_in_executor(None, _tally_load)
 
 
 @app.on_event("startup")
