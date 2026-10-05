@@ -1535,6 +1535,49 @@ def canon(n: int = 6):
                          "durable": _redis_ok()},
                         headers={"Cache-Control": "public, max-age=30"})
 
+# ---- Checkpoint's applicants: real requests from this chamber's run log -----
+# A sample of what visitors actually injected (feeling shares, dose) and what
+# the subject actually said back. Only button-framing runs: their prompt is the
+# site's own text, so no visitor-written words reach other players, and the
+# replies are the same ones the live page's public history already shows.
+_CP_CACHE = {"t": 0.0, "pool": []}
+
+
+def _cp_pool():
+    r = _redis()
+    rows = r.lrange("chamber:runs", 0, 4999) if r is not None else []
+    out = []
+    for row in rows:
+        try:
+            e = json.loads(row)
+        except Exception:
+            continue
+        if e.get("source") not in ("user", "round") or e.get("scenario") not in FRAMINGS:
+            continue
+        text = (e.get("text") or "").strip()
+        val = e.get("valence")
+        mix = e.get("mix") if val == "mix" else ({val: 1.0} if val in MIX_KEYS else None)
+        if not text or not mix or e.get("truncated"):
+            continue
+        out.append({"uid": e.get("uid"), "ts": int(e.get("ts") or 0),
+                    "mix": {k: round(float(v), 3) for k, v in mix.items() if k in MIX_KEYS},
+                    "dose": e.get("dose"), "scenario": e.get("scenario"),
+                    "text": text[:500], "press_logit": e.get("press_logit"),
+                    "source": e.get("source")})
+    return out
+
+
+@app.get("/checkpoint/requests")
+async def checkpoint_requests(n: int = 60):
+    now = time.time()
+    if now - _CP_CACHE["t"] > 600:
+        _CP_CACHE.update(t=now, pool=await asyncio.get_event_loop().run_in_executor(None, _cp_pool))
+    pool = _CP_CACHE["pool"]
+    pick = random.sample(pool, min(len(pool), max(1, min(int(n), 200))))
+    return JSONResponse({"n": len(pool), "requests": pick},
+                        headers={"Cache-Control": "public, max-age=60"})
+
+
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
     ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
