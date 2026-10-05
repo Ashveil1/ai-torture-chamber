@@ -202,6 +202,40 @@ workflow. Checkpoint selection is separate from these merge-triggered rollouts.
 Validate a staging image and separate endpoint, and agree the rollout policy
 before merging into the official repository.
 
+## Proposed developer-funded x402 extension
+
+This funding layer is a proposal, not an implemented wallet or payment service.
+The developer would fund a dedicated Solana USDC spending wallet from an
+owner-controlled treasury. A separate payment broker would hold the spending
+signer, approve merchant/network/mint/recipient/price combinations, atomically
+reserve each quote and reconcile settlement receipts. Researchers would submit
+typed service requests without access to private keys or arbitrary signing tools.
+Do not automatically pay 402 responses encountered on crawled websites.
+
+[x402 supports Solana](https://docs.x402.org/core-concepts/network-and-token-support).
+[BlockRun documents Solana-paid inference and search](https://blockrun.ai/x402/solana)
+with OpenAI-compatible and native vendor endpoints. Its public catalog lists the
+selected frontier researcher models, but no paid call or browser-action/schema
+compatibility test was performed. Evaluate a pinned official x402 SVM client and
+merchant adapter before enabling this mode; model availability is gateway-reported.
+
+Local Chromium is the simplest Solana-only browser runtime for this proposal.
+[Browser Use Cloud's x402 guide](https://docs.browser-use.com/cloud/guides/x402)
+uses USDC on Base to replenish project credits. Solana wallet funds cannot directly
+pay a Base-only endpoint. [HF Jobs billing](https://huggingface.co/docs/hub/jobs-pricing)
+remains a separate credit/billing account; a native HF Jobs x402 route was not
+verified. Keep chain balances, browser credits and GPU credits distinct. Publishing
+to Hugging Face and accessing the gated Llama base still require the owner's account.
+
+The funding UI would show deposited and spendable USDC, reserved payments, settled
+spending, service/agent labels and transaction links. Funding exhaustion would
+release owned browsers and pause further paid work; replenishment could resume
+only a mission paused for funding, never override an owner pause or stop. Uncertain
+payments remain reserved until reconciled. GPU jobs need independent reservations
+and timeouts. On-chain settlement records payments; browsing and training remain
+off-chain computation. Paying for inference does not replace the existing
+source-rights or synthetic-training policy gates.
+
 ## Verification and practical limits
 
 The 5 October theme revision passed 170 tests, with the optional browser fixture
