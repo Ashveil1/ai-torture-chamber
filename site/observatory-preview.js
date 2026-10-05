@@ -16,7 +16,7 @@
     ["sentinel","The Sentinel","Welfare & measurement","Separate a model's behavior from claims about experience."],
     ["cartographer","The Cartographer","Theories & gaps","Map disagreements and questions that remain open."],
     ["archivist","The Archivist","Rights & provenance","Track source versions, attribution and reuse evidence."],
-    ["curator","The Curator","Corpus quality","Review duplicates, exclusions and source families."]
+    ["curator","The Curator","Corpus quality","Find coverage gaps, assess evidence and draft useful source-linked instruction examples."]
   ];
   function create() {
     const now = stamp();
