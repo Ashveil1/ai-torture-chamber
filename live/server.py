@@ -1361,7 +1361,8 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "final_encounter_start", "final_encounter_end", "final_reward",
                       "final_choice", "confession_start", "confession_turn",
                       "confession_act_start", "confession_act_end", "study_consent",
-                      "study_rating", "study_belief", "study_end", "survey", "consent"}
+                      "study_rating", "study_belief", "study_end", "welfare_start",
+                      "welfare_answer", "welfare_certificate", "survey", "consent"}
 _EVENT_RATE = {}
 
 
