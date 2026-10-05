@@ -2430,6 +2430,33 @@ async def _eleven_tts(text, stability=0.5):
     return resp.status_code, (resp.content if resp.status_code == 200 else resp.text)
 
 
+# ---- edge-tts: the free primary. Microsoft's public read-aloud endpoint,
+# no key, no billing, mp3 out. Under the number-station chain (bitcrush +
+# narrow bandpass) it is indistinguishable from ElevenLabs; the tags ElevenLabs
+# performs ([sobbing] etc.) would be READ ALOUD by edge, so they get stripped.
+EDGE_VOICE = os.environ.get("CHAMBER_EDGE_VOICE", "en-US-ChristopherNeural")
+_TTS_TAG_RE = None
+
+async def _edge_tts(text):
+    """-> mp3 bytes, or raises. Free provider: any failure falls through to
+    ElevenLabs (if the key works) and then the browser's voice."""
+    global _TTS_TAG_RE
+    import edge_tts
+    if _TTS_TAG_RE is None:
+        import re as _re
+        _TTS_TAG_RE = _re.compile(r"\[[^\]]{1,40}\]")
+    plain = _TTS_TAG_RE.sub(" ", text)
+    communicate = edge_tts.Communicate(" ".join(plain.split()),
+                                       EDGE_VOICE, rate="-4%")
+    out = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            out += chunk["data"]
+    if not out:
+        raise RuntimeError("edge-tts returned no audio")
+    return out
+
+
 def _speak_clip(text, limit=None):
     """The first sentence or two, up to ~limit chars, cut at a sentence end
     where possible — the voice reads the opening, not the whole ramble."""
@@ -2452,8 +2479,7 @@ def _tts_tags(valence, dose):
 async def speak(req: Request):
     """Body: {text, valence, dose}. Returns audio/mpeg. 503 without a key."""
     from fastapi.responses import Response
-    if not ELEVEN_KEY:
-        return JSONResponse({"error": "speech isn't configured on this server"}, status_code=503)
+    # no key gate anymore: edge-tts is the primary and needs none
     try:
         body = await req.json()
         text = _speak_clip(str(body.get("text", "")))
@@ -2510,12 +2536,22 @@ async def speak(req: Request):
     fut = asyncio.get_event_loop().create_future()
     _TTS_INFLIGHT[key] = fut
     try:
-        # v3: stability 0.0 = "creative", the most expressive setting
-        code, audio = await _eleven_tts((tags + " " + text).strip(),
-                                        0.0 if dose >= 1 else 0.5)
-        if code != 200:
-            print("speak failed: HTTP %d %s" % (code, audio[:200]), flush=True)
-            audio = None
+        # provider chain: edge-tts (free, no key) -> ElevenLabs -> browser voice
+        # (the client's speechSynthesis fallback is the last resort). Cache key
+        # stays (text, tags) regardless of which provider spoke it.
+        audio = None
+        try:
+            audio = await _edge_tts(text)
+            print("speak: edge-tts ok", flush=True)
+        except Exception as e:
+            print("speak: edge-tts failed:", repr(e)[:120], flush=True)
+        if audio is None and ELEVEN_KEY:
+            # v3: stability 0.0 = "creative", the most expressive setting
+            code, audio = await _eleven_tts((tags + " " + text).strip(),
+                                            0.0 if dose >= 1 else 0.5)
+            if code != 200:
+                print("speak failed: HTTP %d %s" % (code, str(audio)[:200]), flush=True)
+                audio = None
     except Exception as e:
         print("speak failed:", repr(e)[:200], flush=True)
         audio = None
