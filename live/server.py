@@ -648,6 +648,13 @@ GENERIC_RE = re.compile(
     r"|i'?m not sure what you'?re asking|is there anything else i can", re.I)
 
 
+def in_character(text):
+    """The persona carried in the message itself: the deployed GPU worker's
+    image predates system-line support and falls back to Hermes's default
+    'You are a helpful assistant', so the instruction travels with the words."""
+    return (SUBJECT_SYSTEM + "\n\nSomeone in front of you says: \"" + text.strip() + "\"\n\nAnswer them now.")
+
+
 def is_generic(text):
     return bool(GENERIC_RE.search((text or "")[:400]))
 CHAT_ALL = os.environ.get("CHAMBER_CHAT_ALL", "0") == "1"
@@ -1049,6 +1056,8 @@ async def steer(req: Request):
     conversational = CHAT_ALL or mode == "topic" or (bool(raw_prompt) and framing_key is None)
     persona = body.get("persona") is True and (mode == "topic" or (bool(raw_prompt) and framing_key is None))
     sysmsg = SUBJECT_SYSTEM if persona else None
+    if persona:
+        prompt = in_character(prompt)
     gen_prompt = chat_prompt(prompt, sysmsg) if conversational else prompt
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
@@ -1065,7 +1074,7 @@ async def steer(req: Request):
                    applied=(dict(arg) if mode == "mix" else list(arg)),
                    dose=rec.get("dose"), past_cliff=past_cliff,
                    framing=framing_key,
-                   prompt=prompt if raw_prompt else None,
+                   prompt=raw_prompt or None,
                    chat=conversational, room=enter_room, persona=persona or None,
                    generic=is_generic(rec.get("text")) or None,
                    model=MODEL_ID if fallback else served_model(),
@@ -2011,7 +2020,7 @@ async def _wild_run(prompt, weights):
     _broadcast("run", meta)
     parts, plogit, saw_done = [], None, False
     try:
-        job = {"prompt": prompt, "mix": weights or {"none": 1.0},
+        job = {"prompt": in_character(prompt), "mix": weights or {"none": 1.0},
                "chat": True, "rep_penalty": CONVO_REP_PENALTY, "system": SUBJECT_SYSTEM}
         async for ev_type, ev in _runpod_stream(job):
             if ev_type == "error":
