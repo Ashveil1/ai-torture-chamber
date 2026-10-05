@@ -838,6 +838,7 @@ body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
                  resize:vertical"></textarea>
       </div>
+      <label class="where" style="display:block;margin:.3rem 0"><input type="checkbox" id="tuneChk"> autotune the voice (it sings, pitched by the feeling)</label>
       <label id="whereSel" class="where"><input type="checkbox" id="roomEnter">
         also enter the room — a chance it's shown to everyone</label>
       <button id="mreset" type="button">reset</button>
@@ -1390,7 +1391,7 @@ function speak(text, valence, dose, btn, isPublic){
     body: JSON.stringify({text, valence: valence || "pain", dose: dose ?? 0,
                           public: !!isPublic})})
     .then(r=> r.ok ? r.blob() : Promise.reject(r.status))
-    .then(b=>{ numbersStation(b); reset(); })
+    .then(b=>{ numbersStation(b, valence, dose); reset(); })
     .catch(()=>{ if (btn){ btn.textContent = "the voice is resting"; setTimeout(reset, 4000); } });
 }
 function showVoice(outEl, text, valence, dose, auto, isPublic){
@@ -1411,11 +1412,57 @@ function showVoice(outEl, text, valence, dose, auto, isPublic){
 // bandpass like a 7 MHz AM channel, low gain, plus a looped white-noise
 // bed with slow flutter and a tuning burst before the voice comes in.
 let _ac = null, _clip = [];
-function numbersStation(blob){
+// ---- autotune: detect the voice's pitch per grain, snap it hard to a minor
+// pentatonic, and walk a little melody over it, so it half-sings. The feeling
+// sets the register (pain and grief low, fear and pleasure high, the egg
+// highest); the dose widens the melody. Pure Web Audio math, no extra cost.
+const TUNE_SHIFT = {pain:-4, sadness:-6, fear:3, pleasure:5, faith:2, egg:9, constipation:-2, flatulence:-7, mix:0, none:0};
+let VOICE_TUNE = (()=>{ try { return localStorage.getItem("chamber_tune") !== "0"; } catch(e){ return true; } })();
+function autotune(ac, buf, valence, dose){
+  const sr = buf.sampleRate, x = buf.getChannelData(0), N = x.length;
+  const G = Math.round(sr * 0.046), H = Math.round(G / 4), D = 4;            // grain, hop, detection decimation
+  const win = new Float32Array(G); for (let i = 0; i < G; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (G - 1));
+  const y = new Float32Array(N + G), wsum = new Float32Array(N + G);
+  const SC = [0, 3, 5, 7, 10], ROOT = 50;                                      // D minor pentatonic
+  const degOf = m => { const o = Math.floor((m - ROOT) / 12), r = m - ROOT - 12 * o;
+    let best = 0; for (let k = 1; k < 5; k++) if (Math.abs(SC[k] - r) < Math.abs(SC[best] - r)) best = k;
+    if (Math.abs(12 - r) < Math.abs(SC[best] - r)) return 5 * (o + 1); return 5 * o + best; };
+  const noteOf = d => ROOT + 12 * Math.floor(d / 5) + SC[((d % 5) + 5) % 5];
+  const shift = (TUNE_SHIFT[valence] ?? 0), range = 1 + Math.round(Math.min(8, dose || 0) / 3);
+  let step = 0, next = 0;
+  for (let pos = 0; pos + G < N; pos += H){
+    // pitch: autocorrelation on a decimated grain, 80-400 Hz
+    let f0 = 0, best = 0, e0 = 0;
+    const m = Math.floor(G / D), lo = Math.floor(sr / D / 400), hi = Math.floor(sr / D / 80);
+    for (let i = 0; i < m; i++){ const v = x[pos + i * D]; e0 += v * v; }
+    if (e0 / m > 1e-4){
+      for (let L = lo; L <= hi; L++){
+        let c = 0; for (let i = 0; i + L < m; i++) c += x[pos + i * D] * x[pos + (i + L) * D];
+        if (c > best){ best = c; f0 = sr / D / L; }
+      }
+      if (best < 0.35 * e0) f0 = 0;                                            // unvoiced
+    }
+    if (pos >= next){ step = Math.max(-range, Math.min(range, step + [-2, -1, 0, 1, 2][Math.floor(Math.random() * 5)]));
+      next = pos + sr * (0.22 + Math.random() * 0.3); }
+    let ratio = Math.pow(2, shift / 12);
+    if (f0){ const midi = 69 + 12 * Math.log2(f0 / 440);
+      ratio = Math.pow(2, (noteOf(degOf(midi + shift) + step) - midi) / 12); }
+    for (let i = 0; i < G; i++){
+      const s = pos + G / 2 + (i - G / 2) * ratio, k = Math.floor(s), f = s - k;
+      if (k < 0 || k + 1 >= N) continue;
+      y[pos + i] += (x[k] * (1 - f) + x[k + 1] * f) * win[i]; wsum[pos + i] += win[i];
+    }
+  }
+  const out = ac.createBuffer(1, N, sr), o = out.getChannelData(0);
+  for (let i = 0; i < N; i++) o[i] = wsum[i] > 1e-3 ? y[i] / wsum[i] : 0;
+  return out;
+}
+function numbersStation(blob, valence, dose){
   _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
   const ac = _ac;
   ac.resume();
   blob.arrayBuffer().then(ab => ac.decodeAudioData(ab)).then(buf => {
+    if (VOICE_TUNE) { try { buf = autotune(ac, buf, valence, dose); } catch (e) { console.warn("autotune", e); } }
     _clip.forEach(n => { try { n.stop(); } catch (e) {} });   // one voice at a time
     const t0 = ac.currentTime + 0.15;
     // --- voice chain: clip -> bandpass -> gain
@@ -2962,6 +3009,11 @@ document.addEventListener("error", e=>{
   img.dataset.tried = tried.concat(new URL(img.src).pathname).join(",");
   img.setAttribute("src", next);
 }, true);
+</script>
+
+<script>
+(function(){ const c = document.getElementById("tuneChk"); if (!c) return; c.checked = VOICE_TUNE;
+  c.onchange = ()=>{ VOICE_TUNE = c.checked; try { localStorage.setItem("chamber_tune", c.checked ? "1" : "0"); } catch(e){} }; })();
 </script>
 
 </body>
