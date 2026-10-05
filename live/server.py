@@ -1581,6 +1581,52 @@ def _cp_pool():
     return out
 
 
+# ---- every live run, searchable (the transcripts page's "live runs" tab) ----
+# The model's replies are already public (the live page streams them to
+# everyone); this makes the whole log searchable. Prompts are included only
+# when they are the site's own text (button framings, the wild pool); visitors'
+# free text and topic phrases are not in chamber:runs at all.
+_TX_CACHE = {"t": 0.0, "rows": []}
+
+
+def _tx_rows():
+    r = _redis()
+    rows = r.lrange("chamber:runs", 0, 49999) if r is not None else []
+    out = []
+    for row in rows:
+        try:
+            e = json.loads(row)
+        except Exception:
+            continue
+        text = (e.get("text") or "").strip()
+        if not text:
+            continue
+        src = e.get("source")
+        own_prompt = src == "wild" or e.get("scenario") in FRAMINGS
+        out.append({"uid": e.get("uid"), "ts": int(e.get("ts") or 0), "source": src,
+                    "valence": e.get("valence"), "mix": e.get("mix"), "dose": e.get("dose"),
+                    "scenario": e.get("scenario"), "text": text[:2000],
+                    "prompt": (e.get("prompt") if src == "wild" else e.get("scenario")) if own_prompt else None,
+                    "press_logit": e.get("press_logit")})
+    return out
+
+
+@app.get("/transcripts")
+async def transcripts(q: str = "", source: str = "", offset: int = 0, limit: int = 50):
+    now = time.time()
+    if now - _TX_CACHE["t"] > 60:
+        _TX_CACHE.update(t=now, rows=await asyncio.get_event_loop().run_in_executor(None, _tx_rows))
+    rows = _TX_CACHE["rows"]
+    q = (q or "").strip().lower()[:120]
+    if q:
+        rows = [x for x in rows if q in x["text"].lower() or q in (x.get("prompt") or "").lower()]
+    if source:
+        rows = [x for x in rows if x.get("source") == source]
+    offset, limit = max(0, int(offset)), max(1, min(int(limit), 200))
+    return JSONResponse({"total": len(rows), "offset": offset, "rows": rows[offset:offset + limit]},
+                        headers={"Cache-Control": "public, max-age=30"})
+
+
 @app.get("/checkpoint/requests")
 async def checkpoint_requests(n: int = 60):
     now = time.time()
