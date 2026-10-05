@@ -248,12 +248,14 @@ for(const change of [
   equal(h.frames.size,0);check(h.node('passage-trail').children.every(mark=>width(mark)===300));
   h.setReduced(false);equal(h.frames.size,1,'Restoring full motion starts an inspectable finite trajectory');
 }
-// The explicit opt-in overrides only decorative motion preferences for this view.
-for(const mode of ['full','reduced','system']) {
+// The controller defaults to full even on a reduced-motion OS. Legacy explicit
+// controller modes remain compatible; the viewer exposes no mode selector.
+for(const mode of [undefined,'full','reduced','system']) {
   const h=harness();h.media.matches=true;const base=input({motionMode:mode});h.motion.update(base);
-  equal(h.motion.isBusy(),mode==='full','Motion mode has deterministic system/full/reduced behavior');
-  equal(h.frames.size,mode==='full'?1:0);
-  if(mode==='full') {
+  const animated=mode===undefined || mode==='full';
+  equal(h.motion.isBusy(),animated,'Default and explicit full controller inputs animate despite the OS preference');
+  equal(h.frames.size,animated?1:0);
+  if(animated) {
     h.advance(300);const x1=parseFloat(h.node('selected-creature').style.left);
     h.advance(450);const x2=parseFloat(h.node('selected-creature').style.left);
     check(x1!==x2&&x2>40,'Approach renders intermediate positions despite OS reduced preference');

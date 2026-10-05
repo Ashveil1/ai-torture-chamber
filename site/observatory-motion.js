@@ -14,7 +14,7 @@
   let active=null, raf=null, last=null, lastInput=null, position=null, rotation=0, drawnKey=null, lastReduced=null, sawSerial=0;
   const APPROACH_MS=600, ENDPOINT_MS=250;
   function reducedMotion(input) {
-    const mode=input?.motionMode || "system";
+    const mode=input?.motionMode || "full";
     return mode==="reduced" || mode!=="full" && reduced.matches;
   }
   function isBusy() {

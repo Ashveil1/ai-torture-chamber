@@ -17,9 +17,8 @@ container execution and managed-browser credentials have not been validated.
 
 Serve `site/` with a static server and open `observatory.html?preview=1`. Use
 `observatory.html?preview=1&motion=1#research` to start the full-motion demonstration
-automatically. The visible Motion selector offers System, Full and Reduced;
-ordinary entry respects the system preference, while this explicit demo opts into
-Full. Preview
+automatically. Full motion is the default in preview and connected views, with no
+motion-mode selector. Pause and Stop remain available. Preview
 mode contains explicitly authored example traces, browser facsimiles, datasets,
 training receipts and checkpoints. It makes no provider calls. Switching to a
 connected endpoint never silently substitutes those examples for a failed API.
@@ -47,8 +46,8 @@ The path represents verified text geometry and the agent's explicit selection,
 not measured attention, understanding or consciousness. Missing geometry creates
 no invented scan path. Unchanged frames do not replay completed motion. Document,
 tab or viewport changes cancel obsolete paths; pause, stale frames and hidden
-views stop animation. System/reduced modes use static highlights when appropriate;
-Full is an explicit viewer choice. Passage traversal takes about four seconds,
+views stop animation. Full motion includes the saw, progressive highlights and
+evidence delivery. Passage traversal takes about four seconds,
 and the preview waits for the path and delivery to finish before advancing.
 The preview demonstrates smooth agent-controlled scrolling and the same sequence
 in a noninteractive local article. The saw retains its pose through scrolling,
@@ -361,13 +360,13 @@ funding state/control races, explicit capability records, quote/receipt handling
 sealed export, immutable GPU images and adapter-specific dose receipt bindings.
 Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
 caller restart records, owner-only inspection and delayed-request cancellation.
-Source-only UI checks pass 159 assertions. The dedicated viewer checks cover
+Source-only UI checks pass 174 assertions. The dedicated viewer checks cover
 scroll locking, letterbox/line geometry, inspection document identity, recent
 matching note events, smooth preview scrolling and late-response races.
-`ui-motion.cjs` passes 200 runtime assertions for finite line traversal,
+`ui-motion.cjs` passes 204 runtime assertions for finite line traversal,
 progressive highlights, exact inspection-to-note promotion, packet delivery,
 repeated-frame idleness, context cancellation, pause/stale clearing and
-reduced-motion behavior without a browser or network.
+full-default playback and legacy controller compatibility without a browser or network.
 `ui-playback.cjs` couples the actual viewer/controller/mission fixtures at 16ms
 intervals: 100 assertions cover gradual positions, scroll continuity, matching
 notebook delivery, long passages and pause/resume without a browser or network.

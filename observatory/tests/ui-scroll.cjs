@@ -9,7 +9,7 @@ function extract(name){
 const nodes=new Map(),labels={};
 function node(id){if(!nodes.has(id))nodes.set(id,{hidden:false,style:{},clientWidth:600,clientHeight:425,getBoundingClientRect:()=>({left:0,top:0})});return nodes.get(id);}
 const context={Number,Math,JSON,mode:'connected',currentView:'research',selectedAgent:'scholar',frameTelemetry:null,highlightedNoteId:'',
-  previewScrollFrame:null,previewScrollKey:'',previewScrollY:0,previewIdleAt:null,previewTimer:null,motionMode:'system',cancelAnimationFrame(){},
+  previewScrollFrame:null,previewScrollKey:'',previewScrollY:0,previewIdleAt:null,previewTimer:null,motionMode:'full',cancelAnimationFrame(){},matchMedia:()=>({matches:true}),
   window:{},document:{hidden:false},connected:true,state:{events:[],mission:{status:'paused'}},
   $:node,text:(id,value)=>labels[id]=value,agent:()=>({id:'scholar',source_id:'preview-butlin',preview_scroll_phase:2,preview_inspection_id:'preview-inspection-7',preview_focus_note_id:'preview-note-7'})};
 vm.createContext(context);
@@ -100,10 +100,9 @@ const pausedTransform=page.style.transform;
 context.state.mission.status='paused';h.renderPreviewViewport();
 assert.equal(page.style.transform,pausedTransform,'Rendering pause freezes the document midway instead of jumping to its target');
 assert.equal(context.previewScrollFrame,null);assert.equal(motionInput.running,false,'Pause is delivered to the motion controller immediately');
-// An explicit Full selection provides the GIF-like demonstration even on reduced-motion systems.
-context.matchMedia=()=>({matches:true});context.motionMode='system';assert.equal(h.motionReduced(),true);
-context.motionMode='full';assert.equal(h.motionReduced(),false);
-context.motionMode='reduced';assert.equal(h.motionReduced(),true);context.motionMode='full';
+// Full app playback stays animated even when the OS requests reduced motion.
+assert.equal(h.motionReduced(),false,'The default keeps the progressive scroll checked above active on reduced-motion systems');
+context.matchMedia=()=>({matches:false});assert.equal(h.motionReduced(),false,'An OS preference change does not change the app playback mode');
 // The real preview scheduler cannot replace a passage halfway through its timeline.
 let timerCallback=null,timerClock=0,controllerBusy=true,steps=0,renders=0;
 Object.assign(context,{previewScrollFrame:null,previewTimer:null,previewIdleAt:null,currentView:'research',

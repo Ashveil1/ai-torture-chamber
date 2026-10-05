@@ -35,7 +35,8 @@
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
   let frameTelemetry = null, highlightedNoteId = "";
   let previewScrollFrame = null, previewScrollKey = "", previewScrollY = 0;
-  let motionMode=mode==="preview" && parameters.get("motion")==="1"?"full":"system", previewIdleAt=null;
+  const motionMode="full";
+  let previewIdleAt=null;
   let inheritedBaseRevision = false;
   let researchCatalog={status:"unavailable",models:[]}, metadataAt=0, metadataLoading=false, metadataGeneration=0;
   let previousProvider=preferences.research_provider;
@@ -160,7 +161,7 @@
     window.ObservatoryMotion?.stop(true);
   }
   function motionReduced() {
-    return motionMode==="reduced" || motionMode==="system" && typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return false;
   }
   function renderFrameTelemetry() {
     const display=$("browser-display"), geometry=viewportGeometry(frameTelemetry?.viewport,frameTelemetry?.focus,display.clientWidth,display.clientHeight);
@@ -1041,15 +1042,6 @@
   window.addEventListener("beforeunload",()=>{disconnect();clearTimeout(previewTimer);ownerToken="";});
   document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelPreviewScroll();window.ObservatoryMotion?.stop();}else if(mode==="connected")refreshState(true);else renderPreviewViewport();});
   lockObserverViewport($("browser-display"));
-  $("crawler-motion").value=motionMode;
-  $("crawler-motion").addEventListener("change",()=>{
-    motionMode=$("crawler-motion").value;previewIdleAt=null;
-    if(mode==="preview"){cancelPreviewScroll();renderPreviewViewport();updatePreviewTimer();}else renderFrameTelemetry();
-  });
-  if(typeof matchMedia==="function")matchMedia("(prefers-reduced-motion: reduce)").addEventListener?.("change",()=>{
-    if(motionMode!=="system")return;
-    if(mode==="preview"){cancelPreviewScroll();renderPreviewViewport();}else renderFrameTelemetry();
-  });
   window.addEventListener("resize",()=>{if(mode==="preview")renderPreviewViewport();else renderFrameTelemetry();});
   installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");
   if(mode==="connected")refreshState();

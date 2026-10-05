@@ -76,17 +76,16 @@ an invented reading highlight. Missing or changed document context still clears 
 
 Pause freezes the current document position and drawn saw/highlights. Resume
 retains the current preview phase rather than skipping ahead. Stale frames and
-hidden views stop animation. The visible Motion selector offers System, Full and
-Reduced. System follows the browser preference; explicit Full animates despite a
-reduced system preference. Reduced displays static highlights and saved indicators,
-without the moving saw or delivery packet. Browser and surrounding panel
+hidden views stop animation. Full motion is the default in both preview and
+connected views, including the moving saw and delivery packet. There is no
+System/Full/Reduced selector. Browser and surrounding panel
 scrollbars retain the native dark-track and muted-gold theme.
 
 ## Inspect the authored demonstration
 
 Open `observatory.html?preview=1&motion=1#research` from the local site server.
-This explicitly selects Full motion and automatically starts authored preview
-playback. Ordinary entry defaults to System. The demonstration performs no real crawl,
+This automatically starts authored preview playback. Ordinary entry also uses
+full motion when playback or a research mission is running. The demonstration performs no real crawl,
 inference, payment or training. The ordinary connected entry remains unchanged.
 
 The preview moves the actual local article surface smoothly, waits for scrolling
@@ -100,22 +99,22 @@ labeled simulated.
 
 ## Verification and remaining acceptance
 
-The combined repository and sidecar suite passes 696 Python tests, with three
+The last combined repository and sidecar run passed 814 Python tests, with three
 optional-environment skips. Backend cases cover focused-page selection, full
 visible literal matching, line geometry, inspection expiry, exact note promotion,
 stable screenshot binding, document identity and public-field redaction.
 
 `node observatory/tests/ui-motion.cjs` runs the actual motion controller against
-controlled DOM geometry and animation clocks: 200 assertions cover traversal,
+controlled DOM geometry and animation clocks: 204 assertions cover traversal,
 progressive reveal, matching save delivery, repeated-frame idleness, cancellation,
-pause/stale state and reduced motion. `ui-scroll.cjs` covers the actual viewer
+pause/stale state, full-default playback and legacy controller compatibility. `ui-scroll.cjs` covers the actual viewer
 functions, frame metadata, scroll locks, preview scrolling and response races;
-`ui-source.cjs` passes 159 source assertions. These checks use no provider calls.
+`ui-source.cjs` passes 174 source assertions. These checks use no provider calls.
 
 `node observatory/tests/ui-playback.cjs` couples the actual motion controller,
 viewer/notebook/mission/timer helpers and authored fixtures at sixteen-millisecond
 intervals: 100 assertions cover gradual positions, progressive highlights,
-scroll continuity, note delivery, longer passages, pause/resume and motion modes.
+scroll continuity, note delivery, longer passages, pause/resume and full-default motion.
 This catches interruptions between the preview and controller, beyond their
 individual tests. The UI-only correction also passes 79 focused API/asset/frame
 tests; the 696-test result is the latest full combined run before that correction.

@@ -6,6 +6,7 @@ const root=path.resolve(__dirname,'../..');
 const main=fs.readFileSync(path.join(root,'site/observatory.js'),'utf8');
 const motion=fs.readFileSync(path.join(root,'site/observatory-motion.js'),'utf8');
 const preview=fs.readFileSync(path.join(root,'site/observatory-preview.js'),'utf8');
+const defaultMotionMode=vm.runInNewContext(main.match(/^  const motionMode=.*;$/m)[0]+'\nmotionMode;');
 let assertions=0;
 const check=(condition,message)=>{assert.ok(condition,message);assertions++;};
 const equal=(actual,expected,message)=>{assert.equal(actual,expected,message);assertions++;};
@@ -17,7 +18,7 @@ function extract(name) {
   return main.slice(start,start+1+next);
 }
 
-function harness({motionMode='full',systemReduced=true,summaryLines=5}={}) {
+function harness({systemReduced=true,summaryLines=5}={}) {
   const nodes=new Map(),rafs=new Map(),timeouts=new Map(),samples=[],renders=[];
   let clock=0,sequence=0,context;
   function element(id='') {
@@ -84,7 +85,7 @@ function harness({motionMode='full',systemReduced=true,summaryLines=5}={}) {
     getComputedStyle:node=>({display:'block',visibility:'visible',overflow:'visible',overflowX:'visible',overflowY:'visible',...node.computed}),
     $:$,all:selector=>document.querySelectorAll(selector),list:value=>Array.isArray(value)?value:[],
     esc:value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),
-    mode:'preview',currentView:'research',selectedAgent:'scholar',notebook:'decisions',motionMode,
+    mode:'preview',currentView:'research',selectedAgent:'scholar',notebook:'decisions',motionMode:defaultMotionMode,
     connected:false,ownerToken:'',frameObjectUrl:'',frameSelection:'',lastPreviewSource:'',
     frameTelemetry:null,highlightedNoteId:'',previewScrollFrame:null,previewScrollKey:'',previewScrollY:0,
     previewIdleAt:null,previewTimer:null,sourceBookmarks:new Set(),toast:()=>{}};
@@ -128,7 +129,6 @@ function harness({motionMode='full',systemReduced=true,summaryLines=5}={}) {
   return {context,nodes,rafs,timeouts,samples,renders,media,snapshot,frame,advance,until,
     start(){context.missionAction('start');return snapshot();},pause(){context.missionAction('pause');return snapshot();},
     resume(){context.missionAction('resume');return snapshot();},stop(){context.missionAction('stop');},
-    mode(value){context.motionMode=value;context.cancelPreviewScroll();context.renderPreviewViewport();context.updatePreviewTimer();},
     node:$};
 }
 
@@ -137,7 +137,7 @@ function harness({motionMode='full',systemReduced=true,summaryLines=5}={}) {
 {
   const h=harness();h.start();
   equal(h.media.matches,true,'This regression reproduces the reduced OS environment');
-  equal(h.context.motionReduced(),false,'Explicit Full overrides System preference');
+  equal(h.context.motionReduced(),false,'Default full playback continues under an OS reduced-motion preference');
   check(h.snapshot().busy,'The real controller reports the initial inspection as busy');
   h.until(sample=>sample.phase===3 && !sample.busy && !sample.scrolling);
   const phases=new Set(h.samples.map(sample=>sample.phase));
@@ -216,20 +216,21 @@ function harness({motionMode='full',systemReduced=true,summaryLines=5}={}) {
   h.stop();
 }
 
-// System and Reduced remain accessible static modes; selecting Full explicitly
-// must replay the current section instead of inheriting a static completed key.
+// Full is the actual app default. OS preference changes cannot interrupt or
+// replace the moving inspection with a static completed passage.
 {
-  const h=harness({motionMode:'system'});h.start();
-  equal(h.context.motionReduced(),true,'System respects the OS reduced-motion preference');
-  equal(h.rafs.size,0,'System reduced motion starts no character/page tween');
-  equal(h.snapshot().busy,false,'Static mode does not hold the completion timer forever');
-  check(h.snapshot().widths.every(width=>width===420 || width===250),'Static mode presents the entire selected passage');
-  h.advance(1200);equal(h.context.agent().step,1,'Static mode keeps a readable hold before the next phase');
-  h.mode('full');check(h.snapshot().busy,'Explicit Full replays the current section');
-  h.until(sample=>sample.action==='inspect' && sample.widths[0]>0 && sample.widths[0]<420,6000);
-  check(h.snapshot().widths[0]>0 && h.snapshot().widths[0]<420,'Full reveals intermediary progress after a System static view');
-  h.mode('reduced');equal(h.rafs.size,0,'Explicit Reduced cancels the active character timeline');
-  equal(h.snapshot().busy,false,'Explicit Reduced cannot strand the timer busy state');
+  const h=harness();h.start();
+  h.until(sample=>sample.busy && sample.action==='inspect' && sample.widths[0]>0 && sample.widths[0]<420,6000);
+  const before=h.snapshot();
+  equal(h.context.motionMode,'full','The viewer uses the actual full app default');
+  check(before.busy && before.widths[0]>0 && before.widths[0]<420,'Default playback progressively reveals the passage');
+  for(const reduced of [false,true]) {
+    h.media.matches=reduced;h.media.listeners.forEach(callback=>callback());
+    equal(h.snapshot().busy,true,'OS preference changes keep the active path moving');
+    equal(h.snapshot().x,before.x,'Preference changes retain the current character position');
+    equal(h.snapshot().widths[0],before.widths[0],'Preference changes retain highlight progress');
+  }
+  h.advance(160);check(h.snapshot().x!==before.x,'The default character continues through intermediate positions');
   h.stop();
 }
 

@@ -73,7 +73,7 @@ assert.ok(preview.research_catalog.models.every(m=>m.id.startsWith('simulated/')
 const html=fs.readFileSync(path.join(root,'site/observatory.html'),'utf8');
 assert.ok(html.includes(objective+'</textarea>'),'Editable mission starts with the broad default');
 assert.ok(html.includes('Saved objectives remain authoritative'),'Saved scopes are not silently widened');
-for(const asset of ['observatory.css','observatory-preview.js','observatory.js'])assert.ok(html.includes(asset+'?v=20261005-scope1'),'Scope updates invalidate cached '+asset);
+for(const asset of ['observatory.css','observatory-motion.js','observatory.js'])assert.ok(html.includes(asset+'?v=20261006-full1'),'Full-motion updates invalidate cached '+asset);
 const htmlIds=Array.from(html.matchAll(/\bid="([^"]+)"/g),m=>m[1]);
 assert.equal(new Set(htmlIds).size,htmlIds.length,'HTML IDs must be unique');
 const authoredIds=new Set([...htmlIds,...Array.from(source.matchAll(/\bid="([^"]+)"/g),m=>m[1])]);
