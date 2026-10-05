@@ -4,10 +4,13 @@ from __future__ import annotations
 import asyncio
 import base64
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from email.utils import format_datetime
 import hmac
 import importlib
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -24,6 +27,63 @@ from .store import Store, utc_now
 SITE = Path(__file__).resolve().parents[1] / "site"
 SOLANA_NETWORKS = {"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"}
 USDC_MINTS = {"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"}
+MAX_FRAME_BYTES = 10 * 1024 * 1024
+
+
+def _frame_headers(agent: dict, data: bytes) -> dict[str, str]:
+    """Attach only geometry recorded for these exact screenshot bytes."""
+    digest = hashlib.sha256(data).hexdigest()
+    headers = {"Cache-Control": "no-store", "X-Observatory-Frame-SHA256": digest}
+    identifier = agent.get("id")
+    if isinstance(identifier, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identifier):
+        headers["X-Observatory-Agent"] = identifier
+    if agent.get("frame_sha256") != digest:
+        return headers
+
+    captured_at = agent.get("frame_at")
+    if isinstance(captured_at, str) and len(captured_at) <= 80:
+        try:
+            captured = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+            if captured.tzinfo is not None and captured.utcoffset() is not None:
+                captured = captured.astimezone(timezone.utc)
+                headers["X-Observatory-Frame-At"] = captured.isoformat()
+                headers["Last-Modified"] = format_datetime(captured, usegmt=True)
+        except (ValueError, OverflowError):
+            pass
+
+    def number(value, minimum, maximum):
+        return type(value) in (int, float) and minimum <= value <= maximum and math.isfinite(value)
+
+    viewport = agent.get("frame_viewport")
+    viewport_fields = ("viewport_width", "viewport_height", "scroll_x", "scroll_y", "document_width", "document_height")
+    if not isinstance(viewport, dict):
+        return headers
+    if (not all(number(viewport.get(key), 1, 32768) for key in ("viewport_width", "viewport_height"))
+            or not all(number(viewport.get(key), 1, 10_000_000) for key in ("document_width", "document_height"))
+            or not number(viewport.get("scroll_x"), 0, max(0, viewport["document_width"] - viewport["viewport_width"]))
+            or not number(viewport.get("scroll_y"), 0, max(0, viewport["document_height"] - viewport["viewport_height"]))
+            or viewport["document_width"] < viewport["viewport_width"]
+            or viewport["document_height"] < viewport["viewport_height"]):
+        return headers
+    safe_viewport = {key: viewport[key] for key in viewport_fields}
+    headers["X-Observatory-Viewport"] = json.dumps(safe_viewport, separators=(",", ":"), allow_nan=False)
+
+    focus = agent.get("frame_focus")
+    if not isinstance(focus, dict) or focus.get("kind") != "supporting_passage":
+        return headers
+    note_id = focus.get("note_id")
+    if not isinstance(note_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", note_id):
+        return headers
+    if (not number(focus.get("x"), 0, viewport["viewport_width"])
+            or not number(focus.get("y"), 0, viewport["viewport_height"])
+            or not number(focus.get("width"), 0.001, viewport["viewport_width"])
+            or not number(focus.get("height"), 0.001, viewport["viewport_height"])
+            or focus["x"] + focus["width"] > viewport["viewport_width"]
+            or focus["y"] + focus["height"] > viewport["viewport_height"]):
+        return headers
+    safe_focus = {key: focus[key] for key in ("x", "y", "width", "height", "kind", "note_id")}
+    headers["X-Observatory-Focus"] = json.dumps(safe_focus, separators=(",", ":"), allow_nan=False)
+    return headers
 
 
 def _broker_client():
@@ -409,15 +469,22 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
                 data = base64.b64decode(agent["frame_base64"], validate=True)
             except (ValueError, TypeError):
                 raise HTTPException(422, "Invalid screenshot") from None
-            if len(data) > 10 * 1024 * 1024:
+            if len(data) > MAX_FRAME_BYTES:
                 raise HTTPException(413, "Screenshot too large")
-            return Response(data, media_type=media, headers={"Cache-Control": "no-store"})
+            return Response(data, media_type=media, headers=_frame_headers(agent, data))
         if agent.get("frame_path"):
             root = (db.path.parent / "frames").resolve()
             path = Path(agent["frame_path"]).resolve()
             if not path.is_relative_to(root) or not path.is_file():
                 raise HTTPException(404, "Screenshot unavailable")
-            return FileResponse(path, media_type=media, headers={"Cache-Control": "no-store"})
+            try:
+                with path.open("rb") as image:
+                    data = image.read(MAX_FRAME_BYTES + 1)
+            except OSError:
+                raise HTTPException(404, "Screenshot unavailable") from None
+            if len(data) > MAX_FRAME_BYTES:
+                raise HTTPException(413, "Screenshot too large")
+            return Response(data, media_type=media, headers=_frame_headers(agent, data))
         raise HTTPException(404, "No browser screenshot has been collected")
 
     @application.post("/api/admin/settings", dependencies=[Depends(owner)])

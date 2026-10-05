@@ -28,6 +28,16 @@ Garamond heading font. Font licenses and provenance are in `site/assets/fonts/`.
 No frontend framework or build step is introduced. `CRAWLNET_REVIEW.md` documents
 the inspected Queen artifacts and the distinction from this 70B adapter recipe.
 
+The browser pane is a fixed, view-only window. Visitors cannot scroll its article;
+agent scrolling changes the incoming viewport capture. A gold position bar shows
+the visible portion of the document. A saved note's supporting passage is marked
+only when it can be matched to visible page text in that exact screenshot; a
+matching notebook entry is identified. This is source geometry, not a measure of
+attention or consciousness. Stale captures or missing geometry clear the marker.
+The preview demonstrates agent-controlled scrolling in a noninteractive local
+article surface, with explicitly simulated notes. The surrounding website and
+notebook remain available to scroll normally.
+
 ## Run the real sidecar
 
 Use Python 3.12 in a separate virtual environment from the existing GPU relay:
@@ -281,7 +291,7 @@ license URLs, separate permission for social-domain subdomains and standalone
 navigation. Docker persistence instructions were corrected; container execution
 remains unverified.
 
-The x402 implementation passed **453 combined tests**, with three skips: the
+The x402 implementation passed **553 combined tests**, with three skips: the
 optional browser fixture and two official-SDK tests omitted in the research
 environment. Those SDK cases pass in the separate payments environment's
 **77-test payment suite**. The suite covers real offline SDK construction/signature,
@@ -289,7 +299,9 @@ funding state/control races, explicit capability records, quote/receipt handling
 sealed export, immutable GPU images and adapter-specific dose receipt bindings.
 Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
 caller restart records, owner-only inspection and delayed-request cancellation.
-Source-only UI checks pass 144 assertions, JS syntax/CSS parsing and compose
+Source-only UI checks pass 148 assertions. The dedicated viewer checks cover
+scroll locking, passage alignment, preview steps and late-response races.
+JS syntax/CSS parsing and compose
 isolation assertions pass, and both Python environments pass dependency checks.
 There was no new browser visual review, paid gateway call, transfer, Docker build
 or 70B GPU run. Existing FastAPI lifecycle deprecation warnings remain.
@@ -301,7 +313,7 @@ python -m pytest observatory/tests -q
 
 That command runs the sidecar suite; its tiny-model test is skipped without the
 optional model stack. `requirements-test.txt` also supplies the repository's
-NumPy/PyYAML dependencies. The reported 453-test handoff used the combined
+NumPy/PyYAML dependencies. The reported 553-test handoff used the combined
 `tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
 reproduce that scope in the separate test environment, add the CPU model stack
 while retaining the sidecar's Hub pin:
@@ -327,7 +339,8 @@ memory requirements also depend on sequence length and batch settings.
 To include the real-browser fixture, set `OBSERVATORY_TEST_CHROMIUM` to an existing
 Chromium executable. With the sidecar running and Node Playwright available,
 `node observatory/tests/ui-smoke.cjs` checks six desktop/mobile views and writes
-screenshots. `node observatory/tests/ui-contract.cjs` checks live-by-default state,
+screenshots. `node observatory/tests/ui-scroll.cjs` exercises viewer geometry and scroll
+controls without a browser. `node observatory/tests/ui-contract.cjs` checks live-by-default state,
 authenticated secret submission, explicit paid-job retry confirmation and the
 secret-free deployment download against authored API fixtures. Neither submits
 real training jobs. Set `OBSERVATORY_UI_OUTPUT` to choose the screenshot directory.

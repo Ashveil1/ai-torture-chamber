@@ -193,6 +193,11 @@ Continuous missions choose searches and links, save original text and publish
 concise evidence-linked notes. Agents explore until stopped, using checkpointed
 bounded passes. Public observations and next actions are displayed; hidden model
 reasoning is not a notebook feed. Site access rules still apply.
+The public browser pane is view-only: agent scrolling determines its captures,
+and a position bar reports the captured viewport. A passage marker requires a
+saved supporting note, visible matching text and the same screenshot hash.
+Visitor wheel/touch input cannot scroll the agent's document. A marker records
+source correspondence rather than proving that the model is attending to it.
 
 Original-text rights and source-family holdouts govern corpus admission. Generated
 notes do not silently become CPT text. Unknown rights stay quarantined, social

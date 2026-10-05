@@ -49,8 +49,10 @@
     if(state.events.length>100) state.events.shift();
     return item;
   }
-  function step(state) {
-    const n=state.preview_step++, agent=state.agents[n%state.agents.length], source=state.sources[n%state.sources.length];
+  function step(state,selectedAgent) {
+    const n=state.preview_step++, agent=state.agents.find(item=>item.id===selectedAgent) || state.agents[n%state.agents.length];
+    const phase=agent.step%4, index=state.agents.indexOf(agent);
+    const source=state.sources[(index+Math.floor(agent.step/4))%state.sources.length];
     const goals=[
       "Follow a citation to check whether the proposed indicator was empirically tested.",
       "Look for an architectural or task-framing explanation of the claim.",
@@ -61,12 +63,14 @@
     ];
     agent.status=state.mission.status==="running"?"preview_browsing":"preview_ready";
     agent.current_url=source.canonical_url;agent.source_id=source.id;agent.goal=goals[n%goals.length];
-    agent.last_action=["Example citation follow","Example page inspection","Example evidence comparison"][n%3];agent.step++;
+    agent.preview_scroll_phase=phase;agent.preview_focus_note_id=null;
+    agent.last_action=["Example page opened","Example scroll to summary","Example note from visible passage","Example scroll to provenance"][phase];agent.step++;
     agent.last_observation=source.limitation;
     event(state,"agent.decision",agent.goal,agent.id,{source_id:source.id,step:agent.step});
-    if(n%2===1) {
+    if(phase===2) {
       const note={id:"preview-note-"+state.cursor,agent_id:agent.id,source_id:source.id,type:"lead",text:source.limitation+" Follow-up: compare at least one competing interpretation.",support_verified:false,generated_by:"preview_fixture",review_status:"pending",bookmarked:false,created_at:stamp()};
       state.notes.push(note);event(state,"note.saved","Example source-linked uncertainty saved.",agent.id,{source_id:source.id,note_id:note.id});
+      agent.preview_focus_note_id=note.id;
     }
     state.mission.open_questions=4+Math.floor(n/6);
     return state;

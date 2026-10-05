@@ -30,6 +30,7 @@
   let selectedAgent = "", selectedDataset = "", selectedJob = "", notebook = "decisions", manifestView = "manifest", currentView = "research";
   let ownerToken = "", connected = false, busy = false, connectionError = "", eventSource = null, previewTimer = null, refreshTimer = null, stateTimer = null;
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
+  let frameTelemetry = null, highlightedNoteId = "";
   let inheritedBaseRevision = false;
   let researchCatalog={status:"unavailable",models:[]}, funding=null, metadataAt=0, metadataLoading=false, metadataGeneration=0;
   let previousProvider=preferences.research_provider;
@@ -108,6 +109,59 @@
     frameGeneration++;frameSelection="";frameLoading=false;
     if(frameObjectUrl) URL.revokeObjectURL(frameObjectUrl);
     frameObjectUrl="";$("live-frame").removeAttribute("src");$("live-frame").hidden=true;
+    resetFrameTelemetry();
+  }
+  function viewportGeometry(viewport,focus,displayWidth,displayHeight) {
+    const keys=["viewport_width","viewport_height","scroll_x","scroll_y","document_width","document_height"];
+    if(!viewport || keys.some(key=>typeof viewport[key]!=="number" || !Number.isFinite(viewport[key]) || viewport[key]<0)) return null;
+    const v=viewport;
+    if(!v.viewport_width || !v.viewport_height || v.viewport_width>32768 || v.viewport_height>32768 || v.document_width<v.viewport_width || v.document_height<v.viewport_height || v.document_width>10000000 || v.document_height>10000000 || v.scroll_x>v.document_width-v.viewport_width || v.scroll_y>v.document_height-v.viewport_height) return null;
+    const scale=Math.min(displayWidth/v.viewport_width,displayHeight/v.viewport_height);
+    if(!Number.isFinite(scale) || scale<=0) return null;
+    const start=v.scroll_y/v.document_height, extent=v.viewport_height/v.document_height;
+    let rect=null;
+    if(focus && ["supporting_passage","preview_passage"].includes(focus.kind) && ["x","y","width","height"].every(key=>typeof focus[key]==="number" && Number.isFinite(focus[key])) && focus.x>=0 && focus.y>=0 && focus.width>0 && focus.height>0 && focus.x+focus.width<=v.viewport_width && focus.y+focus.height<=v.viewport_height && typeof focus.note_id==="string" && /^[A-Za-z0-9_-]{1,128}$/.test(focus.note_id)) {
+      rect={left:(displayWidth-v.viewport_width*scale)/2+focus.x*scale,top:(displayHeight-v.viewport_height*scale)/2+focus.y*scale,width:focus.width*scale,height:focus.height*scale,note_id:focus.note_id};
+    }
+    return {start,extent,end:Math.min(1,start+extent),rect};
+  }
+  function frameMetadata(headers,id) {
+    if(headers.get("X-Observatory-Agent")!==id || !/^[a-f0-9]{64}$/.test(headers.get("X-Observatory-Frame-SHA256") || "")) return null;
+    try {
+      const raw=headers.get("X-Observatory-Viewport"), rawFocus=headers.get("X-Observatory-Focus");
+      if(!raw || raw.length>2048 || rawFocus && rawFocus.length>2048) return null;
+      const viewport=JSON.parse(raw), focus=rawFocus?JSON.parse(rawFocus):null;
+      // A connected feed never accepts the preview's authored highlight type.
+      return {viewport,focus:focus?.kind==="supporting_passage"?focus:null};
+    } catch (_) { return null; }
+  }
+  function resetFrameTelemetry() {
+    frameTelemetry=null;highlightedNoteId="";
+    $("passage-focus").hidden=true;$("agent-scroll-track").hidden=true;
+    text("viewport-position","Page position unavailable");
+  }
+  function renderFrameTelemetry() {
+    const display=$("browser-display"), geometry=viewportGeometry(frameTelemetry?.viewport,frameTelemetry?.focus,display.clientWidth,display.clientHeight);
+    highlightedNoteId="";
+    $("passage-focus").hidden=!geometry?.rect;$("agent-scroll-track").hidden=!geometry;
+    if(!geometry) {text("viewport-position","Page position unavailable");return;}
+    const start=Math.floor(geometry.start*100),end=Math.min(100,Math.ceil(geometry.end*100));
+    text("viewport-position",(mode==="preview"?"Example viewport":"Agent viewport")+" · "+start+"–"+end+"% of page");
+    $("agent-scroll-thumb").style.top=geometry.start*100+"%";
+    $("agent-scroll-thumb").style.height=geometry.extent*100+"%";
+    if(geometry.rect) {
+      const rect=geometry.rect, overlay=$("passage-focus");
+      overlay.style.left=rect.left+"px";overlay.style.top=rect.top+"px";overlay.style.width=rect.width+"px";overlay.style.height=rect.height+"px";
+      text("passage-focus-caption",mode==="preview"?"Example passage":"Saved note passage");
+      highlightedNoteId=rect.note_id;
+    }
+  }
+  function lockObserverViewport(display) {
+    // A wheel or touch gesture over the spectator pane cannot alter its page.
+    const hold=event=>event.preventDefault();
+    display.addEventListener("wheel",hold,{passive:false});
+    display.addEventListener("touchmove",hold,{passive:false});
+    display.addEventListener("dragstart",hold);
   }
   function disconnect() {
     if(eventSource) eventSource.close();
@@ -206,11 +260,13 @@
     if(mode!=="connected" || !connected || currentView!=="research" || document.hidden || frameLoading) return;
     const selected=agent();if(!selected) return;
     if(frameSelection!==String(selected.id)) { clearLiveFrame();frameSelection=String(selected.id); }
-    const generation=frameGeneration, id=String(selected.id);frameLoading=true;
+    const generation=frameGeneration, id=String(selected.id);frameLoading=true;let pendingUrl="";
     const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),8000);
     try {
       const response=await fetch(endpoint("agents/"+encodeURIComponent(id)+"/frame")+"?t="+Date.now(),{cache:"no-store",credentials:"omit",signal:controller.signal});
+      if(mode!=="connected" || generation!==frameGeneration || String(selectedAgent)!==id) return;
       if(!response.ok) {
+        resetFrameTelemetry();renderNotebook();
         if(response.status===404 && !frameObjectUrl) {$("live-frame").hidden=true;$("browser-empty").hidden=false;}
         else if(!response.ok) text("frame-description",frameObjectUrl?"Last captured frame · new frame unavailable":"Waiting for an actual browser frame");
         return;
@@ -219,16 +275,20 @@
       const blob=await response.blob();
       if(blob.size>10*1024*1024) throw new Error("Browser frame exceeds the preview size limit.");
       if(mode!=="connected" || generation!==frameGeneration || String(selectedAgent)!==id) return;
-      const url=URL.createObjectURL(blob), previous=frameObjectUrl;frameObjectUrl=url;
+      const url=URL.createObjectURL(blob);pendingUrl=url;
+      const decoded=new Image();decoded.src=url;await decoded.decode();
+      if(mode!=="connected" || generation!==frameGeneration || String(selectedAgent)!==id) return;
+      const previous=frameObjectUrl;frameObjectUrl=url;pendingUrl="";
       $("live-frame").src=url;$("live-frame").hidden=false;$("browser-empty").hidden=true;
-      const capturedAt=response.headers.get("Last-Modified") || selected.frame_at || selected.frame_updated_at;
+      const capturedAt=response.headers.get("X-Observatory-Frame-At") || response.headers.get("Last-Modified");
       const capturedTime=capturedAt ? new Date(capturedAt).getTime() : NaN;
       const stale=Number.isFinite(capturedTime) && Date.now()-capturedTime>15000;
       text("frame-description","Actual browser capture · "+(Number.isFinite(capturedTime)?clock(capturedAt):"capture time not reported")+(stale?" · stale capture":"")+" · public view is read-only");
+      frameTelemetry=stale?null:frameMetadata(response.headers,id);renderFrameTelemetry();renderNotebook();
       $("frame-stamp").hidden=false;$("selected-creature").hidden=false;
       if(previous) URL.revokeObjectURL(previous);
-    } catch(error) { text("frame-description",frameObjectUrl?"Last actual capture · browser feed temporarily unavailable":"Waiting for browser worker · no simulated frame"); }
-    finally { clearTimeout(timeout);if(generation===frameGeneration) frameLoading=false; }
+    } catch(error) { if(generation===frameGeneration){resetFrameTelemetry();renderNotebook();text("frame-description",frameObjectUrl?"Last actual capture · browser feed temporarily unavailable":"Waiting for browser worker · no simulated frame");} }
+    finally { clearTimeout(timeout);if(pendingUrl)URL.revokeObjectURL(pendingUrl);if(generation===frameGeneration) frameLoading=false; }
   }
   function creature(index=0) {
     const crowns=['<path d="M37 24l-5-9 10 4 8-12 8 12 10-4-5 9"/>','<path d="M31 27Q50 6 69 27M39 19l-2-7m26 7 2-7"/>','<path d="M36 24l14-12 14 12M50 12V5"/><circle cx="50" cy="8" r="2"/>','<path d="M30 25l9-12 11 10 11-10 9 12"/>','<path d="M34 25V13h32v12m-23-8h14"/>','<path d="M30 27l20-15 20 15M50 12V6"/>'];
@@ -277,9 +337,26 @@
     if(state.agents.some(item=>String(item.id)===selected)) $("agent-filter").value=selected;
   }
   function illustrativeArticle(source) {
-    if(!source) return '<!doctype html><html><body style="font:16px Georgia;background:#e7ddc9;color:#332719;padding:35px"><p>Illustrative browser</p><h1>No selected source</h1><p>This preview does not crawl the web.</p></body></html>';
+    if(!source) return '<div class="preview-page"><p class="preview-meta">No example source selected.</p></div>';
     const arxiv=sourceUrl(source).includes("arxiv.org"), header=arxiv?"arXiv":"Research archive";
-    return '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;background:#e7ddc9;color:#30281e;font:14px/1.75 Georgia,serif}header{background:#6b241b;color:#f5ead7;padding:12px 24px;display:flex;align-items:center;justify-content:space-between}header b{font-size:27px;font-weight:400}header span{font:9px monospace}article{padding:23px 30px 35px;max-width:800px;margin:auto}.meta{font:9px/1.8 monospace;color:#70624e}.title{font-size:28px;line-height:1.2;font-weight:400;margin:15px 0 12px}.authors{font-size:12px;color:#795d39}h2{font-size:17px;font-weight:400;margin:22px 0 8px}p{margin:0 0 11px}.callout{border-left:2px solid #a17832;padding:7px 13px;background:#ded1b8;margin:18px 0}.footer{font:9px/1.8 monospace;color:#75664f;border-top:1px solid #bdac8e;padding-top:12px;margin-top:20px}@media(max-width:400px){article{padding:21px 20px}.title{font-size:23px}header{padding:10px 20px}}</style></head><body><header><b>'+header+'</b><span>Illustrative article DOM</span></header><article><div class="meta">'+esc(source.version || "Example source")+'<br>Public reference · '+esc(source.license || "Rights unknown")+'</div><h1 class="title">'+esc(source.title)+'</h1><p class="authors">'+esc(source.authors || "Authors recorded at source")+'</p><h2>Research summary</h2><p>'+esc(source.summary || "No source summary recorded.")+'</p><div class="callout"><strong>Question for the record</strong><p>'+esc(source.limitation || "Which observations would distinguish the claim from a competing explanation?")+'</p></div><h2>Provenance before conclusions</h2><p>The research record keeps the document version, source URL and licensing decision together. Agent notes are separate from original source text.</p><p class="footer">Simulated browser. This is an original illustrative layout, not a captured live page. Summaries are paraphrases; source full text is not reproduced.</p></article></body></html>';
+    return '<div class="preview-page"><div class="preview-document-header"><b>'+header+'</b><span>Illustrative article</span></div><article class="preview-article"><div class="preview-meta">'+esc(source.version || "Example source")+'<br>Public reference · '+esc(source.license || "Rights unknown")+'</div><h1 class="preview-title" data-preview-section="0">'+esc(source.title)+'</h1><p class="preview-authors">'+esc(source.authors || "Authors recorded at source")+'</p><h2>Research summary</h2><p data-preview-section="1">'+esc(source.summary || "No source summary recorded.")+'</p><div class="preview-callout" data-preview-section="2"><strong>Question for the record</strong><p>'+esc(source.limitation || "Which observations would distinguish the claim from a competing explanation?")+'</p></div><h2>Provenance before conclusions</h2><p data-preview-section="3">The research record keeps the document version, source URL and licensing decision together. Agent notes are separate from original source text.</p><p class="preview-document-footer">Simulated browser. This is an original illustrative layout. Summaries are paraphrases; source full text is not reproduced.</p></article></div>';
+  }
+  function renderPreviewViewport() {
+    if(mode!=="preview" || currentView!=="research") return;
+    const display=$("browser-display"), page=$("preview-frame").querySelector(".preview-page");
+    if(!page || !display.clientWidth || !display.clientHeight) {resetFrameTelemetry();return;}
+    const phase=Math.max(0,Math.min(3,Number(agent()?.preview_scroll_phase) || 0));
+    const height=Math.max(display.clientHeight,page.scrollHeight), scroll=Math.round(Math.max(0,height-display.clientHeight)*[0,.38,.72,1][phase]);
+    page.style.transform="translateY(-"+scroll+"px)";
+    const target=page.querySelector('[data-preview-section="'+phase+'"]');
+    let focus=null;
+    if(target && phase===2 && agent()?.preview_focus_note_id) {
+      const y=Math.max(0,target.offsetTop-scroll), bottom=Math.min(display.clientHeight,target.offsetTop-scroll+target.offsetHeight);
+      const x=Math.max(0,target.offsetLeft), right=Math.min(display.clientWidth,target.offsetLeft+target.offsetWidth);
+      if(bottom>y && right>x) focus={x,y,width:right-x,height:bottom-y,kind:"preview_passage",note_id:agent().preview_focus_note_id};
+    }
+    frameTelemetry={viewport:{viewport_width:display.clientWidth,viewport_height:display.clientHeight,scroll_x:0,scroll_y:scroll,document_width:display.clientWidth,document_height:height},focus};
+    renderFrameTelemetry();
   }
   function renderBrowser() {
     const selected=agent(), source=currentSource(), index=Math.max(0,state.agents.findIndex(item=>String(item.id)===String(selectedAgent)));
@@ -294,10 +371,11 @@
     text("frame-stamp",mode==="preview" ? "Simulated article layout" : "Actual browser capture");
     if(mode==="preview") {
       $("live-frame").hidden=true;$("browser-empty").hidden=true;
-      if(lastPreviewSource!==(source?.id || "")) { $("preview-frame").srcdoc=illustrativeArticle(source);lastPreviewSource=source?.id || ""; }
-      text("frame-description","Example source rendered locally · no browser session");
+      if(lastPreviewSource!==(source?.id || "")) { $("preview-frame").innerHTML=illustrativeArticle(source);lastPreviewSource=source?.id || ""; }
+      renderPreviewViewport();
+      text("frame-description","Example agent-controlled scroll · no browser session");
     } else {
-      $("preview-frame").removeAttribute("srcdoc");lastPreviewSource="";
+      $("preview-frame").innerHTML="";lastPreviewSource="";
       $("browser-empty").hidden=!!frameObjectUrl;
       if(frameSelection!==String(selectedAgent)) clearLiveFrame();
       if(!selected) text("frame-description","No actual browser session. Start a connected research mission.");
@@ -322,7 +400,7 @@
       entries=[...state.notes].reverse().filter(note=>note.agent_id===selectedAgent && (note.passage || note.supporting_passage || note.evidence_passage)).map(note=>({...note,text:note.passage || note.supporting_passage || note.evidence_passage,label:note.support_verified?"Passage provenance checked":"Unverified passage"}));
       if(mode==="preview" && source) entries=[{text:source.summary,label:"Paraphrased summary · example",source_id:source.id}];
     }
-    $("notebook-content").innerHTML=entries.length ? entries.map(entry=>'<article class="notebook-entry"><div class="entry-meta"><span>'+esc(entry.label)+'</span><time>'+esc(clock(entry.created_at))+'</time></div><p>'+esc(entry.text || "No authored text.")+'</p>'+(sourceById(entry.source_id)?'<button class="source-ref" data-source="'+esc(entry.source_id)+'">'+esc(short(sourceById(entry.source_id).title,48))+'</button>':"")+'</article>').join("") : '<p class="empty-notebook">'+(notebook==="extracts"?"No public source passages are attached to this agent. Full documents remain in the private corpus; a summary is not a quotation.":"This agent has not recorded "+esc(notebook)+" yet.")+'</p>';
+    $("notebook-content").innerHTML=entries.length ? entries.map(entry=>'<article class="notebook-entry'+(entry.id===highlightedNoteId?' is-visible-passage':'')+'"><div class="entry-meta"><span>'+esc(entry.label)+(entry.id===highlightedNoteId?' · shown in browser':'')+'</span><time>'+esc(clock(entry.created_at))+'</time></div><p>'+esc(entry.text || "No authored text.")+'</p>'+(sourceById(entry.source_id)?'<button class="source-ref" data-source="'+esc(entry.source_id)+'">'+esc(short(sourceById(entry.source_id).title,48))+'</button>':"")+'</article>').join("") : '<p class="empty-notebook">'+(notebook==="extracts"?"No public source passages are attached to this agent. Full documents remain in the private corpus; a summary is not a quotation.":"This agent has not recorded "+esc(notebook)+" yet.")+'</p>';
     all("[data-notebook]").forEach(button=>{button.classList.toggle("active",button.dataset.notebook===notebook);button.setAttribute("aria-selected",String(button.dataset.notebook===notebook));});
   }
   function renderEvents() {
@@ -433,7 +511,7 @@
     all("[data-view]").forEach(button=>{const active=button.dataset.view===view;button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;});
     if(focus) $("tab-"+view).focus();
     history.replaceState(null,"",location.pathname+location.search+"#"+view);
-    if(view==="research") refreshFrame();
+    if(view==="research") {if(mode==="preview"){renderPreviewViewport();renderNotebook();}else refreshFrame();}
   }
   function openDialog(id) { if(!$(id).open) $(id).showModal(); }
   function openSetup() {
@@ -501,10 +579,10 @@
   }
   function updatePreviewTimer() {
     clearInterval(previewTimer);previewTimer=null;
-    if(mode==="preview" && state.mission.status==="running") previewTimer=setInterval(()=>{window.ObservatoryPreview.step(state);render();},4200);
+    if(mode==="preview" && state.mission.status==="running") previewTimer=setInterval(()=>{window.ObservatoryPreview.step(state,selectedAgent);render();},4200);
   }
   async function missionAction(action) {
-    if(mode==="preview"){window.ObservatoryPreview.mission(state,action);if(action==="start" || action==="resume")window.ObservatoryPreview.step(state);updatePreviewTimer();render();toast("Preview "+action+" simulated. No real browser was started.");}
+    if(mode==="preview"){window.ObservatoryPreview.mission(state,action);if(action==="start" || action==="resume")window.ObservatoryPreview.step(state,selectedAgent);updatePreviewTimer();render();toast("Preview "+action+" simulated. No real browser was started.");}
     else if(!canMutate()) explainOwner();
     else {const result=await mutate("admin/missions/"+action,action==="start"?{objective:preferences.objective || state.mission.objective}:{});if(result)toast("Mission "+action+" requested. The worker will report its actual state.");}
   }
@@ -720,7 +798,7 @@
   $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearInterval(previewTimer);state=window.ObservatoryPreview.create();selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
   $("mission-toggle").addEventListener("click",()=>missionAction(state.mission.status==="running"?"pause":["paused","funding_paused","faulted"].includes(state.mission.status)?"resume":"start"));
   $("mission-stop").addEventListener("click",()=>confirmAction(mode==="preview"?"Stop the preview?":"Stop the research mission?",mode==="preview"?"The simulation stops. Example notes, sources and snapshots remain available.":"The worker stops research and releases its owned browser sessions. Source records, notes and datasets remain durable.",mode==="preview"?"Stop preview":"Stop mission",()=>missionAction("stop")));
-  $("mission-step").addEventListener("click",()=>{if(mode!=="preview")return;window.ObservatoryPreview.step(state);render();toast("Advanced one simulated research event.");});
+  $("mission-step").addEventListener("click",()=>{if(mode!=="preview")return;window.ObservatoryPreview.step(state,selectedAgent);render();toast("Advanced one simulated research event.");});
   $("browser-inspect").addEventListener("click",()=>{const source=currentSource();if(source)inspectSource(source.id);});
   $("capture-inspect").addEventListener("click",()=>{const source=currentSource();if(source)inspectSource(source.id);});
   $("bookmark-source").addEventListener("click",()=>{const source=currentSource();if(source)bookmarkSource(source.id);});
@@ -736,6 +814,8 @@
   $("confirm-accept").addEventListener("click",async()=>{const callback=confirmation;confirmation=null;$("confirm-dialog").close();if(callback)await callback();});
   window.addEventListener("beforeunload",()=>{disconnect();clearInterval(previewTimer);ownerToken="";});
   document.addEventListener("visibilitychange",()=>{if(!document.hidden && mode==="connected")refreshState(true);});
+  lockObserverViewport($("browser-display"));
+  window.addEventListener("resize",()=>{if(mode==="preview")renderPreviewViewport();else renderFrameTelemetry();});
   installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");
   if(mode==="connected")refreshState();
   setInterval(refreshFrame,2000);
