@@ -55,8 +55,8 @@ in a noninteractive local article. The saw retains its pose through scrolling,
 then travels to the next selected section, with explicitly simulated inspections and
 notes. The surrounding website and notebook remain available to scroll normally.
 See [motion and inspection contracts](MOTION.md) for behavior and verification.
-The character uses self-contained SVG: swept steel teeth, a beveled brass housing,
-machining slots and a dark optical core. Small roster icons hide secondary details.
+The saw uses self-contained SVG: swept steel teeth, machining slots and a compact
+brass spindle with a recessed hex arbor. Small roster icons hide secondary grooves.
 Materials use gradients with unique per-instance IDs and layered geometry rather
 than image assets or animated filters.
 

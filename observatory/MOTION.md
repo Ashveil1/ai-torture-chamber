@@ -37,19 +37,20 @@ establish claim truth, attention, understanding or consciousness.
 
 ## Motion sequence
 
-The saw artwork is a self-contained SVG with directional steel teeth, a beveled
-brass hub, machining relief slots, inset optics and mechanical support brackets.
-The blade and upright chassis retain separate `(50, 50)` pivots in the existing
+The saw artwork is a self-contained SVG with directional steel teeth, machining
+relief slots and a compact brass spindle with a recessed hex arbor. It has no
+feet, sensor panel, light or face details. The blade and spindle retain separate
+`(50, 50)` pivots in the existing
 100-unit viewBox. Unique gradient IDs are created per invocation, so a selected
 character and its matching roster icon cannot share the wrong material definition.
-The 35px roster hides secondary grooves, fasteners and engraving; viewer sizes
-remain 52px desktop and 44px mobile. The asset has 64 SVG elements and approximately
-6.1KB of markup, with no external image or font requests and no SVG filter effects.
+The 35px roster hides secondary grooves; viewer sizes remain 52px desktop and
+44px mobile. The asset has 35 SVG elements and approximately 4.2KB of markup,
+with no external image or font requests and no SVG filter effects.
 Offline SVG renders check the asset on dark and parchment surfaces at these sizes;
 these are asset studies, not screenshots of the website.
 
 1. The saw approaches a selected visible passage. Its blade turns with distance
-   traveled; its hub, sensor and feelers remain upright.
+   traveled; its central spindle remains upright.
 2. It follows each painted line from left to right. Gold highlighting grows
    behind it, with short curved returns between lines. Ordinary passages take
    about four seconds; longer passages receive additional traversal time. This

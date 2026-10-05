@@ -323,7 +323,9 @@ for(const mode of ['full','reduced','system']) {
 }
 {
   const h=harness();check(h.motion.saw(0).includes('saw-blade'));check(h.motion.saw(0).includes('saw-body'));
-  check(h.motion.saw(0).includes('saw-feeler'));check(h.motion.saw(5).includes('>6</text>'));
-  check(!h.motion.saw('<script>').includes('<script>'),'Character numbering cannot inject HTML');
+  const first=h.motion.saw(0),second=h.motion.saw(0),ids=Array.from(first.matchAll(/\bid="([^"]+)"/g),item=>item[1]);
+  check(ids.every(id=>!second.includes('id="'+id+'"')),'Repeated instances cannot share material IDs');
+  check(Array.from(first.matchAll(/url\(#([^)]*)\)/g),item=>item[1]).every(id=>ids.includes(id)),'Every material reference resolves inside its own SVG');
+  check(!h.motion.saw('<script>').includes('<script>'),'Caller labels cannot inject SVG markup');
 }
 console.log(JSON.stringify({motionController:'passed',assertions,actualLineTraversal:true,sameInspectionRefreshContinues:true,verifiedNoteDelivery:true,identityAndRaceCancellation:true,motionModes:true,scrollPoseContinuity:true,completionAwareBusy:true,reducedMotion:true,noNetwork:true}));

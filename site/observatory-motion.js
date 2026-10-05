@@ -27,7 +27,7 @@
   }
   function text(id,value) { const node=$(id); if(node) node.textContent=value; }
   function label(value,input) { text("crawler-activity",(input?.preview?"Example · ":"")+value); }
-  function saw(index=0) {
+  function saw() {
     const uid="observatory-saw-"+(++sawSerial),teeth=[],facets=[];
     const point=(angle,radius)=>{const a=angle*Math.PI/180;return (50+Math.cos(a)*radius).toFixed(2)+","+(50+Math.sin(a)*radius).toFixed(2);};
     for(let i=0;i<24;i++) {
@@ -35,33 +35,22 @@
       teeth.push(root,edge,tip,heel);
       facets.push("M"+edge+"L"+tip+"L"+point(a+6.5,39.2)+"Z");
     }
-    const slots=Array.from({length:6},(_,i)=>'<path d="M73 33Q79 37 78 43" transform="rotate('+(i*60)+' 50 50)"/>').join("");
-    const screws=Array.from({length:3},(_,i)=>'<g transform="rotate('+(i*120)+' 50 50)"><circle cx="50" cy="32.8" r="2.1" fill="#30291d" stroke="#e1c38b" stroke-width=".8"/><path d="M48.9 32.8h2.2" stroke="#90816a" stroke-width=".7"/></g>').join("");
-    const number=Number.isFinite(Number(index))?clamp(Math.floor(Number(index))+1,1,999):1;
+    const slots=Array.from({length:4},(_,i)=>'<path d="M73 26L66 33Q64 35 66 37" transform="rotate('+(i*90)+' 50 50)"/>').join("");
     return '<svg class="saw-svg" viewBox="0 0 100 100" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">'+
       '<defs><linearGradient id="'+uid+'-steel" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#f1eadb"/><stop offset=".22" stop-color="#b3b9b0"/><stop offset=".49" stop-color="#5e6968"/><stop offset=".63" stop-color="#b0b7af"/><stop offset="1" stop-color="#424c4b"/></linearGradient>'+
-      '<linearGradient id="'+uid+'-brass" x1="0" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#f1d9a0"/><stop offset=".24" stop-color="#ba9555"/><stop offset=".57" stop-color="#684924"/><stop offset=".81" stop-color="#d6b373"/><stop offset="1" stop-color="#715128"/></linearGradient>'+
-      '<radialGradient id="'+uid+'-core" cx=".35" cy=".2" r=".85"><stop offset="0" stop-color="#53574e"/><stop offset=".45" stop-color="#272e2c"/><stop offset="1" stop-color="#0e1515"/></radialGradient>'+
-      '<linearGradient id="'+uid+'-lens" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1515"/><stop offset=".45" stop-color="#172929"/><stop offset="1" stop-color="#455452"/></linearGradient></defs>'+
+      '<linearGradient id="'+uid+'-brass" x1="0" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#f1d9a0"/><stop offset=".24" stop-color="#ba9555"/><stop offset=".57" stop-color="#684924"/><stop offset=".81" stop-color="#d6b373"/><stop offset="1" stop-color="#715128"/></linearGradient></defs>'+
       '<circle cx="50" cy="52" r="40" fill="#110f0b" opacity=".2"/>'+
       '<g class="saw-blade"><path class="saw-cutting-edge" d="M'+teeth.join("L")+'Z" fill="url(#'+uid+'-steel)" stroke="#292d28" stroke-width="1.3" stroke-linejoin="round"/>'+
       '<path class="saw-tooth-facets" d="'+facets.join("")+'" fill="#ece3cf" opacity=".65"/>'+
       '<circle cx="50" cy="50" r="36.8" fill="none" stroke="#e4d6b7" stroke-width=".9"/>'+
       '<g class="saw-metal-grooves" fill="none" stroke="#d2d4bf" stroke-width=".55" opacity=".6"><circle cx="50" cy="50" r="33.8"/><circle cx="50" cy="50" r="30.5"/><circle cx="50" cy="50" r="27.2"/></g>'+
-      '<g class="saw-expansion-slots" fill="none" stroke="#283431" stroke-width="2.2" stroke-linecap="round">'+slots+'</g>'+
-      '<circle cx="50" cy="50" r="23.4" fill="none" stroke="#404943" stroke-width="1.2"/></g>'+
-      '<g class="saw-body"><g class="saw-feeler" fill="none" stroke-linecap="round"><path d="M35 58Q28 63 29 73M65 58Q72 63 71 73" stroke="#18201c" stroke-width="5"/><path d="M35 58Q28 63 29 73M65 58Q72 63 71 73" stroke="#9e855b" stroke-width="2.4"/><path d="M26 74h6M68 74h6" stroke="#39433e" stroke-width="3.2"/></g>'+
-      '<circle cx="50" cy="51.6" r="21.5" fill="#171b17" opacity=".7"/>'+
-      '<circle cx="50" cy="50" r="21" fill="url(#'+uid+'-brass)" stroke="#302819" stroke-width="1.1"/>'+
-      '<circle class="saw-hub" cx="50" cy="50" r="15.5" fill="url(#'+uid+'-core)" stroke="#e4c995" stroke-width=".8"/>'+
-      '<path d="M37.3 43.4A14.3 14.3 0 0 1 60.4 40.1" fill="none" stroke="#a7b1a1" stroke-width=".7" opacity=".65"/>'+
-      '<g class="saw-screws">'+screws+'</g>'+
-      '<rect class="saw-eye" x="38" y="42" width="24" height="10.5" rx="4.5" fill="url(#'+uid+'-lens)" stroke="#93825c" stroke-width="1"/>'+
-      '<path d="M42 44h14" stroke="#8da398" stroke-width=".9" stroke-linecap="round" opacity=".55"/>'+
-      '<circle class="saw-status-light" cx="56.2" cy="47.3" r="2.15" fill="#d6b565" stroke="#eedba8" stroke-width=".65"/>'+
-      '<circle cx="55.6" cy="46.7" r=".55" fill="#fff0c6"/>'+
-      '<path d="M41 57.5h5m8 0h5" stroke="#a99b76" stroke-width="1" stroke-linecap="round"/>'+
-      '<text class="saw-engraving" x="50" y="63.5" text-anchor="middle" fill="#d5c39a" font-family="Georgia,serif" font-size="10">'+number+'</text></g></svg>';
+      '<g class="saw-expansion-slots" fill="none" stroke="#35433e" stroke-width="1.7" stroke-linecap="round">'+slots+'</g>'+
+      '<circle cx="50" cy="50" r="18.2" fill="none" stroke="#737c71" stroke-width=".8"/></g>'+
+      '<g class="saw-body"><circle cx="50" cy="51" r="14.8" fill="#22281f" opacity=".35"/>'+
+      '<circle class="saw-hub" cx="50" cy="50" r="14" fill="url(#'+uid+'-brass)" stroke="#493c28" stroke-width="1"/>'+
+      '<circle cx="50" cy="50" r="12.3" fill="none" stroke="#ecdbab" stroke-width=".65"/>'+
+      '<path class="saw-arbor" d="M50 43.5L55.63 46.75V53.25L50 56.5L44.37 53.25V46.75Z" fill="#252e2b" stroke="#6a593e" stroke-width="1.2"/>'+
+      '<path d="M46 48L50 45.7L54 48" fill="none" stroke="#92998b" stroke-width=".65" opacity=".75"/></g></svg>';
   }
   function elementRect(value,width,height) {
     if(!value || !["left","top","width","height"].every(key=>finite(value[key])) || value.width<=0 || value.height<=0) return null;
