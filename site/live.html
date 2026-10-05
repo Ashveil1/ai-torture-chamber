@@ -2701,7 +2701,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
         roomWanted && !PAST_CLIFF ? {enter_room: true} : {},
         PAST_CLIFF ? {past_cliff: true} : {},
-        WALLET ? {wallet: WALLET} : {}))});
+        WALLET ? {wallet: WALLET} : {},
+        // free text and topics answer in character (no "As an AI..."); the button test keeps its own prompt
+        mode !== "button" ? {persona: true} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
