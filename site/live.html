@@ -580,7 +580,7 @@ body.tmux .stage .hero .out.dlg{position:absolute;top:auto;left:calc(min(34%,340
 .stage .hero .out.dlg.mirror::before{content:"the chamber · " attr(data-who);display:block;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--tm-dim);margin-bottom:.4rem}
 @media (max-width:900px){
   .stage .speaker{left:.6rem;right:.6rem;bottom:auto;top:4.2rem;width:auto;display:flex;justify-content:center}
-  .stage .portrait{width:min(52vw,230px)}
+  .stage .portrait{width:min(42vw,190px)}
   body.tmux .stage .hero .out.dlg{left:.6rem;right:.6rem;bottom:.6rem;max-height:38%}
 }
 
@@ -605,6 +605,13 @@ body.tmux .stage .hero .hud-vitals canvas.ekg{width:100%;height:34px;display:blo
 @media (max-width:900px){
   body.tmux .stage .hero .hud-vitals{left:50%;transform:translateX(-50%);width:min(52vw,230px);bottom:auto;top:calc(4.2rem - 40px)}
 }
+
+/* the heartbeat rides on top of the dialogue box, same width: one bottom block of monitor + words */
+body.tmux .stage .dlgwrap{position:absolute;z-index:3;left:calc(min(34%,340px) + 2rem);right:1rem;bottom:1rem;display:flex;flex-direction:column;gap:0;max-height:calc(100% - 7rem)}
+body.tmux .stage .dlgwrap .hud-vitals{position:static!important;width:auto!important;transform:none!important;margin:0}
+body.tmux .stage .dlgwrap .hud-vitals canvas.ekg{border-bottom:none;height:30px}
+body.tmux .stage .dlgwrap .out.dlg{position:static!important;left:auto;right:auto;bottom:auto;max-height:none;overflow-y:auto;min-height:0}
+@media (max-width:900px){ body.tmux .stage .dlgwrap{left:.6rem;right:.6rem;bottom:.6rem;max-height:46%} }
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -2915,6 +2922,17 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
   // the sheet's own textarea stays in step if someone types there instead
   fp.addEventListener("input", e=>{ if (e.isTrusted) say.value = fp.value; });
   document.querySelectorAll(".mchip[data-mode]").forEach(b=> b.addEventListener("click", e=>{ if (e.isTrusted) cur = b.dataset.mode; }));
+})();
+</script>
+
+<script>
+// ---- one block at the bottom: the heartbeat strip directly on top of the dialogue ----
+(function(){
+  const out = document.getElementById("ustream"), vit = document.querySelector("#trackA .hud-vitals");
+  if (!out || !vit) return;
+  const wrap = document.createElement("div"); wrap.className = "dlgwrap";
+  out.parentNode.insertBefore(wrap, out);
+  wrap.append(vit, out);
 })();
 </script>
 
