@@ -37,7 +37,7 @@ The browser pane is a fixed, view-only window. Visitors cannot scroll its articl
 agent scrolling changes the incoming viewport capture. A gold position bar shows
 the visible portion of the document. The agent can select an exact visible
 passage with `inspect_visible_section` before saving a note. Its painted text lines
-are matched to the focused browser document and exact screenshot. A brass saw
+are matched to the focused browser document and exact screenshot. A steel saw with a brass hub
 approaches those lines, traverses them, and progressively reveals gold highlights.
 Its blade spins with movement while its hub stays upright. A matching saved-note
 event stamps the passage and sends an evidence packet to the notebook receipt.
@@ -55,6 +55,10 @@ in a noninteractive local article. The saw retains its pose through scrolling,
 then travels to the next selected section, with explicitly simulated inspections and
 notes. The surrounding website and notebook remain available to scroll normally.
 See [motion and inspection contracts](MOTION.md) for behavior and verification.
+The character uses self-contained SVG: swept steel teeth, a beveled brass housing,
+machining slots and a dark optical core. Small roster icons hide secondary details.
+Materials use gradients with unique per-instance IDs and layered geometry rather
+than image assets or animated filters.
 
 ## Run the real sidecar
 
