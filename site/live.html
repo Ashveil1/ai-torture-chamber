@@ -354,10 +354,15 @@
      along its top and right edges, and the transcript as a game dialogue
      box over its lower third. The image is a backdrop, never clipping the
      HUD: the panel holds 16:10 but grows when the HUD needs more room. ---- */
-  .hero{position:relative;display:grid;aspect-ratio:16/10;margin-top:.8rem;
+  /* the controls are an overlay band pinned to the TOP of the scene: label,
+     lens, EKG and the STOP gauge hug the top edge; nothing floats mid-image.
+     The band is content-sized, never stretches, and the image owns the rest. */
+  .hero{position:relative;display:block;min-height:340px;margin-top:.8rem;
     border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);
     outline-offset:3px;background:var(--scorch);isolation:isolate}
   .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    aspect-ratio:16/10;top:50%;transform:translateY(-50%);
+    height:auto;min-height:100%;
     object-position:center 30%;z-index:0;transition:filter .5s ease}
   /* vignette + scanlines so the HUD reads over any part of the image */
   .hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
@@ -393,13 +398,17 @@
   .hero:has(.out.streaming) .hud-dose::after{content:"● live";color:var(--blood-hot);
     text-transform:uppercase;letter-spacing:.16em;animation:pulse-text 1.2s ease-in-out infinite}
 
-  .hero #trackWrap{position:relative;z-index:2;margin:0;gap:.7rem;
-    padding:2.6rem .85rem .85rem}
+  .hero #trackWrap{position:absolute;top:0;left:0;right:0;z-index:2;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    gap:.7rem;padding:.7rem .85rem;pointer-events:none}
+  .hero #trackWrap > .track{pointer-events:auto;flex:1 1 auto;min-width:0}
+  /* top band grid: everything content-sized, one column of readouts on the
+     left, STOP pinned to the right edge. No filler rows — gap/imgb/imgr/sig
+     were mid-image floaters; imgBtn and sigil now sit under the EKG, and the
+     voice line tucks under the readouts. */
   #trackWrap > .track{display:grid;min-width:0;column-gap:.6rem;
     grid-template-columns:minmax(0,1fr) auto;
-    grid-template-rows:auto auto auto auto auto 1fr auto auto;
-    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig"
-      "imgr sig" "gap sig" "dlg dlg" "vox vox"}
+    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig" "imgr vox"}
   #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
     font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
   .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
@@ -424,9 +433,13 @@
   .hero .pbtn-face{width:2.7rem;height:2.7rem;border-width:2px;font-size:.6rem}
   .hero .pressbtn .plabel{font-size:.58rem;max-width:5.6rem;text-align:center;
     line-height:1.25;text-transform:uppercase;letter-spacing:.08em}
-  .hero .out.dlg{grid-area:dlg;margin-top:.6rem;min-height:4.6rem;max-height:13rem}
-  .hero .voice{grid-area:vox;margin:.45rem 0 0;background:rgba(5,5,8,.72);
-    border-left-color:var(--blood)}
+  /* the dialogue box OVERLAYS the scene: pinned to the lower third of the
+     image panel, inside the hero, above the image and vignette. It no longer
+     occupies a grid row — the grid rows above it shrink to the top band. */
+  .hero .out.dlg{position:absolute;left:.85rem;right:.85rem;bottom:.85rem;
+    z-index:4;margin:0;min-height:4.6rem;max-height:13rem}
+  .hero .voice{grid-area:vox;justify-self:end;margin:.45rem 0 0;
+    background:rgba(5,5,8,.72);border-left-color:var(--blood)}
 
   /* ---- dialogue box: the transcript as a game text box — semi-opaque,
      thin double rule, bone corner brackets, speaker tag, square corners.
@@ -646,6 +659,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
           alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
         <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
+        <div class="hud-chip" id="walletChip" style="cursor:pointer" title="connect phantom: $SAW holders run freer">◇ connect wallet</div>
         <div id="trackWrap">
           <div class="track" id="trackA">
             <div class="tlabel hud-chip" id="labelA"></div>
@@ -2228,6 +2242,40 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
+// ---- phantom wallet: holders run freer (rate limits, past-the-cliff).
+// Opt-in via a small chip in the HUD; the pubkey is sent with each steer
+// so the relay can look up the tier. Nothing else changes hands.
+let WALLET = localStorage.getItem("chamber_wallet");
+async function connectWallet(){
+  try {
+    const p = ("phantom" in window) && window.phantom.solana;
+    if (!p || !p.isPhantom){ note("phantom not found — install it, then reload"); return; }
+    const res = await p.connect();
+    WALLET = res.publicKey.toString();
+    localStorage.setItem("chamber_wallet", WALLET);
+    paintWalletChip();
+    try {
+      const r = await fetch(`${API}/sawboard/me?wallet=${WALLET}`).then(r=>r.json());
+      if (!r.joined){
+        await fetch(`${API}/sawboard/join`, {method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({wallet: WALLET, alias: WALLET.slice(0,4)+"…"})});
+      }
+      note(r.tier && r.tier !== "BASE"
+        ? `wallet connected — ${r.tier}: ${r.allowance} bot msgs/day, easier limits`
+        : "wallet connected — base tier (100k $SAW unlocks operator)");
+    } catch(e) { note("wallet connected (ledger unreachable)"); }
+  } catch(e){ note("connection refused"); }
+}
+function paintWalletChip(){
+  const chip = document.getElementById("walletChip");
+  if (!chip) return;
+  if (!WALLET){ chip.textContent = "◇ connect wallet"; chip.onclick = connectWallet; return; }
+  chip.textContent = "◆ " + WALLET.slice(0,4) + "…" + WALLET.slice(-4);
+  chip.onclick = () => { WALLET = null; localStorage.removeItem("chamber_wallet");
+    paintWalletChip(); note("wallet disconnected"); };
+}
+paintWalletChip();
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -2417,7 +2465,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
         roomWanted && !PAST_CLIFF ? {enter_room: true} : {},
-        PAST_CLIFF ? {past_cliff: true} : {}))});
+        PAST_CLIFF ? {past_cliff: true} : {},
+        WALLET ? {wallet: WALLET} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
