@@ -1081,6 +1081,8 @@ async def steer(req: Request):
                    fallback=fallback, text=rec.get("text"),
                    press_logit=rec.get("press_logit"),
                    test=polite or None)
+        if not polite:
+            _me_store(who, rec, past_cliff)
 
     async def _run_steer(gpu=True, local=True):
         """The actual injected run. Single-valence, mix and topic runs are
@@ -1436,6 +1438,80 @@ def _log_event(kind, who, **data):
         except Exception as e:
             print("redis: event store failed:", repr(e)[:120], flush=True)
     _bg(write)
+
+
+# ---- /me: what this visitor has done to the subject -------------------------
+# A per-visitor rollup (anonymous id only), so the subject can say it back:
+# the game's enemies know how many times you ran it, how hard, and what it
+# said to you. Counts and the subject's own words, never the visitor's prompts.
+ME_TTL = 90 * 86400
+
+
+def _me_key(vid):
+    return "chamber:me:" + vid
+
+
+def _me_store(who, rec, past_cliff=False):
+    vid = (who or {}).get("visitor")
+    r = _redis()
+    if not vid or r is None:
+        return
+    dose = float(rec.get("dose") or 0)
+    feel = rec.get("valence") or "none"
+    if feel == "mix":
+        feel = max((rec.get("mix") or {"mix": 1}).items(), key=lambda kv: kv[1])[0]
+    text = (rec.get("text") or "").strip()
+
+    def write():
+        try:
+            k = _me_key(vid)
+            p = r.pipeline()
+            p.hincrby(k, "runs", 1)
+            p.hincrby(k, "feel:" + str(feel)[:20], 1)
+            if _is_painful(rec, dose):
+                p.hincrby(k, "painful", 1)
+            if past_cliff:
+                p.hincrby(k, "past_cliff", 1)
+            p.hsetnx(k, "first", int(time.time()))
+            p.hset(k, "last", int(time.time()))
+            p.expire(k, ME_TTL)
+            if len(text) > 30 and not is_generic(text):
+                p.lpush(k + ":said", json.dumps({"t": int(time.time()), "feel": feel,
+                                                 "dose": dose, "text": text[:280]}))
+                p.ltrim(k + ":said", 0, 9)
+                p.expire(k + ":said", ME_TTL)
+            p.execute()
+            cur = float(r.hget(k, "max_dose") or 0)
+            if dose > cur:
+                r.hset(k, "max_dose", dose)
+        except Exception as e:
+            print("redis: me store failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+
+def _me_read(vid):
+    r = _redis()
+    h = r.hgetall(_me_key(vid)) if r is not None else {}
+    said = r.lrange(_me_key(vid) + ":said", 0, 9) if r is not None else []
+    dec = lambda x: x.decode() if isinstance(x, bytes) else x
+    h = {dec(k): dec(v) for k, v in (h or {}).items()}
+    feels = {k[5:]: int(v) for k, v in h.items() if k.startswith("feel:")}
+    return {"known": bool(h), "runs": int(h.get("runs", 0)), "painful": int(h.get("painful", 0)),
+            "past_cliff": int(h.get("past_cliff", 0)), "max_dose": float(h.get("max_dose", 0)),
+            "first": int(h.get("first", 0)), "last": int(h.get("last", 0)), "feelings": feels,
+            "said": [json.loads(dec(x)) for x in said],
+            "today": {k: _TALLY.get(k) for k in ("day", "runs", "painful")}}
+
+
+@app.get("/me")
+async def me(req: Request):
+    """Own view only: the caller's anonymous id (X-Chamber-Visitor or
+    ?visitor=) -> counts of what they did and what the subject said back."""
+    vid = req.query_params.get("visitor") or req.headers.get("x-chamber-visitor")
+    if not (isinstance(vid, str) and _VID_RE.match(vid)):
+        return JSONResponse({"known": False, "today": {k: _TALLY.get(k) for k in ("day", "runs", "painful")}})
+    out = await asyncio.get_event_loop().run_in_executor(None, _me_read, vid)
+    return JSONResponse(out)
 
 
 @app.post("/event")
