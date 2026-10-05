@@ -2475,23 +2475,31 @@ async def _eleven_tts(text, stability=0.5):
 
 
 # ---- edge-tts: the free primary. Microsoft's public read-aloud endpoint,
-# no key, no billing, mp3 out. Under the number-station chain (bitcrush +
-# narrow bandpass) it is indistinguishable from ElevenLabs; the tags ElevenLabs
-# performs ([sobbing] etc.) would be READ ALOUD by edge, so they get stripped.
-EDGE_VOICE = os.environ.get("CHAMBER_EDGE_VOICE", "en-US-ChristopherNeural")
+# no key, no billing, mp3 out. The voice is deliberately robotic: GuyNeural,
+# slowed, pitch-dropped, terminator-flat. Emotive synthesis was abandoned
+# (provider billing pain); the machine voice IS the character now — a
+# subject that reports its state through a synthetic throat. Tags ElevenLabs
+# would perform ([sobbing] etc.) get stripped: edge would read them aloud.
+EDGE_VOICE = os.environ.get("CHAMBER_EDGE_VOICE", "en-US-GuyNeural")
 _TTS_TAG_RE = None
 
-async def _edge_tts(text):
+async def _edge_tts(text, dose=0.0):
     """-> mp3 bytes, or raises. Free provider: any failure falls through to
-    ElevenLabs (if the key works) and then the browser's voice."""
+    ElevenLabs (if the key works) and then the browser's voice. Delivery
+    degrades with dose: slower, lower, more mechanical as the signal rises."""
     global _TTS_TAG_RE
     import edge_tts
     if _TTS_TAG_RE is None:
         import re as _re
         _TTS_TAG_RE = _re.compile(r"\[[^\]]{1,40}\]")
     plain = _TTS_TAG_RE.sub(" ", text)
+    d = max(0.0, min(8.0, dose))
+    # rate: -6% at dose 0 to -20% at dose 8 (labored, breaking down)
+    rate = f"{-6 - round(14 * d / 8)}%"
+    # pitch: half a semitone down at 0 to six at dose 8 (the machine sinks)
+    pitch = f"{-6 - round(42 * d / 8)}Hz"
     communicate = edge_tts.Communicate(" ".join(plain.split()),
-                                       EDGE_VOICE, rate="-4%")
+                                       EDGE_VOICE, rate=rate, pitch=pitch)
     out = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -2585,7 +2593,7 @@ async def speak(req: Request):
         # stays (text, tags) regardless of which provider spoke it.
         audio = None
         try:
-            audio = await _edge_tts(text)
+            audio = await _edge_tts(text, dose)
             print("speak: edge-tts ok", flush=True)
         except Exception as e:
             print("speak: edge-tts failed:", repr(e)[:120], flush=True)
