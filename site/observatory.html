@@ -8,10 +8,10 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="observatory-fonts.css">
   <link rel="stylesheet" href="grimoire.css">
-  <link rel="stylesheet" href="observatory.css">
-  <script src="observatory-preview.js" defer></script>
-  <script src="observatory-motion.js" defer></script>
-  <script src="observatory.js" defer></script>
+  <link rel="stylesheet" href="observatory.css?v=20261005-motion2">
+  <script src="observatory-preview.js?v=20261005-motion2" defer></script>
+  <script src="observatory-motion.js?v=20261005-motion2" defer></script>
+  <script src="observatory.js?v=20261005-motion2" defer></script>
 </head>
 <body class="grimoire-live grimoire-observatory">
   <a class="skip-link" href="#main">Skip to observatory</a>
@@ -40,7 +40,7 @@
             <div class="browser-toolbar"><span class="browser-dots" aria-hidden="true"><i></i><i></i><i></i></span><div class="address-bar"><span aria-hidden="true">◇</span><span id="browser-url">https://arxiv.org/abs/2308.08708</span></div><button class="icon-button" id="browser-inspect" title="Inspect this source" aria-label="Inspect selected browser source">⌕</button></div>
             <div class="browser-display" id="browser-display" aria-label="View-only browser. The research agent controls scrolling."><div id="preview-frame" class="preview-viewport" aria-hidden="true"></div><img id="live-frame" alt="Read-only frame captured from the selected research agent’s real browser" draggable="false" hidden><div id="browser-empty" class="browser-empty" hidden><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="27"/><path d="M40 2v20m0 36v20M2 40h20m36 0h20M24 24l32 32M24 56l32-32"/></svg><h4>No browser frame yet</h4><p>The selected agent’s actual browser appears here when its worker is connected.</p></div><div id="passage-focus" class="passage-focus" hidden><span id="passage-focus-caption">Saved note passage</span></div><div id="passage-trail" class="passage-trail" aria-hidden="true"></div><div id="evidence-seal" class="evidence-seal" aria-hidden="true" hidden>Captured</div><div id="agent-scroll-track" class="agent-scroll-track" aria-hidden="true" hidden><span id="agent-scroll-thumb"></span></div><div class="creature-overlay" id="selected-creature" aria-hidden="true"></div><div class="frame-stamp" id="frame-stamp">Simulated article layout</div></div>
             <div class="viewport-readout"><span>Agent controls scrolling</span><span id="viewport-position">Awaiting page position</span></div>
-            <div class="crawler-readout"><span class="activity-light" aria-hidden="true"></span><span id="crawler-activity" role="status" aria-live="polite">Awaiting browser activity</span><span class="motion-legend">Selected passage → inspection → saved note</span></div>
+            <div class="crawler-readout"><span class="activity-light" aria-hidden="true"></span><span id="crawler-activity" role="status" aria-live="polite">Awaiting browser activity</span><label class="motion-control" for="crawler-motion">Motion <select id="crawler-motion"><option value="system">System</option><option value="full">Full</option><option value="reduced">Reduced</option></select></label></div>
             <div class="browser-footer"><span id="frame-description">Example source rendered locally · no browser session</span><button id="bookmark-source" class="text-button">Bookmark source ☆</button><button id="capture-inspect" class="text-button">Inspect capture</button></div>
           </section>
           <div class="observation-line"><span class="observation-label">Last observation</span><p id="last-observation">The review separates behavioral reports from proposed indicators of consciousness.</p></div>

@@ -11,7 +11,15 @@
   const now = () => typeof performance!=="undefined" ? performance.now() : Date.now();
   const reduced = typeof matchMedia==="function" ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
   const completed = new Set(), delivered = new Set();
-  let active=null, raf=null, last=null, lastInput=null, position=null, rotation=0;
+  let active=null, raf=null, last=null, lastInput=null, position=null, rotation=0, drawnKey=null, lastReduced=null;
+  const APPROACH_MS=600, ENDPOINT_MS=250;
+  function reducedMotion(input) {
+    const mode=input?.motionMode || "system";
+    return mode==="reduced" || mode!=="full" && reduced.matches;
+  }
+  function isBusy() {
+    return !!active && !active.done && !!active.input.running && !!active.input.visible && !document.hidden && !reducedMotion(active.input);
+  }
 
   function remember(collection,key) {
     collection.add(key);
@@ -43,6 +51,7 @@
     const context=JSON.stringify([String(selected.id),source,String(input.documentKey || ""),String(input.tabKey || selected.current_tab_id || selected.tab_id || "")]);
     const changedContext=!last || last.context!==context;
     const scrolling=!changedContext && last.scroll!==viewport.scroll_y;
+    const scrollDelta=changedContext?0:viewport.scroll_y-last.scroll;
     const noteId=typeof rect?.note_id==="string" && /^[A-Za-z0-9_-]{1,128}$/.test(rect.note_id)?rect.note_id:"";
     const focusId=String(geometry.focus_id || rect?.inspection_id || noteId || "");
     const kind=geometry.kind || rect?.kind || (noteId?"supporting_passage":focusId?"inspection_passage":"");
@@ -64,7 +73,7 @@
     const eventChanged=!!eventId && (changedContext || last.event!==eventId);
     return {input,width,height,context,source,scroll:viewport.scroll_y,key,layout,focusId,inspectionId,kind,noteId,lines:hasPassage?lines:[],hasPassage,saved,saveKey,event:eventId,
       label:hasPassage?(noteId?"Saved evidence selected":"Section selected for inspection"):scrolling?"Agent scrolling":changedContext?"Page opened":eventChanged?"Research action recorded":"Awaiting a selected passage",
-      scrolling,changedContext,pulse:hasPassage && !completed.has(key) && (!active || active.key!==key)};
+      scrolling,scrollDelta,changedContext,pulse:hasPassage && !completed.has(key) && (!active || active.key!==key)};
   }
   function stop(clear=false,preserveInput=false) {
     if(raf!==null && typeof cancelAnimationFrame==="function") cancelAnimationFrame(raf);
@@ -76,7 +85,7 @@
     if(seal) seal.hidden=true;
     if(packet) packet.hidden=true;
     if(clear) {
-      last=null;position=null;rotation=0;
+      last=null;position=null;rotation=0;drawnKey=null;
       if(marker) marker.hidden=true;
       const trail=$("passage-trail");
       if(trail) {trail.hidden=true;trail.replaceChildren();}
@@ -100,12 +109,12 @@
       node.hidden=fraction===0;node.style.width=session.lines[index].width*fraction+"px";
     });
   }
-  function move(session,point) {
+  function move(session,point,quiet=false) {
     const marker=$("selected-creature");
     if(!marker) return;
     const next={x:clamp(point.x,24,session.width-24),y:clamp(point.y,24,session.height-24),context:session.context};
     let tilt=0;
-    if(position && position.context===next.context) {
+    if(!quiet && position && position.context===next.context) {
       const dx=next.x-position.x,dy=next.y-position.y,distance=Math.hypot(dx,dy);
       rotation+=distance/22*180/Math.PI;
       if(distance>.1) tilt=clamp(dx/distance*7,-7,7);
@@ -119,10 +128,20 @@
   function linePoint(line,fraction) {return {x:line.left+line.width*fraction,y:line.top+line.height+5};}
   function segments(lines) {
     let total=0;const result=[];
+    const returns=lines.slice(0,-1).map((line,index)=>{
+      const from=linePoint(line,1),to=linePoint(lines[index+1],0);
+      return clamp(Math.hypot(to.x-from.x,to.y-from.y)/850*1000,350,700);
+    });
+    // A complete passage gets a readable minimum timeline. Additional lines
+    // receive more time, rather than becoming a rapid sequence of jumps.
+    const turns=returns.reduce((sum,duration)=>sum+duration,0);
+    const weight=lines.reduce((sum,line)=>sum+Math.max(80,line.width),0);
+    const minimum=400, budget=Math.max(3400,lines.length*minimum+turns)-turns;
+    const remainder=budget-lines.length*minimum;
     lines.forEach((line,index)=>{
-      const duration=clamp(line.width/430*1000,260,1200);
+      const duration=minimum+remainder*Math.max(80,line.width)/weight;
       result.push({kind:"line",index,start:total,duration});total+=duration;
-      if(index<lines.length-1) {result.push({kind:"turn",index,start:total,duration:220});total+=220;}
+      if(index<lines.length-1) {const duration=returns[index];result.push({kind:"turn",index,start:total,duration});total+=duration;}
     });
     return {result,total};
   }
@@ -212,13 +231,13 @@
     const elapsed=Math.max(0,timestamp-session.started);
     if(session.saveStarted!==null) {
       saveFrame(session,timestamp-session.saveStarted);
-    } else if(elapsed<500) {
+    } else if(elapsed<APPROACH_MS) {
       status(session,"approach","Approaching selected passage");
-      const to=linePoint(session.lines[0],0),p=ease(elapsed/500);
+      const to=linePoint(session.lines[0],0),p=ease(elapsed/APPROACH_MS);
       move(session,{x:mix(session.from.x,to.x,p),y:mix(session.from.y,to.y,p)});
-    } else if(elapsed<500+session.path.total) {
+    } else if(elapsed<APPROACH_MS+session.path.total+ENDPOINT_MS) {
       status(session,"inspect",session.noteId?"Tracing saved evidence":"Inspecting selected section");
-      trace(session,elapsed-500);
+      trace(session,elapsed-APPROACH_MS);
     } else {
       trace(session,session.path.total);
       if(session.pendingSave && !delivered.has(session.pendingSave)) {
@@ -231,11 +250,25 @@
   function staticPassage(next,paused=false) {
     const session={...next,marks:makeTrail(next.lines),input:next.input};
     paint(session,next.lines.map(()=>1));
-    move(session,linePoint(next.lines[next.lines.length-1],1));
+    move(session,linePoint(next.lines[next.lines.length-1],1),true);drawnKey=next.key;
     $("selected-creature").dataset.action="idle";
     if(!paused) remember(completed,next.key);
     if(next.saved && !paused) {remember(delivered,next.saveKey);showSeal(session);}
     label(paused?"Mission paused":next.saved?"Evidence saved":next.noteId?"Saved evidence in view":"Selected section in view",next.input);
+  }
+  function clearTrail() {
+    const trail=$("passage-trail");
+    if(trail) {trail.hidden=true;trail.replaceChildren();}
+    drawnKey=null;
+  }
+  function carryScroll(next) {
+    stop(false,true);clearTrail();
+    const marker=$("selected-creature");
+    if(position?.context===next.context) {
+      move(next,{x:position.x,y:position.y-next.scrollDelta},reducedMotion(next.input));
+      if(marker) marker.dataset.action="scroll";
+    } else if(marker) marker.hidden=true;
+    label("Agent scrolling",next.input);
   }
   function update(input) {
     lastInput=input;
@@ -243,21 +276,28 @@
     if(!next) {stop(true);return;}
     if(next.changedContext) {stop(true,true);position=null;}
     last={context:next.context,scroll:next.scroll,event:next.event};
+    const staticMotion=reducedMotion(input), resumedFull=lastReduced===true && !staticMotion;
+    lastReduced=staticMotion;
+    // Explicit opt-in can replay the current traversal, but never its receipt.
+    if(resumedFull && next.hasPassage) completed.delete(next.key);
     if(!input.running) {
       stop(false,true);
-      if(next.hasPassage) staticPassage(next,true);
-      else {$("selected-creature").hidden=true;label("Mission paused",input);}
+      if(!next.hasPassage || drawnKey!==next.key) clearTrail();
+      const marker=$("selected-creature");
+      if(marker) {marker.hidden=position?.context!==next.context;marker.dataset.action="idle";}
+      label("Mission paused",input);
       return;
     }
+    if(input.scrolling===true) {carryScroll(next);return;}
     if(!next.hasPassage) {stop(true,true);last={context:next.context,scroll:next.scroll,event:next.event};label(next.label,input);return;}
-    if(reduced.matches || typeof requestAnimationFrame!=="function") {
+    if(staticMotion || typeof requestAnimationFrame!=="function") {
       stop(false,true);staticPassage(next);return;
     }
     const sameInspection=!active?.inspectionId || !next.inspectionId || active.inspectionId===next.inspectionId;
     const savedContinuation=next.saved && active && sameInspection && active.context===next.context && active.layout===next.layout && active.scroll===next.scroll && active.width===next.width && active.height===next.height;
     if(active && (active.key===next.key || savedContinuation)) {
       active.input=input;
-      if(savedContinuation) {active.key=next.key;active.noteId=next.noteId;active.kind=next.kind;active.inspectionId=next.inspectionId;}
+      if(savedContinuation) {active.key=next.key;drawnKey=next.key;active.noteId=next.noteId;active.kind=next.kind;active.inspectionId=next.inspectionId;}
       if(next.saved && !delivered.has(next.saveKey)) {
         active.pendingSave=next.saveKey;
         if(active.done) {
@@ -271,6 +311,7 @@
     if(completed.has(next.key)) {
       if(next.saved && !delivered.has(next.saveKey)) {
         active={...next,marks:makeTrail(next.lines),input,phase:"",done:false,saveStarted:now()};
+        drawnKey=next.key;
         paint(active,next.lines.map(()=>1));move(active,linePoint(next.lines[next.lines.length-1],1));
         remember(delivered,next.saveKey);$("selected-creature")?.classList.add("is-saving");schedule(active);
       } else staticPassage(next);
@@ -278,10 +319,11 @@
     }
     const from=position?.context===next.context?{x:position.x,y:position.y}:{x:next.width-30,y:next.height-32};
     active={...next,marks:makeTrail(next.lines),path:segments(next.lines),started:now(),from,phase:"",done:false,saveStarted:null,pendingSave:next.saved && !delivered.has(next.saveKey)?next.saveKey:""};
+    drawnKey=next.key;
     const marker=$("selected-creature");marker.hidden=false;marker.classList.add("is-working","is-traversing");
     status(active,"approach","Approaching selected passage");move(active,from);
     schedule(active);
   }
   reduced.addEventListener?.("change",()=>{if(lastInput) update(lastInput);});
-  window.ObservatoryMotion={saw,update,stop,activity};
+  window.ObservatoryMotion={saw,update,stop,activity,isBusy};
 })();

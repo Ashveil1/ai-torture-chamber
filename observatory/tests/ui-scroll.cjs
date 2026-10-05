@@ -8,13 +8,13 @@ function extract(name){
 }
 const nodes=new Map(),labels={};
 function node(id){if(!nodes.has(id))nodes.set(id,{hidden:false,style:{},clientWidth:600,clientHeight:425,getBoundingClientRect:()=>({left:0,top:0})});return nodes.get(id);}
-const context={Number,Math,JSON,mode:'connected',currentView:'research',frameTelemetry:null,highlightedNoteId:'',
-  previewScrollFrame:null,previewScrollKey:'',previewScrollY:0,cancelAnimationFrame(){},
+const context={Number,Math,JSON,mode:'connected',currentView:'research',selectedAgent:'scholar',frameTelemetry:null,highlightedNoteId:'',
+  previewScrollFrame:null,previewScrollKey:'',previewScrollY:0,previewIdleAt:null,previewTimer:null,motionMode:'system',cancelAnimationFrame(){},
   window:{},document:{hidden:false},connected:true,state:{events:[],mission:{status:'paused'}},
   $:node,text:(id,value)=>labels[id]=value,agent:()=>({id:'scholar',source_id:'preview-butlin',preview_scroll_phase:2,preview_inspection_id:'preview-inspection-7',preview_focus_note_id:'preview-note-7'})};
 vm.createContext(context);
-vm.runInContext(['viewportGeometry','frameMetadata','resetFrameTelemetry','renderFrameTelemetry','lockObserverViewport','cancelPreviewScroll','previewPassageLines','paintPreviewViewport','renderPreviewViewport','refreshFrame'].map(extract).join('\n')+
-  '\nthis.helpers={viewportGeometry,frameMetadata,resetFrameTelemetry,renderFrameTelemetry,lockObserverViewport,renderPreviewViewport,refreshFrame};',context);
+vm.runInContext(['viewportGeometry','frameMetadata','resetFrameTelemetry','motionReduced','renderFrameTelemetry','lockObserverViewport','cancelPreviewScroll','previewPassageLines','paintPreviewViewport','renderPreviewViewport','updatePreviewTimer','refreshFrame'].map(extract).join('\n')+
+  '\nthis.helpers={viewportGeometry,frameMetadata,resetFrameTelemetry,motionReduced,renderFrameTelemetry,lockObserverViewport,renderPreviewViewport,updatePreviewTimer,refreshFrame};',context);
 const h=context.helpers,viewport={viewport_width:1000,viewport_height:800,scroll_x:0,scroll_y:1200,document_width:1000,document_height:4000};
 const focus={x:100,y:200,width:200,height:40,kind:'supporting_passage',note_id:'note-7'};
 const geometry=h.viewportGeometry(viewport,focus,600,425);
@@ -90,9 +90,34 @@ context.agent=()=>({id:'scholar',source_id:'preview-butlin',preview_scroll_phase
 context.previewScrollY=0;context.previewScrollKey='';context.state.mission.status='running';
 h.renderPreviewViewport();assert.equal(typeof scrollFrame,'function');
 scrollFrame(325);assert.equal(page.style.transform,'translateY(-168px)');assert.equal(context.frameTelemetry.focus,null);
+assert.equal(motionInput.scrolling,true,'The controller receives explicit scroll continuity');
 scrollFrame(650);assert.equal(context.previewScrollFrame,null);assert.equal(context.frameTelemetry.focus.lines.length,3);
+assert.equal(motionInput.scrolling,false);
 context.previewScrollY=0;h.renderPreviewViewport();context.state.mission.status='paused';scrollFrame(325);
 assert.equal(scrollFrame,null);assert.ok(scrollCancelled>0,'Pausing cancels the scroll rather than completing it in the background');
+context.state.mission.status='running';context.previewScrollY=0;context.previewScrollKey='';h.renderPreviewViewport();scrollFrame(325);
+const pausedTransform=page.style.transform;
+context.state.mission.status='paused';h.renderPreviewViewport();
+assert.equal(page.style.transform,pausedTransform,'Rendering pause freezes the document midway instead of jumping to its target');
+assert.equal(context.previewScrollFrame,null);assert.equal(motionInput.running,false,'Pause is delivered to the motion controller immediately');
+// An explicit Full selection provides the GIF-like demonstration even on reduced-motion systems.
+context.matchMedia=()=>({matches:true});context.motionMode='system';assert.equal(h.motionReduced(),true);
+context.motionMode='full';assert.equal(h.motionReduced(),false);
+context.motionMode='reduced';assert.equal(h.motionReduced(),true);context.motionMode='full';
+// The real preview scheduler cannot replace a passage halfway through its timeline.
+let timerCallback=null,timerClock=0,controllerBusy=true,steps=0,renders=0;
+Object.assign(context,{previewScrollFrame:null,previewTimer:null,previewIdleAt:null,currentView:'research',
+  setTimeout:callback=>{timerCallback=callback;return 9;},clearTimeout:()=>{timerCallback=null;},
+  performance:{now:()=>timerClock},render:()=>renders++,
+  window:{ObservatoryMotion:{isBusy:()=>controllerBusy},ObservatoryPreview:{step:()=>steps++}}});
+context.state.mission.status='running';h.updatePreviewTimer();
+timerClock=7000;timerCallback();assert.equal(steps,0,'A long actual passage is never interrupted by a six-second timer');
+controllerBusy=false;timerCallback();assert.equal(steps,0,'Completed passage gets a brief hold');
+timerClock+=450;timerCallback();assert.equal(steps,1);assert.equal(renders,1);
+context.previewScrollFrame=12;timerClock+=5000;timerCallback();assert.equal(steps,1,'Scroll must finish before the next passage');
+context.previewScrollFrame=null;context.document.hidden=true;timerCallback();assert.equal(steps,1,'Hidden preview cannot advance');
+context.document.hidden=false;context.currentView='evidence';timerCallback();assert.equal(steps,1,'Other views do not skip unseen passages');
+context.currentView='research';context.state.mission.status='paused';h.updatePreviewTimer();assert.equal(timerCallback,null,'Pause clears the scheduled callback');
 const previewContext={window:{},Date,JSON};vm.createContext(previewContext);
 vm.runInContext(fs.readFileSync(path.join(root,'site/observatory-preview.js'),'utf8'),previewContext);
 const preview=previewContext.window.ObservatoryPreview,state=preview.create(),original=state.agents[0].source_id;

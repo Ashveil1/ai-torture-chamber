@@ -40,7 +40,11 @@ establish claim truth, attention, understanding or consciousness.
 1. The saw approaches a selected visible passage. Its blade turns with distance
    traveled; its hub, sensor and feelers remain upright.
 2. It follows each painted line from left to right. Gold highlighting grows
-   behind it, with short curved returns between lines. This sequence is finite.
+   behind it, with short curved returns between lines. Ordinary passages take
+   about four seconds; longer passages receive additional traversal time. This
+   sequence is finite.
+   Curved returns travel at approximately 850 pixels per second, bounded to
+   350–700ms, so the saw visibly crosses between line endpoints.
 3. Only a recent matching `note.saved` event can stamp the passage and deliver an
    evidence packet to the stable notebook receipt. Original passage text is not
    exposed; the receipt shows the public authored note. Revisiting the same saved
@@ -53,22 +57,34 @@ delivery without repeating the traversal. Missing passage geometry leaves no
 invented reading path. The screenshot feed is a periodically captured viewport,
 not a continuous video stream; the overlay animates between matched captures.
 
-Pause freezes the current valid view. Stale frames and hidden views stop animation.
-Reduced-motion mode displays a static passage highlight and saved indicator,
+During authored preview scrolling the saw stays visible and its pose follows the
+measured scroll delta; obsolete highlights clear. Once scrolling settles, it
+approaches the next selected passage from that pose. This is page movement, not
+an invented reading highlight. Missing or changed document context still clears it.
+
+Pause freezes the current document position and drawn saw/highlights. Resume
+retains the current preview phase rather than skipping ahead. Stale frames and
+hidden views stop animation. The visible Motion selector offers System, Full and
+Reduced. System follows the browser preference; explicit Full animates despite a
+reduced system preference. Reduced displays static highlights and saved indicators,
 without the moving saw or delivery packet. Browser and surrounding panel
 scrollbars retain the native dark-track and muted-gold theme.
 
 ## Inspect the authored demonstration
 
 Open `observatory.html?preview=1&motion=1#research` from the local site server.
-This automatically starts authored preview playback and performs no real crawl,
+This explicitly selects Full motion and automatically starts authored preview
+playback. Ordinary entry defaults to System. The demonstration performs no real crawl,
 inference, payment or training. The ordinary connected entry remains unchanged.
 
 The preview moves the actual local article surface smoothly, waits for scrolling
 to settle, and measures its clipped DOM text lines. Its inspection and save
 steps share an explicit example inspection ID. Example passages are paraphrases,
 never certified original evidence. Pause and document visibility also stop its
-scroll animation. Every fixture remains labeled simulated.
+scroll animation. The scheduler waits for the actual scroll, passage path and
+evidence delivery to complete before advancing, including longer narrow-screen
+paths. Manual advance also waits while playback is moving. Every fixture remains
+labeled simulated.
 
 ## Verification and remaining acceptance
 
@@ -78,11 +94,19 @@ visible literal matching, line geometry, inspection expiry, exact note promotion
 stable screenshot binding, document identity and public-field redaction.
 
 `node observatory/tests/ui-motion.cjs` runs the actual motion controller against
-controlled DOM geometry and animation clocks: 143 assertions cover traversal,
+controlled DOM geometry and animation clocks: 200 assertions cover traversal,
 progressive reveal, matching save delivery, repeated-frame idleness, cancellation,
 pause/stale state and reduced motion. `ui-scroll.cjs` covers the actual viewer
 functions, frame metadata, scroll locks, preview scrolling and response races;
-`ui-source.cjs` passes 158 source assertions. These checks use no provider calls.
+`ui-source.cjs` passes 159 source assertions. These checks use no provider calls.
+
+`node observatory/tests/ui-playback.cjs` couples the actual motion controller,
+viewer/notebook/mission/timer helpers and authored fixtures at sixteen-millisecond
+intervals: 100 assertions cover gradual positions, progressive highlights,
+scroll continuity, note delivery, longer passages, pause/resume and motion modes.
+This catches interruptions between the preview and controller, beyond their
+individual tests. The UI-only correction also passes 79 focused API/asset/frame
+tests; the 696-test result is the latest full combined run before that correction.
 
 Fresh visual browser review is still blocked by saved browser permissions. Earlier
 archived screenshots show a previous revision. Real provider sessions, payments,

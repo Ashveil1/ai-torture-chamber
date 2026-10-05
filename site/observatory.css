@@ -426,6 +426,9 @@ body.grimoire-live.grimoire-observatory {
 .notebook-capture>p { font:.9rem/1.45 var(--grimoire); color:var(--bone); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
 .notebook-capture.is-receiving,.notebook-capture.evidence-arrived { background:#c9a22718; }
 .crawler-readout { display:flex; align-items:center; gap:8px; padding:10px 0 4px; color:var(--gold); font:.68rem var(--mono); }
+.crawler-readout { flex-wrap:wrap; }
+.motion-control { display:flex; align-items:center; gap:7px; margin-left:auto; color:var(--bone-dim); font:.64rem var(--mono); white-space:nowrap; }
+.motion-control select { color:var(--gold); background:#15110d; border:1px solid var(--parch-line); padding:3px 6px; font:inherit; min-height:26px; }
 .activity-light { width:5px; height:5px; background:currentColor; border-radius:50%; flex:none; }
 .motion-legend { margin-left:auto; text-align:right; color:var(--bone-dim); font:.62rem var(--mono); max-width:34ch; }
 .grimoire-observatory .agent-avatar .saw-svg { max-height:35px; }

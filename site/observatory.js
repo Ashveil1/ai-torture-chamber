@@ -32,6 +32,7 @@
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
   let frameTelemetry = null, highlightedNoteId = "";
   let previewScrollFrame = null, previewScrollKey = "", previewScrollY = 0;
+  let motionMode=mode==="preview" && parameters.get("motion")==="1"?"full":"system", previewIdleAt=null;
   let inheritedBaseRevision = false;
   let researchCatalog={status:"unavailable",models:[]}, metadataAt=0, metadataLoading=false, metadataGeneration=0;
   let previousProvider=preferences.research_provider;
@@ -155,6 +156,9 @@
     text("viewport-position","Page position unavailable");
     window.ObservatoryMotion?.stop(true);
   }
+  function motionReduced() {
+    return motionMode==="reduced" || motionMode==="system" && typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
   function renderFrameTelemetry() {
     const display=$("browser-display"), geometry=viewportGeometry(frameTelemetry?.viewport,frameTelemetry?.focus,display.clientWidth,display.clientHeight);
     highlightedNoteId="";
@@ -175,7 +179,7 @@
       const age=Date.now()-new Date(item.created_at).getTime();
       return item.type==="note.saved" && item.data?.note_id===geometry.rect?.note_id && (!geometry.rect?.inspection_id || item.data?.inspection_id===geometry.rect.inspection_id) && (mode==="preview" || Number.isFinite(age) && age>=-5000 && age<=30000);
     }) || events.find(item=>item.type!=="note.saved");
-    window.ObservatoryMotion?.update({geometry,viewport:frameTelemetry.viewport,selected,event:latest,preview:mode==="preview",running:state.mission.status==="running" && (mode==="preview" || connected),visible:currentView==="research" && !document.hidden,frameKey:frameTelemetry.frameKey,documentKey:frameTelemetry.documentKey});
+    window.ObservatoryMotion?.update({geometry,viewport:frameTelemetry.viewport,selected,event:latest,preview:mode==="preview",scrolling:frameTelemetry.scrolling===true,motionMode,running:state.mission.status==="running" && (mode==="preview" || connected),visible:currentView==="research" && !document.hidden,frameKey:frameTelemetry.frameKey,documentKey:frameTelemetry.documentKey});
   }
   function lockObserverViewport(display) {
     // A wheel or touch gesture over the spectator pane cannot alter its page.
@@ -372,7 +376,7 @@
       if(note_id)focus.note_id=note_id;
     }
     frameTelemetry={viewport:{viewport_width:display.clientWidth,viewport_height:display.clientHeight,scroll_x:0,scroll_y:scroll,document_width:display.clientWidth,document_height:height},focus,
-      frameKey:"preview-"+String(selected?.id)+"-"+String(selected?.step)+"-"+scroll,documentKey:"preview-"+String(selected?.id)+"-"+String(selected?.source_id)};
+      frameKey:"preview-"+String(selected?.id)+"-"+String(selected?.step)+"-"+scroll,documentKey:"preview-"+String(selected?.id)+"-"+String(selected?.source_id),scrolling:!settled};
     renderFrameTelemetry();
   }
   function renderPreviewViewport() {
@@ -383,8 +387,12 @@
     const target=page.querySelector('[data-preview-section="'+[1,2,2,3][phase]+'"]');
     const height=Math.max(display.clientHeight,page.scrollHeight),scroll=Math.round(Math.max(0,Math.min(height-display.clientHeight,(target?.offsetTop || 0)-95)));
     const key=[selected?.id,selected?.source_id,phase,height,display.clientWidth,display.clientHeight].join(":");
+    if(document.hidden){cancelPreviewScroll();return;}
+    if(state.mission.status!=="running" && previewScrollKey) {
+      cancelPreviewScroll();paintPreviewViewport(page,target,Math.max(0,Math.min(height-display.clientHeight,previewScrollY)),phase);return;
+    }
     if(previewScrollFrame!==null && previewScrollKey===key)return;
-    const moving=state.mission.status==="running" && !document.hidden && !(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const moving=state.mission.status==="running" && !document.hidden && !motionReduced();
     if(moving && Math.abs(scroll-previewScrollY)>2) {
       cancelPreviewScroll();previewScrollKey=key;
       const from=Math.max(0,Math.min(height-display.clientHeight,previewScrollY)),started=performance.now();
@@ -663,12 +671,23 @@
     catch(error){toast(error.message);return null;}
     finally {busy=false;render();}
   }
-  function updatePreviewTimer() {
-    clearInterval(previewTimer);previewTimer=null;
-    if(mode==="preview" && state.mission.status==="running") previewTimer=setInterval(()=>{window.ObservatoryPreview.step(state,selectedAgent);render();},6000);
+  function updatePreviewTimer(delay=150) {
+    clearTimeout(previewTimer);previewTimer=null;
+    if(mode!=="preview" || state.mission.status!=="running")return;
+    previewTimer=setTimeout(()=>{
+      previewTimer=null;
+      if(mode!=="preview" || state.mission.status!=="running")return;
+      if(document.hidden || currentView!=="research" || previewScrollFrame!==null || window.ObservatoryMotion?.isBusy()) {
+        previewIdleAt=null;updatePreviewTimer();return;
+      }
+      const now=performance.now();
+      if(previewIdleAt===null)previewIdleAt=now;
+      if(now-previewIdleAt<(motionReduced()?2400:450)){updatePreviewTimer();return;}
+      previewIdleAt=null;window.ObservatoryPreview.step(state,selectedAgent);render();updatePreviewTimer();
+    },delay);
   }
   async function missionAction(action) {
-    if(mode==="preview"){window.ObservatoryPreview.mission(state,action);if(action==="start" || action==="resume")window.ObservatoryPreview.step(state,selectedAgent);updatePreviewTimer();render();toast("Preview "+action+" simulated. No real browser was started.");}
+    if(mode==="preview"){window.ObservatoryPreview.mission(state,action);if(action==="start")window.ObservatoryPreview.step(state,selectedAgent);previewIdleAt=null;updatePreviewTimer();render();toast("Preview "+action+" simulated. No real browser was started.");}
     else if(!canMutate()) explainOwner();
     else {const result=await mutate("admin/missions/"+action,action==="start"?{objective:preferences.objective || state.mission.objective}:{});if(result)toast("Mission "+action+" requested. The worker will report its actual state.");}
   }
@@ -745,7 +764,7 @@
       // A connected setup must select from that backend's actual catalog, never
       // from the authored preview fixtures or a previous endpoint's catalog.
       if(nextMode==="connected" && (mode!=="connected" || api!==preferences.api_base)) {
-        preferences.api_base=api;disconnect();clearInterval(previewTimer);mode="connected";state=emptyState();selectedAgent="";lastPreviewSource="";
+        preferences.api_base=api;disconnect();clearTimeout(previewTimer);mode="connected";state=emptyState();selectedAgent="";lastPreviewSource="";
         await refreshState();
         if(!connected)return;
         syncResearchFields("");
@@ -759,7 +778,7 @@
       const publicPreferences={};
       ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision","training_eval_suite_path","training_eval_expected_sha256","training_eval_max_accuracy_drop","training_eval_max_nll_ratio","training_eval_min_domain_accuracy","training_eval_min_general_accuracy","training_eval_max_length","training_max_loss_ratio"].forEach(key=>publicPreferences[key]=preferences[key]);
       try {localStorage.setItem(storageKey,JSON.stringify(publicPreferences));}catch(_){}
-      if(nextMode!==mode){disconnect();clearInterval(previewTimer);mode=nextMode;state=mode==="preview"?window.ObservatoryPreview.create():emptyState();selectedAgent="";lastPreviewSource="";}
+      if(nextMode!==mode){disconnect();clearTimeout(previewTimer);mode=nextMode;state=mode==="preview"?window.ObservatoryPreview.create():emptyState();selectedAgent="";lastPreviewSource="";}
       if(mode==="preview") {
         state.settings={...state.settings,...settings};state.mission.objective=settings.objective;
         ["setting-research-key","setting-browser-key","setting-hf-token","setting-cdp"].forEach(id=>$(id).value="");
@@ -892,10 +911,14 @@
   $("setting-protocol").addEventListener("change",()=>syncResearchFields(""));
   $("setting-catalog-model").addEventListener("change",()=>{const model=compatibleResearchModels($("setting-protocol").value).find(item=>item.id===$("setting-catalog-model").value);text("research-catalog-status",mode==="preview"?"Simulated selection. No model call or payment occurs.":(model?.capability_source==="owner_declared"?"Owner-declared controls.":"Gateway-advertised controls.")+" Paid compatibility remains untested. Validate the chosen model with a bounded acceptance test before continuous research.");});
   $("connection-check").addEventListener("click",async()=>{try{preferences.api_base=validateEndpoint($("setting-api").value);const payload=normalizeState(await request("state"));text("setup-result","Backend reachable. "+payload.agents.length+" actual agents, "+payload.sources.length+" source records. Save setup to enter connected mode.");if(mode==="connected"){state=payload;connected=true;connectionError="";render();}}catch(error){text("setup-result",error.message+" Preview mode was not substituted.");}});
-  $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearInterval(previewTimer);state=window.ObservatoryPreview.create();selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
+  $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearTimeout(previewTimer);state=window.ObservatoryPreview.create();selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
   $("mission-toggle").addEventListener("click",()=>missionAction(state.mission.status==="running"?"pause":["paused","funding_paused","faulted"].includes(state.mission.status)?"resume":"start"));
   $("mission-stop").addEventListener("click",()=>confirmAction(mode==="preview"?"Stop the preview?":"Stop the research mission?",mode==="preview"?"The simulation stops. Example notes, sources and snapshots remain available.":"The worker stops research and releases its owned browser sessions. Source records, notes and datasets remain durable.",mode==="preview"?"Stop preview":"Stop mission",()=>missionAction("stop")));
-  $("mission-step").addEventListener("click",()=>{if(mode!=="preview")return;window.ObservatoryPreview.step(state,selectedAgent);render();toast("Advanced one simulated research event.");});
+  $("mission-step").addEventListener("click",()=>{
+    if(mode!=="preview")return;
+    if(state.mission.status==="running" && (previewScrollFrame!==null || window.ObservatoryMotion?.isBusy())){toast("Let the current passage finish before advancing.");return;}
+    previewIdleAt=null;window.ObservatoryPreview.step(state,selectedAgent);render();updatePreviewTimer();toast("Advanced one simulated research event.");
+  });
   $("browser-inspect").addEventListener("click",()=>{const source=currentSource();if(source)inspectSource(source.id);});
   $("capture-inspect").addEventListener("click",()=>{const source=currentSource();if(source)inspectSource(source.id);});
   $("bookmark-source").addEventListener("click",()=>{const source=currentSource();if(source)bookmarkSource(source.id);});
@@ -908,9 +931,18 @@
   $("training-start").addEventListener("click",startTraining);$("training-dataset").addEventListener("change",renderTraining);$("training-stage").addEventListener("change",renderTraining);$("training-parent").addEventListener("change",renderTraining);
   $("training-job-select").addEventListener("change",()=>{selectedJob=$("training-job-select").value;renderTraining();});
   $("confirm-accept").addEventListener("click",async()=>{const callback=confirmation;confirmation=null;$("confirm-dialog").close();if(callback)await callback();});
-  window.addEventListener("beforeunload",()=>{disconnect();clearInterval(previewTimer);ownerToken="";});
+  window.addEventListener("beforeunload",()=>{disconnect();clearTimeout(previewTimer);ownerToken="";});
   document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelPreviewScroll();window.ObservatoryMotion?.stop();}else if(mode==="connected")refreshState(true);else renderPreviewViewport();});
   lockObserverViewport($("browser-display"));
+  $("crawler-motion").value=motionMode;
+  $("crawler-motion").addEventListener("change",()=>{
+    motionMode=$("crawler-motion").value;previewIdleAt=null;
+    if(mode==="preview"){cancelPreviewScroll();renderPreviewViewport();updatePreviewTimer();}else renderFrameTelemetry();
+  });
+  if(typeof matchMedia==="function")matchMedia("(prefers-reduced-motion: reduce)").addEventListener?.("change",()=>{
+    if(motionMode!=="system")return;
+    if(mode==="preview"){cancelPreviewScroll();renderPreviewViewport();}else renderFrameTelemetry();
+  });
   window.addEventListener("resize",()=>{if(mode==="preview")renderPreviewViewport();else renderFrameTelemetry();});
   installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");
   if(mode==="connected")refreshState();
