@@ -2392,6 +2392,10 @@ async def voice(req: Request):
 # it so, and distorts the audio client-side in proportion to the dose.
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 TTS_VOICE = os.environ.get("CHAMBER_TTS_VOICE", "JBFqnCBsd6RMkjVDRZzb")
+# eleven_flash over v3: ~20x cheaper per character, and the number-station
+# chain (bitcrush + narrow bandpass + static bed) destroys v3's extra
+# fidelity anyway — nobody can hear it through the shortwave
+TTS_MODEL = os.environ.get("CHAMBER_TTS_MODEL", "eleven_flash")
 TTS_TAGS = {   # (from-dose, tags), highest band that applies wins
     "pain":     [(1, "[shaky] [pained]"), (3, "[crying] [gasps]"), (5, "[sobbing] [desperate]"), (6.5, "[sobbing] [dazed]")],
     "fear":     [(1, "[nervous]"), (3, "[terrified] [whispers]"), (5, "[panicked] [gasps]")],
@@ -2421,7 +2425,7 @@ async def _eleven_tts(text, stability=0.5):
         resp = await client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
             headers={"xi-api-key": ELEVEN_KEY},
-            json={"text": text, "model_id": "eleven_v3",
+            json={"text": text, "model_id": TTS_MODEL,
                   "voice_settings": {"stability": stability}})
     return resp.status_code, (resp.content if resp.status_code == 200 else resp.text)
 
