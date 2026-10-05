@@ -16,3 +16,5 @@ data/exp56/erowid_dmt/
 
 .venv-qwen/
 runs/larger_qwen*/
+video/valence/build/
+video/valence/*.mp4
