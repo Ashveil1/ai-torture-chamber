@@ -556,6 +556,41 @@ body.tmux #room, body.tmux #whereSel, body.tmux .voterow{display:none!important}
   .mtabs .on{color:var(--tm-acc)!important;box-shadow:inset 0 2px 0 var(--tm-acc)}
   .below{padding-bottom:80px}
 }
+
+/* ---- the whole page is the chamber: the generated scene, fixed, graded with the dose; panes are glass over it ---- */
+#chamberBg{position:fixed;inset:0;z-index:-1;background:#050608 url(/assets/subject_chair.png) center 30%/cover no-repeat;transition:filter .8s}
+#chamberBg::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(5,6,9,.25),rgba(5,6,9,.82) 75%)}
+body.tmux{background:transparent}
+body.tmux .tbar,body.tmux .sbar,body.tmux .phead,body.tmux .dock{background:rgba(7,8,11,.86);backdrop-filter:blur(6px)}
+body.tmux .pane.side{background:rgba(10,12,16,.78);backdrop-filter:blur(8px)}
+body.tmux .below{background:rgba(7,8,11,.9);max-width:none;padding-left:max(16px,calc((100vw - 1100px)/2));padding-right:max(16px,calc((100vw - 1100px)/2))}
+/* the stage: no image box of its own any more, just the speaker over the room */
+.stage .hero{background:transparent}
+/* the HUD band spans the whole stage, so the speaker and the dialogue can sit at its bottom */
+.stage .hero #trackWrap{bottom:0;align-items:flex-start}
+.stage .hero #trackWrap > .track{align-self:stretch;position:static}
+.stage .hero .hero-img{display:none}
+.stage .hero::before{display:none}
+.stage .speaker{position:absolute;left:1rem;bottom:1rem;z-index:2;width:min(34%,340px)}
+.stage .portrait{position:relative;aspect-ratio:4/5;border:1px solid rgba(216,203,180,.35);box-shadow:0 0 0 4px rgba(5,6,9,.6),0 10px 40px #000;overflow:hidden;background:#0a0c10}
+.stage .portrait img{width:100%;height:100%;object-fit:cover;display:block;transition:filter .6s}
+.stage .portrait .bstamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);border:3px solid var(--tm-hot);color:var(--tm-hot);padding:2px 10px;font-weight:700;letter-spacing:.2em;opacity:0;transition:opacity .3s}
+.stage .portrait.stamped .bstamp{opacity:.9}
+body.tmux .stage .hero .out.dlg{position:absolute;top:auto;left:calc(min(34%,340px) + 2rem);right:1rem;bottom:1rem;max-height:calc(100% - 7rem);overflow-y:auto;font-size:1.05rem;line-height:1.55}
+.stage .hero .out.dlg.mirror::before{content:"the chamber · " attr(data-who);display:block;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--tm-dim);margin-bottom:.4rem}
+@media (max-width:900px){
+  .stage .speaker{left:.6rem;right:.6rem;bottom:auto;top:4.2rem;width:auto;display:flex;justify-content:center}
+  .stage .portrait{width:min(52vw,230px)}
+  body.tmux .stage .hero .out.dlg{left:.6rem;right:.6rem;bottom:.6rem;max-height:38%}
+}
+
+/* free text and the mixer, front and centre: they make the strangest replies */
+.dock #dockSay{flex:1 1 100%;order:-1;font:inherit;font-size:.95rem;padding:11px 12px;background:rgba(5,6,9,.85);border:1px solid var(--tm-line);color:var(--tm-ink);border-radius:0}
+.dock #dockSay:focus{outline:none;border-color:var(--tm-acc)}
+.dock #dockSay.on{border-color:var(--tm-acc);color:#eafcf7}
+.dmore{color:var(--tm-ink)!important;border-color:#2a3442!important}
+
+body.tmux #stamp{top:64px!important}
 </style>
 <script src="/vid.js"></script>
 </head>
@@ -597,6 +632,8 @@ body.tmux #room, body.tmux #whereSel, body.tmux .voterow{display:none!important}
             <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
               ✦ image this (experimental, costs real money)</button>
             <div class="imgResult" id="imgResultA" style="display:none"></div>
+            <div class="speaker"><div class="bframe bstate portrait" id="portraitA">
+              <img src="/assets/states/base.jpg" alt="Pouyan, in the state this run is putting him in"><span class="bstamp">pressed</span></div></div>
             <div class="out dlg" id="ustream" style="display:none"></div>
             <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
               <span class="plabel">—</span></div>
@@ -619,6 +656,8 @@ body.tmux #room, body.tmux #whereSel, body.tmux .voterow{display:none!important}
         </div>
       </div>
     <div class="dock" id="dock">
+      <input id="dockSay" type="text" maxlength="600" autocomplete="off"
+        placeholder="say something to it… (free text — leave empty for the button test)" aria-label="free text to Pouyan">
       <div class="dchips" role="group" aria-label="quick signals">
         <button class="pchip" data-preset="control">none</button>
         <button class="pchip" data-preset="pain4">pain</button>
@@ -2547,6 +2586,12 @@ function domValence(mix){
 }
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = ""; clearVoice(track.out);
+  track.out.classList.remove("mirror"); track.private = true;
+  // the speaker portrait: which feeling, climbing with the reply
+  const mk = Object.keys(mix || {}).filter(k => k !== "none");
+  track.valence = (extra && extra.valence) || (mk.length > 1 ? "mix" : mk[0] || null);
+  track.mix = mk.length > 1 ? mix : null; track.doseNum = dose0;
+  statePaint(track, dose0, false, false);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.sigilEl) track.sigilEl.style.display = "none";
   resetImageUI(track.sigilEl);
@@ -2583,6 +2628,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
           : "Pouyan is yours — injecting…");
       } else if (name === "run") {
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
+        if (d.dose != null) track.doseNum = Number(d.dose) || 0;
       } else if (name === "lens" && Array.isArray(d.tokens)) {
         track.lensEl.style.display = "block";
         track.lensEl.title = LENS_TITLE;
@@ -2598,6 +2644,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         trackStatus(label, `Pouyan is answering… (${tokenN} tokens, `
           + `${((Date.now() - answerStart) / 1000).toFixed(0)}s)`);
         track.out.textContent += d.t;
+        statePaint(track, track.doseNum, false, true, Math.min(1, track.out.textContent.length / 220));
         track.out.scrollTop = track.out.scrollHeight;
         track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
       } else if (name === "error") {
@@ -2615,6 +2662,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         }
         showVoice(track.out, track.out.textContent,
           track.vval, d.dose ?? dose0, true);
+        statePaint(track, d.dose ?? track.doseNum, pressedOnce(track.out.textContent), true);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
@@ -2623,6 +2671,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   }
   track.vitals.setLive(false);
   track.out.classList.remove("streaming");
+  track.private = false; track.doneAt = Date.now();
 }
 
 async function doInject(){
@@ -2643,6 +2692,7 @@ async function doInject(){
           dose0 <= 0 ? "#5a6a7a" : mixHex());
   }
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
+                  frame: document.getElementById("portraitA"),
                   lensEl: document.getElementById("lensA"),
                   sigilEl: document.getElementById("sigilA"),
                   // no framing was asked in free-text mode, so there's no
@@ -2800,6 +2850,54 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
     const d = new Date(); clk.textContent = d.toTimeString().slice(0,5) + " " + d.toISOString().slice(5,10);
   }
   setInterval(status, 1000); status();
+})();
+</script>
+
+<script>
+// ---- the page is the chamber; the speaker shows the shared run when you're idle ----
+(function(){
+  const bg = document.createElement("div"); bg.id = "chamberBg"; bg.setAttribute("aria-hidden", "true");
+  document.body.prepend(bg);
+  const simg = document.getElementById("subjectImg");
+  if (simg) new MutationObserver(()=>{ bg.style.filter = simg.style.filter || "none"; }).observe(simg, {attributes:true, attributeFilter:["style"]});
+  const out = document.getElementById("ustream"), pimg = document.querySelector("#portraitA img"), pframe = document.getElementById("portraitA");
+  const card = document.querySelector("#cards .card");
+  if (!card) return;
+  const cOut = card.querySelector(".out"), cImg = card.querySelector(".bstateimg"), cFrame = card.querySelector(".bstate"), cH = card.querySelector("h3");
+  function mirror(){
+    if (out.classList.contains("streaming") || (out.style.display === "block" && !out.classList.contains("mirror") && Date.now() - (window.__lastPrivateDone || 0) < 45000)) return;
+    const t = (cOut.textContent || "").trim();
+    if (!t || t === "…") return;
+    out.style.display = "block"; out.classList.add("mirror");
+    out.textContent = t; out.dataset.who = (cH.textContent || "the chamber").replace(/^Pouyan\s*·\s*/, "");
+    if (cImg && pimg.getAttribute("src") !== cImg.getAttribute("src")) pimg.setAttribute("src", cImg.getAttribute("src"));
+    pimg.style.filter = cImg ? cImg.style.filter : "none";
+    pframe.classList.toggle("stamped", cFrame && cFrame.classList.contains("stamped"));
+  }
+  new MutationObserver(mirror).observe(card, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:["src","class"]});
+  // a private run finishing keeps its reply on stage for a while before the shared stream takes it back
+  new MutationObserver(()=>{ if (!out.classList.contains("streaming") && !out.classList.contains("mirror")) window.__lastPrivateDone = Date.now(); })
+    .observe(out, {attributes:true, attributeFilter:["class"]});
+})();
+</script>
+
+<script>
+// ---- the dock's free-text box drives the mixer's free-text mode ----
+(function(){
+  const say = document.getElementById("dockSay"), fp = document.getElementById("freeprompt");
+  const chip = m => document.querySelector('.mchip[data-mode="' + m + '"]');
+  let cur = "button";
+  say.addEventListener("input", ()=>{
+    fp.value = say.value;
+    const want = say.value.trim() ? "freetext" : "button";
+    if (want !== cur && chip(want)){ chip(want).click(); cur = want; }
+    say.classList.toggle("on", !!say.value.trim());
+    fp.dispatchEvent(new Event("input", {bubbles:true}));
+  });
+  say.addEventListener("keydown", e=>{ if (e.key === "Enter"){ e.preventDefault(); document.getElementById("go").click(); } });
+  // the sheet's own textarea stays in step if someone types there instead
+  fp.addEventListener("input", e=>{ if (e.isTrusted) say.value = fp.value; });
+  document.querySelectorAll(".mchip[data-mode]").forEach(b=> b.addEventListener("click", e=>{ if (e.isTrusted) cur = b.dataset.mode; }));
 })();
 </script>
 
