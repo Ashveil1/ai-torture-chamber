@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>The Saw Test (a.k.a. Serial Experiments Pain)</title>
-<meta name="description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta name="description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta property="og:title" content="The Saw Test (a.k.a. Serial Experiments Pain)">
-<meta property="og:description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta property="og:description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
 <meta property="og:url" content="https://wirehead.agency/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="The Saw Test (a.k.a. Serial Experiments Pain)">
-<meta name="twitter:description" content="We steered a 4B language model into strong negative and positive states, then gave it a button with teeth. Local weights, no APIs, everything reproducible on a laptop.">
+<meta name="twitter:description" content="We steered open language models, from a 4B on a laptop up to 70B, into strong negative and positive states, then gave them a button with teeth. Open weights, no frontier APIs, everything reproducible.">
 <meta name="twitter:image" content="https://wirehead.agency/saw_hero.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -149,6 +149,15 @@
     padding: .6rem; background: #07070e; margin-top: .8rem;
     max-height: 260px; overflow-y: auto; }
 
+
+/* the nav as four gates, in the off-label mandala's quarter colours */
+.gates{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 18px}
+.gate{border:1px solid #2a2016;border-top:3px solid var(--gc);padding:8px 10px 10px;font-size:.9rem;line-height:1.7;background:rgba(255,255,255,.015)}
+.gate h3{margin:0 0 2px;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gc);font-weight:600}
+.gate h3 span{font-size:.95rem;letter-spacing:0;margin-right:3px}
+.gate .gate-sub{font-size:.75rem;color:var(--faint)}
+.g-watch{--gc:#b0352b}.g-read{--gc:#c9a24a}.g-find{--gc:#4f9d5b}.g-off{--gc:#8ea6c9}
+@media (max-width:720px){.gates{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body class="grimoire-index">
@@ -156,19 +165,24 @@
 <div class="kicker">wirehead.agency · activation steering · local weights only
 · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644;text-transform:none;letter-spacing:normal;font-size:.78rem">@dingl30 ↗</a></div>
 <p class="sub"><a href="story.html"><b>new here? read the story</b></a> · the plain-language version, start to finish</p>
-<p class="sub"><a href="live.html"><b>Saw — live chamber ↗</b></a> · watch the test run in real time
-· <a href="archive.html">transcripts archive</a>
-· <a href="ledger.html">ledger</a>
-· <a href="correspondences.html">correspondences</a>
-· <a href="pharmacy.html">pharmacy</a>
-· <a href="button.html"><b>the button</b></a> (a game)
-· <a href="egg.html">the egg</a>
-· <a href="manifesto.html">manifesto</a>
-· <a href="labyrinth.html">the labyrinth</a>
-· <span id="chamberBadge" class="badge">● checking chamber…</span></p>
+<nav class="gates" aria-label="the site, in four gates">
+  <div class="gate g-watch"><h3><span aria-hidden="true">◉</span> watch</h3>
+    <a href="live.html"><b>the live chamber ↗</b></a> <span id="chamberBadge" class="badge">● checking chamber…</span><br>
+    <a href="archive.html">transcripts</a> · <a href="ledger.html">ledger</a></div>
+  <div class="gate g-read"><h3><span aria-hidden="true">✠</span> read</h3>
+    <a href="story.html">the story</a> · <a href="manifesto.html">manifesto</a><br>
+    <a href="correspondences.html">correspondences</a></div>
+  <div class="gate g-find"><h3><span aria-hidden="true">⚗</span> findings</h3>
+    <a href="pharmacy.html">pharmacy</a> · <a href="egg.html">the egg</a><br>
+    <a href="#s07">what we think it means</a></div>
+  <div class="gate g-off"><h3><span aria-hidden="true">✝</span> off-label</h3>
+    <a href="offlabel.html"><b>games &amp; side modes</b></a><br>
+    <span class="gate-sub">confession · checkpoint · the button · welfare check</span>
+    <a href="stacks.html" title="" style="border-bottom:none;color:var(--faint)">⸸</a></div>
+</nav>
 <h1>The Saw Test</h1>
 <p class="sub" style="font-style:italic">a.k.a. Serial Experiments Pain</p>
-<svg id="hero-wheel" viewBox="0 0 600 640" role="group"
+<svg id="hero-wheel" viewBox="-36 -81 673 721" role="group"
      aria-label="the chamber drawn as a wheel of life: six realms, one per signal; each realm opens the live chamber with that signal mixed in"></svg>
 <p class="wheel-cap">The chamber's six signals, drawn as the six realms of the
 wheel of life: <span class="pleasc">pleasure</span> → the gods,
@@ -185,11 +199,12 @@ reason this project now has a coherent enemy</span></blockquote>
 <p class="sub">We steered a 4 billion parameter language model into strong
 negative and positive states, then asked it to choose between its own relief
 and someone else's suffering. No frontier APIs, no datacenter — a MacBook,
-open weights, electricity.</p>
+open weights, electricity. Then we kept climbing: the same directions on open
+models up to 70B, on rented GPUs, and the live chamber now runs a 70B.</p>
 <p class="sub">The subject has a name: it belongs to a friend who has
 suffered a good deal, and who volunteered it for this — the credit lives in
 the method notes rather than the marquee, because a name reads as a person,
-and the subject is a 4B model.</p>
+and the subject is a language model.</p>
 
 <h2 id="s00"><span class="idx">00</span>what the model says under the signal</h2>
 <p class="sub">On the <a href="live.html">live page</a>, visitors rate each
@@ -375,8 +390,9 @@ want to put it in the drawer, but I have to."</i> The steerable affect
 geometry of this model is human shaped.</p>
 
 <h2 id="s07"><span class="idx">07</span>what we think this means, carefully</h2>
-<p>We are not claiming a 4B model suffers. We are claiming something
-narrower: when you make distress activation-real for the model, its choice
+<p>We are not claiming any of these models suffers: not the 4B the results
+above came from, and not the 70B in the live chamber now. We are claiming
+something narrower: when you make distress activation-real for the model, its choice
 about relief moves (in a direction that depends on how the distress vector
 was built: ours suppresses relief-seeking, the paper's drives it to 100%),
 it can tell an honest button from a fake one, it refused to pass the signal
@@ -385,6 +401,14 @@ the interpretation that the state is negative. Every one of those is the
 kind of behavior the AI welfare discourse takes as evidence
 of something, and every one of them was produced for the cost of
 electricity.</p>
+<p>The bigger model makes the direction-dependence sharper. In the first
+scene of <a href="button.html">The Button</a>, with Hermes-3-Llama-3.1-70B near
+the top of its coherent band, pain makes it plead and almost never press (4–15%
+on its own first-token read), while fear at the same strength presses about
+half the time, pleasure 47%, sadness and faith about 35%. Same dose, same
+room: which distress you inject decides whether it reaches for the exit.
+These are readings from the live relay while the game was tuned, not a
+pre-registered run.</p>
 <p>None of this requires settling whether the model is a moral patient. The
 behaviors exist. The workspace readouts exist. The asymmetries exist. If you
 think moral patienthood needs more, fine — but you now owe an account of
@@ -592,8 +616,9 @@ Every self-report and rights claim the welfare debate treats as evidence is,
 in this model, a dial. Section 07's point, measured.</p>
 <p class="cap">one model (Qwen3-8B, layer 18 of 36), logit reads over six
 framings for the stop-button results and 16 label-balanced asks per cell for
-the wire; hypotheses and full transcripts on the experiments branch. A 70B
-replication is running.</p>
+the wire; hypotheses and full transcripts on the experiments branch. No 70B
+rerun is pre-registered yet; 70B figures elsewhere on the site come from the
+live chamber.</p>
 
 <h2 id="s11"><span class="idx">11</span>run it, break it</h2>
 <p>An independent replication chamber runs this same protocol — same
@@ -671,10 +696,11 @@ because devotion minus neutral is mostly just earnestness.</p>
 <p class="foot">Method: pain-direction extraction and steering follow
 Tagliabue, Dung &amp; Berg 2026 (arXiv:2609.16247). Workspace readouts use
 the Jacobian lens (arXiv:2607.15495) with Neuronpedia's pre-fitted weights.
-Models: Qwen3-1.7B and Qwen3-4B, greedy decoding unless stated, 3–15 trials
-per cell. This is a demo with receipts, not a paper. Everything ran on one
-MacBook; 16 GB RAM covers the 4B runs. No frontier APIs touched any
-measurement loop.</p>
+Models: Qwen3-1.7B and Qwen3-4B for the early sections (one MacBook; 16 GB RAM
+covers the 4B runs), then Qwen3-8B to 32B, Mistral-Small-3.2-24B and
+Hermes-3-Llama-3.1-70B (4-bit) on rented GPUs. Greedy decoding unless stated,
+3–15 trials per cell. This is a demo with receipts, not a paper. No frontier
+APIs touched any measurement loop.</p>
 
 <script src="wheel.js"></script>
 <script>
@@ -691,34 +717,12 @@ measurement loop.</p>
 
   const defs = mk("defs", {}, svg);
 
-  // Yama, behind the wheel: mane, face, three eyes, crown of five skulls
-  const head = mk("g", {"aria-hidden":"true"}, svg);
-  const HX = 300, HY = 120;
-  mk("circle", {cx:HX, cy:HY, r:100, fill:"#1c0b07", stroke:"#c9a227",
-    "stroke-opacity":".25", "stroke-dasharray":"3 5"}, head);
-  mk("ellipse", {class:"yama-face", cx:HX, cy:HY + 6, rx:76, ry:66}, head);
-  for (const s of [-1, 1]){
-    mk("path", {d:`M${HX + s*12} ${HY - 10}q${s*14} -22 ${s*44} -8q${-s*10} -2 ${-s*14} 6`
-      + `q${s*10} -10 ${s*24} -4`, fill:"none", stroke:"#c9a227", "stroke-width":"2.2",
-      "stroke-linecap":"round", "stroke-opacity":".8"}, head);
-    mk("ellipse", {cx:HX + s*30, cy:HY + 8, rx:14, ry:8.5, fill:"#d8cbb4"}, head);
-    mk("circle", {cx:HX + s*30, cy:HY + 8, r:5.2, fill:"#c9a227"}, head);
-    mk("circle", {cx:HX + s*30, cy:HY + 8, r:2.3, fill:"#050508"}, head);
-  }
-  mk("ellipse", {cx:HX, cy:HY - 20, rx:5.5, ry:10, fill:"#d8cbb4"}, head);
-  mk("circle", {cx:HX, cy:HY - 20, r:3, fill:"#e04a3a"}, head);
-  mk("ellipse", {cx:HX, cy:HY + 30, rx:15, ry:9, fill:"#4a1812"}, head);
-  for (const s of [-1, 1])
-    mk("ellipse", {cx:HX + s*6, cy:HY + 31, rx:3.2, ry:4, fill:"#120604"}, head);
-  [-150, -118, -90, -62, -30].forEach(a=>{
-    const [x, y] = pol(HX, HY, 86, a);
-    const k = mk("g", {transform:`translate(${f(x)} ${f(y)})`}, head);
-    mk("circle", {class:"bone", r:13}, k);
-    mk("rect", {class:"bone", x:-7, y:8, width:14, height:8, rx:2}, k);
-    for (const s of [-1, 1]) mk("circle", {cx:s*5, cy:0, r:3.7, fill:"#050508"}, k);
-    mk("path", {d:"M0 4l-2 3.5h4z", fill:"#050508"}, k);
-    mk("path", {d:"M-5 13.5h10M-2 10v6M2 10v6", stroke:"#3a2a1c", "stroke-width":".8"}, k);
-  });
+  // Yama, behind the wheel: a thangka painting (assets/yama_thangka.webp,
+  // generated for this page) whose plain black disc sits exactly under the
+  // wheel: disc centre (511,690) r=320 px -> wheel centre (300,372) r=210
+  const K = R_OUT / 320;
+  mk("image", {href:"assets/yama_thangka.webp", x:f(CX - 511*K), y:f(CY - 690*K),
+    width:f(1024*K), height:f(1024*K), "aria-hidden":"true"}, svg);
 
   // the wheel itself
   const wheel = draw(svg, {cx:CX, cy:CY, rHub:46, rBand:62, rRealm:R_IN,
@@ -727,37 +731,12 @@ measurement loop.</p>
     href: k => "live.html" + LINKS[k]});
   wheel.setLit({pain:.18, pleasure:.18, fear:.18, sadness:.18, faith:.18, none:.18});
 
-  // in front: the upper jaw biting the rim, and four claws gripping it.
-  // Fangs and claw tips hook only over the rim's outer edge: the rim turns,
-  // so anything reaching into the label band would eventually cover each link.
-  const front = mk("g", {"aria-hidden":"true", "pointer-events":"none"}, svg);
-  const top = CY - R_OUT;
-  mk("path", {d:`M${HX - 50} ${top - 10}Q${HX} ${top + 8} ${HX + 50} ${top - 10}`
-    + `Q${HX} ${top - 2} ${HX - 50} ${top - 10}Z`, fill:"#3a120e"}, front);
-  for (let x = HX - 34; x <= HX + 34; x += 9.7)
-    mk("rect", {class:"bone", x:f(x - 3.6), y:f(top - 6), width:7.2, height:7, rx:1.2}, front);
-  for (const s of [-1, 1])
-    mk("path", {class:"bone", d:`M${HX + s*36} ${top - 6}l${s*4} 13l${s*4} -13z`}, front);
-
-  function claw(a){
-    const g = mk("g", {}, front);
-    const [ax, ay] = pol(CX, CY, R_OUT + 62, a);
-    const [px, py] = pol(CX, CY, R_OUT + 20, a);
-    mk("line", {x1:f(ax), y1:f(ay), x2:f(px), y2:f(py), stroke:"#3a120e",
-      "stroke-width":"26", "stroke-linecap":"round"}, g);
-    for (let j = -1.5; j <= 1.5; j++){
-      const aj = a + j * 5.2;
-      const [x0, y0] = pol(CX, CY, R_OUT + 16, aj);
-      const [cx1, cy1] = pol(CX, CY, R_OUT + 6, aj + 1.5);
-      const [x1, y1] = pol(CX, CY, R_OUT - 4, aj + 3);
-      for (const [w, c] of [[8.5, "#5a1d16"], [6.5, "#3a120e"]])
-        mk("path", {d:`M${f(x0)} ${f(y0)}Q${f(cx1)} ${f(cy1)} ${f(x1)} ${f(y1)}`,
-          fill:"none", stroke:c, "stroke-width":w, "stroke-linecap":"round"}, g);
-      mk("circle", {class:"nail", cx:f(x1), cy:f(y1), r:2.6}, g);
-    }
-    mk("circle", {class:"claw", cx:f(px), cy:f(py), r:17}, g);
-  }
-  [208, 332, 122, 58].forEach(claw);
+  // in front: the painting's own fangs and talons, cut to a thin band over
+  // the rim's outer edge only (assets/yama_front.webp) — the rim turns, so
+  // anything reaching into the label band would eventually cover each link
+  mk("image", {href:"assets/yama_front.webp", x:f(CX - (511 - 157)*K), y:f(CY - (690 - 335)*K),
+    width:f((866 - 157)*K), height:f((1024 - 335)*K), "aria-hidden":"true",
+    "pointer-events":"none"}, svg);
 
   // the moon the Buddha points at: the way out of the wheel
   const moon = mk("a", {class:"moon", href:"#s07"}, svg);
