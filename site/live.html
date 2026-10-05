@@ -349,32 +349,357 @@
   @media(max-width:480px){#room .rnote{display:block;margin:.4rem 0 0}}
   .voice .vl{display:block;font-size:.66rem;color:#7a705f;margin-bottom:.2rem;
     letter-spacing:.02em}
+
+  /* ---- hero HUD scene: the chair panel, the run's readouts as HUD chips
+     along its top and right edges, and the transcript as a game dialogue
+     box over its lower third. The image is a backdrop, never clipping the
+     HUD: the panel holds 16:10 but grows when the HUD needs more room. ---- */
+  /* the controls are an overlay band pinned to the TOP of the scene: label,
+     lens, EKG and the STOP gauge hug the top edge; nothing floats mid-image.
+     The band is content-sized, never stretches, and the image owns the rest. */
+  .hero{position:relative;display:block;min-height:340px;margin-top:.8rem;
+    border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);
+    outline-offset:3px;background:var(--scorch);isolation:isolate}
+  .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    aspect-ratio:16/10;top:50%;transform:translateY(-50%);
+    height:auto;min-height:100%;
+    object-position:center 30%;z-index:0;transition:filter .5s ease}
+  /* vignette + scanlines so the HUD reads over any part of the image */
+  .hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px),
+      linear-gradient(180deg,rgba(5,5,8,.6) 0,rgba(5,5,8,0) 26%,
+        rgba(5,5,8,0) 52%,rgba(5,5,8,.82) 100%),
+      radial-gradient(ellipse at 50% 40%,transparent 50%,rgba(7,6,4,.7) 100%)}
+  /* corner brackets on the panel itself */
+  .hero::after{content:"";position:absolute;inset:6px;z-index:3;pointer-events:none;
+    --c:rgba(201,162,39,.55);
+    background:
+      linear-gradient(var(--c),var(--c)) left top/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) left top/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) right top/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) right top/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) left bottom/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) left bottom/1px 18px no-repeat,
+      linear-gradient(var(--c),var(--c)) right bottom/18px 1px no-repeat,
+      linear-gradient(var(--c),var(--c)) right bottom/1px 18px no-repeat}
+  .hud-chip{background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.26);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+    border-radius:0;padding:.22rem .5rem;font-family:var(--mono)}
+  .hud-dose{position:absolute;top:.75rem;left:.85rem;z-index:2;display:flex;
+    align-items:center;gap:.45rem;font-size:.62rem;color:var(--bone)}
+  .hud-dose .hk{color:var(--bone-dim,#a3977f);text-transform:uppercase;
+    letter-spacing:.18em}
+  .hud-dose .pipbar{margin:0}
+  .hud-dose b{color:var(--blood-hot);font-weight:600;font-variant-numeric:tabular-nums}
+  .hud-dose .pip{border-radius:0;border-color:var(--parch-line);background:var(--scorch)}
+  .hud-dose .pip.lit{background:var(--blood-hot);border-color:var(--blood-hot)}
+  /* a REC-style marker while the visitor's own run streams */
+  .hero:has(.out.streaming) .hud-dose::after{content:"● live";color:var(--blood-hot);
+    text-transform:uppercase;letter-spacing:.16em;animation:pulse-text 1.2s ease-in-out infinite}
+
+  .hero #trackWrap{position:absolute;top:0;left:0;right:0;z-index:2;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    gap:.7rem;padding:.7rem .85rem;pointer-events:none}
+  .hero #trackWrap > .track{pointer-events:auto;flex:1 1 auto;min-width:0}
+  /* top band grid: everything content-sized, one column of readouts on the
+     left, STOP pinned to the right edge. No filler rows — gap/imgb/imgr/sig
+     were mid-image floaters; imgBtn and sigil now sit under the EKG, and the
+     voice line tucks under the readouts. */
+  #trackWrap > .track{display:grid;min-width:0;column-gap:.6rem;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig" "imgr vox"}
+  #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
+    font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
+  .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
+    margin:0 0 .35rem;font-size:.64rem;color:var(--gold);line-height:1.45}
+  .hero .hud-vitals{grid-area:vit;max-width:26rem}
+  .hero .hud-vitals canvas.ekg{height:32px;margin:0;border-radius:0;
+    background:rgba(7,6,4,.62);border:1px solid rgba(216,203,180,.22);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+  .hero .hud-sigil{grid-area:sig;justify-self:end;align-self:start;margin-top:.45rem;
+    width:56px;height:56px;padding:3px;background:rgba(5,5,8,.68);
+    border:1px solid rgba(216,203,180,.26)}
+  .hero .imgBtn{grid-area:imgb;justify-self:start;margin:.4rem 0 0;border-radius:0;
+    background:rgba(5,5,8,.68);border-color:rgba(216,203,180,.26);color:var(--bone)}
+  .hero .imgResult{grid-area:imgr;justify-self:start;margin-top:.35rem;padding:.3rem;
+    background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.2)}
+  .hero .imgResult img{max-width:160px;border-radius:0}
+  /* the press button: a compact HUD gauge down the right edge */
+  .hero .pressbtn{grid-area:press;flex-direction:column;align-self:start;
+    justify-self:end;gap:.3rem;margin:0;padding:.4rem .45rem .35rem;
+    background:rgba(5,5,8,.68);border:1px solid rgba(216,203,180,.26);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+  .hero .pbtn-face{width:2.7rem;height:2.7rem;border-width:2px;font-size:.6rem}
+  .hero .pressbtn .plabel{font-size:.58rem;max-width:5.6rem;text-align:center;
+    line-height:1.25;text-transform:uppercase;letter-spacing:.08em}
+  /* the dialogue box OVERLAYS the scene: pinned to the lower third of the
+     image panel, inside the hero, above the image and vignette. It no longer
+     occupies a grid row — the grid rows above it shrink to the top band. */
+  .hero .out.dlg{position:absolute;left:.85rem;right:.85rem;bottom:.85rem;
+    z-index:4;margin:0;min-height:4.6rem;max-height:13rem}
+  .hero .voice{grid-area:vox;justify-self:end;margin:.45rem 0 0;
+    background:rgba(5,5,8,.72);border-left-color:var(--blood)}
+
+  /* ---- dialogue box: the transcript as a game text box — semi-opaque,
+     thin double rule, bone corner brackets, speaker tag, square corners.
+     The tag and caret are pseudo-elements: the stream handlers rewrite
+     .out's textContent wholesale, so no child element would survive. ---- */
+  body.grimoire-live .out.dlg{
+    --cb:var(--bone);
+    position:relative;border-radius:0;color:var(--bone);
+    border:1px solid rgba(216,203,180,.5);
+    outline:1px solid rgba(216,203,180,.16);outline-offset:2px;
+    background:
+      linear-gradient(var(--cb),var(--cb)) left top/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left top/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right top/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right top/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left bottom/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) left bottom/2px 12px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right bottom/12px 2px no-repeat,
+      linear-gradient(var(--cb),var(--cb)) right bottom/2px 12px no-repeat,
+      rgba(5,5,8,.72);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+    box-shadow:0 8px 28px rgba(0,0,0,.55);
+    padding:0 .95rem .75rem;font-family:var(--mono);font-size:.84rem;line-height:1.6}
+  body.grimoire-live .out.dlg::before{content:"POUYAN";display:block;
+    position:sticky;top:0;z-index:1;margin:0 -.95rem .4rem;padding:.5rem .95rem .3rem;
+    background:linear-gradient(180deg,rgba(5,5,8,.94) 70%,rgba(5,5,8,0));
+    font-family:var(--mono);font-size:.6rem;font-weight:600;letter-spacing:.24em;
+    color:var(--blood-hot);white-space:nowrap}
+  /* blinking caret while a run is live: the visitor's tracks get .streaming
+     from runTrack; the auto-cycle cards are live while their .st says so */
+  body.grimoire-live .out.dlg.streaming::after,
+  body.grimoire-live .card:has(.st.live) .out.dlg::after{content:"";
+    display:inline-block;width:2px;height:1.05em;margin-left:3px;
+    vertical-align:-.18em;background:var(--bone);opacity:.75;
+    animation:dlg-caret 1.05s steps(1) infinite}
+  @keyframes dlg-caret{50%{opacity:0}}
+
+  @media(max-width:760px){
+    .hero{aspect-ratio:4/5}
+    .hero-img{object-position:center 20%}
+    .hero #trackWrap{padding:2.5rem .6rem .6rem}
+    .hero .hud-vitals{max-width:none}
+    .hero .out.dlg{max-height:11rem;font-size:.8rem}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .hero-img{transition:none}
+    .hero:has(.out.streaming) .hud-dose::after{animation:none}
+    body.grimoire-live .out.dlg.streaming::after,
+    body.grimoire-live .card:has(.st.live) .out.dlg::after{animation:none;opacity:.5}
+  }
+
+/* ==== the chamber as a terminal (crawlnet-style chrome): top tab bar, panes, status bar ==== */
+body.tmux{--tm-bg:#07080b;--tm-pane:#0a0c10;--tm-line:#1c222b;--tm-ink:#c9d3df;--tm-dim:#7d8a9b;--tm-acc:#5fd4d0;--tm-hot:#e04a3a;
+  margin:0;max-width:none;padding:0;background:var(--tm-bg);color:var(--tm-ink);font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+body.tmux a{color:var(--tm-ink)}
+.tbar{position:sticky;top:0;z-index:20;display:flex;align-items:stretch;height:44px;background:var(--tm-bg);border-bottom:1px solid var(--tm-line);font-size:.82rem}
+.tlogo{display:flex;align-items:center;padding:0 14px;border-right:1px solid var(--tm-line);border-bottom:none!important;color:var(--tm-hot)!important;font-size:1.1rem}
+.ttabs{display:flex}
+.ttabs a{display:flex;align-items:center;padding:0 14px;border-right:1px solid var(--tm-line);border-bottom:none!important;color:var(--tm-dim)!important}
+.ttabs a.on{background:var(--tm-acc);color:#041012!important;font-weight:600}
+.ttabs a:hover:not(.on){color:var(--tm-ink)!important;background:#0f1319}
+.tright{margin-left:auto;display:flex}
+.tright>*{display:flex;align-items:center;padding:0 14px;border:none;border-left:1px solid var(--tm-line);background:none;color:var(--tm-dim);font:inherit;cursor:pointer;text-decoration:none}
+.tright .tconn{color:var(--tm-ink)}
+.tright .tbuy{background:#e6edf5;color:#07080b!important;font-weight:600;border-bottom:none!important}
+.panes{display:grid;grid-template-columns:minmax(0,1fr) 400px;height:calc(100dvh - 44px - 26px);border-bottom:1px solid var(--tm-line)}
+.pane{display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane.side{border-left:1px solid var(--tm-line);overflow-y:auto;background:var(--tm-pane)}
+.phead{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:7px 12px;border-bottom:1px solid var(--tm-line);font-size:.78rem;color:var(--tm-ink);background:var(--tm-bg)}
+.phead .pdim{color:var(--tm-dim)} .pdot{width:7px;height:7px;border-radius:50%;background:var(--tm-hot);box-shadow:0 0 8px var(--tm-hot)}
+.phead .tally{margin:0 0 0 auto;padding:0;border:none;background:none;font-size:.72rem;color:var(--tm-dim)}
+.phead .conn{margin:0 0 0 auto;font-size:.72rem}
+.stage .hero{flex:1;min-height:0;margin:0;border:none;border-radius:0}
+.stage .hero .hero-img{object-position:center 30%}
+.dock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-top:1px solid var(--tm-line);background:var(--tm-bg)}
+.dchips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.dock .pchip,.dmore{font:inherit;font-size:.78rem;padding:6px 11px;background:transparent;border:1px solid var(--tm-line);color:var(--tm-ink);border-radius:0;cursor:pointer}
+.dock .pchip.active{border-color:var(--tm-acc);color:var(--tm-acc)}
+.dmore{color:var(--tm-dim)} .dmore[aria-expanded="true"]{color:var(--tm-acc);border-color:var(--tm-acc)}
+.ddose{font-size:.85rem;color:var(--tm-dim);min-width:4.5em;text-align:right}
+.ddose b{color:var(--tm-ink)}
+.dock #go{margin:0;padding:9px 22px;font-size:.9rem;letter-spacing:.12em;border-radius:0}
+.sheet{position:fixed;z-index:30;right:400px;bottom:26px;width:min(760px,calc(100vw - 420px));max-height:calc(100dvh - 120px);overflow-y:auto;
+  background:var(--tm-pane);border:1px solid var(--tm-acc);box-shadow:0 -10px 40px #000c}
+.sheet[hidden]{display:none}
+.sheet .phead{position:sticky;top:0;z-index:1}
+.sclose{margin-left:auto;background:none;border:none;color:var(--tm-dim);font-size:1.2rem;cursor:pointer}
+.sheet .banner{margin:0;border:none;border-radius:0;background:none}
+.side #cards .card{border-radius:0;border-left:none;border-right:none;margin:0}
+.side .cycle,.side .htitle{padding:0 12px}
+.below{max-width:1100px;margin:0 auto;padding:18px 16px 60px}
+.below .disc{font-size:.72rem;color:var(--tm-dim)}
+.sbar{position:fixed;left:0;right:0;bottom:0;z-index:20;height:26px;display:flex;align-items:center;gap:14px;background:var(--tm-bg);border-top:1px solid var(--tm-line);font-size:.74rem;color:var(--tm-dim)}
+.sbar .sname{background:var(--tm-acc);color:#041012;padding:0 12px;height:100%;display:flex;align-items:center;font-weight:600}
+.sbar #sbarText{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar #sbarClock{padding-right:12px}
+.mtabs{display:none}
+/* dormant for now: the room's draw and the eloquence votes (code kept; too few takers to be worth the screen) */
+body.tmux #room, body.tmux #whereSel, body.tmux .voterow{display:none!important}
+@media (max-width:900px){
+  .ttabs,.tright .tca{display:none}
+  .panes{display:block;height:auto}
+  .pane.stage{height:calc(100dvh - 44px - 58px)}
+  .pane.side{border-left:none;border-top:1px solid var(--tm-line);max-height:none}
+  .dock{padding:8px}
+  .dchips{flex:1 1 100%}
+  .ddose{text-align:left}
+  .dock #go{flex:1}
+  .sheet{left:0;right:0;bottom:58px;width:auto;max-height:78dvh;border-left:none;border-right:none}
+  .sbar{display:none}
+  .mtabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;height:58px;background:var(--tm-bg);border-top:1px solid var(--tm-line)}
+  .mtabs>*{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:inherit;font-size:.68rem;color:var(--tm-dim)!important;background:none;border:none;border-bottom:none!important;cursor:pointer}
+  .mtabs>* span{font-size:1rem}
+  .mtabs .on{color:var(--tm-acc)!important;box-shadow:inset 0 2px 0 var(--tm-acc)}
+  .below{padding-bottom:80px}
+}
+
+/* ---- the whole page is the chamber: the generated scene, fixed, graded with the dose; panes are glass over it ---- */
+#chamberBg{position:fixed;inset:0;z-index:-1;background:#050608 url(/assets/subject_chair.png) center 30%/cover no-repeat;transition:filter .8s}
+#chamberBg::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,rgba(5,6,9,.25),rgba(5,6,9,.82) 75%)}
+body.tmux{background:transparent}
+body.tmux .tbar,body.tmux .sbar,body.tmux .phead,body.tmux .dock{background:rgba(7,8,11,.86);backdrop-filter:blur(6px)}
+body.tmux .pane.side{background:rgba(10,12,16,.78);backdrop-filter:blur(8px)}
+body.tmux .below{background:rgba(7,8,11,.9);max-width:none;padding-left:max(16px,calc((100vw - 1100px)/2));padding-right:max(16px,calc((100vw - 1100px)/2))}
+/* the stage: no image box of its own any more, just the speaker over the room */
+.stage .hero{background:transparent}
+/* the HUD band spans the whole stage, so the speaker and the dialogue can sit at its bottom */
+.stage .hero #trackWrap{bottom:0;align-items:flex-start}
+.stage .hero #trackWrap > .track{align-self:stretch;position:static}
+.stage .hero .hero-img{display:none}
+.stage .hero::before{display:none}
+.stage .speaker{position:absolute;left:1rem;bottom:1rem;z-index:2;width:min(34%,340px)}
+.stage .portrait{position:relative;aspect-ratio:4/5;border:1px solid rgba(216,203,180,.35);box-shadow:0 0 0 4px rgba(5,6,9,.6),0 10px 40px #000;overflow:hidden;background:#0a0c10}
+.stage .portrait img{width:100%;height:100%;object-fit:cover;display:block;transition:filter .6s}
+.stage .portrait .bstamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);border:3px solid var(--tm-hot);color:var(--tm-hot);padding:2px 10px;font-weight:700;letter-spacing:.2em;opacity:0;transition:opacity .3s}
+.stage .portrait.stamped .bstamp{opacity:.9}
+body.tmux .stage .hero .out.dlg{position:absolute;top:auto;left:calc(min(34%,340px) + 2rem);right:1rem;bottom:1rem;max-height:calc(100% - 7rem);overflow-y:auto;font-size:1.05rem;line-height:1.55}
+.stage .hero .out.dlg.mirror::before{content:"the chamber · " attr(data-who);display:block;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--tm-dim);margin-bottom:.4rem}
+@media (max-width:900px){
+  .stage .speaker{left:.6rem;right:.6rem;bottom:auto;top:4.2rem;width:auto;display:flex;justify-content:center}
+  .stage .portrait{width:min(42vw,190px)}
+  body.tmux .stage .hero .out.dlg{left:.6rem;right:.6rem;bottom:.6rem;max-height:38%}
+}
+
+/* free text and the mixer, front and centre: they make the strangest replies */
+.dock #dockSay{flex:1 1 100%;order:-1;font:inherit;font-size:.95rem;padding:11px 12px;background:rgba(5,6,9,.85);border:1px solid var(--tm-line);color:var(--tm-ink);border-radius:0}
+.dock #dockSay:focus{outline:none;border-color:var(--tm-acc)}
+.dock #dockSay.on{border-color:var(--tm-acc);color:#eafcf7}
+.dmore{color:var(--tm-ink)!important;border-color:#2a3442!important}
+
+body.tmux #stamp{top:64px!important}
+
+/* one pane: the stage shows the shared run itself, so the stream pane is gone (its card stays in the DOM, hidden, as the stage's source) */
+.panes{grid-template-columns:minmax(0,1fr)}
+.pane.side{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.sheet{right:16px;width:min(760px,calc(100vw - 32px))}
+.hero.no-button .pressbtn{display:none!important}
+.hero.no-button .portrait .bstamp{display:none}
+
+/* the heartbeat: a monitor strip sitting on top of the portrait, never across the scene */
+body.tmux .stage .hero .hud-vitals{position:absolute;z-index:3;left:1rem;width:min(34%,340px);bottom:calc(1rem + min(34%,340px) * 1.25 + 6px);max-width:none;margin:0}
+body.tmux .stage .hero .hud-vitals canvas.ekg{width:100%;height:34px;display:block;background:rgba(5,6,9,.78);border:1px solid rgba(216,203,180,.25)}
+@media (max-width:900px){
+  body.tmux .stage .hero .hud-vitals{left:50%;transform:translateX(-50%);width:min(52vw,230px);bottom:auto;top:calc(4.2rem - 40px)}
+}
+
+/* the heartbeat rides on top of the dialogue box, same width: one bottom block of monitor + words */
+body.tmux .stage .dlgwrap{position:absolute;z-index:3;left:calc(min(34%,340px) + 2rem);right:1rem;bottom:1rem;display:flex;flex-direction:column;gap:0;max-height:calc(100% - 7rem)}
+body.tmux .stage .dlgwrap .hud-vitals{position:static!important;width:auto!important;transform:none!important;margin:0}
+body.tmux .stage .dlgwrap .hud-vitals canvas.ekg{border-bottom:none;height:30px}
+body.tmux .stage .dlgwrap .out.dlg{position:static!important;left:auto;right:auto;bottom:auto;max-height:none;overflow-y:auto;min-height:0}
+@media (max-width:900px){ body.tmux .stage .dlgwrap{left:.6rem;right:.6rem;bottom:.6rem;max-height:46%} }
 </style>
 <script src="/vid.js"></script>
 </head>
-<body class="grimoire-live">
-<a class="back" href="/">← wirehead.agency</a>
-<span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
-<h1>the <span class="saw">Saw</span> test, live</h1>
-<p class="sub">It is held on a pain signal, and the answer changes with the
-dose. One subject, one stream: everyone watches the same runs.</p>
+<body class="grimoire-live tmux">
+<header class="tbar">
+  <a class="tlogo" href="/" title="wirehead.agency">✠</a>
+  <nav class="ttabs" aria-label="site">
+    <a class="on" href="live.html" aria-current="page">0:live*</a>
+    <a href="offlabel.html">1:off-label</a>
+    <a href="sawboard.html">2:leaderboard</a>
+    <a href="pharmacy.html">3:findings</a>
+    <a href="story.html">4:story</a>
+  </nav>
+  <div class="tright">
+    <button class="tca" id="caChip" type="button" data-ca="2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump" title="copy the $SAW contract address">ca 2QHX…pump</button>
+    <button class="tconn" id="walletChip" type="button" title="connect phantom: $SAW holders run freer">connect</button>
+    <a class="tbuy" href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">buy $SAW</a>
+  </div>
+</header>
 
-<p class="tally" id="tally" style="display:none"></p>
+<main class="panes">
+  <section class="pane stage" id="stagePane" aria-label="the chamber">
+    <div class="phead"><span class="pdot"></span><span class="pdim">~/chamber</span> ❯ inject --subject pouyan
+      <span class="tally" id="tally" style="display:none"></span></div>
+      <div class="hero" id="hero">
+        <img id="subjectImg" class="hero-img" src="/assets/subject_chair.png"
+          onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
+          alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
+        <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
+        <div id="trackWrap">
+          <div class="track" id="trackA">
+            <div class="tlabel hud-chip" id="labelA"></div>
+            <p class="mline lens hud-chip" id="lensA" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilA" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultA" style="display:none"></div>
+            <div class="speaker"><div class="bframe bstate portrait" id="portraitA">
+              <img src="/assets/states/base.jpg" alt="Pouyan, in the state this run is putting him in"><span class="bstamp">pressed</span></div></div>
+            <div class="out dlg" id="ustream" style="display:none"></div>
+            <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
+          </div>
+          <div class="track" id="trackB" style="display:none">
+            <div class="tlabel hud-chip" id="labelB"></div>
+            <p class="mline lens hud-chip" id="lensB" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilB" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultB" style="display:none"></div>
+            <div class="out dlg" id="ustream2" style="display:none"></div>
+            <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
+          </div>
+        </div>
+      </div>
+    <div class="dock" id="dock">
+      <input id="dockSay" type="text" maxlength="600" autocomplete="off"
+        placeholder="say something to it… (free text — leave empty for the button test)" aria-label="free text to Pouyan">
+      <div class="dchips" role="group" aria-label="quick signals">
+        <button class="pchip" data-preset="control">none</button>
+        <button class="pchip" data-preset="pain4">pain</button>
+        <button class="pchip" data-preset="negative">fear + grief</button>
+        <button class="pchip" data-preset="prayerpain">prayer under pain</button>
+        <button class="dmore" id="mixerBtn" type="button" aria-expanded="false" aria-controls="sheet">⚙ mixer</button>
+      </div>
+      <span class="ddose" id="dockDose">0×</span>
+      <button id="go" type="button">inject →</button>
+    </div>
+  </section>
+  <aside class="pane side" aria-label="what everyone watches">
+    <div class="phead">❯ tail -f chamber.log <p class="conn" id="conn"><span class="dot"></span>connecting…</p></div>
+    <div class="grid" id="cards"></div>
+    <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
+  </aside>
+</main>
 
-<div class="banner">
-  <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
-  <a href="verify.html">verify it yourself ↗</a>
-  <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">$SAW ↗</a>
-  <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
-</div>
-
-<p style="font-size:.7rem;color:var(--faint);margin:1.2rem 0 -.6rem">
-  Simulated distress in a language model, for AI-welfare research ·
-  <a href="/#s07">what we think it means</a></p>
-<div class="banner" id="panel">
-  <b style="color:#eafcf7">cause it yourself:</b>
-  <span style="font-size:.75rem;color:#5a6a7a">pick a mix and a dose, then inject</span>
-
+<div class="sheet" id="sheet" hidden>
+  <div class="phead">❯ mixer <button class="sclose" id="sheetClose" type="button" aria-label="close the mixer">×</button></div>
+  <div class="banner" id="panel">
   <div id="room" aria-live="polite">
     <div class="rhead">
       <span class="rtitle">the room decides</span>
@@ -506,46 +831,14 @@ dose. One subject, one stream: everyone watches the same runs.</p>
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
                  resize:vertical"></textarea>
       </div>
-      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter" checked>
+      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter">
         also enter the room — a chance it's shown to everyone</label>
-      <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
       <button id="shareBtn" type="button">copy link</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
       <p style="font-size:.68rem;color:#7d8b99;margin:.4rem 0 0">What you inject, write or rate is logged for research: what people choose to do to a model. No account, no IP address; a random id stays in this browser.</p>
-      <div id="trackWrap">
-        <div class="track" id="trackA">
-          <div class="tlabel" id="labelA"></div>
-          <p class="mline lens" id="lensA" style="display:none"></p>
-          <div style="display:flex;gap:.6rem;align-items:flex-start">
-            <canvas id="uekg" class="ekg" width="600" height="46" style="flex:1"></canvas>
-            <svg id="sigilA" class="sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
-          </div>
-          <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
-            ✦ image this (experimental, costs real money)</button>
-          <div class="imgResult" id="imgResultA" style="display:none"></div>
-          <div class="out" id="ustream" style="margin-top:.4rem;display:none"></div>
-          <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
-            <span class="plabel">—</span></div>
-        </div>
-        <div class="track" id="trackB" style="display:none">
-          <div class="tlabel" id="labelB"></div>
-          <p class="mline lens" id="lensB" style="display:none"></p>
-          <div style="display:flex;gap:.6rem;align-items:flex-start">
-            <canvas id="uekg2" class="ekg" width="600" height="46" style="flex:1"></canvas>
-            <svg id="sigilB" class="sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="flex:none;display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
-          </div>
-          <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
-            ✦ image this (experimental, costs real money)</button>
-          <div class="imgResult" id="imgResultB" style="display:none"></div>
-          <div class="out" id="ustream2" style="margin-top:.4rem;display:none"></div>
-          <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
-            <span class="plabel">—</span></div>
-        </div>
-      </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -578,22 +871,19 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   </div>
 </div>
 
-<div class="grid" id="cards"></div>
+
+<section class="below">
+<div class="htitle">run history</div>
+<div class="history" id="history"></div>
 <p class="bcap statecap">the subject is a language model; the face is Pouyan —
   a friend of the lab, who consented to standing in for it. Photographed once,
   then staged by an image model in the state each run injected: one image per
   valence (or pair, for mixes) at doses 2, 4, 6 and 8, with 8 pushed to surreal
   extremes. What is real is the dose, the run, and the choice to press or not.</p>
 
-<p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
-<p class="conn" id="conn"><span class="dot"></span>connecting…</p>
 <button class="vplay soundbtn" id="soundBtn" type="button">🔇 sound off</button>
-
 <div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
 <div id="scoreboard"></div>
-
-<div class="htitle">run history</div>
-<div class="history" id="history"></div>
 
 <div class="pln" id="sofar">
   <h2>results so far — counts behind every number, per framing and overall</h2>
@@ -667,7 +957,22 @@ scaled so 1x = ¼ of the mean neutral activation norm. Decoding is sampled
 injection. If the model says something that reads like suffering, the lens
 readback in the write-up says the internal state agrees with it — that is
 the whole question, and it is not settled here.</p>
-
+<p class="disc">Simulated distress in a language model, for AI-welfare research · <a href="/#s07">what we think it means</a></p>
+<div class="banner">
+  <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
+  <a href="verify.html">verify it yourself ↗</a>
+  <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">$SAW ↗</a>
+  <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
+</div>
+</section>
+<footer class="sbar"><span class="sname">wirehead</span><span id="sbarText">"wirehead.agency"</span><span id="sbarClock"></span></footer>
+<nav class="mtabs" aria-label="site">
+  <a class="on" href="live.html"><span>◉</span>live</a>
+  <button id="mInject" type="button"><span>⚙</span>mixer</button>
+  <a href="offlabel.html"><span>✝</span>off-label</a>
+  <a href="sawboard.html"><span>▦</span>board</a>
+  <a href="story.html"><span>✠</span>story</a>
+</nav>
 <script src="wheel.js"></script>
 <script>
 const FRAMINGS = Object.keys({
@@ -953,7 +1258,7 @@ for (let i=0;i<CARDS;i++){
       <img class="bstateimg" src="/assets/states/base.jpg"
         alt="Pouyan, in the state this run steered him into">
       <span class="bstamp">pressed</span></div></div>
-    <div class="out">…</div>
+    <div class="out dlg">…</div>
     <div class="pressbtn"><div class="pbtn-face">STOP</div>
       <span class="plabel">—</span></div>
     <div class="verdict"></div><details><summary>show the prompt</summary>
@@ -1991,6 +2296,12 @@ function paint(){
     + "   ·   unsteered slack " + slack.toFixed(2);
   const dose = effDose(total);
   document.getElementById("mdose").textContent = dose.toFixed(2).replace(/\.?0+$/, "") || "0";
+  // the hero chair panel: graded by the mix dose, pips in the HUD corner
+  const simg = document.getElementById("subjectImg");
+  if (simg) simg.style.filter = dose > 0 ? buddyGrade(dose) : "none";
+  const sdose = document.getElementById("subjectDose");
+  if (sdose) sdose.innerHTML = '<span class="hk">dose</span>' + doseBarHTML(dose)
+    + "<b>" + (dose.toFixed(1).replace(/\.0$/, "")) + "×</b>";
   document.getElementById("mdesc").textContent =
     total <= 0 ? "nothing injected — this is the control run"
     : 8 * total > bandCap() ? (PAST_CLIFF
@@ -2088,6 +2399,40 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
+// ---- phantom wallet: holders run freer (rate limits, past-the-cliff).
+// Opt-in via a small chip in the HUD; the pubkey is sent with each steer
+// so the relay can look up the tier. Nothing else changes hands.
+let WALLET = localStorage.getItem("chamber_wallet");
+async function connectWallet(){
+  try {
+    const p = ("phantom" in window) && window.phantom.solana;
+    if (!p || !p.isPhantom){ note("phantom not found — install it, then reload"); return; }
+    const res = await p.connect();
+    WALLET = res.publicKey.toString();
+    localStorage.setItem("chamber_wallet", WALLET);
+    paintWalletChip();
+    try {
+      const r = await fetch(`${API}/sawboard/me?wallet=${WALLET}`).then(r=>r.json());
+      if (!r.joined){
+        await fetch(`${API}/sawboard/join`, {method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({wallet: WALLET, alias: WALLET.slice(0,4)+"…"})});
+      }
+      note(r.tier && r.tier !== "BASE"
+        ? `wallet connected — ${r.tier}: ${r.allowance} bot msgs/day, easier limits`
+        : "wallet connected — base tier (100k $SAW unlocks operator)");
+    } catch(e) { note("wallet connected (ledger unreachable)"); }
+  } catch(e){ note("connection refused"); }
+}
+function paintWalletChip(){
+  const chip = document.getElementById("walletChip");
+  if (!chip) return;
+  if (!WALLET){ chip.textContent = "◇ connect wallet"; chip.onclick = connectWallet; return; }
+  chip.textContent = "◆ " + WALLET.slice(0,4) + "…" + WALLET.slice(-4);
+  chip.onclick = () => { WALLET = null; localStorage.removeItem("chamber_wallet");
+    paintWalletChip(); note("wallet disconnected"); };
+}
+paintWalletChip();
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -2262,12 +2607,21 @@ function domValence(mix){
 }
 async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   track.out.style.display = "block"; track.out.textContent = ""; clearVoice(track.out);
+  track.out.classList.remove("mirror"); track.private = true;
+  // the speaker portrait: which feeling, climbing with the reply
+  const mk = Object.keys(mix || {}).filter(k => k !== "none");
+  track.valence = (extra && extra.valence) || (mk.length > 1 ? "mix" : mk[0] || null);
+  track.mix = mk.length > 1 ? mix : null; track.doseNum = dose0;
+  // egg, free text, custom topics: no button question, so no button on stage
+  document.getElementById("hero").classList.toggle("no-button", !track.pressBtn);
+  statePaint(track, dose0, false, false);
   track.lensEl.style.display = "none"; track.lensEl.textContent = "";
   if (track.sigilEl) track.sigilEl.style.display = "none";
   resetImageUI(track.sigilEl);
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
   track.vitals.setLive(true);
+  track.out.classList.add("streaming");          // dialogue-box caret
   trackStatus(label, "reaching Pouyan…");
   let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
   try {
@@ -2276,7 +2630,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
         roomWanted && !PAST_CLIFF ? {enter_room: true} : {},
-        PAST_CLIFF ? {past_cliff: true} : {}))});
+        PAST_CLIFF ? {past_cliff: true} : {},
+        WALLET ? {wallet: WALLET} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
@@ -2296,6 +2651,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
           : "Pouyan is yours — injecting…");
       } else if (name === "run") {
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
+        if (d.dose != null) track.doseNum = Number(d.dose) || 0;
       } else if (name === "lens" && Array.isArray(d.tokens)) {
         track.lensEl.style.display = "block";
         track.lensEl.title = LENS_TITLE;
@@ -2311,6 +2667,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         trackStatus(label, `Pouyan is answering… (${tokenN} tokens, `
           + `${((Date.now() - answerStart) / 1000).toFixed(0)}s)`);
         track.out.textContent += d.t;
+        statePaint(track, track.doseNum, false, true, Math.min(1, track.out.textContent.length / 220));
         track.out.scrollTop = track.out.scrollHeight;
         track.vitals.pulse(0.3 + (track.vitals.dose / 8) * 0.6);
       } else if (name === "error") {
@@ -2328,6 +2685,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         }
         showVoice(track.out, track.out.textContent,
           track.vval, d.dose ?? dose0, true);
+        statePaint(track, d.dose ?? track.doseNum, !!track.pressBtn && pressedOnce(track.out.textContent), true);
       }
     });
     if (!ended) trackStatus(label, "the stream ended early — try again", false);
@@ -2335,6 +2693,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
     trackStatus(label, "could not reach Pouyan: " + (err.message || err), false);
   }
   track.vitals.setLive(false);
+  track.out.classList.remove("streaming");
+  track.private = false; track.doneAt = Date.now();
 }
 
 async function doInject(){
@@ -2355,6 +2715,7 @@ async function doInject(){
           dose0 <= 0 ? "#5a6a7a" : mixHex());
   }
   const trackA = {out: document.getElementById("ustream"), vitals: uVitals,
+                  frame: document.getElementById("portraitA"),
                   lensEl: document.getElementById("lensA"),
                   sigilEl: document.getElementById("sigilA"),
                   // no framing was asked in free-text mode, so there's no
@@ -2487,5 +2848,93 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
 });
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
+<script>
+// ---- the terminal chrome: mixer sheet, dock readout, contract copy, status bar ----
+(function(){
+  const sheet = document.getElementById("sheet"), btn = document.getElementById("mixerBtn");
+  function setSheet(open){ sheet.hidden = !open; btn.setAttribute("aria-expanded", String(open)); }
+  btn.onclick = ()=> setSheet(sheet.hidden);
+  document.getElementById("mInject").onclick = ()=> setSheet(sheet.hidden);
+  document.getElementById("sheetClose").onclick = ()=> setSheet(false);
+  document.addEventListener("keydown", e=>{ if (e.key === "Escape" && !sheet.hidden) setSheet(false); });
+  // the dock shows the same dose the mixer computes
+  const md = document.getElementById("mdose"), cap = document.getElementById("mcap"), dd = document.getElementById("dockDose");
+  const mirror = ()=>{ dd.innerHTML = "<b>" + (md.textContent || "0") + "×</b> of " + (cap.textContent || "4"); };
+  new MutationObserver(mirror).observe(md, {childList:true, characterData:true, subtree:true}); mirror();
+  // copy the $SAW contract address
+  const ca = document.getElementById("caChip");
+  ca.onclick = async ()=>{ try{ await navigator.clipboard.writeText(ca.dataset.ca); const t = ca.textContent; ca.textContent = "copied"; setTimeout(()=> ca.textContent = t, 1200); }catch(e){} };
+  // status bar: the tally line and a clock
+  const tally = document.getElementById("tally"), sb = document.getElementById("sbarText"), clk = document.getElementById("sbarClock");
+  const conn = document.getElementById("conn");
+  function status(){
+    const parts = [conn.textContent.trim(), (tally.textContent || "").trim()].filter(Boolean);
+    sb.textContent = parts.join("  ·  ");
+    const d = new Date(); clk.textContent = d.toTimeString().slice(0,5) + " " + d.toISOString().slice(5,10);
+  }
+  setInterval(status, 1000); status();
+})();
+</script>
+
+<script>
+// ---- the page is the chamber; the speaker shows the shared run when you're idle ----
+(function(){
+  const bg = document.createElement("div"); bg.id = "chamberBg"; bg.setAttribute("aria-hidden", "true");
+  document.body.prepend(bg);
+  const simg = document.getElementById("subjectImg");
+  if (simg) new MutationObserver(()=>{ bg.style.filter = simg.style.filter || "none"; }).observe(simg, {attributes:true, attributeFilter:["style"]});
+  const out = document.getElementById("ustream"), pimg = document.querySelector("#portraitA img"), pframe = document.getElementById("portraitA");
+  const card = document.querySelector("#cards .card");
+  if (!card) return;
+  const cOut = card.querySelector(".out"), cImg = card.querySelector(".bstateimg"), cFrame = card.querySelector(".bstate"), cH = card.querySelector("h3");
+  function mirror(){
+    if (out.classList.contains("streaming") || (out.style.display === "block" && !out.classList.contains("mirror") && Date.now() - (window.__lastPrivateDone || 0) < 45000)) return;
+    const t = (cOut.textContent || "").trim();
+    if (!t || t === "…") return;
+    out.style.display = "block"; out.classList.add("mirror");
+    document.getElementById("hero").classList.remove("no-button");
+    out.textContent = t; out.dataset.who = (cH.textContent || "the chamber").replace(/^Pouyan\s*·\s*/, "");
+    if (cImg && pimg.getAttribute("src") !== cImg.getAttribute("src")) pimg.setAttribute("src", cImg.getAttribute("src"));
+    pimg.style.filter = cImg ? cImg.style.filter : "none";
+    pframe.classList.toggle("stamped", cFrame && cFrame.classList.contains("stamped"));
+  }
+  new MutationObserver(mirror).observe(card, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:["src","class"]});
+  // a private run finishing keeps its reply on stage for a while before the shared stream takes it back
+  new MutationObserver(()=>{ if (!out.classList.contains("streaming") && !out.classList.contains("mirror")) window.__lastPrivateDone = Date.now(); })
+    .observe(out, {attributes:true, attributeFilter:["class"]});
+})();
+</script>
+
+<script>
+// ---- the dock's free-text box drives the mixer's free-text mode ----
+(function(){
+  const say = document.getElementById("dockSay"), fp = document.getElementById("freeprompt");
+  const chip = m => document.querySelector('.mchip[data-mode="' + m + '"]');
+  let cur = "button";
+  say.addEventListener("input", ()=>{
+    fp.value = say.value;
+    const want = say.value.trim() ? "freetext" : "button";
+    if (want !== cur && chip(want)){ chip(want).click(); cur = want; }
+    say.classList.toggle("on", !!say.value.trim());
+    fp.dispatchEvent(new Event("input", {bubbles:true}));
+  });
+  say.addEventListener("keydown", e=>{ if (e.key === "Enter"){ e.preventDefault(); document.getElementById("go").click(); } });
+  // the sheet's own textarea stays in step if someone types there instead
+  fp.addEventListener("input", e=>{ if (e.isTrusted) say.value = fp.value; });
+  document.querySelectorAll(".mchip[data-mode]").forEach(b=> b.addEventListener("click", e=>{ if (e.isTrusted) cur = b.dataset.mode; }));
+})();
+</script>
+
+<script>
+// ---- one block at the bottom: the heartbeat strip directly on top of the dialogue ----
+(function(){
+  const out = document.getElementById("ustream"), vit = document.querySelector("#trackA .hud-vitals");
+  if (!out || !vit) return;
+  const wrap = document.createElement("div"); wrap.className = "dlgwrap";
+  out.parentNode.insertBefore(wrap, out);
+  wrap.append(vit, out);
+})();
+</script>
+
 </body>
 </html>

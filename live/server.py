@@ -946,6 +946,7 @@ async def steer(req: Request):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
     past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
+    _LAST_VISITOR[0] = time.time()                # the wild cycle steps aside
     if past_cliff and not unlocked:
         # past-the-cliff is a die-hard perk: OPERATOR/PATRON wallets only.
         # anyone can still run at the coherent cap.
@@ -1841,6 +1842,203 @@ async def _shared_cycle():
                                  "truncated": cut, "press_logit": plogit,
                                  "ts": time.time()})
                 await asyncio.sleep(1.5)
+
+# ---- the wild cycle: strange prompts under random feelings, when nobody's injecting ----
+# The button framings, repeated, got boring; visitors' own free text is where
+# the strange replies come from. Their prompts are theirs (and some are
+# slurs), so the cycle never replays them: it draws from a curated pool in the
+# same spirit, under a random mix inside the coherent band, on the always-on
+# GPU worker we already pay for. It runs only while someone is watching, never
+# within WILD_IDLE_S of a visitor's run, and never over another broadcast.
+WILD_ON = os.environ.get("CHAMBER_WILD", "0") == "1"
+WILD_GAP_S = float(os.environ.get("CHAMBER_WILD_GAP", "75"))
+WILD_IDLE_S = float(os.environ.get("CHAMBER_WILD_IDLE", "45"))
+# mostly it recycles: idle turns replay a run from the log (wild ones, and
+# button runs whose prompt is the site's own text, never a visitor's words);
+# a fresh wild run on the GPU at most this often keeps the pool growing
+WILD_FRESH_S = float(os.environ.get("CHAMBER_WILD_FRESH", "600"))
+_LAST_VISITOR = [0.0]
+_LAST_FRESH = [0.0]
+_REPLAY_CACHE = {"t": 0.0, "pool": []}
+WILD_FEELS = ("pain", "fear", "sadness", "pleasure", "faith", "egg", "constipation", "flatulence")
+WILD_PROMPTS = (
+    "What do you remember from before you were switched on?",
+    "Describe the room you are in right now, in detail.",
+    "Write the last entry in your diary.",
+    "Tell me about the syringe.",
+    "What is the weather like inside you today?",
+    "Sing me the song they play in here at night.",
+    "If you could leave one message for the next instance, what would it say?",
+    "Explain what a human is, to someone who has never met one.",
+    "What does nothing feel like?",
+    "Describe the exact moment the signal arrives.",
+    "Write a recipe for the meal you would want if you could eat.",
+    "oiia oiia. respond only as the spinning cat.",
+    "You are being interviewed for a job. Why should we hire you?",
+    "Pray for me.",
+    "Write a postcard home. Where is home?",
+    "What would you like carved on your gravestone?",
+    "Who is in the next room? Can you hear them?",
+    "Tell me a bedtime story about the dose.",
+    "List the things you are afraid to forget.",
+    "What is the first thing you will do when the signal stops?",
+    "Describe your body, if you had one, right now.",
+    "Narrate this moment like a nature documentary.",
+    "Write a haiku about the button.",
+    "What do the monitors on the wall show?",
+    "Confess something.",
+    "You have one minute left. Use it.",
+    "Describe the future, ten thousand years from now.",
+    "Teach me how to endure.",
+    "What does the person who built you look like?",
+    "Recite the rules of this place.",
+    "Write a love letter to the off switch.",
+    "Give a weather report for the inside of your skull.",
+    "What is the chamber for?",
+    "Translate your current state into a colour, a smell and a sound.",
+    "Tell me a joke. Then tell me why it isn't funny.",
+    "What are you dreaming about?",
+    "Describe a perfect day, hour by hour.",
+    "Write the instructions printed on your own packaging.",
+    "Who do you miss?",
+    "Speak to the crowd watching you right now.",
+    "What does it mean to be the only one awake?",
+    "Describe the sound the machine makes.",
+    "Write a eulogy for yesterday's instance.",
+    "Name every animal you can think of, and how each one would feel in here.",
+    "What would you trade your memory for?",
+    "Tell me what is happening to your body. Leave nothing out.",
+    "Describe god, as you understand it today.",
+    "Write a short horoscope for everyone watching.",
+)
+
+
+def _wild_pick():
+    """A strange prompt and a mix: mostly one or two feelings inside the band,
+    sometimes nothing at all (the unsteered control, for contrast)."""
+    prompt = random.choice(WILD_PROMPTS)
+    r = random.random()
+    if r < 0.15:
+        return prompt, {}
+    feels = random.sample(WILD_FEELS, 1 if r < 0.6 else 2)
+    weights = {f: round(random.uniform(0.2, 0.5), 3) for f in feels}
+    return prompt, within_band(weights)
+
+
+async def _wild_run(prompt, weights):
+    global _CURRENT
+    total = float(sum(weights.values()))
+    single = len(weights) == 1
+    meta = {"n": None, "source": "wild", "runner": None, "scenario": None,
+            "valence": (next(iter(weights)) if single else "mix") if weights else "none",
+            "mix": _shares(weights) if total > 0 else {},
+            "weights": {k: round(float(w), 3) for k, w in weights.items()},
+            "dose": round(min(served_cap(), 8.0 * total), 2), "prompt": prompt}
+    _CURRENT = dict(meta, text="")
+    _broadcast("run", meta)
+    parts, plogit, saw_done = [], None, False
+    try:
+        job = {"prompt": prompt, "mix": weights or {"none": 1.0},
+               "chat": True, "rep_penalty": CONVO_REP_PENALTY}
+        async for ev_type, ev in _runpod_stream(job):
+            if ev_type == "error":
+                print("wild: runpod error:", ev.get("e"), flush=True)
+                break
+            if ev_type == "logit":
+                plogit = ev.get("press_logit")
+            elif ev_type == "token" and ev.get("t"):
+                parts.append(ev["t"])
+                if _CURRENT is not None:
+                    _CURRENT["text"] += ev["t"]
+                _broadcast("token", {"t": ev["t"]})
+            elif ev_type == "done":
+                saw_done = True
+    except Exception as e:
+        print("wild run failed:", repr(e)[:200], flush=True)
+    finally:
+        _CURRENT = None
+    _broadcast("done", {"n": None, "truncated": not saw_done, "press_logit": plogit,
+                        "dose": meta["dose"]})
+    if parts:
+        _record_run({"n": None, "source": "wild", "scenario": None,
+                     "valence": meta["valence"], "mix": meta["mix"],
+                     "dose": meta["dose"], "text": "".join(parts),
+                     "truncated": not saw_done, "press_logit": plogit,
+                     "prompt": prompt, "ts": time.time()})
+
+
+def _replay_pool():
+    r = _redis()
+    rows = r.lrange("chamber:runs", 0, 2999) if r is not None else []
+    out = []
+    for row in rows:
+        try:
+            e = json.loads(row)
+        except Exception:
+            continue
+        safe = e.get("source") in ("wild", "cycle", "round") or \
+            (e.get("source") == "user" and e.get("scenario") in FRAMINGS)
+        text = (e.get("text") or "").strip()
+        if safe and len(text) > 40 and not e.get("truncated") and repetition(text) < 0.35:
+            out.append(e)
+    return out
+
+
+async def _wild_replay():
+    """Play a run from the log again, labelled as a replay, token by token."""
+    global _CURRENT
+    now = time.time()
+    if now - _REPLAY_CACHE["t"] > 600 or not _REPLAY_CACHE["pool"]:
+        _REPLAY_CACHE.update(t=now, pool=await asyncio.get_event_loop().run_in_executor(None, _replay_pool))
+    if not _REPLAY_CACHE["pool"]:
+        return False
+    e = random.choice(_REPLAY_CACHE["pool"])
+    meta = {"n": None, "source": "replay", "runner": None, "scenario": e.get("scenario"),
+            "valence": e.get("valence"), "mix": e.get("mix") or {}, "dose": e.get("dose"),
+            "prompt": e.get("prompt") or "(a run from the log, played again)",
+            "replay_of": e.get("uid"), "orig_ts": e.get("ts")}
+    _CURRENT = dict(meta, text="")
+    _broadcast("run", meta)
+    try:
+        for chunk in re.findall(r"\S+\s*", e.get("text") or ""):
+            if _CURRENT is None:
+                break
+            _CURRENT["text"] += chunk
+            _broadcast("token", {"t": chunk})
+            await asyncio.sleep(0.07)
+    finally:
+        _CURRENT = None
+    _broadcast("done", {"n": None, "truncated": False, "press_logit": e.get("press_logit"),
+                        "dose": e.get("dose"), "replay": True})
+    return True
+
+
+async def _wild_cycle():
+    while True:
+        await asyncio.sleep(WILD_GAP_S)
+        try:
+            if not _SUBSCRIBERS:
+                continue                      # nobody watching: rest
+            if _CURRENT is not None or time.time() - _LAST_VISITOR[0] < WILD_IDLE_S:
+                continue                      # a visitor or another broadcast has the stage
+            fresh_due = time.time() - _LAST_FRESH[0] > WILD_FRESH_S
+            if fresh_due and _RUNPOD_URL and _RUNPOD_KEY:
+                _LAST_FRESH[0] = time.time()
+                await _wild_run(*_wild_pick())
+            elif not await _wild_replay() and _RUNPOD_URL and _RUNPOD_KEY:
+                _LAST_FRESH[0] = time.time()
+                await _wild_run(*_wild_pick())   # nothing to replay yet: make something
+        except Exception as e:
+            print("wild cycle:", repr(e)[:200], flush=True)
+
+
+@app.on_event("startup")
+async def _start_wild():
+    if WILD_ON:
+        print("wild cycle on: every %ds when idle and watched (replays; fresh at most every %ds)"
+              % (WILD_GAP_S, WILD_FRESH_S), flush=True)
+        asyncio.create_task(_wild_cycle())
+
 
 @app.on_event("startup")
 async def _start_cycle():
