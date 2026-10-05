@@ -230,6 +230,9 @@ class TrainingCoordinator:
         for key in ("hf_namespace", "hf_dataset_repo", "hf_model_repo", "training_image"):
             if not settings.get(key):
                 reasons.append(key + "_missing")
+        image = settings.get("training_image")
+        if image and (not isinstance(image, str) or not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", image)):
+            reasons.append("training_image_requires_immutable_sha256_digest")
         for key in ("hf_dataset_repo", "hf_model_repo"):
             value = settings.get(key, "")
             if value and (value.count("/") != 1 or value.split("/")[0] != settings.get("hf_namespace")):
@@ -534,7 +537,8 @@ class TrainingCoordinator:
                          "adapter_revision": run["artifact_revision"], "adapter_subfolder": run["manifest"]["output_subfolder"],
                          "tokenizer_id": run["manifest"]["output_repo"], "tokenizer_revision": run["artifact_revision"],
                          "tokenizer_subfolder": run["manifest"]["output_subfolder"],
-                         "status": "selected", "remote_endpoint_active": False}
+                         "status": "selected", "remote_endpoint_active": False,
+                         "adapter_dose_calibration": {"status": "required", "method": "adapted_model_dose_sweep"}}
             deployment_env = {
                 "CHAMBER_MODEL": selection["base_model"], "CHAMBER_MODEL_REVISION": selection["base_revision"],
                 "MODEL_ADAPTER_ID": selection["adapter_id"], "MODEL_ADAPTER_REVISION": selection["adapter_revision"],
@@ -542,6 +546,7 @@ class TrainingCoordinator:
                 "MODEL_TOKENIZER_ID": selection["tokenizer_id"], "MODEL_TOKENIZER_REVISION": selection["tokenizer_revision"],
                 "MODEL_TOKENIZER_SUBFOLDER": selection["tokenizer_subfolder"],
                 "CHAMBER_QUANTIZE_4BIT": "true" if run["manifest"]["training"]["mode"] == "qlora" else "false",
+                "CHAMBER_DOSE_CAP": "0", "CHAMBER_COHERENT_CAP": "0",
             }
             calibrated_layer = run["calibration"].get("layer")
             if calibrated_layer is None:
@@ -561,7 +566,8 @@ class TrainingCoordinator:
                 "base_model": run["manifest"]["base_model"], "base_revision": run["manifest"]["base_revision"],
             }
             checkpoint.update(status="selected", selected_at=selection["selected_at"],
-                              remote_endpoint_active=False, deployment_env=deployment_env)
+                              remote_endpoint_active=False, deployment_env=deployment_env,
+                              adapter_dose_calibration=selection["adapter_dose_calibration"])
             self.store.put("checkpoints", checkpoint)
             self.store.event("checkpoint.selected", "Validated adapter selected; remote chamber reload requires the deployment bridge", run_id=run["id"])
             return selection

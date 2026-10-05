@@ -51,14 +51,15 @@ async def test_real_browser_collects_original_and_supported_note(tmp_path, monke
             completion = output_format.model_validate({"evaluation_previous_goal": "Fixture step completed", "memory": "Next investigate competing evidence.",
                                                        "next_goal": "Read and record source evidence.", "action": [action]})
             return ChatInvokeCompletion(completion=completion, usage=None)
-    monkeypatch.setattr("observatory.research.researcher_model", lambda settings: AuthoredModel())
+    monkeypatch.setattr("observatory.research.researcher_model", lambda settings, **kwargs: AuthoredModel())
     async def fixture_public_url(value):
         if not value.startswith(url.rsplit("/", 1)[0]):
             raise ValueError("Fixture test forbids external network requests")
         return value
     monkeypatch.setattr("observatory.research.public_url", fixture_public_url)
     store = Store(tmp_path / "state.db")
-    store.save_settings({"browser_provider": "local", "chromium_executable": CHROMIUM, "steps_per_pass": 5})
+    store.save_settings({"research_provider": "openai", "openai_api_key": "authored-fixture-not-used",
+                         "browser_provider": "local", "chromium_executable": CHROMIUM, "steps_per_pass": 5})
     store.set_mission({"id": "fixture", "status": "running", "objective": "Read a controlled research fixture"})
     supervisor = ResearchSupervisor(store)
     async def allowed(value):

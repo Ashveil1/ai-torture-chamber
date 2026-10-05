@@ -19,7 +19,7 @@ class MemoryStore:
         self.records, self.events = {}, []
         self.settings = {"training_enabled": True, "hf_token": "hf_private_owner_token", "hf_namespace": "owner",
                          "hf_dataset_repo": "owner/corpus", "hf_model_repo": "owner/adapters",
-                         "training_image": "owner/training@sha256:test", "training_min_documents": 1,
+                         "training_image": "owner/training@sha256:" + "a" * 64, "training_min_documents": 1,
                          "training_min_tokens": 1, "synthetic_training_approved": True,
                          "provider_policy_reference": "owner-reviewed-policy"}
 
@@ -244,6 +244,9 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(public["deployment_env"]["MODEL_ADAPTER_REVISION"], "adapter-commit")
         self.assertEqual(public["deployment_env"]["CHAMBER_QUANTIZE_4BIT"], "true")
         self.assertEqual(public["deployment_env"]["CHAMBER_LAYER"], "40")
+        self.assertEqual(public["deployment_env"]["CHAMBER_DOSE_CAP"], "0")
+        self.assertEqual(public["deployment_env"]["CHAMBER_COHERENT_CAP"], "0")
+        self.assertEqual(public["adapter_dose_calibration"]["status"], "required")
         old = self.store.get("checkpoints", "old-checkpoint")
         self.assertEqual(old["status"], "candidate")
         self.assertEqual(old["revision"], "preserved-commit")

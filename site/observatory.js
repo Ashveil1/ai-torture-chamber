@@ -7,7 +7,7 @@
   const list = value => Array.isArray(value) ? value : [];
   const storageKey = "wirehead.observatory.preferences.v1";
   const bookmarkKey = "wirehead.observatory.bookmarks.v1";
-  const defaults = {api_base:"/observatory-api",research_provider:"openai",research_model:"gpt-6-astra",reasoning_effort:"high",browser_provider:"browseruse",agent_count:6,hf_namespace:"",hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_enabled:false,training_continue_from_previous:true,synthetic_training_approved:false,provider_policy_reference:""};
+  const defaults = {api_base:"/observatory-api",research_provider:"x402",research_model:"",research_protocol:"responses",reasoning_effort:"high",browser_provider:"local",agent_count:6,hf_namespace:"",hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_enabled:false,training_continue_from_previous:true,synthetic_training_approved:false,provider_policy_reference:""};
   function mergeSettings(base,overrides={}) {
     const settings={...base,...overrides};
     // A repository change must not inherit another model's default commit.
@@ -31,6 +31,8 @@
   let ownerToken = "", connected = false, busy = false, connectionError = "", eventSource = null, previewTimer = null, refreshTimer = null, stateTimer = null;
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
   let inheritedBaseRevision = false;
+  let researchCatalog={status:"unavailable",models:[]}, funding=null, metadataAt=0, metadataLoading=false, metadataGeneration=0;
+  let previousProvider=preferences.research_provider;
   let sourceBookmarks = new Set();
   try { sourceBookmarks = new Set(JSON.parse(localStorage.getItem(bookmarkKey) || "[]")); } catch (_) {}
 
@@ -111,6 +113,7 @@
     if(eventSource) eventSource.close();
     eventSource=null;clearInterval(stateTimer);clearTimeout(refreshTimer);stateTimer=null;connected=false;
     clearLiveFrame();
+    metadataGeneration++;metadataAt=0;metadataLoading=false;researchCatalog={status:"unavailable",models:[]};funding=null;
   }
   async function refreshState(silent=false) {
     if(mode!=="connected") return;
@@ -119,12 +122,69 @@
       if(mode!=="connected") return;
       state=normalizeState(payload);connected=true;connectionError="";
       render();
+      await refreshPaymentMetadata();
       if(!eventSource) startEventStream();
       if(!stateTimer) stateTimer=setInterval(()=>refreshState(true),12000);
     } catch(error) {
       connected=false;connectionError=error.message;render();
       if(!silent) text("setup-result",error.message+" No preview records were substituted.");
     }
+  }
+  async function refreshPaymentMetadata(force=false) {
+    if(mode==="preview"){renderFunding();syncResearchFields();return;}
+    if(!connected || metadataLoading || !force && Date.now()-metadataAt<30000)return;
+    const generation=metadataGeneration;metadataLoading=true;
+    try {
+      const results=await Promise.allSettled([request("research-models"),request("funding")]);
+      if(generation!==metadataGeneration || mode!=="connected")return;
+      researchCatalog=results[0].status==="fulfilled"?results[0].value:{status:"unavailable",models:[]};
+      funding=results[1].status==="fulfilled"?results[1].value:null;
+      metadataAt=Date.now();renderFunding();syncResearchFields();
+    } finally {if(generation===metadataGeneration)metadataLoading=false;}
+  }
+  function catalog() { return mode==="preview" ? state.research_catalog || {status:"simulated",models:[]} : researchCatalog; }
+  function compatibleResearchModels(protocol) {
+    return list(catalog().models).filter(item=>item.eligible===true && ["owner_declared","gateway_advertised"].includes(item.capability_source) && list(item.protocols).includes(protocol) && item.capabilities?.vision===true && item.capabilities?.structured_actions===true && (protocol==="responses"?item.capabilities?.structured_outputs===true:item.capabilities?.tool_calling===true));
+  }
+  function syncResearchFields(wantedModel) {
+    const paid=$("setting-provider").value==="x402";
+    $("x402-model-fields").hidden=!paid;$("direct-model-label").hidden=paid;
+    if($("research-key-label"))$("research-key-label").hidden=paid;
+    const selector=$("setting-catalog-model"), selected=wantedModel===undefined ? selector.value || $("setting-model").value : wantedModel;
+    const models=compatibleResearchModels($("setting-protocol").value);
+    selector.innerHTML=models.length ? models.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name && item.name!==item.id?item.name+" · "+item.id:item.id)+' · '+esc(mode==="preview"?"simulated controls":item.capability_source==="owner_declared"?"owner declared":"gateway advertised")+'</option>').join("") : '<option value="">'+esc(mode==="preview"?"No matching simulated model":"No compatible live model available")+'</option>';
+    if(models.some(item=>item.id===selected))selector.value=selected;
+    else if(selected && paid) {
+      selector.insertAdjacentHTML("afterbegin",'<option value="'+esc(selected)+'" disabled>'+esc(selected)+' · unavailable in this catalog</option>');selector.value=selected;
+    }
+    selector.disabled=!models.length;
+    text("research-catalog-status",mode==="preview"?"Simulated catalog. These selections never call a model or make a payment.":models.length?"Controls are owner declared or gateway advertised. Paid compatibility remains untested; the broker validates each request's quote.":"The payment broker is unavailable or has no declared compatible model. Configure the model capability registry outside this interface. No sample models were substituted.");
+  }
+  function usdc(amount) {
+    if(typeof amount!=="string" || !/^\d+$/.test(amount))return "Not available";
+    const value=BigInt(amount), whole=value/1000000n, fraction=String(value%1000000n).padStart(6,"0").replace(/0+$/,"");
+    return whole.toLocaleString("en-US")+(fraction?"."+fraction:"")+" USDC";
+  }
+  function solanaExplorer(kind,value,network) {
+    if(typeof value!=="string" || !/^[1-9A-HJ-NP-Za-km-z]{32,90}$/.test(value))return "";
+    if(!["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp","solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"].includes(network))return "";
+    return "https://explorer.solana.com/"+kind+"/"+encodeURIComponent(value)+(network==="solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"?"?cluster=devnet":"");
+  }
+  function renderFunding() {
+    const record=mode==="preview" ? state.funding : connected?funding:null, simulated=mode==="preview";
+    const status=record?.status || "unknown";
+    const reasons={DAILY_LIMIT:"The daily request budget is exhausted. Adding wallet funds does not raise that cap.",SETTLEMENT_UNKNOWN:"A payment outcome is unresolved. Reconcile its broker receipt before authorizing another request.",SIGNER_INVALID:"The isolated broker signer configuration needs operator attention. No signer details are exposed here.",SIGNER_NOT_CONFIGURED:"No spending signer is configured. The developer sets up the signer outside this interface.",NOT_CONFIGURED:"The broker is disabled or its request caps and approved recipients are incomplete. Configure those controls before enabling spending.",FUNDING_UNKNOWN:"The wallet balance cannot be confirmed. Unknown funds remain unavailable for new requests.",UNFUNDED:"The wallet lacks the required request reserve. The developer can replenish the allowance; an operator pause or stop remains in effect."};
+    text("funding-status",simulated?"Simulated allowance":!connected?"Not connected":titleCase(status));
+    $("funding-status").className="tag "+(status==="ready" && !simulated?"eligible":"review");
+    text("funding-description",simulated?"Illustrative balances and receipts. No spending wallet exists in this preview; there is no address to fund.":!connected?"Connect the sidecar to observe the broker. No wallet address or sample receipt is substituted.":status==="ready"?"The broker reports a funded research allowance. Request limits and outstanding reservations still apply.":status==="unfunded"?"The research allowance is exhausted. The developer can replenish the configured wallet; funding never resumes an operator-stopped mission.":record?.configured?"The broker is configured, but the allowance is disabled or its balance is unknown. Research calls remain subject to broker validation.":"No spending signer is configured or the broker cannot be reached. The developer configures the isolated broker environment before funding a wallet.");
+    if(!simulated && connected && reasons[record?.reason])text("funding-description",reasons[record.reason]);
+    const wallet=record?.wallet_address, walletUrl=simulated?"":solanaExplorer("address",wallet,record?.network);
+    $("funding-wallet").innerHTML=walletUrl?'<a href="'+esc(walletUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(wallet)+'</a>':esc(simulated?"Simulated · no wallet address":wallet || "Not available");
+    text("funding-network",simulated?"Simulated · no network":record?.network==="solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"?"Solana devnet · test USDC cannot pay mainnet services":record?.network==="solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"?"Solana mainnet · native USDC":"Network not available");
+    text("funding-balance",usdc(record?.balance_atomic));text("funding-reserved",usdc(record?.reserved_atomic));text("funding-settled",usdc(record?.settled_atomic));
+    text("funding-daily-committed",usdc(record?.daily_spent_and_reserved_atomic));text("funding-daily-remaining",usdc(record?.daily_remaining_atomic));text("funding-required-reserve",usdc(record?.required_request_reserve_atomic));
+    const receipts=list(record?.receipts);text("funding-receipt-count",receipts.length+(simulated?" simulated":" recorded"));
+    $("funding-receipts").innerHTML=receipts.length?receipts.map(item=>{const url=simulated?"":solanaExplorer("tx",item.transaction,item.network);return '<div class="funding-receipt"><div><strong>'+esc(simulated?"Simulated payment":titleCase(item.status))+'</strong><small>'+esc(item.request_id || "Request identifier not supplied")+'</small></div><span>'+esc(usdc(item.amount_atomic))+'</span><span>'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">View settlement</a>':esc(simulated?"No transaction":"No settlement signature"))+'</span></div>';}).join(""):'<p class="empty-notebook">No payment receipts are available. Service delivery and on-chain settlement are separate records.</p>';
   }
   function startEventStream() {
     if(mode!=="connected" || !connected || typeof EventSource==="undefined") return;
@@ -181,7 +241,7 @@
     if(!state.jobs.some(item=>String(item.id)===String(selectedJob))) selectedJob=state.jobs.at(-1)?.id || "";
     document.body.classList.toggle("connected",mode==="connected");
     document.body.classList.toggle("is-paused",state.mission.status!=="running" || mode==="connected" && !connected);
-    renderMode();renderMission();renderAgents();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();
+    renderMode();renderMission();renderAgents();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();renderFunding();
     if($("notes-dialog").open) renderAllNotes();
   }
   function renderMode() {
@@ -198,10 +258,11 @@
     text("mission-state",(mode==="preview" ? "Preview " : "")+titleCase(status));
     $("mission-state").classList.toggle("running",running);
     text("mission-title",state.mission.objective || "No research mission has been started.");
-    text("mission-detail",mode==="preview" ? "An open research frontier. The simulation continues until you stop it." : transition ? "The worker will checkpoint and release its browser at a safe action boundary." : "An open research frontier. Agents continue until the owner stops the mission.");
-    $("mission-toggle").innerHTML=esc(mode==="preview" ? running?"Pause preview":status==="paused"?"Resume preview":"Run preview" : running?"Pause mission":status==="paused"?"Resume mission":"Start mission")+' <span aria-hidden="true">'+(running?"Ⅱ":"▷")+'</span>';
+    const resumable=["paused","funding_paused","faulted"].includes(status);
+    text("mission-detail",mode==="preview" ? "An open research frontier. The simulation continues until you stop it." : status==="funding_paused"?"Research is paused for funding. Check the allowance and reserved requests before explicitly resuming.":status==="faulted"?"The worker stopped after a provider or configuration fault. Review the event record and setup before resuming.":transition ? "The worker will checkpoint and release its browser at a safe action boundary." : "An open research frontier. Agents continue until the owner stops the mission.");
+    $("mission-toggle").innerHTML=esc(mode==="preview" ? running?"Pause preview":resumable?"Resume preview":"Run preview" : running?"Pause mission":resumable?"Resume mission":"Start mission")+' <span aria-hidden="true">'+(running?"Ⅱ":"▷")+'</span>';
     $("mission-toggle").disabled=busy || transition || mode==="connected" && !connected;
-    $("mission-stop").disabled=busy || transition || !["running","paused","pausing"].includes(status);
+    $("mission-stop").disabled=busy || transition || !["running","paused","pausing","funding_paused","faulted"].includes(status);
     $("mission-step").hidden=mode!=="preview";$("mission-step").disabled=busy;
     text("metric-sources",state.sources.length);text("metric-eligible",state.sources.filter(eligible).length);
     text("metric-questions",state.mission.open_questions ?? state.notes.filter(note=>["question","lead"].includes(note.type)).length);
@@ -294,6 +355,7 @@
     $("dataset-list").innerHTML=state.datasets.length ? [...state.datasets].reverse().map(dataset=>'<button class="dataset-entry '+(String(dataset.id)===String(selectedDataset)?"selected":"")+'" data-dataset="'+esc(dataset.id)+'"><span class="tag">'+esc(mode==="preview"?"Example candidate":titleCase(dataset.status || "Candidate"))+'</span><strong>'+esc(datasetName(dataset))+'</strong><small>'+esc(dateLabel(dataset.created_at))+'<br>'+esc(dataset.counts?.original_documents ?? list(dataset.source_ids).length)+' original documents · '+esc(dataset.counts?.synthetic_examples ?? 0)+' instruction examples</small></button>').join("") : '<p class="empty-notebook">No curated snapshots.<br>Review source rights, then create the first immutable candidate.</p>';
     const dataset=state.datasets.find(item=>String(item.id)===String(selectedDataset));
     $("manifest-download").disabled=!dataset;
+    $("dataset-export").disabled=!dataset || mode==="preview" || !canMutate() || busy;
     text("manifest-state",dataset ? mode==="preview" ? "Example snapshot" : (dataset.immutable ? "Immutable candidate" : titleCase(dataset.status)) : "Awaiting snapshot");
     text("manifest-name",dataset ? datasetName(dataset) : "No curated snapshot selected");
     all("[data-manifest]").forEach(button=>button.classList.toggle("active",button.dataset.manifest===manifestView));
@@ -365,7 +427,7 @@
     $("connection-list").innerHTML=connections.map(item=>'<div class="connection-row"><span>'+esc(item.name || names[item.id] || titleCase(item.id))+'</span><span class="'+(["connected","ready","healthy","ok"].includes(item.status)?"healthy":"")+'">'+esc(item.message || titleCase(item.status || "Not reported"))+'</span></div>').join("");
   }
   function showView(view,focus=false) {
-    if(!["research","evidence","datasets","training","checkpoints"].includes(view)) return;
+    if(!["research","evidence","datasets","training","checkpoints","funding"].includes(view)) return;
     currentView=view;
     all(".view").forEach(panel=>panel.hidden=panel.id!=="view-"+view);
     all("[data-view]").forEach(button=>{const active=button.dataset.view===view;button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;});
@@ -378,7 +440,8 @@
     const fields={api:preferences.api_base,objective:state.mission.objective || preferences.objective || $("setting-objective").value,provider:state.settings.research_provider || preferences.research_provider,model:state.settings.research_model || preferences.research_model,browser:state.settings.browser_provider || preferences.browser_provider,hf:state.settings.hf_namespace || preferences.hf_namespace};
     Object.entries(fields).forEach(([name,value])=>{if(value!==undefined) $("setting-"+name).value=value;});
     all('input[name="mode"]').forEach(input=>input.checked=input.value===mode);
-    $("owner-token").value=ownerToken;renderConnections();fillExtraSettings();openDialog("setup-dialog");
+    $("owner-token").value=ownerToken;renderConnections();fillExtraSettings();previousProvider=$("setting-provider").value;syncResearchFields(fields.model);openDialog("setup-dialog");
+    refreshPaymentMetadata(true);
   }
   function bookmarkSource(id) {
     const source=sourceById(id);if(!source) return;
@@ -450,7 +513,7 @@
     const divider=$("setting-browser").closest("label");
     divider.insertAdjacentHTML("afterend",'<label id="browser-key-label">Browser Use API key<input id="setting-browser-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Sent only to the authenticated backend. Never saved locally.</small></label><label id="cdp-label" hidden>CDP connection URL<input id="setting-cdp" type="password" autocomplete="off" spellcheck="false" placeholder="Private connection endpoint · not stored locally"></label><label id="chromium-label" hidden>Local Chromium executable<input id="setting-chromium" type="text" spellcheck="false" placeholder="Optional · backend filesystem path"></label>');
     $("cdp-label").insertAdjacentHTML("afterend",'<label id="cdp-ack-label" hidden><input id="setting-cdp-ack" type="checkbox"> I confirm this is a dedicated, isolated browser with no authenticated sessions.<small>Custom CDP runs one research agent. Do not attach a personal browser or expose its connection URL publicly.</small></label>');
-    $("setting-provider").closest(".form-pair").insertAdjacentHTML("afterend",'<label>Research provider API key<input id="setting-research-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Stored encrypted by the backend; never in browser storage.</small></label><div class="form-pair"><label>Reasoning effort<select id="setting-effort"><option value="high">High</option><option value="xhigh">Extra high</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label>Research agents<input id="setting-agent-count" type="number" min="1" max="6" value="6"></label></div>');
+    $("setting-provider").closest(".form-pair").insertAdjacentHTML("afterend",'<label id="research-key-label">Research provider API key<input id="setting-research-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Stored encrypted by the backend; never in browser storage.</small></label><div class="form-pair"><label>Reasoning effort<select id="setting-effort"><option value="high">High</option><option value="xhigh">Extra high</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label>Research agents<input id="setting-agent-count" type="number" min="1" max="6" value="6"></label></div>');
     $("setting-hf").closest("label").insertAdjacentHTML("afterend",'<label>Hugging Face token<input id="setting-hf-token" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend token"></label><div class="setup-divider"><h3>Training permissions</h3><span>Explicit owner choices</span></div><label>Selected training base<input id="setting-base-model" type="text" spellcheck="false" value="meta-llama/Llama-3.1-70B"><small>Continued pretraining uses original text; instruction tuning is a separately approved SFT stage. Selecting a model does not download weights.</small></label><label><input id="setting-training-enabled" type="checkbox"> Enable actual training jobs<small>Training can allocate paid GPU jobs after backend validation. Preview actions never allocate compute.</small></label><label><input id="setting-synthetic-approved" type="checkbox"> Enable approved instruction examples<small>Generated notebook drafts require review. The owner must verify teacher-provider terms before permitting SFT.</small></label><label>Teacher-provider policy reference<input id="setting-policy-reference" type="text" placeholder="Policy URL / agreement and review date"><small>Required when enabling generated instruction examples; it does not bypass evidence or source-rights review.</small></label>');
     all("#settings-form .settings-note").forEach(item=>item.textContent="Secret fields are sent only to the authenticated backend and are never written to browser storage. Public settings report configured status, not keys.");
     $("setting-policy-reference").closest("label").insertAdjacentHTML("afterend",'<details class="advanced-setup"><summary>GPU worker, repositories &amp; recipe</summary><p>These settings bound training jobs. Research browsing continues until manually stopped.</p><label>Dataset repository<input id="setting-dataset-repo" type="text" spellcheck="false" placeholder="namespace/consciousness-corpus"></label><label>Model repository<input id="setting-model-repo" type="text" spellcheck="false" placeholder="namespace/Llama-Consciousness-70B"></label><label>Pinned worker container<input id="setting-training-image" type="text" spellcheck="false" placeholder="registry/worker@sha256:…"></label><div class="form-pair"><label>GPU hardware<select id="setting-hardware"><option value="a100-large">A100 large</option><option value="h200">H200</option></select></label><label>Adaptation<select id="setting-training-mode"><option value="qlora">QLoRA</option><option value="lora">LoRA</option></select></label></div><div class="form-pair"><label>Check snapshots every (hours)<input id="setting-training-interval" type="number" min="0.1" step="0.1" value="4"></label><label>GPU timeout (seconds)<input id="setting-training-timeout" type="number" min="60" max="604800" value="14400"></label></div><div class="form-pair"><label>Minimum documents<input id="setting-min-documents" type="number" min="1" value="20"></label><label>Minimum tokens<input id="setting-min-tokens" type="number" min="1" value="50000"></label></div><div class="form-pair"><label>Training steps per job<input id="setting-max-steps" type="number" min="1" value="100"></label><label>Sequence length<input id="setting-sequence-length" type="number" min="128" value="2048"></label></div><label>Model publication<select id="setting-publish-policy"><option value="private">Private repositories</option><option value="hold">Hold publication</option><option value="public">Public model artifacts</option></select></label><label>Budget reference (USD)<input id="setting-training-budget" type="number" min="0" step="1" placeholder="Optional"><small>Informational. Provider funds, hardware choices and job timeouts control spending; this field is not an enforced spending cap.</small></label><label>Base model revision<input id="setting-base-revision" type="text" spellcheck="false" placeholder="Blank resolves and pins the selected repository at preparation"></label></details>');
@@ -480,16 +543,24 @@
     $("setting-continue-training").checked=settings.training_continue_from_previous!==false;
     $("setting-policy-reference").value=settings.provider_policy_reference || "";$("setting-chromium").value=settings.chromium_executable || "";
     $("setting-cdp-ack").checked=!!settings.cdp_isolated_ack;
+    $("setting-protocol").value=settings.research_protocol || "responses";
     const fields={"dataset-repo":["hf_dataset_repo",""],"model-repo":["hf_model_repo",""],"training-image":["training_image",""],hardware:["training_hardware","a100-large"],"training-mode":["training_mode","qlora"],"training-interval":["training_interval_hours",4],"training-timeout":["training_timeout_seconds",14400],"min-documents":["training_min_documents",20],"min-tokens":["training_min_tokens",50000],"max-steps":["training_max_steps",100],"sequence-length":["training_sequence_length",2048],"publish-policy":["publish_policy","private"],"training-budget":["training_budget_usd",""],"base-revision":["hf_base_revision",""]};
     Object.entries(fields).forEach(([field,[key,fallback]])=>{$("setting-"+field).value=settings[key] ?? fallback;});
     inheritedBaseRevision=settings.hf_base_model===defaults.hf_base_model && $("setting-base-revision").value===defaults.hf_base_revision;
     toggleBrowserFields();
+    syncResearchFields(settings.research_model);
   }
   function collectSettings() {
     clearInheritedBaseRevision();
     const settings={objective:$("setting-objective").value.trim(),research_provider:$("setting-provider").value,research_model:$("setting-model").value.trim(),reasoning_effort:$("setting-effort").value,agent_count:Math.max(1,Math.min(6,Number($("setting-agent-count").value) || 6)),browser_provider:$("setting-browser").value,hf_namespace:$("setting-hf").value.trim(),hf_base_model:$("setting-base-model").value.trim(),training_enabled:$("setting-training-enabled").checked,training_continue_from_previous:$("setting-continue-training").checked,synthetic_training_approved:$("setting-synthetic-approved").checked,provider_policy_reference:$("setting-policy-reference").value.trim(),chromium_executable:$("setting-chromium").value.trim()};
+    settings.research_protocol=$("setting-protocol").value;
+    if(settings.research_provider==="x402") {
+      settings.research_model=$("setting-catalog-model").value;
+      if(settings.research_model && !compatibleResearchModels(settings.research_protocol).some(item=>item.id===settings.research_model))throw new Error("Select a compatible model from the live broker catalog before changing x402 research setup.");
+      if(!settings.research_model)delete settings.research_model;
+    }
     if(settings.synthetic_training_approved && !settings.provider_policy_reference) throw new Error("Record the teacher-provider policy reference before enabling instruction examples.");
-    if(!settings.research_model || !settings.hf_base_model) throw new Error("Research and subject model IDs must be provided.");
+    if(settings.research_provider!=="x402" && !settings.research_model || !settings.hf_base_model) throw new Error("Research and subject model IDs must be provided.");
     settings.cdp_isolated_ack=$("setting-cdp-ack").checked;
     if(settings.browser_provider==="cdp") {
       settings.agent_count=1;
@@ -501,11 +572,23 @@
   async function saveSetup(event) {
     event.preventDefault();text("setup-result","");
     try {
-      const nextMode=document.querySelector('input[name="mode"]:checked').value, api=validateEndpoint($("setting-api").value), settings=collectSettings();
+      const nextMode=document.querySelector('input[name="mode"]:checked').value, api=validateEndpoint($("setting-api").value);
+      // A connected setup must select from that backend's actual catalog, never
+      // from the authored preview fixtures or a previous endpoint's catalog.
+      if(nextMode==="connected" && (mode!=="connected" || api!==preferences.api_base)) {
+        preferences.api_base=api;disconnect();clearInterval(previewTimer);mode="connected";state=emptyState();selectedAgent="";lastPreviewSource="";
+        await refreshState();
+        if(!connected)return;
+        syncResearchFields("");
+      }
+      if(nextMode==="preview" && mode!=="preview") {
+        disconnect();mode="preview";state=window.ObservatoryPreview.create();selectedAgent="";lastPreviewSource="";syncResearchFields("");
+      }
+      const settings=collectSettings();
       ownerToken=$("owner-token").value.trim();preferences={...preferences,...settings,api_base:api};
       // Explicit allowlist: never serialize form data or include credential fields.
       const publicPreferences={};
-      ["api_base","objective","research_provider","research_model","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision"].forEach(key=>publicPreferences[key]=preferences[key]);
+      ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision"].forEach(key=>publicPreferences[key]=preferences[key]);
       try {localStorage.setItem(storageKey,JSON.stringify(publicPreferences));}catch(_){}
       if(nextMode!==mode){disconnect();clearInterval(previewTimer);mode=nextMode;state=mode==="preview"?window.ObservatoryPreview.create():emptyState();selectedAgent="";lastPreviewSource="";}
       if(mode==="preview") {
@@ -519,7 +602,7 @@
       if(ownerToken) {
         const secretSettings={...settings};
         const brainKey=$("setting-research-key").value.trim(), browserKey=$("setting-browser-key").value.trim(), hfToken=$("setting-hf-token").value.trim(), cdp=$("setting-cdp").value.trim();
-        if(brainKey) secretSettings[settings.research_provider==="anthropic"?"anthropic_api_key":"openai_api_key"]=brainKey;
+        if(brainKey && settings.research_provider!=="x402") secretSettings[settings.research_provider==="anthropic"?"anthropic_api_key":"openai_api_key"]=brainKey;
         if(browserKey) secretSettings.browser_use_api_key=browserKey;if(hfToken) secretSettings.hf_token=hfToken;if(cdp)secretSettings.cdp_url=cdp;
         await request("admin/settings","POST",secretSettings);
         ["setting-research-key","setting-browser-key","setting-hf-token","setting-cdp"].forEach(id=>$(id).value="");
@@ -561,6 +644,22 @@
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"})), anchor=document.createElement("a");
     anchor.href=url;anchor.download=String(dataset.id).replace(/[^a-zA-Z0-9_-]/g,"_")+"-manifest.json";document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
     toast(mode==="preview"?"Preview metadata manifest downloaded.":"Public metadata manifest downloaded.");
+  }
+  async function downloadDataset() {
+    const dataset=state.datasets.find(item=>String(item.id)===String(selectedDataset));
+    if(!dataset || mode==="preview"){toast("Preview contains metadata only. Sealed dataset exports require an actual backend snapshot.");return;}
+    if(!canMutate()){explainOwner();return;}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),60000);
+    $("dataset-export").disabled=true;
+    try {
+      const response=await fetch(endpoint("admin/datasets/"+encodeURIComponent(dataset.id)+"/export"),{headers:{Accept:"application/zip",Authorization:"Bearer "+ownerToken},credentials:"omit",cache:"no-store",signal:controller.signal});
+      if(!response.ok){const result=await response.json().catch(()=>null);throw new Error(typeof result?.detail==="string"?result.detail:"Dataset export returned HTTP "+response.status+".");}
+      if(!(response.headers.get("Content-Type") || "").startsWith("application/zip"))throw new Error("The backend did not return a dataset ZIP.");
+      const blob=await response.blob(),url=URL.createObjectURL(blob),anchor=document.createElement("a");
+      anchor.href=url;anchor.download=String(dataset.id).replace(/[^a-zA-Z0-9_-]/g,"_")+".zip";document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      toast("Sealed snapshot downloaded with separate CPT/SFT splits, provenance and file hashes.");
+    } catch(error){toast(error.name==="AbortError"?"Dataset export timed out. No paid job or upload was requested.":error.message);}
+    finally {clearTimeout(timeout);renderDatasets();}
   }
   async function createSnapshot() {
     if(mode==="preview"){const dataset=window.ObservatoryPreview.snapshot(state);selectedDataset=dataset.id;render();toast("Simulated metadata snapshot created. No corpus was uploaded.");}
@@ -613,11 +712,13 @@
   all("[data-view]").forEach(button=>button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();const buttons=all("[data-view]"),index=buttons.indexOf(button),next=event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowRight"?1:-1)+buttons.length)%buttons.length;showView(buttons[next].dataset.view,true);}));
   $("setup-open").addEventListener("click",openSetup);$("connect-open").addEventListener("click",openSetup);
   $("settings-form").addEventListener("submit",saveSetup);$("note-form").addEventListener("submit",saveNote);
-  $("owner-token").addEventListener("input",()=>{ownerToken=$("owner-token").value.trim();renderNotebook();renderTraining();});
-  $("setting-provider").addEventListener("change",()=>{const old=$("setting-model").value;if(["gpt-6-astra","claude-fable-5-1"].includes(old))$("setting-model").value=$("setting-provider").value==="anthropic"?"claude-fable-5-1":"gpt-6-astra";$("setting-research-key").value="";});
+  $("owner-token").addEventListener("input",()=>{ownerToken=$("owner-token").value.trim();renderNotebook();renderTraining();renderDatasets();});
+  $("setting-provider").addEventListener("change",()=>{const next=$("setting-provider").value,old=$("setting-model").value;if(next!=="x402" && (previousProvider==="x402" || ["gpt-6-astra","claude-fable-5-1"].includes(old)))$("setting-model").value=next==="anthropic"?"claude-fable-5-1":"gpt-6-astra";$("setting-research-key").value="";previousProvider=next;syncResearchFields(next==="x402"?"":undefined);});
+  $("setting-protocol").addEventListener("change",()=>syncResearchFields(""));
+  $("setting-catalog-model").addEventListener("change",()=>{const model=compatibleResearchModels($("setting-protocol").value).find(item=>item.id===$("setting-catalog-model").value);text("research-catalog-status",mode==="preview"?"Simulated selection. No model call or payment occurs.":(model?.capability_source==="owner_declared"?"Owner-declared controls.":"Gateway-advertised controls.")+" Paid compatibility remains untested. Validate the chosen model with a bounded acceptance test before continuous research.");});
   $("connection-check").addEventListener("click",async()=>{try{preferences.api_base=validateEndpoint($("setting-api").value);const payload=normalizeState(await request("state"));text("setup-result","Backend reachable. "+payload.agents.length+" actual agents, "+payload.sources.length+" source records. Save setup to enter connected mode.");if(mode==="connected"){state=payload;connected=true;connectionError="";render();}}catch(error){text("setup-result",error.message+" Preview mode was not substituted.");}});
   $("preview-reset").addEventListener("click",()=>{if(mode!=="preview"){toast("Switch to Preview to reset simulated records.");return;}clearInterval(previewTimer);state=window.ObservatoryPreview.create();selectedAgent="";selectedDataset="";selectedJob="";lastPreviewSource="";render();toast("Preview reset. No connected backend was changed.");});
-  $("mission-toggle").addEventListener("click",()=>missionAction(state.mission.status==="running"?"pause":state.mission.status==="paused"?"resume":"start"));
+  $("mission-toggle").addEventListener("click",()=>missionAction(state.mission.status==="running"?"pause":["paused","funding_paused","faulted"].includes(state.mission.status)?"resume":"start"));
   $("mission-stop").addEventListener("click",()=>confirmAction(mode==="preview"?"Stop the preview?":"Stop the research mission?",mode==="preview"?"The simulation stops. Example notes, sources and snapshots remain available.":"The worker stops research and releases its owned browser sessions. Source records, notes and datasets remain durable.",mode==="preview"?"Stop preview":"Stop mission",()=>missionAction("stop")));
   $("mission-step").addEventListener("click",()=>{if(mode!=="preview")return;window.ObservatoryPreview.step(state);render();toast("Advanced one simulated research event.");});
   $("browser-inspect").addEventListener("click",()=>{const source=currentSource();if(source)inspectSource(source.id);});
@@ -628,12 +729,14 @@
   $("evidence-search").addEventListener("input",renderEvidence);$("rights-filter").addEventListener("change",renderEvidence);$("agent-filter").addEventListener("change",renderEvidence);
   $("event-filter-toggle").addEventListener("click",()=>{eventOnlyAgent=!eventOnlyAgent;renderEvents();});
   $("snapshot-create").addEventListener("click",createSnapshot);$("manifest-download").addEventListener("click",downloadManifest);
+  $("dataset-export").addEventListener("click",downloadDataset);
+  $("funding-refresh").addEventListener("click",()=>refreshPaymentMetadata(true));
   $("training-start").addEventListener("click",startTraining);$("training-dataset").addEventListener("change",renderTraining);$("training-stage").addEventListener("change",renderTraining);$("training-parent").addEventListener("change",renderTraining);
   $("training-job-select").addEventListener("change",()=>{selectedJob=$("training-job-select").value;renderTraining();});
   $("confirm-accept").addEventListener("click",async()=>{const callback=confirmation;confirmation=null;$("confirm-dialog").close();if(callback)await callback();});
   window.addEventListener("beforeunload",()=>{disconnect();clearInterval(previewTimer);ownerToken="";});
   document.addEventListener("visibilitychange",()=>{if(!document.hidden && mode==="connected")refreshState(true);});
-  installExtraSettings();fillExtraSettings();render();showView(location.hash.slice(1) || "research");
+  installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");
   if(mode==="connected")refreshState();
   setInterval(refreshFrame,2000);
 })();

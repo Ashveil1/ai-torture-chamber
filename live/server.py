@@ -16,7 +16,8 @@ local CPU generation. Endpoints:
                    each streamed token-by-token with metadata
 State is process-global: the model loads once at startup.
 """
-import asyncio, collections, json, os, queue, random, re, secrets, threading, time
+import asyncio, collections, json, math, os, queue, random, re, secrets, threading, time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -162,8 +163,59 @@ _DOSE_CAPS = {
 _DOSE_CAP_OVERRIDE = os.environ.get("CHAMBER_DOSE_CAP")
 
 
+def adapter_dose_calibration() -> dict:
+    """An owner's dose sweep is bound to this exact adapter/runtime, not its base.
+
+    The trainer's finite-activation smoke screen is not a dose sweep. Without
+    a matching receipt, adapted workers can still serve the baseline (dose 0).
+    This receipt records owner measurements; it is not an independent audit.
+    """
+    if not MODEL_ADAPTER_ID:
+        return {"status": "not_applicable"}
+    path = os.environ.get("CHAMBER_ADAPTER_CALIBRATION")
+    if not path:
+        return {"status": "required", "reason": "adapter_dose_sweep_required"}
+    expected = {
+        "base_id": MODEL_ID, "base_revision": MODEL_REVISION,
+        "adapter_id": MODEL_ADAPTER_ID, "adapter_revision": MODEL_ADAPTER_REVISION,
+        "adapter_subfolder": MODEL_ADAPTER_SUBFOLDER,
+        "tokenizer_id": MODEL_TOKENIZER_ID, "tokenizer_revision": MODEL_TOKENIZER_REVISION,
+        "tokenizer_subfolder": MODEL_TOKENIZER_SUBFOLDER,
+    }
+    runtime = {"layer": LAYER, "dtype": str(DTYPE).removeprefix("torch."),
+               "quantize_4bit": QUANTIZE_4BIT}
+    try:
+        receipt_path = Path(path)
+        if receipt_path.stat().st_size > 32768:
+            raise ValueError
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if not isinstance(receipt, dict):
+            raise ValueError
+        if receipt.get("model") != expected or receipt.get("runtime") != runtime:
+            return {"status": "mismatch", "reason": "adapter_or_runtime_binding_mismatch"}
+        caps = receipt.get("caps", {})
+        hard, coherent = caps.get("hard"), caps.get("coherent")
+        measured_at = receipt.get("measured_at")
+        if not isinstance(measured_at, str) or datetime.fromisoformat(measured_at.replace("Z", "+00:00")).utcoffset() is None:
+            raise ValueError
+        if (type(receipt.get("schema_version")) is not int or receipt["schema_version"] != 1 or receipt.get("method") != "adapted_model_dose_sweep"
+                or receipt.get("passed") is not True
+                or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("evidence_sha256", "")))
+                or type(receipt["runtime"].get("quantize_4bit")) is not bool
+                or any(isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap)
+                       for cap in (hard, coherent))
+                or not 0 <= coherent <= hard):
+            raise ValueError
+        return {"status": "passed", "hard": float(hard), "coherent": float(coherent),
+                "evidence_sha256": receipt["evidence_sha256"], "measured_at": receipt["measured_at"]}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {"status": "invalid", "reason": "invalid_adapter_dose_receipt"}
+
+
 def dose_cap() -> float:
     """Max coherent user-facing dose for the served model (1x units)."""
+    if MODEL_ADAPTER_ID:
+        return adapter_dose_calibration().get("hard", 0.0)
     if _DOSE_CAP_OVERRIDE:
         return float(_DOSE_CAP_OVERRIDE)
     return _DOSE_CAPS.get(MODEL_ID, 6.0)
@@ -196,10 +248,14 @@ def served_model() -> str:
 
 def served_cap() -> float:
     """The served model's hard cap (the GPU worker clamps to its own)."""
+    if MODEL_ADAPTER_ID:
+        return dose_cap()
     return min(dose_cap(), _DOSE_CAPS.get(served_model(), dose_cap()))
 
 
 def coherent_cap() -> float:
+    if MODEL_ADAPTER_ID:
+        return adapter_dose_calibration().get("coherent", 0.0)
     env = os.environ.get("CHAMBER_COHERENT_CAP")
     cap = float(env) if env else _COHERENT_CAPS.get(served_model(), 4.0)
     return min(cap, served_cap())
@@ -907,6 +963,7 @@ async def health():
                          "layer": LAYER, "subject": "the subject",
                          "dose_cap": served_cap(),
                          "coherent_cap": coherent_cap(),
+                         "adapter_dose_calibration": adapter_dose_calibration(),
                          "served_model": served_model(),
                          "valences": list(VALENCES), **_model_pins()})
 

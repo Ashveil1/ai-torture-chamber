@@ -6,7 +6,8 @@ evidence-linked observations, and checkpoint their memory between browser passes
 Visitors see real screenshots and concise research decisions. The existing live
 model relay remains independently deployed.
 
-This is a functional alpha for developer integration. CPT readiness checks are
+This is a functional alpha for developer integration, with an implemented isolated
+Solana x402 inference broker. Provider-funded acceptance is still required. CPT readiness checks are
 scheduled; SFT requires individual instruction-note approval and an explicit
 operator submission. Checkpoint selection records the choice and exports pinned
 worker settings, without a remote deployment receipt. Actual 70B training, GPU
@@ -19,7 +20,7 @@ mode contains explicitly authored example traces, browser facsimiles, datasets,
 training receipts and checkpoints. It makes no provider calls. Switching to a
 connected endpoint never silently substitutes those examples for a failed API.
 
-The five views cover research, evidence, datasets, training and checkpoints.
+The six views cover research, evidence, datasets, training, checkpoints and funding.
 Operator setup and mission controls are separate from the public watch surface.
 The interface inherits the existing `grimoire-live` theme and its card/banner
 surfaces, uses the live page's 1180px layout, and self-hosts the same Cormorant
@@ -41,8 +42,11 @@ python -m uvicorn observatory.app:app --host 127.0.0.1 --port 8060 --workers 1
 ```
 
 Open `http://127.0.0.1:8060/`. The application redirects to the connected interface
-with `?api=/api`. Starting the service performs no crawl or GPU provisioning. A
-mission starts only through authenticated operator controls. The owner token is
+with `?api=/api`. A fresh, disabled configuration performs no crawl or GPU
+provisioning. Persisted running missions resume, and enabled training can submit
+a due CPT job after restart. Stop the mission and disable `training_enabled`
+before shutdown if recurring work should remain stopped. A new mission starts
+only through authenticated operator controls. The owner token is
 kept in page memory and must be re-entered after reload.
 
 Managed Browser Use Cloud does not require a local Chromium install. Its V4 API
@@ -53,9 +57,16 @@ Local Chromium and a dedicated custom CDP endpoint are also supported.
 
 ## Operator configuration
 
-Provide the researcher provider/model, corresponding API key, browser provider
-and browser credentials. OpenAI uses the Responses API with structured actions;
-Claude uses Browser Use's Anthropic adapter. Model identifiers are editable.
+The default researcher route is Solana USDC/x402 with local Chromium. Run the
+isolated payments process, configure its signer, approved merchant and explicit
+limits, then choose a compatible model from its catalog in operator setup. Native
+Responses and Anthropic Messages preserve images and structured browser actions.
+No research-provider API key or wallet key is entered into the page for x402.
+See `X402_OPERATIONS.md` for both service startup paths, funding and acceptance.
+Explicit direct OpenAI/Anthropic API-key routes remain available; managed browsers
+need their own credentials. Model availability is gateway-reported; capabilities
+require explicit gateway metadata or exact owner declarations. Paid compatibility
+has not been validated.
 
 The six specialties are Scholar, Skeptic, Sentinel, Cartographer, Archivist and
 Curator. `agent_count` chooses how many to run. A bounded pass limits one context
@@ -64,6 +75,10 @@ Pause stops further actions at a safe boundary; Stop closes owned sessions while
 preserving collected documents and notes. Restarting the service resumes a
 persisted running mission. The owner should intentionally stop a mission before
 shutting down if it should remain stopped on restart.
+Insufficient wallet funds or daily headroom releases owned browsers and uses
+`funding_paused`; only that same funding-paused mission can automatically resume
+after fresh preflight. An owner Pause or Stop takes precedence. Uncertain payment
+outcomes and permanent model/authentication/schema faults need owner attention.
 
 Collection follows robots.txt, waits between navigations to a host, rejects
 private network destinations and blocks non-GET/HEAD browser requests. This can
@@ -111,6 +126,11 @@ owner's registry. Configure a digest-pinned `training_image` in setup. Set
 enable `training_enabled`. Dataset exports are private; adapter publishing policy
 is independently configurable. Revision-pinned manifests, tokenizer/base commits
 and content hashes accompany every job.
+Actual sealed snapshots can also be downloaded through the owner-authenticated
+dataset export. The ZIP separates CPT/SFT train and validation JSONL, with
+rights/provenance, exclusions and hashes. Export verifies snapshot integrity and
+does not contact HF or provision GPU work. Mutable GPU image tags are refused;
+`training_image` must contain a full immutable `@sha256:` digest.
 
 Instruction tuning is a separate stage tied to a completed CPT parent. An example
 must have eligible sources, matching evidence passages, individual owner approval,
@@ -143,7 +163,11 @@ For a 70B QLoRA adapter, build the updated `live/Dockerfile.worker70` image and 
 a suitable CUDA worker. The exported `CHAMBER_QUANTIZE_4BIT=true` loads the full
 base with NF4 double quantization. The bundle includes `CHAMBER_LAYER` from the
 measured hook screen. This does not validate dose caps for the adapted model;
-recalibrate those before serving interventions. `CHAMBER_DEVICE_MAP=auto` is available for
+adapted workers serve dose zero until a matching owner-measured dose-sweep receipt
+is supplied through `CHAMBER_ADAPTER_CALIBRATION`. The receipt binds all base,
+adapter and tokenizer revisions/subfolders plus layer, dtype and quantization;
+generic cap overrides cannot bypass it. `X402_OPERATIONS.md` describes the format.
+`CHAMBER_DEVICE_MAP=auto` is available for
 placement across the worker's devices. This image and real 70B memory use still
 need validation on the owner's GPU infrastructure.
 
@@ -160,9 +184,8 @@ original-source benchmark content. Passage matching verifies quotation provenanc
 not the truth of a claim. No frozen consciousness-understanding or general
 capability-retention benchmark suite is implemented. The default held-out loss threshold
 allows up to 5% regression, so a passed checkpoint does not demonstrate improved
-domain competence. There is no adapted-model dose-cap calibration receipt;
-generic/base positive steering caps remain unless the owner overrides them.
-Measure and record adapted dose limits before serving an intervention.
+domain competence. The dose receipt guard checks formatting and exact deployment
+bindings; the owner must perform and retain the actual sweep measurements.
 
 ## Deployment alongside the existing website
 
@@ -202,39 +225,44 @@ workflow. Checkpoint selection is separate from these merge-triggered rollouts.
 Validate a staging image and separate endpoint, and agree the rollout policy
 before merging into the official repository.
 
-## Proposed developer-funded x402 extension
+## Developer-funded x402 research
 
-This funding layer is a proposal, not an implemented wallet or payment service.
-The developer would fund a dedicated Solana USDC spending wallet from an
-owner-controlled treasury. A separate payment broker would hold the spending
-signer, approve merchant/network/mint/recipient/price combinations, atomically
-reserve each quote and reconcile settlement receipts. Researchers would submit
-typed service requests without access to private keys or arbitrary signing tools.
-Do not automatically pay 402 responses encountered on crawled websites.
+`x402_broker.py` implements an isolated buyer for BlockRun's fixed Solana native
+inference endpoints using the official pinned x402 SVM client. The owner configures
+the spending key only in this process, enables payments, approves recipients and
+sets explicit per-request/day/reserve limits. The researcher supplies typed vendor
+requests without URLs, signing tools or private keys. Quotes are checked before
+atomic reservations. A durable request ID, encrypted response cache, exclusive
+ledger lock and conservative recovery prevent automatic repeat payment after an
+ambiguous result. Confirmed exact USDC transfers and SDK memos bind settlement to
+requests; an authenticated reconciliation operation only verifies an existing
+transfer. It never resends or signs one.
+Caller request IDs and bodies also persist encrypted across researcher restarts.
+Owner-only inspection/acknowledgement recovers a lost response or seals an idle
+unpaid request with a broker cancellation record before changing research context.
+Unknown payments cannot be cleared by acknowledgement. The Docker build context
+excludes payment ledgers, keys and SDK review scratch files.
 
-[x402 supports Solana](https://docs.x402.org/core-concepts/network-and-token-support).
-[BlockRun documents Solana-paid inference and search](https://blockrun.ai/x402/solana)
-with OpenAI-compatible and native vendor endpoints. Its public catalog lists the
-selected frontier researcher models, but no paid call or browser-action/schema
-compatibility test was performed. Evaluate a pinned official x402 SVM client and
-merchant adapter before enabling this mode; model availability is gateway-reported.
+The Funding view relays allowlisted public address/balance/reservation/receipt data
+and distinguishes unknown settlement from insufficient funding. No wallet is
+created by this PR. The owner funds an existing dedicated spending wallet; there
+is no visitor donation flow. No paid gateway call or on-chain transfer was performed
+for verification. A fixture suite exercises the real official SDK's transaction
+construction and Ed25519 signature with mocked mint/blockhash RPC, without transfer.
 
-Local Chromium is the simplest Solana-only browser runtime for this proposal.
-[Browser Use Cloud's x402 guide](https://docs.browser-use.com/cloud/guides/x402)
-uses USDC on Base to replenish project credits. Solana wallet funds cannot directly
-pay a Base-only endpoint. [HF Jobs billing](https://huggingface.co/docs/hub/jobs-pricing)
-remains a separate credit/billing account; a native HF Jobs x402 route was not
-verified. Keep chain balances, browser credits and GPU credits distinct. Publishing
-to Hugging Face and accessing the gated Llama base still require the owner's account.
+Use `compose.yaml` for separate researcher and payment containers, loopback public
+binding, private broker networking and independent persistent volumes. It has not
+been Docker-built in this environment. See `X402_OPERATIONS.md` and the two
+`.env.*.example` files for startup, receipt recovery and owner acceptance steps.
 
-The funding UI would show deposited and spendable USDC, reserved payments, settled
-spending, service/agent labels and transaction links. Funding exhaustion would
-release owned browsers and pause further paid work; replenishment could resume
-only a mission paused for funding, never override an owner pause or stop. Uncertain
-payments remain reserved until reconciled. GPU jobs need independent reservations
-and timeouts. On-chain settlement records payments; browsing and training remain
-off-chain computation. Paying for inference does not replace the existing
-source-rights or synthetic-training policy gates.
+[BlockRun advertises Solana-paid inference](https://blockrun.ai/x402/solana).
+The initial native protocol adapters cover compatible OpenAI/Claude models, not
+every model/service in the gateway catalog. There is no automatic model fallback
+or payment for crawled websites. [Browser Use Cloud x402](https://docs.browser-use.com/cloud/guides/x402)
+uses Base credits; this Solana broker does not pay it. [HF Jobs billing](https://huggingface.co/docs/hub/jobs-pricing)
+is also separate: GPU work, private Hub publication and gated model access require
+owner accounts. On-chain settlement records inference payments; browser activity
+and training are off-chain. Source/output training rights gates still apply.
 
 ## Verification and practical limits
 
@@ -253,6 +281,19 @@ license URLs, separate permission for social-domain subdomains and standalone
 navigation. Docker persistence instructions were corrected; container execution
 remains unverified.
 
+The x402 implementation passed **453 combined tests**, with three skips: the
+optional browser fixture and two official-SDK tests omitted in the research
+environment. Those SDK cases pass in the separate payments environment's
+**77-test payment suite**. The suite covers real offline SDK construction/signature,
+funding state/control races, explicit capability records, quote/receipt handling,
+sealed export, immutable GPU images and adapter-specific dose receipt bindings.
+Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
+caller restart records, owner-only inspection and delayed-request cancellation.
+Source-only UI checks pass 144 assertions, JS syntax/CSS parsing and compose
+isolation assertions pass, and both Python environments pass dependency checks.
+There was no new browser visual review, paid gateway call, transfer, Docker build
+or 70B GPU run. Existing FastAPI lifecycle deprecation warnings remain.
+
 ```sh
 python -m pip install -r observatory/requirements-test.txt
 python -m pytest observatory/tests -q
@@ -260,7 +301,7 @@ python -m pytest observatory/tests -q
 
 That command runs the sidecar suite; its tiny-model test is skipped without the
 optional model stack. `requirements-test.txt` also supplies the repository's
-NumPy/PyYAML dependencies. The reported 175-test handoff used the combined
+NumPy/PyYAML dependencies. The reported 453-test handoff used the combined
 `tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
 reproduce that scope in the separate test environment, add the CPU model stack
 while retaining the sidecar's Hub pin:
@@ -285,7 +326,7 @@ memory requirements also depend on sequence length and batch settings.
 
 To include the real-browser fixture, set `OBSERVATORY_TEST_CHROMIUM` to an existing
 Chromium executable. With the sidecar running and Node Playwright available,
-`node observatory/tests/ui-smoke.cjs` checks five desktop/mobile views and writes
+`node observatory/tests/ui-smoke.cjs` checks six desktop/mobile views and writes
 screenshots. `node observatory/tests/ui-contract.cjs` checks live-by-default state,
 authenticated secret submission, explicit paid-job retry confirmation and the
 secret-free deployment download against authored API fixtures. Neither submits
@@ -295,3 +336,9 @@ API state and events redact credentials, browser connection URLs and original
 full text. Owner settings are encrypted with Fernet. A generated key is protected
 with local file permissions/Windows ACLs; it must be backed up with the database.
 Do not rotate or delete it without migrating the saved settings.
+
+For the current source-only UI check, use `node observatory/tests/ui-source.cjs`.
+To reproduce SDK signing checks in the **separate payments environment**, install
+`requirements-payments.txt`, pytest and pytest-asyncio, then run
+`python -m pytest observatory/tests/test_x402_broker.py -q`. These tests construct
+unfunded fixture transactions with mocked RPC; they never send a transfer.

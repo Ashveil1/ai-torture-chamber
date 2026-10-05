@@ -157,7 +157,7 @@ async def test_owned_browser_stopped_even_when_work_raises(tmp_path, monkeypatch
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr("observatory.research.httpx.AsyncClient", lambda **kwargs: client)
     with pytest.raises(RuntimeError, match="work failed"):
-        async with browser_endpoint({"browser_use_api_key": "test-key"}, tmp_path) as endpoint:
+        async with browser_endpoint({"browser_provider": "browseruse", "browser_use_api_key": "test-key"}, tmp_path) as endpoint:
             assert endpoint.startswith("wss:")
             raise RuntimeError("work failed")
     assert calls == [("POST", "/api/v4/browsers"), ("PATCH", "/api/v4/browsers/session-1")]
@@ -309,7 +309,7 @@ async def test_cancellation_during_creation_still_stops_owned_browser(tmp_path, 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr("observatory.research.httpx.AsyncClient", lambda **kwargs: client)
     async def work():
-        async with browser_endpoint({"browser_use_api_key": "fixture-key"}, tmp_path):
+        async with browser_endpoint({"browser_provider": "browseruse", "browser_use_api_key": "fixture-key"}, tmp_path):
             pytest.fail("Cancelled provisioning must not enter the research body")
     task = asyncio.create_task(work())
     await created.wait()
@@ -340,7 +340,7 @@ async def test_provider_error_does_not_undo_operator_stop(store, monkeypatch):
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     monkeypatch.setattr("observatory.research.httpx.AsyncClient", lambda **kwargs: client)
     with pytest.raises(httpx.HTTPStatusError):
-        async with browser_endpoint({"browser_use_api_key": "fixture-key"}, store.path.parent, store):
+        async with browser_endpoint({"browser_provider": "browseruse", "browser_use_api_key": "fixture-key"}, store.path.parent, store):
             pytest.fail("Rejected provisioning must not start a browser")
     assert store.get_mission()["status"] == "stopping"
     assert store.list_records("browser_sessions")[0]["status"] == "creation_unknown"

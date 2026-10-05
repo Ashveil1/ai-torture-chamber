@@ -37,6 +37,9 @@ const fs=require('node:fs');
   await page.waitForFunction(()=>document.getElementById('mode-badge').textContent.includes('Connected'));
   await page.locator('#setup-open').click();
   await page.locator('#owner-token').fill('fixture-owner-secret');
+  // Explicit direct-provider fixture; the real default now uses x402/local.
+  await page.locator('#setting-provider').selectOption('openai');
+  await page.locator('#setting-browser').selectOption('browseruse');
   await page.locator('#setting-research-key').fill('fixture-teacher-secret');
   await page.locator('#setting-browser-key').fill('fixture-browser-secret');
   await page.locator('#setting-hf-token').fill('fixture-hub-secret');

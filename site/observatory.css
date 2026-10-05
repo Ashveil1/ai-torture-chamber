@@ -330,3 +330,22 @@ body.grimoire-live.grimoire-observatory {
   .grimoire-observatory .dataset-workspace { display: flex; flex-direction: column; }
   .grimoire-observatory .table-wrap { max-width: calc(100vw - 32px); }
 }
+
+/* Funding follows the existing grimoire panel and ledger hierarchy. */
+.grimoire-observatory .dataset-downloads { display:flex; flex-wrap:wrap; gap:8px; }
+.grimoire-observatory .funding-record { background:linear-gradient(180deg,var(--parch),var(--parch-2)); padding:22px; }
+.grimoire-observatory .funding-record h3,.grimoire-observatory .funding-boundary h3 { font-size:1.4rem; font-weight:600; }
+.grimoire-observatory .funding-wallet { padding:18px 0; border-bottom:1px solid var(--parch-line); }
+.grimoire-observatory .funding-wallet dt,.grimoire-observatory .funding-balances dt { font-size:.7rem; color:var(--bone-dim); margin-bottom:8px; }
+.grimoire-observatory .funding-wallet dd { margin:0; overflow-wrap:anywhere; font-size:.8rem; }
+.grimoire-observatory .funding-wallet small { display:block; margin-top:10px; color:var(--bone-dim); font-size:.65rem; }
+.grimoire-observatory .funding-wallet a,.grimoire-observatory .funding-receipt a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
+.grimoire-observatory .funding-balances { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; margin:22px 0; }
+.grimoire-observatory .funding-balances dd { margin:0; font-size:1.45rem; font-family:'Cormorant Garamond',Georgia,serif; }
+.grimoire-observatory .funding-receipt-heading { display:flex; gap:12px; align-items:baseline; justify-content:space-between; border-top:1px solid var(--parch-line); margin-top:22px; padding-top:18px; }
+.grimoire-observatory .funding-receipt-heading span { font-size:.7rem; color:var(--bone-dim); }
+.grimoire-observatory .funding-receipt { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:18px; padding:14px 0; border-bottom:1px solid var(--parch-line); font-size:.8rem; }
+.grimoire-observatory .funding-receipt small { display:block; font-size:.65rem; color:var(--bone-dim); overflow-wrap:anywhere; margin-top:5px; }
+.grimoire-observatory .funding-boundary { max-width:72ch; margin:25px 0; }
+.grimoire-observatory .funding-boundary p { font-size:.8rem; line-height:1.8; margin-top:8px; }
+@media(max-width:760px) { .grimoire-observatory .funding-balances { grid-template-columns:1fr; gap:18px; }.grimoire-observatory .funding-receipt { grid-template-columns:minmax(0,1fr) auto; }.grimoire-observatory .funding-receipt>span:last-child { grid-column:1/-1; } }

@@ -17,6 +17,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import time
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -24,8 +25,10 @@ import httpx
 
 from .curation import eligibility, family_id
 from .network import CollectionPolicy, USER_AGENT, canonical_url, public_get, public_url
-from .research_llm import researcher_model
+from .research_llm import MonitoredResearchModel, researcher_model, validate_research_settings
 from .store import Store, utc_now
+from .x402_client import (ResearchFundingError, ResearchPermanentError, ResearchTransientError,
+                         X402BrokerClient, X402_AGENT_LLM_TIMEOUT_SECONDS, classify_failure)
 
 ROLES = (
     ("scholar", "The Scholar", "Primary consciousness research, neuroscience and computational theories; seek original papers."),
@@ -206,7 +209,7 @@ async def stop_managed_browser(client, key: str, session_id: str):
 @asynccontextmanager
 async def browser_endpoint(settings: dict, data_root: Path, store: Store | None = None):
     """Owned cloud/local sessions are always stopped; custom CDP is only detached."""
-    provider = settings.get("browser_provider", "browseruse")
+    provider = settings.get("browser_provider", "local")
     if provider == "cdp":
         if settings.get("cdp_isolated_ack") is not True:
             raise ValueError("Custom CDP requires confirmation of a dedicated, unauthenticated research browser")
@@ -318,6 +321,8 @@ class ResearchSupervisor:
         self.in_step: set[str] = set()
         self.mission_id: str | None = None
         self.closed = False
+        self.next_funding_check = 0.0
+        self.release_mission_id: str | None = None
 
     async def start(self):
         sessions = [item for item in self.store.list_records("browser_sessions") if item.get("status") in {"creating", "creation_unknown", "active"}]
@@ -344,7 +349,7 @@ class ResearchSupervisor:
         self.closed = True
         if self.task:
             self.task.cancel()
-            with suppress(asyncio.CancelledError):
+            with suppress(asyncio.CancelledError, Exception):
                 await self.task
         await self._stop_workers()
 
@@ -377,48 +382,122 @@ class ResearchSupervisor:
         value.update(updates)
         self.store.put("agents", value)
 
+    def _fail_mission(self, error, *, agent_id=None, mission_id=None, funding_check=False):
+        """A provider response can never undo an operator pause or stop."""
+        status = "funding_paused" if isinstance(error, ResearchFundingError) else "faulted"
+        with self.store._lock:
+            mission = self.store.get_mission()
+            allowed = {"running", "funding_paused"} if funding_check else {"running"}
+            if (not mission_id or mission.get("id") == mission_id) and mission.get("status") in {"pausing", "paused"}:
+                # Preserve manual control while still releasing a failed paid session.
+                self.release_mission_id = mission.get("id")
+            if mission.get("status") not in allowed or (mission_id and mission.get("id") != mission_id):
+                return
+            self.store.set_mission({**mission, "status": status, "error_code": error.code,
+                                   "message": str(error), "pause_reason": "funding" if status == "funding_paused" else "runtime"})
+        if agent_id:
+            self._agent_update(agent_id, status=status, last_error=str(error), error_code=error.code)
+        self.store.put("connections", {"id": "research", "status": status, "message": str(error), "code": error.code})
+        self.store.event("mission." + status, str(error), agent_id=agent_id, run_id=mission.get("id"),
+                         data={"code": error.code})
+
+    async def _check_funding(self, mission: dict):
+        if time.monotonic() < self.next_funding_check:
+            return
+        self.next_funding_check = time.monotonic() + 10
+        settings = self.store.get_settings(private=True)
+        if settings.get("research_provider", "x402") != "x402":
+            self._fail_mission(ResearchPermanentError("PROVIDER_CHANGED", "Research provider changed; explicitly resume the mission."),
+                               mission_id=mission.get("id"), funding_check=True)
+            return
+        try:
+            settings = validate_research_settings(settings, require_config=True)
+            async with X402BrokerClient() as broker:
+                await broker.preflight(settings["research_model"], settings["research_protocol"])
+        except ResearchFundingError:
+            return
+        except ResearchTransientError:
+            return
+        except Exception as exc:
+            self._fail_mission(classify_failure(exc), mission_id=mission.get("id"), funding_check=True)
+            return
+        with self.store._lock:
+            current = self.store.get_mission()
+            if current.get("id") != mission.get("id") or current.get("status") != "funding_paused":
+                return
+            self.store.set_mission({**current, "status": "running", "pause_reason": None,
+                                   "error_code": None, "message": "Funding is available; research resumed."})
+        self.store.put("connections", {"id": "research", "status": "ready", "message": "Broker funds and advertised model capabilities available."})
+        self.store.event("mission.funding_resumed", "Funding is available; research resumed.", run_id=mission.get("id"))
+
     async def _watch(self):
         while not self.closed:
-            mission = self.store.get_mission()
-            status = mission.get("status")
-            if status == "running":
-                if self.mission_id != mission["id"]:
-                    await self._stop_workers()
-                    self.mission_id = mission["id"]
-                settings = self.store.get_settings(private=True)
-                count = max(1, min(len(ROLES), int(settings.get("agent_count", 6))))
-                if settings.get("browser_provider") == "cdp":
-                    count = 1  # A shared endpoint cannot provide independent agent contexts.
-                await self._reconcile_workers({mission["id"] + "-" + role for role, _, _ in ROLES[:count]})
-                for role, name, specialty in ROLES[:count]:
-                    agent_id = mission["id"] + "-" + role
-                    if agent_id not in self.workers or self.workers[agent_id].done():
-                        self._agent_update(agent_id, name=name, role=role, specialty=specialty, status="connecting")
-                        self.workers[agent_id] = asyncio.create_task(self._researcher(agent_id, specialty), name=role)
-                for agent in self.active.values():
-                    agent.resume()
-            elif status in {"pausing", "paused"}:
-                for agent in self.active.values():
-                    agent.pause()
-                if status == "pausing" and not self.in_step:
-                    # Agent callbacks stop at the next completed action boundary.
-                    self.store.set_mission({**mission, "status": "paused"})
-                    self.store.event("mission.paused", "Research paused; notes and frontier preserved")
-            elif status in {"stopping", "stopped"}:
-                if self.workers:
-                    await self._stop_workers()
-                    for item in self.store.list_records("agents"):
-                        if item["id"].startswith(self.mission_id or "__none__"):
-                            self._agent_update(item["id"], status="stopped")
-                if status == "stopping":
-                    self.store.set_mission({**mission, "status": "stopped"})
-                    self.store.event("mission.stopped", "Research stopped; collected evidence remains available")
+            try:
+                await self._tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._fail_mission(classify_failure(exc))
             await asyncio.sleep(0.5)
 
+    async def _tick(self):
+        mission = self.store.get_mission()
+        status = mission.get("status")
+        if self.release_mission_id:
+            if self.release_mission_id == mission.get("id"):
+                identifiers = list(self.workers)
+                await self._stop_workers()
+                for agent_id in identifiers:
+                    self._agent_update(agent_id, status="paused" if status == "pausing" else status)
+            self.release_mission_id = None
+        if status == "running":
+            if self.mission_id != mission["id"]:
+                await self._stop_workers()
+                self.mission_id = mission["id"]
+            settings = validate_research_settings(self.store.get_settings(private=True))
+            count = 1 if settings["browser_provider"] == "cdp" else settings["agent_count"]
+            await self._reconcile_workers({mission["id"] + "-" + role for role, _, _ in ROLES[:count]})
+            for role, name, specialty in ROLES[:count]:
+                agent_id = mission["id"] + "-" + role
+                if agent_id not in self.workers or self.workers[agent_id].done():
+                    self._agent_update(agent_id, name=name, role=role, specialty=specialty, status="connecting")
+                    self.workers[agent_id] = asyncio.create_task(self._researcher(agent_id, specialty), name=role)
+            for agent in list(self.active.values()):
+                agent.resume()
+        elif status in {"funding_paused", "faulted"}:
+            identifiers = list(self.workers)
+            await self._stop_workers()  # Unfunded/terminal states release every owned browser.
+            for agent_id in identifiers:
+                self._agent_update(agent_id, status=status)
+            if status == "funding_paused":
+                await self._check_funding(mission)
+        elif status in {"pausing", "paused"}:
+            for agent in list(self.active.values()):
+                agent.pause()
+            if status == "pausing" and not self.in_step:
+                with self.store._lock:
+                    current = self.store.get_mission()
+                    if current.get("id") == mission.get("id") and current.get("status") == "pausing":
+                        self.store.set_mission({**current, "status": "paused"})
+                        self.store.event("mission.paused", "Research paused; notes and checkpoints preserved")
+        elif status in {"stopping", "stopped"}:
+            if self.workers:
+                await self._stop_workers()
+                for item in self.store.list_records("agents"):
+                    if item["id"].startswith(self.mission_id or "__none__"):
+                        self._agent_update(item["id"], status="stopped")
+            if status == "stopping":
+                with self.store._lock:
+                    current = self.store.get_mission()
+                    if current.get("id") == mission.get("id") and current.get("status") == "stopping":
+                        self.store.set_mission({**current, "status": "stopped"})
+                        self.store.event("mission.stopped", "Research stopped; collected evidence remains available")
+
     async def _researcher(self, agent_id: str, specialty: str):
+        failures = 0
         while not self.closed:
             mission = self.store.get_mission()
-            if mission.get("id") != self.mission_id or mission.get("status") in {"stopping", "stopped"}:
+            if mission.get("id") != self.mission_id or mission.get("status") in {"stopping", "stopped", "faulted", "funding_paused"}:
                 return
             if mission.get("status") != "running":
                 self._agent_update(agent_id, status="paused")
@@ -426,14 +505,21 @@ class ResearchSupervisor:
                 continue
             try:
                 await self._pass(agent_id, specialty, mission)
+                failures = 0
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # SDK error strings can embed credentials or signed CDP URLs.
-                description = self.store.sanitize(str(exc)) if isinstance(exc, ValueError) else type(exc).__name__
-                self._agent_update(agent_id, status="disconnected", last_error=description)
-                self.store.event("agent.error", "Research pass could not continue: " + description, agent_id=agent_id)
-                await asyncio.sleep(15)
+                error = classify_failure(exc)
+                if isinstance(error, ResearchTransientError):
+                    failures += 1
+                    if failures < 3:
+                        self._agent_update(agent_id, status="retrying", last_error=str(error), retry_attempt=failures)
+                        self.store.event("agent.retry", str(error), agent_id=agent_id, data={"attempt": failures})
+                        await asyncio.sleep(2 ** failures)
+                        continue
+                    error = ResearchPermanentError("TRANSIENT_RETRY_EXHAUSTED", "Research retries were exhausted; inspect the provider and explicitly resume.")
+                self._fail_mission(error, agent_id=agent_id, mission_id=mission.get("id"))
+                return
 
     async def _pass(self, agent_id: str, specialty: str, mission: dict):
         os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
@@ -442,8 +528,11 @@ class ResearchSupervisor:
         from browser_use.agent.views import ActionResult
         from playwright.async_api import Error as BrowserError, async_playwright
 
-        settings = self.store.get_settings(private=True)
-        llm = researcher_model(settings)  # Validate credentials before provisioning a billed browser.
+        settings = validate_research_settings(self.store.get_settings(private=True), require_config=True)
+        if self.store.pending_research_requests(agent_id):
+            raise ResearchPermanentError("CALLER_RECOVERY_REQUIRED", "Review the agent's unresolved broker request before allocating a new research browser.")
+        raw_llm = researcher_model(settings, intent_store=self.store, scope=agent_id)
+        llm = MonitoredResearchModel(raw_llm, lambda error: self._fail_mission(error, agent_id=agent_id, mission_id=mission["id"]))
         memory = self.store.get("research_memory", agent_id) or {"id": agent_id, "passes": 0}
         recent = [item["text"] for item in self.store.list_records("notes") if item.get("agent_id") == agent_id][-12:]
         task = (mission["objective"] + "\nYour specialty: " + specialty +
@@ -454,6 +543,10 @@ class ResearchSupervisor:
             client = getattr(llm, "client", None) or getattr(llm, "http_client", None)
             if client:
                 resources.push_async_callback(client.close if hasattr(client, "close") else client.aclose)
+            if hasattr(raw_llm, "preflight"):
+                await raw_llm.preflight()  # Catalog, native schema controls and funds before browser provisioning.
+            if self.store.get_mission().get("status") != "running" or self.store.get_mission().get("id") != mission["id"]:
+                raise asyncio.CancelledError
             endpoint = await resources.enter_async_context(browser_endpoint(settings, self.store.path.parent, self.store))
             async with async_playwright() as pw, AsyncExitStack() as browser_resources:
                 observer = await pw.chromium.connect_over_cdp(endpoint)
@@ -559,6 +652,7 @@ class ResearchSupervisor:
 
                 agent = Agent(task=task, llm=llm, browser=browser, tools=tools, use_vision=True,
                               extend_system_message=SYSTEM, register_new_step_callback=next_step,
+                              llm_timeout=X402_AGENT_LLM_TIMEOUT_SECONDS if settings["research_provider"] == "x402" else 420,
                               enable_signal_handler=False, generate_gif=False,
                               use_judge=False,
                               file_system_path=str(self.store.path.parent / "agent-files" / agent_id))
@@ -567,6 +661,8 @@ class ResearchSupervisor:
                 try:
                     self._agent_update(agent_id, status="browsing", model=llm.name)
                     history = await agent.run(max_steps=max(5, min(50, int(settings.get("steps_per_pass", 25)))), on_step_end=after_step)
+                    if agent.state.consecutive_failures >= 3:
+                        raise ResearchTransientError("ACTION_RETRIES_EXHAUSTED", "Research action retries were exhausted.")
                     latest = self.store.get("research_memory", agent_id) or memory
                     self.store.put("research_memory", {**latest, "passes": memory.get("passes", 0) + 1,
                                                        "summary": (history.final_result() or latest.get("summary", ""))[:12000]})

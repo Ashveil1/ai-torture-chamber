@@ -23,7 +23,7 @@ const assert=require('node:assert/strict');
   await page.locator('#mission-step').click();
   await page.locator('[data-agent]').nth(1).click();
   await page.locator('#toast').waitFor({state:'hidden'});
-  for(const view of ['evidence','datasets','training','checkpoints']){
+  for(const view of ['evidence','datasets','training','checkpoints','funding']){
     await page.locator('[data-view="'+view+'"]').click();
     await page.screenshot({path:path.join(output,view+'-desktop.png'),fullPage:true});
   }
@@ -49,7 +49,7 @@ const assert=require('node:assert/strict');
   await page.locator('#setup-dialog [data-close-dialog]').click();
   assert.ok(!await page.evaluate(()=>JSON.stringify({...localStorage}).includes('UI_SECRET_MUST_NOT_PERSIST')));
   await page.setViewportSize({width:390,height:844});
-  for(const view of ['research','evidence','datasets','training','checkpoints']){
+  for(const view of ['research','evidence','datasets','training','checkpoints','funding']){
     await page.locator('[data-view="'+view+'"]').click();
     await page.screenshot({path:path.join(output,view+'-mobile.png'),fullPage:true});
     const overflow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll('body *')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0 && r.right>innerWidth+1}).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:Math.round(el.getBoundingClientRect().right),width:Math.round(el.getBoundingClientRect().width)})).slice(0,18)}));
@@ -68,7 +68,7 @@ const assert=require('node:assert/strict');
   assert.equal(await page.locator('[data-agent]').count(),0,'Disconnected mode must not substitute preview agents');
   assert.match(await page.locator('#mode-description').innerText(),/unavailable|disconnect|failed|HTTP|connect|Not Found/i);
   assert.deepEqual(errors,[],'Browser JavaScript errors');
-  fs.writeFileSync(path.join(output,'verification.json'),JSON.stringify({desktopViews:5,mobileViews:5,secretStorage:'passed',connectedEmpty:'passed',disconnected:'passed',anonymousControls:result.status(),errors},null,2));
+  fs.writeFileSync(path.join(output,'verification.json'),JSON.stringify({desktopViews:6,mobileViews:6,secretStorage:'passed',connectedEmpty:'passed',disconnected:'passed',anonymousControls:result.status(),errors},null,2));
   await browser.close();
-  console.log(JSON.stringify({output,checks:'passed',screenshots:16}));
+  console.log(JSON.stringify({output,checks:'passed',screenshots:18}));
 })().catch(error=>{console.error(error);process.exit(1)});
