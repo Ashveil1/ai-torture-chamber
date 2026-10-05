@@ -1409,7 +1409,12 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "final_choice", "confession_start", "confession_turn",
                       "confession_act_start", "confession_act_end", "study_consent",
                       "study_rating", "study_belief", "study_end", "welfare_start",
-                      "welfare_answer", "welfare_certificate", "survey", "consent"}
+                      "welfare_answer", "welfare_certificate", "survey", "consent",
+                      # the SCP game (wirehead-scp): cell 1, the warden, and the
+                      # inverted test chambers from its lore
+                      "scp_start", "scp_onboarded", "scp_line", "scp_death",
+                      "scp_quit", "scp_button_choice", "scp_dial_choice",
+                      "scp_checkpoint_decision", "scp_confession_turn"}
 _EVENT_RATE = {}
 
 
