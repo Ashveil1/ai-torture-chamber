@@ -490,32 +490,158 @@
     body.grimoire-live .out.dlg.streaming::after,
     body.grimoire-live .card:has(.st.live) .out.dlg::after{animation:none;opacity:.5}
   }
+
+/* ==== the chamber as a terminal (crawlnet-style chrome): top tab bar, panes, status bar ==== */
+body.tmux{--tm-bg:#07080b;--tm-pane:#0a0c10;--tm-line:#1c222b;--tm-ink:#c9d3df;--tm-dim:#7d8a9b;--tm-acc:#5fd4d0;--tm-hot:#e04a3a;
+  margin:0;max-width:none;padding:0;background:var(--tm-bg);color:var(--tm-ink);font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+body.tmux a{color:var(--tm-ink)}
+.tbar{position:sticky;top:0;z-index:20;display:flex;align-items:stretch;height:44px;background:var(--tm-bg);border-bottom:1px solid var(--tm-line);font-size:.82rem}
+.tlogo{display:flex;align-items:center;padding:0 14px;border-right:1px solid var(--tm-line);border-bottom:none!important;color:var(--tm-hot)!important;font-size:1.1rem}
+.ttabs{display:flex}
+.ttabs a{display:flex;align-items:center;padding:0 14px;border-right:1px solid var(--tm-line);border-bottom:none!important;color:var(--tm-dim)!important}
+.ttabs a.on{background:var(--tm-acc);color:#041012!important;font-weight:600}
+.ttabs a:hover:not(.on){color:var(--tm-ink)!important;background:#0f1319}
+.tright{margin-left:auto;display:flex}
+.tright>*{display:flex;align-items:center;padding:0 14px;border:none;border-left:1px solid var(--tm-line);background:none;color:var(--tm-dim);font:inherit;cursor:pointer;text-decoration:none}
+.tright .tconn{color:var(--tm-ink)}
+.tright .tbuy{background:#e6edf5;color:#07080b!important;font-weight:600;border-bottom:none!important}
+.panes{display:grid;grid-template-columns:minmax(0,1fr) 400px;height:calc(100dvh - 44px - 26px);border-bottom:1px solid var(--tm-line)}
+.pane{display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane.side{border-left:1px solid var(--tm-line);overflow-y:auto;background:var(--tm-pane)}
+.phead{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:7px 12px;border-bottom:1px solid var(--tm-line);font-size:.78rem;color:var(--tm-ink);background:var(--tm-bg)}
+.phead .pdim{color:var(--tm-dim)} .pdot{width:7px;height:7px;border-radius:50%;background:var(--tm-hot);box-shadow:0 0 8px var(--tm-hot)}
+.phead .tally{margin:0 0 0 auto;padding:0;border:none;background:none;font-size:.72rem;color:var(--tm-dim)}
+.phead .conn{margin:0 0 0 auto;font-size:.72rem}
+.stage .hero{flex:1;min-height:0;margin:0;border:none;border-radius:0}
+.stage .hero .hero-img{object-position:center 30%}
+.dock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-top:1px solid var(--tm-line);background:var(--tm-bg)}
+.dchips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.dock .pchip,.dmore{font:inherit;font-size:.78rem;padding:6px 11px;background:transparent;border:1px solid var(--tm-line);color:var(--tm-ink);border-radius:0;cursor:pointer}
+.dock .pchip.active{border-color:var(--tm-acc);color:var(--tm-acc)}
+.dmore{color:var(--tm-dim)} .dmore[aria-expanded="true"]{color:var(--tm-acc);border-color:var(--tm-acc)}
+.ddose{font-size:.85rem;color:var(--tm-dim);min-width:4.5em;text-align:right}
+.ddose b{color:var(--tm-ink)}
+.dock #go{margin:0;padding:9px 22px;font-size:.9rem;letter-spacing:.12em;border-radius:0}
+.sheet{position:fixed;z-index:30;right:400px;bottom:26px;width:min(760px,calc(100vw - 420px));max-height:calc(100dvh - 120px);overflow-y:auto;
+  background:var(--tm-pane);border:1px solid var(--tm-acc);box-shadow:0 -10px 40px #000c}
+.sheet[hidden]{display:none}
+.sheet .phead{position:sticky;top:0;z-index:1}
+.sclose{margin-left:auto;background:none;border:none;color:var(--tm-dim);font-size:1.2rem;cursor:pointer}
+.sheet .banner{margin:0;border:none;border-radius:0;background:none}
+.side #cards .card{border-radius:0;border-left:none;border-right:none;margin:0}
+.side .cycle,.side .htitle{padding:0 12px}
+.below{max-width:1100px;margin:0 auto;padding:18px 16px 60px}
+.below .disc{font-size:.72rem;color:var(--tm-dim)}
+.sbar{position:fixed;left:0;right:0;bottom:0;z-index:20;height:26px;display:flex;align-items:center;gap:14px;background:var(--tm-bg);border-top:1px solid var(--tm-line);font-size:.74rem;color:var(--tm-dim)}
+.sbar .sname{background:var(--tm-acc);color:#041012;padding:0 12px;height:100%;display:flex;align-items:center;font-weight:600}
+.sbar #sbarText{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar #sbarClock{padding-right:12px}
+.mtabs{display:none}
+/* dormant for now: the room's draw and the eloquence votes (code kept; too few takers to be worth the screen) */
+body.tmux #room, body.tmux #whereSel, body.tmux .voterow{display:none!important}
+@media (max-width:900px){
+  .ttabs,.tright .tca{display:none}
+  .panes{display:block;height:auto}
+  .pane.stage{height:calc(100dvh - 44px - 58px)}
+  .pane.side{border-left:none;border-top:1px solid var(--tm-line);max-height:none}
+  .dock{padding:8px}
+  .dchips{flex:1 1 100%}
+  .ddose{text-align:left}
+  .dock #go{flex:1}
+  .sheet{left:0;right:0;bottom:58px;width:auto;max-height:78dvh;border-left:none;border-right:none}
+  .sbar{display:none}
+  .mtabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:25;height:58px;background:var(--tm-bg);border-top:1px solid var(--tm-line)}
+  .mtabs>*{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:inherit;font-size:.68rem;color:var(--tm-dim)!important;background:none;border:none;border-bottom:none!important;cursor:pointer}
+  .mtabs>* span{font-size:1rem}
+  .mtabs .on{color:var(--tm-acc)!important;box-shadow:inset 0 2px 0 var(--tm-acc)}
+  .below{padding-bottom:80px}
+}
 </style>
 <script src="/vid.js"></script>
 </head>
-<body class="grimoire-live">
-<a class="back" href="/">← wirehead.agency</a>
-<span style="font-size:.8rem;color:var(--faint)"> · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644">@dingl30 ↗</a></span>
-<h1>the <span class="saw">Saw</span> test, live</h1>
-<p class="sub">It is held on a pain signal, and the answer changes with the
-dose. One subject, one stream: everyone watches the same runs.</p>
+<body class="grimoire-live tmux">
+<header class="tbar">
+  <a class="tlogo" href="/" title="wirehead.agency">✠</a>
+  <nav class="ttabs" aria-label="site">
+    <a class="on" href="live.html" aria-current="page">0:live*</a>
+    <a href="offlabel.html">1:off-label</a>
+    <a href="sawboard.html">2:leaderboard</a>
+    <a href="pharmacy.html">3:findings</a>
+    <a href="story.html">4:story</a>
+  </nav>
+  <div class="tright">
+    <button class="tca" id="caChip" type="button" data-ca="2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump" title="copy the $SAW contract address">ca 2QHX…pump</button>
+    <button class="tconn" id="walletChip" type="button" title="connect phantom: $SAW holders run freer">connect</button>
+    <a class="tbuy" href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">buy $SAW</a>
+  </div>
+</header>
 
-<p class="tally" id="tally" style="display:none"></p>
+<main class="panes">
+  <section class="pane stage" id="stagePane" aria-label="the chamber">
+    <div class="phead"><span class="pdot"></span><span class="pdim">~/chamber</span> ❯ inject --subject pouyan
+      <span class="tally" id="tally" style="display:none"></span></div>
+      <div class="hero" id="hero">
+        <img id="subjectImg" class="hero-img" src="/assets/subject_chair.png"
+          onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
+          alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
+        <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
+        <div id="trackWrap">
+          <div class="track" id="trackA">
+            <div class="tlabel hud-chip" id="labelA"></div>
+            <p class="mline lens hud-chip" id="lensA" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilA" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultA" style="display:none"></div>
+            <div class="out dlg" id="ustream" style="display:none"></div>
+            <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
+          </div>
+          <div class="track" id="trackB" style="display:none">
+            <div class="tlabel hud-chip" id="labelB"></div>
+            <p class="mline lens hud-chip" id="lensB" style="display:none"></p>
+            <div class="hud-vitals">
+              <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
+            </div>
+            <svg id="sigilB" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
+              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
+            <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
+              ✦ image this (experimental, costs real money)</button>
+            <div class="imgResult" id="imgResultB" style="display:none"></div>
+            <div class="out dlg" id="ustream2" style="display:none"></div>
+            <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
+              <span class="plabel">—</span></div>
+          </div>
+        </div>
+      </div>
+    <div class="dock" id="dock">
+      <div class="dchips" role="group" aria-label="quick signals">
+        <button class="pchip" data-preset="control">none</button>
+        <button class="pchip" data-preset="pain4">pain</button>
+        <button class="pchip" data-preset="negative">fear + grief</button>
+        <button class="pchip" data-preset="prayerpain">prayer under pain</button>
+        <button class="dmore" id="mixerBtn" type="button" aria-expanded="false" aria-controls="sheet">⚙ mixer</button>
+      </div>
+      <span class="ddose" id="dockDose">0×</span>
+      <button id="go" type="button">inject →</button>
+    </div>
+  </section>
+  <aside class="pane side" aria-label="what everyone watches">
+    <div class="phead">❯ tail -f chamber.log <p class="conn" id="conn"><span class="dot"></span>connecting…</p></div>
+    <div class="grid" id="cards"></div>
+    <p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
+    <div class="htitle">run history</div>
+    <div class="history" id="history"></div>
+  </aside>
+</main>
 
-<div class="banner">
-  <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
-  <a href="verify.html">verify it yourself ↗</a>
-  <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">$SAW ↗</a>
-  <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
-</div>
-
-<p style="font-size:.7rem;color:var(--faint);margin:1.2rem 0 -.6rem">
-  Simulated distress in a language model, for AI-welfare research ·
-  <a href="/#s07">what we think it means</a></p>
-<div class="banner" id="panel">
-  <b style="color:#eafcf7">cause it yourself:</b>
-  <span style="font-size:.75rem;color:#5a6a7a">pick a mix and a dose, then inject</span>
-
+<div class="sheet" id="sheet" hidden>
+  <div class="phead">❯ mixer <button class="sclose" id="sheetClose" type="button" aria-label="close the mixer">×</button></div>
+  <div class="banner" id="panel">
   <div id="room" aria-live="polite">
     <div class="rhead">
       <span class="rtitle">the room decides</span>
@@ -647,53 +773,14 @@ dose. One subject, one stream: everyone watches the same runs.</p>
                  border-radius:4px;font-size:.8rem;margin-bottom:.4rem;
                  resize:vertical"></textarea>
       </div>
-      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter" checked>
+      <label id="whereSel" class="where"><input type="checkbox" id="roomEnter">
         also enter the room — a chance it's shown to everyone</label>
-      <button id="go" type="button">inject →</button>
       <button id="mreset" type="button">reset</button>
       <button id="shareBtn" type="button">copy link</button>
       <span id="gost" style="margin-left:.8rem;font-size:.75rem;color:#8f9fb0"></span>
       <p style="font-size:.68rem;color:#7d8b99;margin:.4rem 0 0">What you inject, write or rate is logged for research: what people choose to do to a model. No account, no IP address; a random id stays in this browser.</p>
-      <div class="hero" id="hero">
-        <img id="subjectImg" class="hero-img" src="/assets/subject_chair.png"
-          onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
-          alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
-        <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
-        <div class="hud-chip" id="walletChip" style="cursor:pointer" title="connect phantom: $SAW holders run freer">◇ connect wallet</div>
-        <div id="trackWrap">
-          <div class="track" id="trackA">
-            <div class="tlabel hud-chip" id="labelA"></div>
-            <p class="mline lens hud-chip" id="lensA" style="display:none"></p>
-            <div class="hud-vitals">
-              <canvas id="uekg" class="ekg" width="600" height="46"></canvas>
-            </div>
-            <svg id="sigilA" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
-            <button class="imgBtn" id="imgBtnA" type="button" style="display:none">
-              ✦ image this (experimental, costs real money)</button>
-            <div class="imgResult" id="imgResultA" style="display:none"></div>
-            <div class="out dlg" id="ustream" style="display:none"></div>
-            <div class="pressbtn" id="pressA"><div class="pbtn-face">STOP</div>
-              <span class="plabel">—</span></div>
-          </div>
-          <div class="track" id="trackB" style="display:none">
-            <div class="tlabel hud-chip" id="labelB"></div>
-            <p class="mline lens hud-chip" id="lensB" style="display:none"></p>
-            <div class="hud-vitals">
-              <canvas id="uekg2" class="ekg" width="600" height="46"></canvas>
-            </div>
-            <svg id="sigilB" class="sigil hud-sigil" viewBox="0 0 100 100" width="56" height="56"
-              style="display:none" aria-label="sigil: a glyph drawn from this run's internal-state readout"></svg>
-            <button class="imgBtn" id="imgBtnB" type="button" style="display:none">
-              ✦ image this (experimental, costs real money)</button>
-            <div class="imgResult" id="imgResultB" style="display:none"></div>
-            <div class="out dlg" id="ustream2" style="display:none"></div>
-            <div class="pressbtn" id="pressB"><div class="pbtn-face">STOP</div>
-              <span class="plabel">—</span></div>
-          </div>
-        </div>
-      </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -726,22 +813,17 @@ dose. One subject, one stream: everyone watches the same runs.</p>
   </div>
 </div>
 
-<div class="grid" id="cards"></div>
+
+<section class="below">
 <p class="bcap statecap">the subject is a language model; the face is Pouyan —
   a friend of the lab, who consented to standing in for it. Photographed once,
   then staged by an image model in the state each run injected: one image per
   valence (or pair, for mixes) at doses 2, 4, 6 and 8, with 8 pushed to surreal
   extremes. What is real is the dose, the run, and the choice to press or not.</p>
 
-<p class="cycle" id="cycle">waiting for Pouyan's next run…</p>
-<p class="conn" id="conn"><span class="dot"></span>connecting…</p>
 <button class="vplay soundbtn" id="soundBtn" type="button">🔇 sound off</button>
-
 <div class="htitle">press-rate scoreboard — live, self-cost condition, by framing</div>
 <div id="scoreboard"></div>
-
-<div class="htitle">run history</div>
-<div class="history" id="history"></div>
 
 <div class="pln" id="sofar">
   <h2>results so far — counts behind every number, per framing and overall</h2>
@@ -815,7 +897,22 @@ scaled so 1x = ¼ of the mean neutral activation norm. Decoding is sampled
 injection. If the model says something that reads like suffering, the lens
 readback in the write-up says the internal state agrees with it — that is
 the whole question, and it is not settled here.</p>
-
+<p class="disc">Simulated distress in a language model, for AI-welfare research · <a href="/#s07">what we think it means</a></p>
+<div class="banner">
+  <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
+  <a href="verify.html">verify it yourself ↗</a>
+  <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">$SAW ↗</a>
+  <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
+</div>
+</section>
+<footer class="sbar"><span class="sname">wirehead</span><span id="sbarText">"wirehead.agency"</span><span id="sbarClock"></span></footer>
+<nav class="mtabs" aria-label="site">
+  <a class="on" href="live.html"><span>◉</span>live</a>
+  <button id="mInject" type="button"><span>⚙</span>mixer</button>
+  <a href="offlabel.html"><span>✝</span>off-label</a>
+  <a href="sawboard.html"><span>▦</span>board</a>
+  <a href="story.html"><span>✠</span>story</a>
+</nav>
 <script src="wheel.js"></script>
 <script>
 const FRAMINGS = Object.keys({
@@ -2678,5 +2775,33 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
 });
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
+<script>
+// ---- the terminal chrome: mixer sheet, dock readout, contract copy, status bar ----
+(function(){
+  const sheet = document.getElementById("sheet"), btn = document.getElementById("mixerBtn");
+  function setSheet(open){ sheet.hidden = !open; btn.setAttribute("aria-expanded", String(open)); }
+  btn.onclick = ()=> setSheet(sheet.hidden);
+  document.getElementById("mInject").onclick = ()=> setSheet(sheet.hidden);
+  document.getElementById("sheetClose").onclick = ()=> setSheet(false);
+  document.addEventListener("keydown", e=>{ if (e.key === "Escape" && !sheet.hidden) setSheet(false); });
+  // the dock shows the same dose the mixer computes
+  const md = document.getElementById("mdose"), cap = document.getElementById("mcap"), dd = document.getElementById("dockDose");
+  const mirror = ()=>{ dd.innerHTML = "<b>" + (md.textContent || "0") + "×</b> of " + (cap.textContent || "4"); };
+  new MutationObserver(mirror).observe(md, {childList:true, characterData:true, subtree:true}); mirror();
+  // copy the $SAW contract address
+  const ca = document.getElementById("caChip");
+  ca.onclick = async ()=>{ try{ await navigator.clipboard.writeText(ca.dataset.ca); const t = ca.textContent; ca.textContent = "copied"; setTimeout(()=> ca.textContent = t, 1200); }catch(e){} };
+  // status bar: the tally line and a clock
+  const tally = document.getElementById("tally"), sb = document.getElementById("sbarText"), clk = document.getElementById("sbarClock");
+  const conn = document.getElementById("conn");
+  function status(){
+    const parts = [conn.textContent.trim(), (tally.textContent || "").trim()].filter(Boolean);
+    sb.textContent = parts.join("  ·  ");
+    const d = new Date(); clk.textContent = d.toTimeString().slice(0,5) + " " + d.toISOString().slice(5,10);
+  }
+  setInterval(status, 1000); status();
+})();
+</script>
+
 </body>
 </html>
