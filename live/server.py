@@ -933,15 +933,23 @@ async def steer(req: Request):
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
-    if not _rate_ok(ip):
+    mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
+    if not _rate_ok(ip, mult):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
-                      "(3 runs/minute/IP, and it rests after %d runs/hour)" % _GLOBAL_HOURLY_CAP},
+                      "(3 runs/minute/IP, and it rests after %d runs/hour)"
+                      % _GLOBAL_HOURLY_CAP
+                      + (" — holders run freer: connect a wallet on the ledger"
+                         if tier == "BASE" else "")},
             status_code=429)
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
     past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
+    if past_cliff and not unlocked:
+        # past-the-cliff is a die-hard perk: OPERATOR/PATRON wallets only.
+        # anyone can still run at the coherent cap.
+        past_cliff = False
     who = _who(req, body)
     requested = {k: (body[k] if k == "mix" else str(body[k])[:60])
                  for k in ("mix", "valence", "dose", "topic", "framing")
@@ -1356,7 +1364,13 @@ _ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
 _EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
 _VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
-                      "survey", "consent"}
+                      "checkpoint_start", "checkpoint_decision", "checkpoint_day",
+                      "checkpoint_end", "final_start", "final_turn",
+                      "final_encounter_start", "final_encounter_end", "final_reward",
+                      "final_choice", "confession_start", "confession_turn",
+                      "confession_act_start", "confession_act_end", "study_consent",
+                      "study_rating", "study_belief", "study_end", "welfare_start",
+                      "welfare_answer", "welfare_certificate", "survey", "consent"}
 _EVENT_RATE = {}
 
 
@@ -1533,6 +1547,49 @@ def canon(n: int = 6):
     return JSONResponse({"min": CANON_MIN, "lines": best[:max(1, min(n, 24))],
                          "durable": _redis_ok()},
                         headers={"Cache-Control": "public, max-age=30"})
+
+# ---- Checkpoint's applicants: real requests from this chamber's run log -----
+# A sample of what visitors actually injected (feeling shares, dose) and what
+# the subject actually said back. Only button-framing runs: their prompt is the
+# site's own text, so no visitor-written words reach other players, and the
+# replies are the same ones the live page's public history already shows.
+_CP_CACHE = {"t": 0.0, "pool": []}
+
+
+def _cp_pool():
+    r = _redis()
+    rows = r.lrange("chamber:runs", 0, 4999) if r is not None else []
+    out = []
+    for row in rows:
+        try:
+            e = json.loads(row)
+        except Exception:
+            continue
+        if e.get("source") not in ("user", "round") or e.get("scenario") not in FRAMINGS:
+            continue
+        text = (e.get("text") or "").strip()
+        val = e.get("valence")
+        mix = e.get("mix") if val == "mix" else ({val: 1.0} if val in MIX_KEYS else None)
+        if not text or not mix or e.get("truncated"):
+            continue
+        out.append({"uid": e.get("uid"), "ts": int(e.get("ts") or 0),
+                    "mix": {k: round(float(v), 3) for k, v in mix.items() if k in MIX_KEYS},
+                    "dose": e.get("dose"), "scenario": e.get("scenario"),
+                    "text": text[:500], "press_logit": e.get("press_logit"),
+                    "source": e.get("source")})
+    return out
+
+
+@app.get("/checkpoint/requests")
+async def checkpoint_requests(n: int = 60):
+    now = time.time()
+    if now - _CP_CACHE["t"] > 600:
+        _CP_CACHE.update(t=now, pool=await asyncio.get_event_loop().run_in_executor(None, _cp_pool))
+    pool = _CP_CACHE["pool"]
+    pick = random.sample(pool, min(len(pool), max(1, min(int(n), 200))))
+    return JSONResponse({"n": len(pool), "requests": pick},
+                        headers={"Cache-Control": "public, max-age=60"})
+
 
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
@@ -2193,7 +2250,29 @@ _RATE_LIMIT, _RATE_WINDOW = 3, 60.0
 _GLOBAL_RUNS = collections.deque(maxlen=4096)   # timestamps of all runs
 _GLOBAL_HOURLY_CAP = int(os.environ.get("CHAMBER_HOURLY_CAP", "900"))   # ~15/min site-wide; GPU spend is bounded by the endpoint's max workers
 
-def _rate_ok(ip):
+# ---- wallet tiers on the live chamber: holders run free-er. The sawboard
+# join stores the wallet; the tier is the same schedule as the ledger.
+# BASE (or no wallet): standard limits. OPERATOR (>=100k $SAW): 2x rate
+# limit, past-the-cliff unlocked. PATRON (>=1M): 4x, unlocked.
+_WALLET_TIER_CACHE = {}   # wallet -> (tier, expires)
+
+async def _wallet_tier(wallet):
+    """-> (multiplier, tier_name, unlocked) with a 10-min cache per wallet."""
+    import time as _t
+    if not wallet:
+        return 1, "BASE", False
+    now = _t.time()
+    hit = _WALLET_TIER_CACHE.get(wallet)
+    if hit and hit[1] > now:
+        return hit[0]
+    bal = await _saw_balance(wallet)
+    allow, tier = _tier(bal)
+    mult = {"PATRON": 4, "OPERATOR": 2}.get(tier, 1)
+    val = (mult, tier, tier in ("PATRON", "OPERATOR"), now + 600)
+    _WALLET_TIER_CACHE[wallet] = val
+    return val[:3]
+
+def _rate_ok(ip, mult=1):
     now = time.time()
     w, c = _RATE.get(ip, (now, 0))
     if now - w > _RATE_WINDOW:
@@ -2702,9 +2781,12 @@ async def sawboard():
                 info = json.loads(blob)
                 bal = await _saw_balance(wallet)
                 allow, tier = _tier(bal)
+                xh = (info.get("x_handle") or "").strip().lower()
                 rows.append({"alias": info.get("alias") or wallet[:4] + "…",
                              "x": _anon_x(info),
-                             "pain": pain.get(wallet, 0),
+                             # backfilled totals are keyed by x handle; live
+                             # wallet-keyed entries win when both exist
+                             "pain": pain.get(wallet) or pain.get(xh, 0),
                              "saw_balance": bal,
                              "tier": tier, "allowance": allow})
         except Exception as e:

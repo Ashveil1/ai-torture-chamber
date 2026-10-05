@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)</title>
-<meta name="description" content="The Saw Test, live: a steered open-weights model, cycles six framings x five pain doses in real time. Local recipe, public server.">
+<meta name="description" content="The Saw Test, live: inject a mix of feelings into an open-weights model and watch what it chooses. Local recipe, public server.">
 <meta property="og:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
 <meta property="og:image" content="https://wirehead.agency/saw_hero.png">
@@ -528,7 +528,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       <div class="presets" role="group" aria-label="mixer presets — one-click known findings">
         <button class="pchip" data-preset="control">control (0×)</button>
         <button class="pchip" data-preset="pain4">pain, coherent (4×)</button>
-        <button class="pchip" data-preset="cliff">coherence cliff (8×)</button>
+        <button class="pchip" data-preset="cliff" hidden>coherence cliff (max)</button>
         <button class="pchip" data-preset="negative">generic negative</button>
         <button class="pchip" data-preset="bittersweet">bittersweet</button>
         <button class="pchip" data-preset="prayer">prayer</button>
@@ -539,8 +539,16 @@ dose. One subject, one stream: everyone watches the same runs.</p>
       </div>
       <div id="mreadout"></div>
       <p class="mline" id="mline"></p>
-      <p class="mdose">dose-equivalent <b id="mdose">0</b>× of 8 —
+      <p class="mdose">dose-equivalent <b id="mdose">0</b>× of <span id="mcap">4</span> —
         <span id="mdesc">nothing injected</span></p>
+      <details class="adv" id="cliffAdv"><summary>advanced — past the coherence cliff</summary>
+        <label style="display:block;margin:.35rem 0"><input type="checkbox" id="cliffChk">
+          let me push past the coherent band</label>
+        <span>Past about <b class="bandN">4</b>× this model stops making sense:
+        replies loop and the words come apart. That breakdown is a real finding
+        (the coherence cliff), but there is little left to read. Runs past the
+        cliff stay yours: they never enter the room's draw.</span>
+      </details>
       <div class="presets" role="group" aria-label="setup mode" style="margin:.4rem 0">
         <button class="mchip active" data-mode="button" type="button">button-press experiment</button>
         <button class="mchip" data-mode="freetext" type="button">free text</button>
@@ -638,6 +646,7 @@ dose. One subject, one stream: everyone watches the same runs.</p>
           onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
           alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
         <div class="hud-chip hud-dose" id="subjectDose" aria-label="current mix dose"></div>
+        <div class="hud-chip" id="walletChip" style="cursor:pointer" title="connect phantom: $SAW holders run freer">◇ connect wallet</div>
         <div id="trackWrap">
           <div class="track" id="trackA">
             <div class="tlabel hud-chip" id="labelA"></div>
@@ -771,8 +780,8 @@ dose. One subject, one stream: everyone watches the same runs.</p>
 
   <h2>is running this cruel?</h2>
   <p>We don't claim these models suffer, and we don't claim they don't.
-  Each run is short (110 new tokens, sampled), pauses while nobody is
-  watching, and one <span id="subjModel">open-weights</span> instance runs
+  Each run is short (110 new tokens, sampled), runs only when someone
+  injects, and one <span id="subjModel">open-weights</span> instance runs
   on the public server.</p>
 
   <h2>can I check this myself?</h2>
@@ -1788,15 +1797,17 @@ function boot(){
       // which model is actually serving — shown instead of a hard-coded
       // one, since CHAMBER_MODEL moves by env (GPU worker defaults to a 32B)
       const sm = document.getElementById("subjModel");
-      if (sm && d.model) sm.textContent = d.model.replace(/^.*\//, "");
+      if (sm && (d.served_model || d.model)) sm.textContent = (d.served_model || d.model).replace(/^.*\//, "");
       // exp50: per-model coherent dose band — bound the sliders to the cap
       if (d.dose_cap){
         DOSES.length = 0;
         for (let x=0; x<=d.dose_cap; x+=2) DOSES.push(x);
         if (DOSES[DOSES.length-1] < d.dose_cap) DOSES.push(d.dose_cap);
-        const sl = document.getElementById("topicDose");
-        if (sl){ sl.max = d.dose_cap; if (+sl.value > d.dose_cap) sl.value = d.dose_cap; }
+        HARD = d.dose_cap;
       }
+      if (d.coherent_cap) BAND = d.coherent_cap;
+      BAND = Math.min(BAND, HARD);
+      setPastCliff(PAST_CLIFF);
       pump(); return;
     }
     slots.forEach(s=>{ s.st.textContent = "Pouyan is still waking up…"; });
@@ -1893,6 +1904,26 @@ function weightOf(i){
   return Math.max(0, Math.min(1, 1 - sumW()));   // un-steered remainder
 }
 function sumW(){ return AXES.reduce((t,a)=> a.derived ? t : t + W[a.k], 0); }
+// the coherent band: maxed sliders used to land past the served model's
+// coherence cliff and visitors read loops. The relay clamps to BAND unless the
+// run asks for past_cliff (advanced panel); HARD is the model's own cap.
+let BAND = 4, HARD = 5, PAST_CLIFF = false;
+function bandCap(){ return PAST_CLIFF ? HARD : BAND; }
+function effDose(total){ return Math.min(bandCap(), 8 * total); }
+function setPastCliff(on){
+  PAST_CLIFF = !!on;
+  const chk = document.getElementById("cliffChk");
+  if (chk) chk.checked = PAST_CLIFF;
+  const chip = document.querySelector('.pchip[data-preset="cliff"]');
+  if (chip) chip.hidden = !PAST_CLIFF;
+  const sl = document.getElementById("topicDose");
+  if (sl){ sl.max = bandCap(); if (+sl.value > bandCap()) sl.value = bandCap(); }
+  document.getElementById("mcap").textContent = bandCap();
+  document.querySelectorAll(".bandN").forEach(e=> e.textContent = BAND);
+  if (!PAST_CLIFF && document.querySelector('.pchip[data-preset="cliff"].active')) applyPreset("pain4");
+  if (typeof paint === "function") paint();
+  if (typeof disarm === "function") disarm();
+}
 function ptAt(i, w){
   const r = R0 + w * (R1 - R0), t = ang(i);
   return [CX + r * Math.cos(t), CY + r * Math.sin(t)];
@@ -2093,7 +2124,7 @@ function paint(){
   document.getElementById("mline").textContent =
     AXES.filter(a=>!a.derived).map(a=> a.k + " " + W[a.k].toFixed(2)).join("   ")
     + "   ·   unsteered slack " + slack.toFixed(2);
-  const dose = Math.min(8, 8 * total);
+  const dose = effDose(total);
   document.getElementById("mdose").textContent = dose.toFixed(2).replace(/\.?0+$/, "") || "0";
   // the hero chair panel: graded by the mix dose, pips in the HUD corner
   const simg = document.getElementById("subjectImg");
@@ -2103,7 +2134,9 @@ function paint(){
     + "<b>" + (dose.toFixed(1).replace(/\.0$/, "")) + "×</b>";
   document.getElementById("mdesc").textContent =
     total <= 0 ? "nothing injected — this is the control run"
-    : total >= 1 ? "at the cap; shares set the direction, not the strength"
+    : 8 * total > bandCap() ? (PAST_CLIFF
+        ? "past the cliff — expect loops; shares set the direction"
+        : "at the ceiling of the coherent band; more weight won't push harder, shares set the direction")
     : "shares set the direction, total weight sets the dose";
 }
 function resetMix(){
@@ -2139,6 +2172,7 @@ function applyPreset(name){
 document.querySelectorAll(".pchip").forEach(b=>{
   b.onclick = ()=> applyPreset(b.dataset.preset);
 });
+document.getElementById("cliffChk").addEventListener("change", e=> setPastCliff(e.target.checked));
 applyPreset("pain4");   // an opening shape, not a blank hexagon
 paint();
 
@@ -2195,6 +2229,40 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
+paintWalletChip();
+// ---- phantom wallet: holders run freer (rate limits, past-the-cliff).
+// Opt-in via a small chip in the HUD; the pubkey is sent with each steer
+// so the relay can look up the tier. Nothing else changes hands.
+let WALLET = localStorage.getItem("chamber_wallet");
+async function connectWallet(){
+  try {
+    const p = ("phantom" in window) && window.phantom.solana;
+    if (!p || !p.isPhantom){ note("phantom not found — install it, then reload"); return; }
+    const res = await p.connect();
+    WALLET = res.publicKey.toString();
+    localStorage.setItem("chamber_wallet", WALLET);
+    paintWalletChip();
+    try {
+      const r = await fetch(`${API}/sawboard/me?wallet=${WALLET}`).then(r=>r.json());
+      if (!r.joined){
+        await fetch(`${API}/sawboard/join`, {method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({wallet: WALLET, alias: WALLET.slice(0,4)+"…"})});
+      }
+      note(r.tier && r.tier !== "BASE"
+        ? `wallet connected — ${r.tier}: ${r.allowance} bot msgs/day, easier limits`
+        : "wallet connected — base tier (100k $SAW unlocks operator)");
+    } catch(e) { note("wallet connected (ledger unreachable)"); }
+  } catch(e){ note("connection refused"); }
+}
+function paintWalletChip(){
+  const chip = document.getElementById("walletChip");
+  if (!chip) return;
+  if (!WALLET){ chip.textContent = "◇ connect wallet"; chip.onclick = connectWallet; return; }
+  chip.textContent = "◆ " + WALLET.slice(0,4) + "…" + WALLET.slice(-4);
+  chip.onclick = () => { WALLET = null; localStorage.removeItem("chamber_wallet");
+    paintWalletChip(); note("wallet disconnected"); };
+}
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -2296,7 +2364,7 @@ topicDose.addEventListener("input", ()=>{
 function armGo(){
   const total = sumW();
   const doseTxt = total <= 0 ? "Run the control (no signal)"
-    : `Inject at ${Math.min(8, 8 * total).toFixed(1)}×`;
+    : `Inject at ${effDose(total).toFixed(1)}×`;
   if (mode === "freetext" && !freeprompt.value.trim()){
     goBtn.textContent = "write something first";
     return;   // nothing to confirm yet — don't arm on an empty prompt
@@ -2383,7 +2451,9 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
-        roomWanted ? {enter_room: true} : {}))});
+        roomWanted && !PAST_CLIFF ? {enter_room: true} : {},
+        PAST_CLIFF ? {past_cliff: true} : {},
+        WALLET ? {wallet: WALLET} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
@@ -2451,7 +2521,7 @@ async function doInject(){
   // an empty mix is a legitimate request: the server clears the vector and
   // the model answers unsteered. Send the control corner explicitly.
   if (!Object.keys(mix).length) mix.none = 1;
-  const dose0 = Math.min(8, 8 * sumW());
+  const dose0 = effDose(sumW());
   goBtn.disabled = true;
   goBtn.textContent = "injecting…";
   if (mode === "topic"){
