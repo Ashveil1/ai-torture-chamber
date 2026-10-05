@@ -933,15 +933,23 @@ async def steer(req: Request):
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
-    if not _rate_ok(ip):
+    mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
+    if not _rate_ok(ip, mult):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
-                      "(3 runs/minute/IP, and it rests after %d runs/hour)" % _GLOBAL_HOURLY_CAP},
+                      "(3 runs/minute/IP, and it rests after %d runs/hour)"
+                      % _GLOBAL_HOURLY_CAP
+                      + (" — holders run freer: connect a wallet on the ledger"
+                         if tier == "BASE" else "")},
             status_code=429)
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
     past_cliff = body.get("past_cliff") is True   # opt-in: see coherent_cap
+    if past_cliff and not unlocked:
+        # past-the-cliff is a die-hard perk: OPERATOR/PATRON wallets only.
+        # anyone can still run at the coherent cap.
+        past_cliff = False
     who = _who(req, body)
     requested = {k: (body[k] if k == "mix" else str(body[k])[:60])
                  for k in ("mix", "valence", "dose", "topic", "framing")
@@ -2242,7 +2250,29 @@ _RATE_LIMIT, _RATE_WINDOW = 3, 60.0
 _GLOBAL_RUNS = collections.deque(maxlen=4096)   # timestamps of all runs
 _GLOBAL_HOURLY_CAP = int(os.environ.get("CHAMBER_HOURLY_CAP", "900"))   # ~15/min site-wide; GPU spend is bounded by the endpoint's max workers
 
-def _rate_ok(ip):
+# ---- wallet tiers on the live chamber: holders run free-er. The sawboard
+# join stores the wallet; the tier is the same schedule as the ledger.
+# BASE (or no wallet): standard limits. OPERATOR (>=100k $SAW): 2x rate
+# limit, past-the-cliff unlocked. PATRON (>=1M): 4x, unlocked.
+_WALLET_TIER_CACHE = {}   # wallet -> (tier, expires)
+
+async def _wallet_tier(wallet):
+    """-> (multiplier, tier_name, unlocked) with a 10-min cache per wallet."""
+    import time as _t
+    if not wallet:
+        return 1, "BASE", False
+    now = _t.time()
+    hit = _WALLET_TIER_CACHE.get(wallet)
+    if hit and hit[1] > now:
+        return hit[0]
+    bal = await _saw_balance(wallet)
+    allow, tier = _tier(bal)
+    mult = {"PATRON": 4, "OPERATOR": 2}.get(tier, 1)
+    val = (mult, tier, tier in ("PATRON", "OPERATOR"), now + 600)
+    _WALLET_TIER_CACHE[wallet] = val
+    return val[:3]
+
+def _rate_ok(ip, mult=1):
     now = time.time()
     w, c = _RATE.get(ip, (now, 0))
     if now - w > _RATE_WINDOW:
