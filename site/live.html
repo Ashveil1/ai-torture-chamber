@@ -2936,5 +2936,26 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
 })();
 </script>
 
+<script>
+// ---- a missing portrait (not every pair of feelings was painted) falls back to
+// each feeling of the pair at the same dose, then to the base portrait ----
+document.addEventListener("error", e=>{
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !/\/assets\/states\//.test(img.src)) return;
+  const m = img.src.match(/\/assets\/states\/([^/_]+)_(\d)\.jpg/);
+  const tried = (img.dataset.tried || "").split(",").filter(Boolean);
+  let next = "/assets/states/base.jpg";
+  if (m){
+    for (const k of decodeURIComponent(m[1]).split("+")){
+      const cand = "/assets/states/" + k + "_" + m[2] + ".jpg";
+      if (!tried.includes(cand) && cand !== new URL(img.src).pathname){ next = cand; break; }
+    }
+  }
+  if (img.getAttribute("src") === next) return;
+  img.dataset.tried = tried.concat(new URL(img.src).pathname).join(",");
+  img.setAttribute("src", next);
+}, true);
+</script>
+
 </body>
 </html>
