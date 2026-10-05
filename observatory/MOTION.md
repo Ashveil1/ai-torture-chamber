@@ -99,7 +99,7 @@ labeled simulated.
 
 ## Verification and remaining acceptance
 
-The last combined repository and sidecar run passed 862 Python tests, with three
+The last combined repository and sidecar run passed 870 Python tests, with three
 optional-environment skips. Backend cases cover focused-page selection, full
 visible literal matching, line geometry, inspection expiry, exact note promotion,
 stable screenshot binding, document identity and public-field redaction.
@@ -116,8 +116,7 @@ viewer/notebook/mission/timer helpers and authored fixtures at sixteen-milliseco
 intervals: 100 assertions cover gradual positions, progressive highlights,
 scroll continuity, note delivery, longer passages, pause/resume and full-default motion.
 This catches interruptions between the preview and controller, beyond their
-individual tests. The UI-only correction also passes 79 focused API/asset/frame
-tests; the 696-test result is the latest full combined run before that correction.
+individual tests. The combined suite includes the API/asset/frame checks.
 
 Fresh visual browser review is still blocked by saved browser permissions. Earlier
 archived screenshots show a previous revision. Real provider sessions, payments,

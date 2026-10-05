@@ -1,5 +1,10 @@
 # Developer-funded Solana research
 
+For an explanatory funding walkthrough, read
+[Ledger treasury to agent spending wallet](docs/ledger-x402-funding.md).
+It describes owner-approved native-USDC top-ups into the separate software signer;
+native Ledger signing of inference requests is not implemented in this repository.
+
 The researcher pays for inference through an isolated x402 broker. The owner
 supplies a dedicated Solana spending wallet, approves BlockRun's merchant
 recipient and sets explicit spending limits. Agents never receive the signer.
@@ -130,6 +135,14 @@ at the configured maximum quote, plus existing reservations and minimum reserve.
 A smaller actual quote may cost less. Each request then validates its real quote
 and atomically reserves its amount against current balance and the UTC daily
 limit. Unresolved reservations remain held across days.
+
+Nonempty seller-defined `extra.memo` values are unsupported and rejected before
+reservation or signing. The pinned SDK must generate a fresh client nonce; a
+reused merchant memo could otherwise match an unrelated old transfer of the same
+amount. Quotes are never rewritten. A merchant requiring its own memo needs a
+separately validated transport. The persistent ledger also prevents attributing
+one settlement transaction to two requests, including response recovery and
+manual reconciliation. Keep that ledger when restarting the service.
 
 Insufficient funds or daily headroom puts the mission into `funding_paused`
 and releases owned browsers. The supervisor periodically checks funds and can

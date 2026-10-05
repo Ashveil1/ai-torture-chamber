@@ -11,6 +11,10 @@ Run it as a separate sidecar from the live Chamber relay.
 
 Start with the [deployment and operator guide](observatory/docs/deployment-guide.md)
 and the [data-to-training-to-experiments guide](observatory/docs/data-training-experiments.md).
+The [research methodology](observatory/docs/research-methodology.md) explains the
+six agent roles, real-browser collection and source-to-model workflow;
+[Ledger funding and x402](observatory/docs/ledger-x402-funding.md) explains how an
+owner-approved hardware-wallet top-up funds the separate agent spending signer.
 The integration is an alpha with offline tests; funded provider, container and real
 70B GPU acceptance remain before unattended use. Preview mode uses simulated
 activity, and selecting a checkpoint does not deploy it into the Chamber.

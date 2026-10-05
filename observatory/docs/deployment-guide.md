@@ -87,7 +87,11 @@ select `messages`; for OpenAI, select `responses`. Model capabilities need a liv
 staging check; model names alone do not establish browser-action compatibility.
 Local Chromium is the default browser. Browser Use Cloud instead needs its
 separate `BROWSER_USE_API_KEY`; dedicated CDP needs `cdp_url`, an unauthenticated
-isolated browser and `cdp_isolated_ack: true`, with one browsing agent.
+isolated browser and `cdp_isolated_ack: true`, with one Scholar. The owner must
+provide a fresh cookie-free, blank CDP session for every pass. Detaching preserves
+the owner's browser; it does not reset visited pages or cookies. Reusing that
+session can fail the next pass's isolation checks. Prefer local/cloud browsers
+for unattended research unless the CDP infrastructure implements that lifecycle.
 
 The payments process is not required for direct inference. Its read-only catalog
 and balance integrations may be unavailable; that is not evidence that a direct
