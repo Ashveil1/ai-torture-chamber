@@ -2751,9 +2751,12 @@ async def sawboard():
                 info = json.loads(blob)
                 bal = await _saw_balance(wallet)
                 allow, tier = _tier(bal)
+                xh = (info.get("x_handle") or "").strip().lower()
                 rows.append({"alias": info.get("alias") or wallet[:4] + "…",
                              "x": _anon_x(info),
-                             "pain": pain.get(wallet, 0),
+                             # backfilled totals are keyed by x handle; live
+                             # wallet-keyed entries win when both exist
+                             "pain": pain.get(wallet) or pain.get(xh, 0),
                              "saw_balance": bal,
                              "tier": tier, "allowance": allow})
         except Exception as e:
