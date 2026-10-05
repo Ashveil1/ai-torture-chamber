@@ -6,6 +6,12 @@ evidence-linked observations, and checkpoint their memory between browser passes
 Visitors see real screenshots and concise research decisions. The existing live
 model relay remains independently deployed.
 
+This is a functional alpha for developer integration. CPT readiness checks are
+scheduled; SFT requires individual instruction-note approval and an explicit
+operator submission. Checkpoint selection records the choice and exports pinned
+worker settings, without a remote deployment receipt. Actual 70B training, GPU
+container execution and managed-browser credentials have not been validated.
+
 ## Inspect the interface first
 
 Serve `site/` with a static server and open `observatory.html?preview=1`. Preview
@@ -149,13 +155,22 @@ read-only cache. These infrastructure-specific values and credentials are not
 included in the public environment download. Deployment is an explicit operator
 action, separate from checkpoint selection.
 
+Current curation does not enforce a corpus topic-relevance score or exclude
+original-source benchmark content. Passage matching verifies quotation provenance,
+not the truth of a claim. No frozen consciousness-understanding or general
+capability-retention benchmark suite is implemented. The default held-out loss threshold
+allows up to 5% regression, so a passed checkpoint does not demonstrate improved
+domain competence. There is no adapted-model dose-cap calibration receipt;
+generic/base positive steering caps remain unless the owner overrides them.
+Measure and record adapted dose limits before serving an intervention.
+
 ## Deployment alongside the existing website
 
 Build the sidecar from the repository root:
 
 ```sh
 docker build -f observatory/Dockerfile -t consciousness-observatory .
-docker run --env-file observatory/.env -p 8060:8060 \
+docker run --env-file observatory/.env -e OBSERVATORY_DB=/data/state.sqlite3 -p 8060:8060 \
   -v observatory-data:/data consciousness-observatory
 ```
 
@@ -172,6 +187,20 @@ Alternatively host the interface directly from the sidecar. `/observatory.html`
 opens in connected mode and uses `/observatory-api` by default; `?api=/api`
 selects the local sidecar path. Only `?preview=1` (or `?mode=preview`) enables
 authored example records. A disconnected live page never substitutes examples.
+When the interface is hosted directly from the sidecar, its Wirehead and current
+Chamber links redirect to the existing public website. The sidecar does not serve
+the live relay code or deploy a Chamber endpoint.
+
+Coordinate upstream merge with the existing deployment automation. On a push to
+`master` changing `live/server.py`, `live/Dockerfile.worker70`, `live/worker.py` or
+`live/requirements.txt`, `.github/workflows/build-worker70.yml` builds and pushes
+the GPU image, then PATCHes the existing RunPod template if `RUNPOD_API_KEY` is
+configured. `.github/workflows/deploy-railway.yml` runs on every `master` push
+and can deploy the existing relay when `RAILWAY_TOKEN` exists; its fallback also
+deploys when no prior-commit environment value is provided. This PR does not change either
+workflow. Checkpoint selection is separate from these merge-triggered rollouts.
+Validate a staging image and separate endpoint, and agree the rollout policy
+before merging into the official repository.
 
 ## Verification and practical limits
 
@@ -184,10 +213,34 @@ The subsequent pinned-model handoff passed 175 tests with the same optional
 browser fixture skipped. Profile overrides, CPT parent continuation, SFT-only
 Llama Base live-chat selection and candidate license packaging are covered.
 
+The readiness audit passed 207 combined tests, with the optional browser fixture
+skipped. Regression tests cover shrinking the active swarm/CDP pool, strict CC
+license URLs, separate permission for social-domain subdomains and standalone
+navigation. Docker persistence instructions were corrected; container execution
+remains unverified.
+
 ```sh
 python -m pip install -r observatory/requirements-test.txt
 python -m pytest observatory/tests -q
 ```
+
+That command runs the sidecar suite; its tiny-model test is skipped without the
+optional model stack. `requirements-test.txt` also supplies the repository's
+NumPy/PyYAML dependencies. The reported 175-test handoff used the combined
+`tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
+reproduce that scope in the separate test environment, add the CPU model stack
+while retaining the sidecar's Hub pin:
+
+```sh
+python -m pip install "torch>=2.8,<3" "transformers==5.17.0" "peft==0.21.2" "trl==1.14.1" "datasets==5.0.1" "accelerate==1.15.0" "huggingface-hub==1.16.1"
+python -m pytest tests observatory/tests -q
+```
+
+The root bridge/regression tests import Torch during collection; the combined
+scope therefore needs that stack. The tiny trainer and PEFT integration tests
+exercise CPU fixtures, not 70B CUDA execution. Do not combine
+`requirements-test.txt` and `requirements-worker.txt` in one installation:
+the GPU image intentionally uses its own Hub 1.33.0 pin and isolated environment.
 
 The suite uses mocked cloud boundaries and an optional real local-Chromium fixture
 test; no API tokens or paid GPU jobs are needed. Training smoke tests construct a

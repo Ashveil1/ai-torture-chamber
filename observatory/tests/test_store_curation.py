@@ -246,3 +246,14 @@ def test_self_hosted_fonts_load_without_exposing_other_files(store):
             assert response.content.startswith(b"wOF2")
         assert client.get("/assets/fonts/private.key").status_code == 404
         assert client.get("/assets/fonts/%2e%2e%2f%2e%2e%2fprivate.key").status_code == 404
+
+
+def test_sidecar_navigation_redirects_to_public_site_without_serving_relay_files(store):
+    with TestClient(create_app(store, enable_runtime=False)) as client:
+        for path, destination in (("/index.html", "https://wirehead.agency/"),
+                                  ("/live.html", "https://wirehead.agency/live.html")):
+            response = client.get(path, follow_redirects=False)
+            assert response.status_code == 307
+            assert response.headers["location"] == destination
+        assert client.get("/live/server.py").status_code == 404
+        assert client.get("/observatory/.env").status_code == 404

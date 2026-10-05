@@ -55,6 +55,81 @@ def test_only_article_license_metadata_verifies_rights():
     result = document_metadata('<script type="application/ld+json">{"@type":"ScholarlyArticle","license":"https://creativecommons.org/licenses/by/4.0/"}</script>')
     assert result["license_verified"] and result["license"] == "cc-by-4.0"
 
+@pytest.mark.parametrize("license_url", [
+    "https://publisher.example/not-a-license/creativecommons.org/licenses/by/4.0",
+    "https://creativecommons.org.publisher.example/licenses/by/4.0/",
+    "https://creativecommons.org/licenses/by/4.0-not-a-license",
+    "https://creativecommons.org/licenses/by/4.0/unrecognized-path",
+    "https://username:password@creativecommons.org/licenses/by/4.0/",
+    "https://creativecommons.org:8443/licenses/by/4.0/",
+    "https://creativecommons.org:invalid/licenses/by/4.0/",
+    "creativecommons.org/licenses/by/4.0/",
+    "https://creativecommons.org/licenses/by-nc/4.0/",
+    "https://creativecommons.org/licenses/by-sa/4.0/",
+])
+def test_unrecognized_license_uri_cannot_admit_article_to_training(store, license_url):
+    from observatory.research import extract_html
+    html = (
+        '<script type="application/ld+json">' +
+        json.dumps({"@type": "ScholarlyArticle", "license": license_url}) +
+        '</script><article>' + "Original source text with competing explanations. " * 8 + '</article>'
+    )
+    text, scope = extract_html(html)
+    source = save_document(store, url="https://publisher.example/article", title="Research",
+                           text=text, html=html, agent_id="archivist", scope=scope)
+    assert not source["license_verified"]
+    assert not source["curation"]["eligible"]
+    assert "rights_not_verified" in source["curation"]["reasons"]
+
+
+@pytest.mark.parametrize("license_url,expected", [
+    ("https://creativecommons.org/licenses/by/4.0/", "cc-by-4.0"),
+    ("http://creativecommons.org/licenses/by/3.0/", "cc-by-3.0"),
+    ("https://www.creativecommons.org/licenses/by/4.0", "cc-by-4.0"),
+    ("https://creativecommons.org:443/licenses/by/4.0/", "cc-by-4.0"),
+    ("https://creativecommons.org/licenses/by/4.0/deed.en", "cc-by-4.0"),
+    ("https://creativecommons.org/licenses/by/4.0/legalcode.en", "cc-by-4.0"),
+    ("https://creativecommons.org/publicdomain/zero/1.0/", "cc0-1.0"),
+])
+def test_supported_article_license_uris_keep_automatic_recognition(license_url, expected):
+    html = '<script type="application/ld+json">' + json.dumps({
+        "@type": "ScholarlyArticle", "license": license_url}) + '</script>'
+    result = document_metadata(html)
+    assert result["license_verified"]
+    assert result["license"] == expected
+    assert result["rights_evidence"]["license_url"] == license_url
+
+@pytest.mark.parametrize("host", [
+    "x.com", "www.x.com", "twitter.com", "mobile.twitter.com", "reddit.com", "old.reddit.com",
+])
+def test_social_roots_and_subdomains_require_permission_even_with_cc_license(store, host):
+    from observatory.curation import eligibility
+    html = '<script type="application/ld+json">{"@type":"Article","license":"https://creativecommons.org/licenses/by/4.0/"}</script>'
+    source = save_document(store, url="https://" + host + "/public-post", title="Public post",
+                           text="A public observation does not establish subjective experience. " * 8,
+                           html=html, agent_id="sentinel", scope="article")
+    assert source["source_type"] == "social"
+    assert source["license_verified"]
+    assert not source["curation"]["eligible"]
+    assert "social_content_requires_separate_permission" in source["curation"]["reasons"]
+    permitted = {**source, "rights_status": "permission_granted",
+                 "permission_evidence": "Owner-recorded explicit permission from the author"}
+    assert eligibility(permitted)["eligible"]
+
+
+@pytest.mark.parametrize("host", [
+    "reddit.com.publisher.example", "notreddit.com",
+    "x.com.publisher.example", "notx.com",
+    "twitter.com.publisher.example", "nottwitter.com",
+])
+def test_social_publisher_lookalikes_remain_ordinary_articles(store, host):
+    html = '<script type="application/ld+json">{"@type":"ScholarlyArticle","license":"https://creativecommons.org/licenses/by/4.0/"}</script>'
+    source = save_document(store, url="https://" + host + "/article", title="Original research",
+                           text="Original research compares evidence with competing explanations. " * 8,
+                           html=html, agent_id="scholar", scope="article")
+    assert source["source_type"] == "article"
+    assert source["curation"]["eligible"]
+
 
 def test_document_versions_and_literal_provenance(store):
     passage = "The existence of subjective experience cannot be established solely through linguistic self reports."
@@ -122,6 +197,66 @@ async def test_mission_stop_cancels_worker_and_preserves_notes(store):
     assert store.get_mission()["status"] == "stopped" and not supervisor.workers
     assert store.list_records("notes")[0]["text"] == "Retained notebook"
     await supervisor.close()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("updates,expected_roles", [
+    ({"agent_count": 2}, {"scholar", "skeptic"}),
+    ({"browser_provider": "cdp"}, {"scholar"}),
+])
+async def test_live_pool_retires_removed_workers_and_honors_cdp_limit(store, updates, expected_roles):
+    """No browser is created: authored workers exercise the real supervisor loop."""
+    store.save_settings({"agent_count": 6, "browser_provider": "local"})
+    store.set_mission({"id": "pool", "status": "running", "objective": "Research"})
+    store.put("notes", {"id": "retained-note", "agent_id": "pool-sentinel", "text": "Retain evidence after retirement"})
+    supervisor = ResearchSupervisor(store)
+    started, cancelled = {}, set()
+    controls = {}
+
+    class FakeControl:
+        def pause(self):
+            pass
+        def resume(self):
+            pass
+
+    async def authored_worker(agent_id, specialty):
+        started[agent_id] = started.get(agent_id, 0) + 1
+        controls[agent_id] = FakeControl()
+        supervisor.active[agent_id] = controls[agent_id]
+        supervisor.in_step.add(agent_id)
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.add(agent_id)
+
+    supervisor._researcher = authored_worker
+
+    async def settled(predicate):
+        async def poll():
+            while not predicate():
+                await asyncio.sleep(0.01)
+        await asyncio.wait_for(poll(), 5)
+
+    try:
+        await supervisor.start()
+        await settled(lambda: len(started) == 6)
+        original_tasks = dict(supervisor.workers)
+        store.save_settings(updates)
+        desired = {"pool-" + role for role in expected_roles}
+        await settled(lambda: set(supervisor.workers) == desired)
+        removed = set(original_tasks) - desired
+        assert removed <= cancelled
+        assert all(original_tasks[identifier].cancelled() for identifier in removed)
+        assert set(supervisor.active) == desired
+        assert supervisor.in_step == desired
+        assert all(supervisor.workers[identifier] is original_tasks[identifier] for identifier in desired)
+        assert all(store.get("agents", identifier)["status"] == "stopped" for identifier in removed)
+        assert store.get("notes", "retained-note")["text"] == "Retain evidence after retirement"
+        # Increasing the pool creates fresh workers only after retired ones have exited.
+        store.save_settings({"agent_count": 6, "browser_provider": "local"})
+        await settled(lambda: len(supervisor.workers) == 6 and all(started.get(identifier) == 2 for identifier in removed))
+        assert all(supervisor.workers[identifier] is not original_tasks[identifier] for identifier in removed)
+    finally:
+        await supervisor.close()
 
 
 def test_responses_message_mapping_preserves_images():

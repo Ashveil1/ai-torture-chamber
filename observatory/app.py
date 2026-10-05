@@ -215,6 +215,14 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
     def page():
         return FileResponse(SITE / "observatory.html")
 
+    @application.get("/index.html")
+    def wirehead_home():
+        return RedirectResponse("https://wirehead.agency/", status_code=307)
+
+    @application.get("/live.html")
+    def current_chamber():
+        return RedirectResponse("https://wirehead.agency/live.html", status_code=307)
+
     @application.get("/{asset}")
     def static_asset(asset: str):
         if asset not in {"observatory.css", "observatory-fonts.css", "observatory.js", "observatory-preview.js", "grimoire.css", "favicon.svg", "icon.svg"}:

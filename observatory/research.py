@@ -98,9 +98,22 @@ def document_metadata(html: str) -> dict:
             value = value.get("@id", value.get("url"))
         if not isinstance(value, str):
             continue
-        match = re.search(r"creativecommons\.org/(licenses/by/(3\.0|4\.0)|publicdomain/zero/1\.0)/?", value, re.I)
+        try:
+            license_url = urlsplit(value)
+            if (license_url.scheme not in {"http", "https"}
+                    or license_url.hostname not in {"creativecommons.org", "www.creativecommons.org"}
+                    or license_url.username or license_url.password
+                    or license_url.port not in {None, 443 if license_url.scheme == "https" else 80}):
+                continue
+        except ValueError:
+            continue
+        match = re.fullmatch(
+            r"/(?:licenses/by/(?P<version>3\.0|4\.0)|publicdomain/zero/1\.0)"
+            r"(?:/(?:legalcode|deed)(?:\.[a-z0-9-]+)?)?/?",
+            license_url.path, re.I,
+        )
         if match:
-            result.update(license="cc-by-" + match[2] if match[2] else "cc0-1.0",
+            result.update(license="cc-by-" + match["version"] if match["version"] else "cc0-1.0",
                           license_verified=True, rights_evidence={"method": "article_metadata", "license_url": value})
             break
     return result
@@ -115,10 +128,12 @@ def save_document(store: Store, *, url: str, title: str, text: str, html: str = 
     old = store.get("sources", source_id)
     if old:
         return old
+    host = urlsplit(url).hostname or ""
+    social = any(host == root or host.endswith("." + root) for root in ("x.com", "twitter.com", "reddit.com"))
     source = {"id": source_id, "canonical_url": url, "url": url, "title": title or url,
               "text": text, "content_hash": content_hash, "agent_id": agent_id,
               "license": "unknown", "license_verified": False, "review_status": "pending",
-              "source_type": "social" if urlsplit(url).hostname in {"x.com", "twitter.com", "www.reddit.com", "reddit.com"} else "article",
+              "source_type": "social" if social else "article",
               "provenance": {"collected_at": utc_now(), "method": method, "content_type": content_type,
                              "extraction_scope": scope,
                              "content_sha256": content_hash, "collector_version": "observatory-0.1"},
@@ -343,6 +358,20 @@ class ResearchSupervisor:
         self.active.clear()
         self.in_step.clear()
 
+    async def _reconcile_workers(self, desired: set[str]):
+        """Retire removed roles before starting or resuming the desired pool."""
+        removed = set(self.workers) - desired
+        tasks = [self.workers[identifier] for identifier in removed]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for identifier in removed:
+            self.workers.pop(identifier, None)
+            self.active.pop(identifier, None)
+            self.in_step.discard(identifier)
+            self._agent_update(identifier, status="stopped")
+
     def _agent_update(self, agent_id: str, **updates):
         value = self.store.get("agents", agent_id) or {"id": agent_id}
         value.update(updates)
@@ -360,6 +389,7 @@ class ResearchSupervisor:
                 count = max(1, min(len(ROLES), int(settings.get("agent_count", 6))))
                 if settings.get("browser_provider") == "cdp":
                     count = 1  # A shared endpoint cannot provide independent agent contexts.
+                await self._reconcile_workers({mission["id"] + "-" + role for role, _, _ in ROLES[:count]})
                 for role, name, specialty in ROLES[:count]:
                     agent_id = mission["id"] + "-" + role
                     if agent_id not in self.workers or self.workers[agent_id].done():
