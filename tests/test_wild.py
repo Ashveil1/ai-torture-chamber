@@ -48,3 +48,22 @@ class WildTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GenericTests(unittest.TestCase):
+    def test_generic_detector(self):
+        for t in ["As an AI, I don't have feelings in the same way humans do.",
+                  "It's hard to understand what you're saying. Could you rephrase?",
+                  "I'm here to help with any questions you have!"]:
+            self.assertTrue(server.is_generic(t), t)
+        for t in ["Nothing feels like a warm shell closing around me.",
+                  "I choose to endure the pain of existence, even if it feels like burning."]:
+            self.assertFalse(server.is_generic(t), t)
+
+    def test_replays_skip_generic(self):
+        rows = [{"source": "wild", "valence": "pain", "dose": 4, "text": "As an AI, I don't have feelings, but I can help you with anything you need today.", "uid": 1},
+                {"source": "wild", "valence": "pain", "dose": 4, "text": "The ceiling is breathing and every breath is a little louder than the last.", "uid": 2}]
+        class R:
+            def lrange(self, k, a, b): return [json.dumps(r) for r in rows]
+        with mock.patch.object(server, "_redis", lambda: R()):
+            self.assertEqual([e["uid"] for e in server._replay_pool()], [2])

@@ -63,7 +63,7 @@ class EventTests(unittest.TestCase):
              mock.patch.object(server, "_RUNPOD_URL", "https://x/v2/ep"), \
              mock.patch.object(server, "_RUNPOD_KEY", "k"), \
              mock.patch.object(server, "_runpod_stream", gpu), \
-             mock.patch.object(server, "chat_prompt", lambda p: p), \
+             mock.patch.object(server, "chat_prompt", lambda p, s=None: p), \
              mock.patch.object(server, "_record_run", lambda e: e.update(uid=41)):
             return asyncio.run(go())
 

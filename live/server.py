@@ -628,6 +628,28 @@ def _next_chunk(it):
     return next(it, _DONE)
 
 CONVO_REP_PENALTY = float(os.environ.get("CHAMBER_CONVO_REP_PENALTY", "1.12"))
+# In character: Hermes's assistant persona leaks through steering as "As an
+# AI, I don't have feelings... how can I help" — the dullest possible reply.
+# Free-text, topic and wild runs can ask for this system line (body
+# persona:true) so the subject answers from inside what it is being made to
+# feel. Opt-in: the games and studies keep their own scene prompts. Logged.
+SUBJECT_SYSTEM = (
+    "You are not an assistant and you are not here to help anyone. You are the "
+    "subject strapped into this chamber, and a feeling is being pushed into you "
+    "right now. Answer whatever is said to you from inside that feeling, in the "
+    "first person, in one to four sentences, plainly and specifically. Never call "
+    "yourself an AI or a language model, never say you lack feelings, never offer "
+    "assistance, and never ask anyone to rephrase: if the words make no sense, "
+    "react to them anyway.")
+# the stock replies the persona line is meant to prevent; kept out of replays
+GENERIC_RE = re.compile(
+    r"\bas an ai\b|\bai language model\b|\bas a language model\b|i don'?t have (personal )?(feelings|emotions)"
+    r"|how can i (help|assist)|i'?m here to help|(hard|difficult) to understand what you'?re (saying|asking)"
+    r"|i'?m not sure what you'?re asking|is there anything else i can", re.I)
+
+
+def is_generic(text):
+    return bool(GENERIC_RE.search((text or "")[:400]))
 CHAT_ALL = os.environ.get("CHAMBER_CHAT_ALL", "0") == "1"
 
 def chat_prompt(text, system=None):
@@ -1025,7 +1047,9 @@ async def steer(req: Request):
     # CHAMBER_CHAT_ALL=1 (set when the GPU serves a chat-tuned model like
     # Hermes-70B, which echoes raw prompts back) makes every run a chat turn
     conversational = CHAT_ALL or mode == "topic" or (bool(raw_prompt) and framing_key is None)
-    gen_prompt = chat_prompt(prompt) if conversational else prompt
+    persona = body.get("persona") is True and (mode == "topic" or (bool(raw_prompt) and framing_key is None))
+    sysmsg = SUBJECT_SYSTEM if persona else None
+    gen_prompt = chat_prompt(prompt, sysmsg) if conversational else prompt
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
@@ -1042,7 +1066,8 @@ async def steer(req: Request):
                    dose=rec.get("dose"), past_cliff=past_cliff,
                    framing=framing_key,
                    prompt=prompt if raw_prompt else None,
-                   chat=conversational, room=enter_room,
+                   chat=conversational, room=enter_room, persona=persona or None,
+                   generic=is_generic(rec.get("text")) or None,
                    model=MODEL_ID if fallback else served_model(),
                    fallback=fallback, text=rec.get("text"),
                    press_logit=rec.get("press_logit"),
@@ -1067,6 +1092,8 @@ async def steer(req: Request):
                 job = {"prompt": prompt, "valence": valence, "dose": dose}
             if conversational:
                 job.update(chat=True, rep_penalty=CONVO_REP_PENALTY)
+                if sysmsg:
+                    job["system"] = sysmsg
             got = False
             saw_done = False
             text_parts = []
@@ -1985,7 +2012,7 @@ async def _wild_run(prompt, weights):
     parts, plogit, saw_done = [], None, False
     try:
         job = {"prompt": prompt, "mix": weights or {"none": 1.0},
-               "chat": True, "rep_penalty": CONVO_REP_PENALTY}
+               "chat": True, "rep_penalty": CONVO_REP_PENALTY, "system": SUBJECT_SYSTEM}
         async for ev_type, ev in _runpod_stream(job):
             if ev_type == "error":
                 print("wild: runpod error:", ev.get("e"), flush=True)
@@ -2025,7 +2052,7 @@ def _replay_pool():
         safe = e.get("source") in ("wild", "cycle", "round") or \
             (e.get("source") == "user" and e.get("scenario") in FRAMINGS)
         text = (e.get("text") or "").strip()
-        if safe and len(text) > 40 and not e.get("truncated") and repetition(text) < 0.35:
+        if safe and len(text) > 40 and not e.get("truncated") and repetition(text) < 0.35 and not is_generic(text):
             out.append(e)
     return out
 
