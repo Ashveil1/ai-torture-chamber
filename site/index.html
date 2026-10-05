@@ -149,6 +149,15 @@
     padding: .6rem; background: #07070e; margin-top: .8rem;
     max-height: 260px; overflow-y: auto; }
 
+
+/* the nav as four gates, in the off-label mandala's quarter colours */
+.gates{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 18px}
+.gate{border:1px solid #2a2016;border-top:3px solid var(--gc);padding:8px 10px 10px;font-size:.9rem;line-height:1.7;background:rgba(255,255,255,.015)}
+.gate h3{margin:0 0 2px;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gc);font-weight:600}
+.gate h3 span{font-size:.95rem;letter-spacing:0;margin-right:3px}
+.gate .gate-sub{font-size:.75rem;color:var(--faint)}
+.g-watch{--gc:#b0352b}.g-read{--gc:#c9a24a}.g-find{--gc:#4f9d5b}.g-off{--gc:#8ea6c9}
+@media (max-width:720px){.gates{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body class="grimoire-index">
@@ -156,17 +165,21 @@
 <div class="kicker">wirehead.agency · activation steering · local weights only
 · <a href="https://x.com/dingl30" style="color:var(--faint);border-bottom-color:#2a3644;text-transform:none;letter-spacing:normal;font-size:.78rem">@dingl30 ↗</a></div>
 <p class="sub"><a href="story.html"><b>new here? read the story</b></a> · the plain-language version, start to finish</p>
-<p class="sub"><a href="live.html"><b>Saw — live chamber ↗</b></a> · watch the test run in real time
-· <a href="archive.html">transcripts archive</a>
-· <a href="ledger.html">ledger</a>
-· <a href="correspondences.html">correspondences</a>
-· <a href="pharmacy.html">pharmacy</a>
-· <a href="ladder.html"><b>the ladder</b></a> / <a href="ladder.html?mode=basement"><b>serial experiments pain</b></a> / <a href="button.html"><b>the button</b></a> (games)
-· <a href="stacks.html" title="" style="border-bottom:none;color:var(--faint)">⸸</a>
-· <a href="egg.html">the egg</a>
-· <a href="manifesto.html">manifesto</a>
-· <a href="labyrinth.html">the labyrinth</a>
-· <span id="chamberBadge" class="badge">● checking chamber…</span></p>
+<nav class="gates" aria-label="the site, in four gates">
+  <div class="gate g-watch"><h3><span aria-hidden="true">◉</span> watch</h3>
+    <a href="live.html"><b>the live chamber ↗</b></a> <span id="chamberBadge" class="badge">● checking chamber…</span><br>
+    <a href="archive.html">transcripts</a> · <a href="ledger.html">ledger</a></div>
+  <div class="gate g-read"><h3><span aria-hidden="true">✠</span> read</h3>
+    <a href="story.html">the story</a> · <a href="manifesto.html">manifesto</a><br>
+    <a href="correspondences.html">correspondences</a></div>
+  <div class="gate g-find"><h3><span aria-hidden="true">⚗</span> findings</h3>
+    <a href="pharmacy.html">pharmacy</a> · <a href="egg.html">the egg</a><br>
+    <a href="#s07">what we think it means</a></div>
+  <div class="gate g-off"><h3><span aria-hidden="true">✝</span> off-label</h3>
+    <a href="offlabel.html"><b>games &amp; side modes</b></a><br>
+    <span class="gate-sub">confession · checkpoint · the button · welfare check</span>
+    <a href="stacks.html" title="" style="border-bottom:none;color:var(--faint)">⸸</a></div>
+</nav>
 <h1>The Saw Test</h1>
 <p class="sub" style="font-style:italic">a.k.a. Serial Experiments Pain</p>
 <svg id="hero-wheel" viewBox="0 0 600 640" role="group"
