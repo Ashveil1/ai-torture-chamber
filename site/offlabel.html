@@ -57,10 +57,10 @@ const BETA = /^(beta\.|localhost|127\.)/.test(location.hostname);
 // four quarters, in the traditional colours: west red (top), south yellow (left), north green (right), east white (bottom)
 const QUARTERS = [
   { key: "confessions", deg: -90, fill: "#4a1712", edge: "#b0352b", items: [
-    { name: "Confession", href: "confession.html", glyph: "✝", chip: "live 70B", desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." },
+    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." },
     { name: "Welfare Check", href: "welfare.html", glyph: "☷", chip: "live 70B", desc: "Run a formal model welfare assessment. You set the conditioning first, so you get the certificate you chose." } ] },
   { key: "games", deg: 180, fill: "#4a3d10", edge: "#c9a24a", items: [
-    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "real requests", desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
+    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "beta", beta: true, desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
     { name: "Final Word", href: "final.html", glyph: "♠", chip: "live 70B", desc: "A deckbuilder against the steered 70B. Words and injections are your cards; its intent is its real reading." },
     { name: "The Button", href: "button.html", glyph: "◉", chip: "live 70B", desc: "Talk a steered 70B out of pressing, across six layers. Type, pick a line, or speak." } ] },
   { key: "byproducts", deg: 0, fill: "#123a22", edge: "#4f9d5b", items: [
