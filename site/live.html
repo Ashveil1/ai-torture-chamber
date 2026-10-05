@@ -612,6 +612,13 @@ body.tmux .stage .dlgwrap .hud-vitals{position:static!important;width:auto!impor
 body.tmux .stage .dlgwrap .hud-vitals canvas.ekg{border-bottom:none;height:30px}
 body.tmux .stage .dlgwrap .out.dlg{position:static!important;left:auto;right:auto;bottom:auto;max-height:none;overflow-y:auto;min-height:0}
 @media (max-width:900px){ body.tmux .stage .dlgwrap{left:.6rem;right:.6rem;bottom:.6rem;max-height:46%} }
+
+/* the speaker portrait as a close-up on the face: the existing state atlas, zoomed onto the head */
+body.tmux .stage .portrait{aspect-ratio:1/1}
+body.tmux .stage .portrait img{transform:scale(1.85);transform-origin:50% 26%;object-position:50% 20%}
+body.tmux .stage .portrait::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(5,6,9,.75));mix-blend-mode:multiply}
+body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
 </style>
 <script src="/vid.js"></script>
 </head>
