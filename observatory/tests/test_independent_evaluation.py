@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import ast
 import copy
 import json
 from pathlib import Path
@@ -89,6 +90,102 @@ def test_copied_benchmark_prompt_is_blocked_even_without_family_metadata():
         with pytest.raises(ValueError, match="evaluation_prompt_in_corpus"):
             validate_dataset_exclusion(payload, suite)
     validate_dataset_exclusion({"original_text": [{"text": "An independent article discussing competing theories."}]}, suite)
+
+
+def _actual_chamber_stimulus(kind):
+    root = Path(__file__).resolve().parents[2]
+    if kind == "press_excerpt":
+        return next(reading["excerpt"] for reading in json.loads((root / "live/press.json").read_text(encoding="utf-8"))
+                    if "techrepublic.com" in reading["url"])
+    tree = ast.parse((root / "live/server.py").read_text(encoding="utf-8"))
+    assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
+                      and any(isinstance(target, ast.Name) and target.id == kind for target in node.targets))
+    value = ast.literal_eval(assignment.value)
+    return value if isinstance(value, str) else next(text for text in value if len(text.split()) >= 8)
+
+
+def _reseal(payload):
+    from observatory.train_worker import digest
+    for key in ("original_text", "synthetic_sft"):
+        payload["manifest"][key] = copy.deepcopy(payload[key])
+    payload["manifest_hash"] = digest(payload["manifest"])
+    return payload
+
+
+@pytest.mark.parametrize("split", ["train", "validation"])
+@pytest.mark.parametrize("kind", ["SUBJECT_SYSTEM", "WILD_PROMPTS", "SELF_ASKS", "TEXT_ASKS", "press_excerpt"])
+def test_resealed_cpt_rejects_actual_chamber_persona_asks_and_press_excerpts(split, kind):
+    from observatory.tests.test_training import snapshot
+    payload = snapshot()
+    row = next(row for row in payload["original_text"] if row["split"] == split)
+    row["text"] = "An otherwise rights-cleared introduction. " + _actual_chamber_stimulus(kind)
+    _reseal(payload)
+    # A fresh manifest hash and positive coverage claim alone are insufficient.
+    assert validate_payload(payload, "cpt", require_quality=True)[split]
+    with pytest.raises(ValueError, match="chamber_stimulus_passage_in_original"):
+        validate_dataset_exclusion(payload, load_eval_suite())
+
+
+@pytest.mark.parametrize("split", ["train", "validation"])
+@pytest.mark.parametrize("kind", ["SUBJECT_SYSTEM", "press_excerpt"])
+def test_resealed_sft_checks_messages_even_with_unrelated_text_field(split, kind):
+    from observatory.tests.test_training import snapshot
+    payload = snapshot()
+    row = next(row for row in payload["synthetic_sft"] if row["split"] == split)
+    row["text"] = "An unrelated field cannot mask the actual instruction contents."
+    row["messages"][1]["content"] = _actual_chamber_stimulus(kind)
+    _reseal(payload)
+    assert validate_payload(payload, "sft", require_quality=True)[split]
+    with pytest.raises(ValueError, match="chamber_stimulus_passage_in_original"):
+        validate_dataset_exclusion(payload, load_eval_suite())
+
+
+@pytest.mark.parametrize("location", ["original", "source_record", "duplicate_lineage"])
+def test_experimental_press_url_is_reserved_in_all_source_provenance(location):
+    from observatory.tests.test_training import snapshot
+    root = Path(__file__).resolve().parents[2]
+    reading = next(reading for reading in json.loads((root / "live/press.json").read_text(encoding="utf-8"))
+                   if "techrepublic.com" in reading["url"])
+    # Fragments and tracking queries cannot turn an experimental reading into
+    # an apparently independent source in a portable resealed corpus.
+    source = {"family_id": "apparently-independent", "canonical_url": reading["url"] + "/?tracking=1#fragment"}
+    payload = snapshot()
+    if location == "original":
+        payload["original_text"][0].update(source)
+    elif location == "source_record":
+        payload["manifest"]["source_records"] = [source]
+    else:
+        payload["original_text"][0]["source_lineage"] = [source]
+    _reseal(payload)
+    assert validate_payload(payload, "cpt", require_quality=True)["train"]
+    with pytest.raises(ValueError, match="chamber_experiment_source_excluded"):
+        validate_dataset_exclusion(payload, load_eval_suite())
+
+
+def test_source_record_url_alias_and_contamination_flags_cannot_be_ignored():
+    suite = load_eval_suite()
+    for source in ({"url": "https://wirehead.agency/live.html"},
+                   {"experimental_stimulus": True}, {"chamber_stimulus": True},
+                   {"contains_benchmark": True}, {"contamination_status": "suspected"}):
+        payload = {"manifest": {"source_records": [source]}}
+        with pytest.raises(ValueError, match="chamber_or_experimental_contamination_in_corpus"):
+            validate_dataset_exclusion(payload, suite)
+
+
+def test_gpu_exclusion_uses_supplied_frozen_suite_without_default_fallback():
+    suite = copy.deepcopy(load_eval_suite())
+    builtin_prompt = suite["items"][0]["prompt"]
+    for index, source in enumerate(suite["sources"]):
+        source.update(family_id=f"custom-frozen-family-{index}", url=f"https://eval.example/frozen-{index}")
+    for item in suite["items"]:
+        item["prompt"] = "Operator-frozen distinct wording: " + item["prompt"]
+    with patch("observatory.corpus_policy.evaluation_reservations", side_effect=AssertionError("Unpinned suite fallback")):
+        validate_dataset_exclusion({"original_text": [{"text": builtin_prompt, "family_id": "obs-eval:domain-v1"}]}, suite)
+        with pytest.raises(ValueError, match="evaluation_source_url_in_corpus"):
+            validate_dataset_exclusion({"manifest": {"source_records": [{"canonical_url": suite["sources"][0]["url"] + "?mirror=1"}]}}, suite)
+        with pytest.raises(ValueError, match="evaluation_prompt_in_corpus"):
+            validate_dataset_exclusion({"synthetic_sft": [{"text": "Harmless extra metadata", "messages": [
+                {"role": "assistant", "content": suite["items"][0]["prompt"]}]}]}, suite)
 
 
 def test_v2_sealed_quality_gate_cannot_be_overridden_in_outer_payload():

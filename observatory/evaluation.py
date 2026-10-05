@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 import re
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 GROUPS = {"domain_understanding", "general_retention"}
 BUILTIN_PATH = Path(__file__).with_name("evals") / "consciousness-smoke-v1.json"
@@ -103,28 +104,47 @@ def _normalized(text: str) -> str:
     return " ".join(re.findall(r"\w+", text.lower()))
 
 
+def _source_url(url: str) -> str:
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
+
+
 def validate_dataset_exclusion(payload: dict, suite: dict) -> None:
-    """Reject benchmark sources in either corpus split and copied task prompts.
+    """Reject benchmark and Chamber sources/passages in both training stages.
 
     Identity and exact prompt checks are conservative engineering guards. They
     cannot discover all paraphrases, translations, or pretraining contamination.
+    Chamber reservations come from the packaged experiment code/readings; all
+    evaluation reservations come from this job's supplied frozen suite.
     """
+    from .corpus_policy import contamination_reasons
+
     validate_suite(suite)
     families = {str(source["family_id"]).lower() for source in suite["sources"]}
-    urls = {str(source["url"]).rstrip("/").lower() for source in suite["sources"]}
-    prompts = [_normalized(item["prompt"]) for item in suite["items"]]
-    rows = payload.get("original_text", []) + payload.get("synthetic_sft", []) + payload.get("manifest", {}).get("source_records", [])
-    rows += [source for row in payload.get("original_text", []) for source in row.get("source_lineage", [])]
+    urls = {_source_url(str(source["url"])) for source in suite["sources"]}
+    prompts = tuple(_normalized(item["prompt"]) for item in suite["items"])
+    reservations = {"families": families, "urls": urls, "passages": prompts}
+    manifest = payload.get("manifest", {})
+    originals = payload.get("original_text", []) + manifest.get("original_text", [])
+    rows = originals + payload.get("synthetic_sft", []) + manifest.get("synthetic_sft", []) + manifest.get("source_records", [])
+    rows += [source for row in originals for source in row.get("source_lineage", [])]
     for row in rows:
         row_families = set(row.get("family_ids", [])) | {row.get("family_id", "")}
         if {str(family).lower() for family in row_families} & families:
             raise ValueError("evaluation_source_family_in_corpus")
-        if str(row.get("canonical_url", "")).rstrip("/").lower() in urls:
+        if _source_url(str(row.get("canonical_url", row.get("url", "")))) in urls:
             raise ValueError("evaluation_source_url_in_corpus")
-        text = row.get("text", "") or " ".join(message.get("content", "") for message in row.get("messages", []))
-        normalized = _normalized(text)
-        if any(prompt in normalized for prompt in prompts):
-            raise ValueError("evaluation_prompt_in_corpus")
+        # Check both representations: an unrelated extra text field must not
+        # hide contaminated SFT messages in a portable, correctly resealed file.
+        texts = [row.get("text", "")]
+        if row.get("messages"):
+            texts.append(" ".join(message.get("content", "") for message in row["messages"]))
+        for text in texts:
+            if any(prompt in _normalized(text) for prompt in prompts):
+                raise ValueError("evaluation_prompt_in_corpus")
+            reasons = contamination_reasons({**row, "text": text}, reservations=reservations)
+            if reasons:
+                raise ValueError("chamber_or_experimental_contamination_in_corpus: " + ", ".join(reasons))
 
 
 def evaluation_policy(settings: dict) -> dict:

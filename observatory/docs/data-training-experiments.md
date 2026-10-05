@@ -262,6 +262,11 @@ are preserved and the mission does not automatically resume. See
 `POST /api/admin/snapshots` builds a candidate without contacting HF or allocating
 a GPU. The new policy is `consciousness-corpus-v3`; compatible immutable v2
 snapshots retain their archived contracts. Source eligibility is recomputed.
+The recorded Chamber persona/wild/self-reading prompts and external reading
+URLs/excerpts in `live/press.json` are excluded from training. Both research and
+training images carry these read-only inputs; GPU preflight rechecks originals,
+instruction messages and source lineage. New experimental inputs need to be
+recorded/reserved as well; literal/identity checks do not detect every paraphrase.
 
 - Exact and near duplicates contribute one representative original. Mirrors
   retain source lineage and reuse evidence; they do not multiply training weight.
@@ -617,6 +622,14 @@ Use matched dose-zero, random/semantic vector controls, task-engagement and
 capability checks, and the same rendering/tokenization/dtype/quantization across
 the candidate and relevant unadapted-base controls. Re-extract representations
 for each adapted subject; do not reuse another model's vectors or dose caps.
+
+For controlled baseline and dose validation, keep relay `CHAMBER_WILD=0` and
+use `persona: false` for requests unless persona priming is an explicit, matched
+experimental condition. The upstream public interface can request a persona;
+its `SUBJECT_SYSTEM` directs first-person feeling claims and discourages denying
+feelings. Retain the exact prompt/persona condition and compare it across controls.
+Those replies are not unprompted evidence of subjective experience. The optional
+wild/self-reading cycle is separate from Observatory mission/training controls.
 
 `painlab` experimental representations and dose units are not necessarily the
 live bridge's vectors/units. A `painlab` screen therefore does not automatically

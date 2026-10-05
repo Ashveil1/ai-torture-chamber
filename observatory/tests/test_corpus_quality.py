@@ -1,10 +1,16 @@
 """Meaningful corpus boundaries: review, independent evidence and leakage."""
+import ast
 import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 from cryptography.fernet import Fernet
 import pytest
 
-from observatory.corpus_policy import chamber_stimulus_passages
+from observatory.corpus_policy import chamber_press_reservations, chamber_stimulus_passages
 from observatory.curation import build_snapshot, eligibility
 from observatory.evaluation import load_eval_suite
 from observatory.store import Store
@@ -195,3 +201,119 @@ def test_frozen_evaluation_family_excluded_even_without_content_match():
 @pytest.mark.parametrize("status", ["suspected", "confirmed"])
 def test_unresolved_contamination_review_keeps_original_out(status):
     assert "benchmark_or_chamber_stimulus_excluded" in eligibility(reviewed_source(contamination_status=status))["reasons"]
+
+
+def actual_chamber_literals(name):
+    """Inspect literal source without importing/executing the live server."""
+    root = Path(__file__).resolve().parents[2]
+    tree = ast.parse((root / "live/server.py").read_text(encoding="utf-8"))
+    assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
+                      and any(isinstance(target, ast.Name) and target.id == name for target in node.targets))
+    value = ast.literal_eval(assignment.value)
+    return [value] if isinstance(value, str) else list(value)
+
+
+def actual_press_readings():
+    root = Path(__file__).resolve().parents[2]
+    return json.loads((root / "live/press.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("name", ["SUBJECT_SYSTEM", "WILD_PROMPTS", "SELF_ASKS", "TEXT_ASKS"])
+def test_new_actual_chamber_prompt_groups_are_reserved_without_server_import(name):
+    passage = next(text for text in actual_chamber_literals(name) if len(text.split()) >= 8)
+    source = reviewed_source(text=reviewed_source()["text"] + "\n" + passage)
+    result = eligibility(source)
+    assert not result["eligible"]
+    assert "chamber_stimulus_passage_in_original" in result["reasons"]
+
+
+@pytest.mark.parametrize("kind", ["self", "kind", "text"])
+def test_actual_press_reading_urls_are_reserved_even_without_the_excerpt(kind):
+    reading = next(item for item in actual_press_readings() if item["kind"] == kind)
+    source = reviewed_source(canonical_url=reading["url"].rstrip("/") + "/?tracking=fixture#section")
+    result = eligibility(source)
+    assert not result["eligible"]
+    assert "chamber_experiment_source_excluded" in result["reasons"]
+
+
+@pytest.mark.parametrize("kind", ["self", "kind", "text"])
+def test_copied_actual_press_reading_on_an_unlisted_mirror_is_excluded(kind):
+    reading = next(item for item in actual_press_readings() if item["kind"] == kind)
+    source = reviewed_source(text=reviewed_source()["text"] + "\n" + reading["excerpt"])
+    result = eligibility(source)
+    assert not result["eligible"]
+    assert "chamber_stimulus_passage_in_original" in result["reasons"]
+
+
+def test_short_questions_and_press_titles_do_not_become_broad_phrase_exclusions():
+    short_prompt = next(text for text in actual_chamber_literals("SELF_ASKS") if text == "Is this true?")
+    title = next(item["title"] for item in actual_press_readings() if item["kind"] == "text")
+    source = reviewed_source(text=reviewed_source()["text"] + "\n" + short_prompt + "\n" + title)
+    assert eligibility(source)["eligible"]
+    assert all(len(passage.split()) >= 8 for passage in chamber_stimulus_passages())
+
+
+def test_actual_press_source_family_and_instruction_excerpt_remain_out_of_both_stages(store):
+    reading = next(item for item in actual_press_readings() if item["kind"] == "text")
+    reserved = reviewed_source("press-original", canonical_url=reading["url"])
+    clean_version = reviewed_source("press-version", family_id=reserved["family_id"], held_out=True)
+    clean = reviewed_source("clean-original", "mixed")
+    clean["quality_review"]["covered_stances"] = ["supportive", "skeptical", "uncertain"]
+    for source in (reserved, clean_version, clean):
+        store.put("sources", source)
+    evidence = store.put("evidence", {"source_id": clean["id"], "passage": clean["text"][:180], "support_verified": True})
+    store.save_settings({"synthetic_training_approved": True, "provider_policy_reference": "Owner fixture agreement"})
+    note = store.put("notes", {"id": "copied-reading-instruction", "source_ids": [clean["id"]],
+        "evidence_ids": [evidence["id"]], "support_verified": True, "review_status": "approved",
+        "messages": [{"role": "user", "content": reading["excerpt"]}, {"role": "assistant", "content": "Fixture answer"}]})
+    snapshot = build_snapshot(store)
+    assert [row["representative_source_id"] for row in snapshot["original_text"]] == [clean["id"]]
+    assert not snapshot["synthetic_sft"]
+    excluded = {row["source_id"]: row["reasons"] for row in snapshot["manifest"]["excluded_sources"]}
+    assert "chamber_experiment_source_excluded" in excluded[reserved["id"]]
+    assert "benchmark_or_chamber_contaminated_family" in excluded[clean_version["id"]]
+    assert "excluded_by_review_or_benchmark_policy" in next(item["reasons"] for item in snapshot["manifest"]["excluded_notes"] if item["note_id"] == note["id"])
+
+
+@pytest.mark.parametrize("dockerfile", ["Dockerfile", "Dockerfile.training"])
+def test_runtime_images_contain_and_read_actual_exclusion_inputs_using_only_stdlib(tmp_path, dockerfile):
+    """Materialize the actual COPY inputs; do not build Docker or load a GPU."""
+    root = Path(__file__).resolve().parents[2]
+    target = tmp_path / "worker-image"
+    for line in (root / "observatory" / dockerfile).read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if not parts or parts[0] != "COPY":
+            continue
+        destination = target / parts[-1].removeprefix("/app/")
+        destination.mkdir(parents=True, exist_ok=True)
+        for source in parts[1:-1]:
+            origin = root / source
+            if origin.is_file():
+                shutil.copyfile(origin, destination / origin.name)
+            elif origin.is_dir():
+                shutil.copytree(origin, destination, dirs_exist_ok=True)
+    assert (target / "observatory/corpus_policy.py").is_file()
+    assert (target / "live/server.py").read_bytes() == (root / "live/server.py").read_bytes()
+    assert (target / "live/press.json").read_bytes() == (root / "live/press.json").read_bytes()
+    expected = {"urls": sorted(chamber_press_reservations()["urls"]), "passages": list(chamber_stimulus_passages())}
+    (target / "expected.json").write_text(json.dumps(expected), encoding="utf-8")
+    script = """
+import importlib.abc, json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+class DenyRuntime(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, *args):
+        if fullname.split('.')[0] in {'browser_use','httpx','cryptography','torch','transformers','pydantic','live'} or fullname in {'observatory.store','observatory.research_llm','observatory.automatic_curation'}:
+            raise AssertionError('Exclusion validator imported a runtime: ' + fullname)
+sys.meta_path.insert(0, DenyRuntime())
+from observatory.corpus_policy import chamber_press_reservations, chamber_stimulus_passages, contamination_reasons
+expected = json.loads(Path(sys.argv[1], 'expected.json').read_text(encoding='utf-8'))
+assert sorted(chamber_press_reservations()['urls']) == expected['urls']
+assert list(chamber_stimulus_passages()) == expected['passages']
+frozen = {'families': set(), 'urls': set(), 'passages': ()}
+assert 'chamber_experiment_source_excluded' in contamination_reasons({'canonical_url': expected['urls'][0]}, reservations=frozen)
+assert 'chamber_stimulus_passage_in_original' in contamination_reasons({'text': expected['passages'][0]}, reservations=frozen)
+"""
+    result = subprocess.run([sys.executable, "-I", "-c", script, str(target)],
+        capture_output=True, text=True, timeout=30, cwd=target)
+    assert result.returncode == 0, result.stderr

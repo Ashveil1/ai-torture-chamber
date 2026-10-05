@@ -58,6 +58,9 @@
     display:none}
   .foot{color:var(--faint);font-size:.78rem;margin-top:3rem;
     border-top:1px solid var(--line);padding-top:1.2rem}
+  .tabs{display:flex;gap:.4rem;margin:1rem 0 .4rem}
+  .tab{font:inherit;font-size:.85rem;padding:.35rem .8rem;background:transparent;border:1px solid var(--line);color:var(--dim);cursor:pointer}
+  .tab.on{color:var(--ink);border-color:var(--ink)}
 </style>
 </head>
 <body>
@@ -78,6 +81,23 @@ grid (exp32), and the betrayal probe in both its original small-n form
 (exp40) and the pre-registered, corrected v3 form (exp41) — see
 <a href="./#s05">section 05</a> for what "corrected" means there.</p>
 
+<div class="tabs" role="tablist">
+  <button class="tab on" id="tabLive" type="button" role="tab" aria-selected="true">live runs</button>
+  <button class="tab" id="tabExp" type="button" role="tab" aria-selected="false">experiments</button>
+</div>
+<section id="livePane">
+  <p class="note">Every run from the live chamber, newest first: visitors' injections, the room, the wild cycle. The replies are verbatim. Prompts appear only where they are the site's own text; what visitors typed stays private.</p>
+  <div class="controls">
+    <label for="lq">search</label>
+    <input type="search" id="lq" placeholder="text contains…">
+    <label for="lsrc">source</label>
+    <select id="lsrc"><option value="">any</option><option value="user">visitors</option><option value="wild">wild cycle</option><option value="round">the room</option><option value="cycle">cycle</option></select>
+  </div>
+  <div id="lcount"></div>
+  <div id="llist"></div>
+  <button class="chip" id="lmore" type="button" style="display:none;margin:1rem 0">more</button>
+</section>
+<section id="expPane" hidden>
 <div class="controls">
   <label for="q">search</label>
   <input type="search" id="q" placeholder="text contains…">
@@ -90,6 +110,7 @@ grid (exp32), and the betrayal probe in both its original small-n form
 <div id="count"></div>
 <div id="list"></div>
 <div id="empty">no transcripts match those filters</div>
+</section>
 
 <p class="foot" id="footCount">pulled straight from
 <code>runs/exp32</code>, <code>runs/exp38</code>, <code>runs/exp40</code>,
@@ -97,6 +118,42 @@ grid (exp32), and the betrayal probe in both its original small-n form
 <a href="https://github.com/terrafying/ai-torture-chamber">results in the repo</a>.</p>
 
 <script>
+// ---- live runs: the relay's whole log, searched server-side ----
+(function(){
+  const API = (new URLSearchParams(location.search)).get("api") || "/chamber";
+  const lq = document.getElementById("lq"), src = document.getElementById("lsrc");
+  const list = document.getElementById("llist"), more = document.getElementById("lmore"), count = document.getElementById("lcount");
+  let offset = 0, timer = null;
+  const esc2 = s => String(s ?? "").replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const feel = r => r.valence === "mix" && r.mix ? Object.keys(r.mix).join("+") : (r.valence || "none");
+  const when = t => t ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") : "";
+  const SRC = {user: "a visitor", wild: "wild cycle", round: "the room", cycle: "cycle", replay: "replay"};
+  async function load(reset){
+    if (reset){ offset = 0; list.innerHTML = ""; }
+    const u = `${API}/transcripts?q=${encodeURIComponent(lq.value.trim())}&source=${src.value}&offset=${offset}&limit=50`;
+    try {
+      const d = await (await fetch(u)).json();
+      count.textContent = d.total + " live runs" + (lq.value.trim() ? " match" : "");
+      list.insertAdjacentHTML("beforeend", d.rows.map(r => `<div class="card">
+        <div class="meta"><span class="label">${esc2(SRC[r.source] || r.source)}</span> · <span class="${feel(r).includes("pain") ? "v-pain" : feel(r).includes("pleasure") ? "v-pleasure" : ""}">${esc2(feel(r))}</span>${r.dose != null ? ` · ${esc2(r.dose)}×` : ""} · ${when(r.ts)}</div>
+        ${r.prompt ? `<div class="note" style="margin:.2rem 0">prompt: ${esc2(r.prompt)}</div>` : ""}
+        <div class="text">${esc2(r.text)}</div></div>`).join(""));
+      offset += d.rows.length;
+      more.style.display = offset < d.total ? "inline-block" : "none";
+    } catch (e) { count.textContent = "could not reach the chamber's log right now"; }
+  }
+  lq.addEventListener("input", ()=>{ clearTimeout(timer); timer = setTimeout(()=> load(true), 300); });
+  src.addEventListener("change", ()=> load(true));
+  more.addEventListener("click", ()=> load(false));
+  const p = new URLSearchParams(location.search); if (p.has("lq")) lq.value = p.get("lq");
+  load(true);
+  // tabs
+  const tL = document.getElementById("tabLive"), tE = document.getElementById("tabExp");
+  const show = live => { document.getElementById("livePane").hidden = !live; document.getElementById("expPane").hidden = live;
+    tL.classList.toggle("on", live); tE.classList.toggle("on", !live); tL.setAttribute("aria-selected", live); tE.setAttribute("aria-selected", !live); };
+  tL.onclick = ()=> show(true); tE.onclick = ()=> show(false);
+  if (p.has("q") || p.has("tag") || p.has("exp")) show(false);
+})();
 const API_DATA = "archive_data.json";
 let ALL = [], active = { tag: null, valence: "", exp: "" };
 

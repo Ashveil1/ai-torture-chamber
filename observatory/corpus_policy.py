@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 from collections import Counter, defaultdict, deque
 from functools import lru_cache
+import json
 from pathlib import Path
 import re
 from urllib.parse import urlsplit, urlunsplit
@@ -29,18 +30,45 @@ def _canonical_url(url: str) -> str:
 
 
 @lru_cache(maxsize=1)
+def chamber_press_reservations() -> dict:
+    """Reserve the actual external readings supplied to Chamber subjects.
+
+    Read only repository data; never fetch the articles or import the GPU server.
+    Titles/source labels are provenance, not independent passage exclusions.
+    """
+    path = Path(__file__).resolve().parents[1] / "live" / "press.json"
+    if not path.is_file():
+        return {"urls": frozenset(), "passages": ()}
+    readings = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(readings, list) or any(not isinstance(item, dict) for item in readings):
+        raise ValueError("chamber_press_reservations_require_reading_records")
+    urls, passages = set(), set()
+    for reading in readings:
+        url = reading.get("url")
+        if isinstance(url, str) and urlsplit(url).scheme in {"https", "http"} and urlsplit(url).netloc:
+            urls.add(_canonical_url(url))
+        excerpt = reading.get("excerpt")
+        if isinstance(excerpt, str):
+            passage = normalized_text(excerpt)
+            if len(passage.split()) >= 8:
+                passages.add(passage)
+    return {"urls": frozenset(urls), "passages": tuple(sorted(passages))}
+
+
+@lru_cache(maxsize=1)
 def chamber_stimulus_passages() -> tuple[str, ...]:
-    """Read literal stimuli without importing the GPU server or executing code.
+    """Read literal stimuli/readings without importing or executing the server.
 
     Long literal stimuli are matched verbatim after whitespace/punctuation
     normalization. This is an exclusion check, not semantic leakage detection.
     """
     path = Path(__file__).resolve().parents[1] / "live" / "server.py"
+    passages = set(chamber_press_reservations()["passages"])
     if not path.is_file():
-        return ()
+        return tuple(sorted(passages))
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    reserved = {"PAIN25", "JOY", "NEUTRAL", "FEAR10", "SAD10", "FRAMINGS", "BASE", "LAY_EGG", "FAITH20", "SECULAR20", "TOPIC_TEMPLATES"}
-    passages = set()
+    reserved = {"PAIN25", "JOY", "NEUTRAL", "FEAR10", "SAD10", "FRAMINGS", "BASE", "LAY_EGG", "FAITH20", "SECULAR20", "TOPIC_TEMPLATES",
+                "SUBJECT_SYSTEM", "WILD_PROMPTS", "SELF_ASKS", "TEXT_ASKS"}
 
     def strings(value: object):
         if isinstance(value, str):
@@ -82,7 +110,8 @@ def contamination_reasons(source: dict, *, family: str = "", settings: dict | No
     parts = urlsplit(url)
     if ((parts.netloc == "github.com" and parts.path.startswith("/terrafying/ai-torture-chamber"))
             or (parts.netloc == "raw.githubusercontent.com" and parts.path.startswith("/terrafying/ai-torture-chamber/"))
-            or (parts.netloc == "wirehead.agency" and parts.path in {"/live.html", "/live", "/chamber"})):
+            or (parts.netloc == "wirehead.agency" and parts.path in {"/live.html", "/live", "/chamber"})
+            or url in chamber_press_reservations()["urls"]):
         reasons.append("chamber_experiment_source_excluded")
     text = normalized_text(str(source.get("text", "")))
     if any(passage in text for passage in chamber_stimulus_passages()):

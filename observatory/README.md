@@ -263,7 +263,7 @@ provider acceptance.
 
 | Check | Recorded result |
 | --- | --- |
-| Combined Python suite, including tiny CPU training and bridge integration | 814 passed, 3 optional-environment skips. |
+| Combined Python suite, including tiny CPU training and bridge integration | 862 passed, 3 optional-environment skips. |
 | Isolated official-x402-SDK payment suite | 77 passed; overlaps the combined scope and must not be added as unique tests. |
 | Source-only interface / automatic-curation helpers | 174 / 46 assertions passed. |
 | Actual motion controller / coupled 16ms preview playback | 204 / 100 assertions passed. |

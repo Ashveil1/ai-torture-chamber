@@ -35,3 +35,18 @@ class CheckpointRequestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TranscriptSearchTests(unittest.TestCase):
+    def test_search_and_prompt_privacy(self):
+        rows = ROWS + [{"source": "wild", "valence": "egg", "dose": 3, "prompt": "Pray for me.", "text": "Cluck. Amen.", "uid": 9}]
+        class R:
+            def lrange(self, k, a, b): return [json.dumps(r) for r in rows]
+        with mock.patch.object(server, "_redis", lambda: R()), mock.patch.dict(server._TX_CACHE, {"t": 0.0, "rows": []}):
+            d = json.loads(asyncio.run(server.transcripts(q="")).body)
+            self.assertEqual(d["total"], 7)
+            vis = [r for r in d["rows"] if r["uid"] == 3][0]
+            self.assertIsNone(vis["prompt"])                      # a visitor's free-text run: reply only
+            d = json.loads(asyncio.run(server.transcripts(q="amen")).body)
+            self.assertEqual([r["uid"] for r in d["rows"]], [9])
+            self.assertEqual(d["rows"][0]["prompt"], "Pray for me.")

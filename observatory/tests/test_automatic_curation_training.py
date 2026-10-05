@@ -19,15 +19,20 @@ def validate_packaged_worker(snapshot, changed, directory):
     """Run the actual Docker-copied validation tree with sidecar imports denied."""
     root = Path(__file__).resolve().parents[2]
     copied = []
-    for line in (root / "observatory/Dockerfile.training").read_text().splitlines():
+    for line in (root / "observatory/Dockerfile.training").read_text(encoding="utf-8").splitlines():
         parts = line.split()
-        if parts and parts[0] == "COPY" and parts[-1] == "/app/observatory/":
+        if parts and parts[0] == "COPY" and parts[-1] in {"/app/observatory/", "/app/live/", "/app/observatory/evals"}:
             copied.extend(parts[1:-1])
     assert "observatory/curation_receipts.py" in copied
     target = directory / "worker-image"
     (target / "observatory").mkdir(parents=True)
     for source in copied:
-        shutil.copyfile(root / source, target / source)
+        destination = target / source
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if (root / source).is_dir():
+            shutil.copytree(root / source, destination)
+        else:
+            shutil.copyfile(root / source, destination)
     (target / "valid.json").write_text(json.dumps(snapshot), encoding="utf-8")
     (target / "changed.json").write_text(json.dumps(changed), encoding="utf-8")
     script = """
@@ -36,12 +41,14 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 class DenySidecar(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, *args):
-        if fullname.split('.')[0] in {'browser_use','httpx','cryptography','torch','transformers','pydantic'} or fullname in {'observatory.store','observatory.research_llm','observatory.automatic_curation','observatory.corpus_policy'}:
+        if fullname.split('.')[0] in {'browser_use','httpx','cryptography','torch','transformers','pydantic'} or fullname in {'observatory.store','observatory.research_llm','observatory.automatic_curation'}:
             raise AssertionError('GPU validation imports sidecar dependency: ' + fullname)
 sys.meta_path.insert(0, DenySidecar())
 from observatory.train_worker import validate_payload
+from observatory.evaluation import load_eval_suite, validate_dataset_exclusion
 valid = json.loads(Path(sys.argv[1], 'valid.json').read_text(encoding='utf-8'))
 assert validate_payload(valid, 'cpt', require_quality=True)['train']
+validate_dataset_exclusion(valid, load_eval_suite())
 changed = json.loads(Path(sys.argv[1], 'changed.json').read_text(encoding='utf-8'))
 try:
     validate_payload(changed, 'cpt', require_quality=True)

@@ -429,6 +429,11 @@ all base/adapter/tokenizer pins, subfolders, layer, dtype and quantization. Gene
 cap overrides do not bypass that guard. Keep the actual measurement artifact;
 see [the receipt schema](../X402_OPERATIONS.md#adapted-chamber-dose-receipt).
 Calibrate and compare before routing public experiments to the new worker.
+Keep relay `CHAMBER_WILD=0` during baseline/dose validation. Use `persona: false`
+for controlled API requests, or deliberately match and log persona priming across
+conditions. The upstream public UI's first-person persona and optional wild or
+self-reading cycles are separate experimental conditions; Observatory Pause/Stop
+does not control those relay cycles. See the experiment guide for interpretation.
 
 ## Staging acceptance and upstream merge
 

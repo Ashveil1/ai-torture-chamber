@@ -35,6 +35,12 @@ upstream pretrained base. Never report complete decontamination on this basis.
 The corpus also excludes identified Chamber stimuli. A domain corpus can contain
 research about experiments; it must not teach the model the evaluation questions
 and preferred answers that will later be used to judge it.
+This includes the current persona, wild and self-reading prompt literals and the
+external reading URLs/excerpts in `live/press.json`. Research and training images
+carry the same read-only exclusion inputs. GPU preflight checks original rows,
+instruction messages, recorded provenance and duplicate lineage before loading
+the model. These checks identify recorded URLs and normalized literal passages;
+they do not detect every transformed or previously unseen experimental input.
 
 New snapshots use `consciousness-corpus-v3`, including research-area and claim-basis
 classifications. The coordinator and provisioned worker require a ready quality

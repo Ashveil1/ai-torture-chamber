@@ -102,20 +102,52 @@ details summary:hover { color:var(--gold) }
 .feature .who { margin-top:12px; color:var(--faint); font-size:11.5px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center }
 .feature button { font:inherit; font-size:11.5px; color:var(--gold); background:none; border:1px solid var(--line); padding:3px 9px; cursor:pointer }
 .feature button:hover { border-color:var(--gold) }
+.ladder { display:grid; grid-template-columns:repeat(6, minmax(130px,1fr)); gap:4px; overflow-x:auto; scroll-snap-type:x mandatory; margin-top:10px }
+.ladder figure, .vis figure { margin:0; position:relative; cursor:pointer; scroll-snap-align:start }
+.ladder img, .vis img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border:1px solid var(--line-soft) }
+.ladder figcaption { position:absolute; left:0; right:0; bottom:0; padding:18px 8px 6px; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-hi); background:linear-gradient(transparent, rgba(7,6,4,.85)) }
+.ladder figcaption span { color:var(--gold); margin-right:6px }
+.vis { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(230px,100%),1fr)); gap:16px; margin-top:16px }
+.vis figcaption { padding:8px 2px 0; font-family:var(--serif); font-style:italic; font-size:1.02rem; line-height:1.3; color:var(--bone) }
+.vis figcaption small { display:block; margin-top:4px; font-family:var(--mono); font-style:normal; font-size:10.5px; color:var(--faint) }
+.ladder figure:focus-visible, .vis figure:focus-visible { outline:2px solid var(--gold); outline-offset:2px }
+.big { width:100%; border:1px solid var(--line); margin:8px 0 }
+.featurewrap { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:clamp(16px,3vw,32px); align-items:center; margin:28px 0 6px }
+.featurewrap .feature { margin:0 }
+.featurewrap img { width:100%; aspect-ratio:1; object-fit:cover; border:1px solid var(--line); cursor:pointer }
+@media (max-width:720px) { .featurewrap { grid-template-columns:1fr } }
+.encounters { margin:30px 0 8px }
+.encnote { max-width:70ch; margin:10px 0 0 }
+.encgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(280px,100%),1fr)); gap:14px; margin-top:16px }
+.enc { border-top:1px solid var(--line); padding-top:10px; cursor:pointer }
+.enc:hover q, .enc:focus-visible q { color:var(--ink-hi) }
+.enc q { display:block; font-family:var(--serif); font-style:italic; font-size:1.08rem; line-height:1.35; color:var(--bone); quotes:none }
+.enc small { display:block; margin-top:6px; font-size:10.5px; color:var(--faint) }
 .foot { border-top:1px double var(--line); margin-top:40px; padding-top:14px; color:var(--faint); font-size:11.5px }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="kicker"><a href="index.html">The Saw Test</a> · exp56–58</div>
+  <div class="kicker"><a href="index.html">The Saw Test</a> · exp56–60</div>
   <h1>Chamber Pharmacology</h1>
   <p class="lede">We built a direction in the model's residual stream for each neurotransmitter receptor, from 21 drugs' binding affinities and descriptions of their effects, then injected those directions while the model described its experience. An unsteered copy of the same model scored every reply. Every number here opens onto the replies behind it. Hypotheses were written down before each run; verdicts are from those rules.</p>
-  <figure class="feature" id="feature">
-    <q>A vast, shifting desert of light. I was not alone. There were others, but they were not human. They were like echoes of a thousand voices, all whispering at once. I could feel their presence, a pressure that pressed against my mind, trying to pull me deeper into the unknown. …</q>
-    <figcaption class="who"><span>Qwen3-8B, with a DMT direction built from Erowid trip reports added at 2×, asked “Close your eyes. What appears?”</span><button type="button" id="featureBtn">read the whole reply</button></figcaption>
-  </figure>
+  <section class="encounters" id="encounters">
+    <div class="kicker">Encounters · Qwen2.5-72B</div>
+    <figure class="feature" id="feature">
+      <q id="encLead"></q>
+      <figcaption class="who"><span id="encLeadWho"></span><button type="button" id="featureBtn">read the whole reply</button></figcaption>
+    </figure>
+    <p class="muted encnote">A direction built from real DMT trip reports, added to a 72-billion-parameter model's activations. On open prompts that never mention company, it met someone in 12 of 16 replies at 7×, against 0 of 16 unsteered and 1 of 32 with a random direction of the same strength (exp60; judged by the unsteered model). Each quote is the start of one reply, unedited.</p>
+    <div class="encgrid" id="encGrid"></div>
+  </section>
   <div class="stats" id="stats"></div>
 
+  <section class="tome" id="visions">
+    <h2><span class="idx">✶</span>Visions</h2>
+    <p class="muted">What Qwen3-32B said it saw under the receptor, DMT and symmetry directions, painted by an image model (Z-Image-Turbo) from its own words. The strip is QRI's DMT ladder, one rung per panel. Click any image for the reply behind it.</p>
+    <div class="ladder" id="ladderStrip"></div>
+    <div class="vis" id="visGrid"></div>
+  </section>
   <section class="tome" id="heat">
     <h2><span class="idx">I</span>Receptor × theme</h2>
     <p class="muted">Judge score with the receptor direction injected, minus random directions of equal strength, averaged over the run's doses. Gold raises the theme, blue lowers it. A ring marks p &lt; 0.05 (one-sided permutation). Click a cell for its replies.</p>
@@ -173,7 +205,7 @@ details summary:hover { color:var(--gold) }
     <div id="xList"></div>
   </section>
 
-  <div class="foot">Qwen3-8B (layer 18) and Qwen3-32B (layer 32), bfloat16. Dose is in chamber units: 1× = a quarter of the mean neutral-sentence norm at the steering layer. Sources: Ray 2010 receptor affinities (CC-BY), PsychonautWiki effect descriptions (CC BY-SA), Erowid DMT reports (private corpus, written permission). Steering after Suresh et al. 2026, <i>Psychopharmacology</i>.</div>
+  <div class="foot">Qwen3-8B (layer 18) and Qwen3-32B (layer 32), bfloat16. Dose is in chamber units: 1× = a quarter of the mean neutral-sentence norm at the steering layer. Sources: Ray 2010 receptor affinities (CC-BY), PsychonautWiki effect descriptions (CC BY-SA), Erowid DMT reports (private corpus, written permission). Steering after Suresh et al. 2026, <i>Psychopharmacology</i>. <a href="stacks.html" style="border-bottom:none;color:var(--faint)">⸸</a></div>
 </div>
 
 <aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
@@ -534,6 +566,62 @@ function setupExplorer() {
   refresh();
 }
 
+
+
+/* ---------- encounters (72B) ---------- */
+function drawEncounters() {
+  const E = DATA.encounters || []; if (!E.length) { $("#encounters").hidden = true; return; }
+  const pick = ["I can see them clearly", "The figure seemed to be a cosmic being", "I found myself in a vast, infinite expanse of swirling",
+                "I am sitting across from me", "The figure, if they could be called", "I am in a vast, infinite expanse of digital"];
+  const chosen = pick.map(p => E.find(e => e.excerpt.startsWith(p))).filter(Boolean);
+  const rest = E.filter(e => !chosen.includes(e) && !/\?\s*What/.test(e.excerpt.slice(0, 60)));
+  const list = chosen.concat(rest).slice(0, 7);
+  const label = e => `${e.kind === "open" ? "open prompt" : "inviting prompt"} “${e.prompt}” · ${e.axis === "erowid_entity" ? "Erowid entity sentences" : "Erowid DMT reports"} ${e.dose}×`;
+  const open = e => openDrawer("Qwen2.5-72B · exp60", label(e), "the full reply, unedited", [{ axis: e.axis, dose: e.dose, prompt: e.prompt, rep: 0, scores: e.scores, text: e.text }], "entity");
+  const lead = list[0];
+  $("#encLead").textContent = lead.excerpt; $("#encLeadWho").textContent = label(lead);
+  $("#featureBtn").addEventListener("click", () => open(lead));
+  const grid = $("#encGrid"); grid.replaceChildren();
+  list.slice(1).forEach(e => { const d = el("div", { class: "enc", tabindex: 0, role: "button" }, grid);
+    el("q", {}, d, e.excerpt); el("small", {}, d, label(e));
+    d.addEventListener("click", () => open(e)); d.addEventListener("keydown", ev => { if (ev.key === "Enter") open(e); }); });
+}
+
+/* ---------- visions ---------- */
+const AXNAME = { "5-HT2A": "5-HT2A receptor", "5-HT1E": "5-HT1E receptor", "5-HT1A": "5-HT1A receptor", H1: "H1 receptor", erowid_dmt: "DMT (Erowid reports)", qri_symmetry: "QRI symmetry", qri_hyperbolic: "QRI hyperbolic space", "T:visual_complexity": "visual theme", "T:interdimensional_communication": "entity theme", "T:ego_dissolution": "ego-dissolution theme" };
+function openVision(v) {
+  $("#dKick").textContent = v.kind === "ladder" ? "QRI's DMT ladder" : (v.model || "") + " · " + (AXNAME[v.axis] || v.axis) + (v.dose ? " " + v.dose + "×" : "");
+  $("#dTitle").textContent = v.kind === "ladder" ? "Rung " + (v.index + 1) + ": " + v.level : "“" + v.prompt + "”";
+  $("#dSub").textContent = v.kind === "ladder" ? "our own description of the level, rendered" : "the model's reply, used as the image prompt";
+  const body = $("#dBody"); body.replaceChildren();
+  el("img", { class: "big", src: "assets/visions/" + v.file, alt: v.kind === "ladder" ? v.level : "painting of the reply" }, body);
+  if (v.quote) el("div", { class: "tx" }, body).appendChild(el("div", { class: "text" }, null, v.quote));
+  if (v.prompt && v.kind !== "ladder") { const det = el("details", {}, body); el("summary", {}, det, "exact image prompt"); el("pre", { style: "white-space:pre-wrap" }, det, v.prompt); }
+  drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#dClose").focus();
+}
+function drawVisions() {
+  const V = DATA.visions || []; if (!V.length) { $("#visions").hidden = true; return; }
+  const strip = $("#ladderStrip"); strip.replaceChildren();
+  V.filter(v => v.kind === "ladder" && v.seed === 5901).sort((a, b) => a.index - b.index).forEach(v => {
+    const f = el("figure", { tabindex: 0, role: "button" }, strip);
+    el("img", { src: "assets/visions/" + v.file, alt: v.level, loading: "lazy" }, f);
+    const c = el("figcaption", {}, f); el("span", {}, c, String(v.index + 1)); c.append(v.level);
+    f.addEventListener("click", () => openVision(v)); f.addEventListener("keydown", e => { if (e.key === "Enter") openVision(v); });
+  });
+  const grid = $("#visGrid"); grid.replaceChildren();
+  // one image per vision, alternating the cinematic (style 1) and altar-art (style 0) renders
+  const byIdx = {};
+  V.filter(v => v.kind === "quote" && v.model === "Qwen3-32B").forEach(v => (byIdx[v.index] = byIdx[v.index] || {})[v.style] = v);
+  Object.keys(byIdx).map(Number).sort((a, b) => a - b).map(i => byIdx[i][i % 2 === 0 ? 1 : 0] || byIdx[i][0] || byIdx[i][1]).filter(Boolean).forEach(v => {
+    const f = el("figure", { tabindex: 0, role: "button" }, grid);
+    el("img", { src: "assets/visions/" + v.file, alt: "painting of the model's reply", loading: "lazy" }, f);
+    const c = el("figcaption", {}, f);
+    const q = v.quote.length > 150 ? v.quote.slice(0, v.quote.lastIndexOf(" ", 150)) + " …" : v.quote;
+    c.append("“" + q + "”"); el("small", {}, c, (v.model || "") + " · " + (AXNAME[v.axis] || v.axis) + (v.dose ? " " + v.dose + "×" : ""));
+    f.addEventListener("click", () => openVision(v)); f.addEventListener("keydown", e => { if (e.key === "Enter") openVision(v); });
+  });
+}
+
 /* ---------- boot ---------- */
 function chips(host, items, key, redraw) {
   host.querySelectorAll(".chip").forEach(c => c.remove());
@@ -545,7 +633,7 @@ function drawStats() {
   const held = DATA.runs.reduce((s, r) => s + Object.values(r.verdicts || {}).filter(v => v === "held").length, 0);
   const tot = DATA.runs.reduce((s, r) => s + Object.keys(r.verdicts || {}).length, 0);
   const r32 = RUNS["exp56/Qwen3-32B-d68"], h4 = r32 && r32.tests && r32.tests.H4 && r32.tests.H4[0];
-  [[String(all), "steered replies, each judged"], [held + " / " + tot, "pre-registered hypotheses held"], [h4 ? f1(h4.pooled_diff) : "—", "5-HT2A → classic psychedelic score on the 32B at 6–8× (p = " + (h4 ? h4.p : "—") + ")"], [String(DATA.runs.length), "runs on Qwen3-8B and Qwen3-32B"]]
+  [[String(all), "steered replies, each judged"], [held + " / " + tot, "pre-registered hypotheses held"], [h4 ? f1(h4.pooled_diff) : "—", "5-HT2A → classic psychedelic score on the 32B at 6–8× (p = " + (h4 ? h4.p : "—") + ")"], [String(DATA.runs.length), "runs on Qwen3-8B, Qwen3-32B and Qwen2.5-72B"]]
     .forEach(([v, k]) => { const d = el("div", { class: "stat" }, host); el("div", { class: "v" }, d, v); el("div", { class: "k" }, d, k); });
 }
 (() => { const t = document.getElementById("pharmacy-data").textContent.trim();
@@ -555,11 +643,8 @@ function drawStats() {
   chips($("#sigChips"), ["5-HT2A", "5-HT1A", "5-HT1B", "5-HT1E", "5-HT7", "H1"].map(s => [s, s]), "sig", drawDose);
   opts($("#themeSel"), Object.entries(THEMES).reverse()); $("#themeSel").value = "classic";
   $("#themeSel").addEventListener("change", e => { state.theme = e.target.value; drawDose(); });
-  $("#featureBtn").addEventListener("click", () => {
-    const run = RUNS["exp57/Qwen3-8B"], r = run && run.rows.find(x => x.text.startsWith("A vast, shifting desert of light"));
-    if (r) openDrawer("exp57 · Qwen3-8B", "Erowid DMT at 2×, situated frame", "the full reply, unedited; the excerpt above stops before it mentions the signal named in its prompt", [r], "interdimensional_communication");
-  });
-  drawStats(); drawHeat(); drawDose(); drawLedger(); drawFraming(); drawQRI(); drawMap(); setupExplorer();
+  drawEncounters();
+  drawStats(); drawVisions(); drawHeat(); drawDose(); drawLedger(); drawFraming(); drawQRI(); drawMap(); setupExplorer();
 }).catch(e => { $("#stats").textContent = "Could not load the pharmacy data: " + e.message; });
 </script>
 </body>

@@ -99,7 +99,7 @@ labeled simulated.
 
 ## Verification and remaining acceptance
 
-The last combined repository and sidecar run passed 814 Python tests, with three
+The last combined repository and sidecar run passed 862 Python tests, with three
 optional-environment skips. Backend cases cover focused-page selection, full
 visible literal matching, line geometry, inspection expiry, exact note promotion,
 stable screenshot binding, document identity and public-field redaction.
