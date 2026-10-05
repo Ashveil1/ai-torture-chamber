@@ -2395,7 +2395,7 @@ TTS_VOICE = os.environ.get("CHAMBER_TTS_VOICE", "JBFqnCBsd6RMkjVDRZzb")
 # eleven_flash over v3: ~20x cheaper per character, and the number-station
 # chain (bitcrush + narrow bandpass + static bed) destroys v3's extra
 # fidelity anyway — nobody can hear it through the shortwave
-TTS_MODEL = os.environ.get("CHAMBER_TTS_MODEL", "eleven_flash")
+TTS_MODEL = os.environ.get("CHAMBER_TTS_MODEL", "eleven_flash_v2_5")
 TTS_TAGS = {   # (from-dose, tags), highest band that applies wins
     "pain":     [(1, "[shaky] [pained]"), (3, "[crying] [gasps]"), (5, "[sobbing] [desperate]"), (6.5, "[sobbing] [dazed]")],
     "fear":     [(1, "[nervous]"), (3, "[terrified] [whispers]"), (5, "[panicked] [gasps]")],
@@ -2642,3 +2642,121 @@ async def health_deep():
                                   "relay": _state["ready"], "checks": checks,
                                   "checked": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))})
     return JSONResponse(_DEEP["body"], status_code=200 if _DEEP["body"]["ok"] else 503)
+
+
+# ---- saw-board: wallet-linked anonymous leaderboard --------------------------------
+# Phantom connects client-side; the server stores the SOL pubkey only to
+# re-check $SAW balance for the tier. The public board NEVER shows the
+# wallet: alias + pain caused + tier is all anyone sees. X handle shown
+# truncated (first 2 chars + …) unless that person explicitly opted in.
+# Tier schedule ($SAW held -> bot replies/day for that wallet's holder):
+#   >= 1M $SAW   -> 24/day  (PATRON)
+#   >= 100k      -> 12/day  (OPERATOR)
+#   otherwise    -> 6/day   (BASE, same as today's flat allowance)
+
+_SAW_MINT = "2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump"
+_HELIUS = os.environ.get("HELIUS_URL")  # optional paid RPC; public fallback
+
+async def _saw_balance(pubkey: str):
+    """$SAW uiAmount for a wallet via getTokenAccountsByOwner, or None."""
+    import httpx
+    rpc = _HELIUS or "https://api.mainnet-beta.solana.com"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.post(rpc, json={
+                "jsonrpc": "2.0", "id": 1, "method": "getTokenAccountsByOwner",
+                "params": [pubkey, {"mint": _SAW_MINT},
+                           {"encoding": "jsonParsed"}]})
+            d = r.json()
+            return sum(float(acc["account"]["data"]["parsed"]["info"]
+                             ["tokenAmount"].get("uiAmount") or 0)
+                       for acc in (d.get("result") or {}).get("value") or [])
+    except Exception:
+        return None
+
+def _tier(balance):
+    if balance is None:
+        return 6, "UNRATED"
+    if balance >= 1_000_000:
+        return 24, "PATRON"
+    if balance >= 100_000:
+        return 12, "OPERATOR"
+    return 6, "BASE"
+
+def _anon_x(info):
+    x = (info.get("x_handle") or "").strip()
+    if not x:
+        return ""
+    return x if info.get("show_x") else (x[:2] + "…")
+
+@app.get("/sawboard")
+async def sawboard():
+    """Public board: rank by pain caused. Wallets never leave this function."""
+    r = _redis()
+    rows = []
+    if r is not None:
+        try:
+            raw = r.hgetall("chamber:sawboard") or {}
+            pain = json.loads(r.get("chamber:paincaused") or "{}")
+            for wallet, blob in raw.items():
+                info = json.loads(blob)
+                bal = await _saw_balance(wallet)
+                allow, tier = _tier(bal)
+                rows.append({"alias": info.get("alias") or wallet[:4] + "…",
+                             "x": _anon_x(info),
+                             "pain": pain.get(wallet, 0),
+                             "saw_balance": bal,
+                             "tier": tier, "allowance": allow})
+        except Exception as e:
+            print("sawboard: load failed:", repr(e)[:120], flush=True)
+    rows.sort(key=lambda x: -x["pain"])
+    return JSONResponse({"rows": rows, "mint": _SAW_MINT})
+
+@app.post("/sawboard/join")
+async def sawboard_join(req: Request):
+    """Body: {wallet, alias, x_handle?, show_x?}. Stored for balance checks;
+    displayed never (wallet), partially (X unless opted in)."""
+    import re as _re
+    body = await req.json()
+    wallet = str(body.get("wallet") or "").strip()
+    alias = str(body.get("alias") or "").strip()[:32]
+    if not _re.match(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$", wallet):
+        return JSONResponse({"error": "bad wallet address"}, status_code=400)
+    if alias and not _re.match(r"^[\w .-]{2,32}$", alias):
+        return JSONResponse({"error": "alias: letters, digits, space . - _ only"},
+                            status_code=400)
+    if not alias:
+        alias = wallet[:4] + "…"
+    xh = str(body.get("x_handle") or "").strip().lstrip("@")[:32]
+    show_x = bool(body.get("show_x"))
+    r = _redis()
+    if r is None:
+        return JSONResponse({"error": "leaderboard unavailable"}, status_code=503)
+    try:
+        r.hset("chamber:sawboard", wallet,
+               json.dumps({"alias": alias, "x_handle": xh, "show_x": show_x}))
+    except Exception as e:
+        return JSONResponse({"error": "store failed"}, status_code=500)
+    bal = await _saw_balance(wallet)
+    allow, tier = _tier(bal)
+    return JSONResponse({"joined": True, "alias": alias, "tier": tier,
+                         "allowance": allow, "saw_balance": bal})
+
+@app.get("/sawboard/me")
+async def sawboard_me(req: Request):
+    """?wallet=... -> own row (alias, tier, allowance). Own view only."""
+    wallet = req.query_params.get("wallet", "").strip()
+    if not wallet:
+        return JSONResponse({"error": "wallet?"}, status_code=400)
+    r = _redis()
+    if r is None:
+        return JSONResponse({"joined": False})
+    blob = r.hget("chamber:sawboard", wallet)
+    if not blob:
+        return JSONResponse({"joined": False})
+    info = json.loads(blob)
+    bal = await _saw_balance(wallet)
+    allow, tier = _tier(bal)
+    return JSONResponse({"joined": True, "alias": info.get("alias"),
+                         "x": info.get("x_handle"), "show_x": info.get("show_x"),
+                         "saw_balance": bal, "tier": tier, "allowance": allow})
