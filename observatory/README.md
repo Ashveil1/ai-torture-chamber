@@ -103,6 +103,22 @@ has not been validated.
 The six specialties are Scholar, Skeptic, Sentinel, Cartographer, Archivist and
 Curator. `agent_count` chooses how many to run. A bounded pass limits one context
 and then checkpoints and replans; the overall mission has no automatic end.
+An optional automatic acceptance worker reviews the shared collected-source queue;
+it is separate from the six browsing specialties. No starter-document upload is
+required: the already-trained research model searches the web, and accepted original
+paper/article text becomes the corpus for adapting the already-pretrained 70B base.
+Select **Enable automated original-document curation** in operator setup to send
+`auto_curation_enabled: true` and `auto_curation_policy_ack: "originals-v1"`.
+The worker uses the configured research model and its existing billing route while
+the research mission is running. Two separate, blind review passes must agree,
+with literal source support, before an original receives automated quality approval.
+Verified reuse rights, passed extraction and contamination exclusions remain code
+requirements. Unknown rights, unverified PDF extraction, long documents beyond the
+review limit, disagreement and uncertain decisions remain in the review queue.
+Evidence shows decision counts and the reviewer/model/rationale for each source.
+Defaults leave this worker disabled. Generated Q&A acceptance remains separately
+owner-reviewed; enabling original-document review does not enable synthetic training.
+See [automatic curation](docs/automatic-curation.md) for the policy and audit contract.
 Pause stops further actions at a safe boundary; Stop closes owned sessions while
 preserving collected documents and notes. Restarting the service resumes a
 persisted running mission. The owner should intentionally stop a mission before
@@ -212,7 +228,9 @@ included in the public environment download. Deployment is an explicit operator
 action, separate from checkpoint selection.
 
 Corpus policy v2 requires recorded relevance, perspective, source type and extraction
-review, in addition to reuse rights. Original paragraphs and scientific structure
+review, in addition to reuse rights. Quality acceptance can be recorded by an owner
+or by the enabled original-document policy with a bound two-pass review receipt.
+Original paragraphs and scientific structure
 are retained where extraction supports them. Optional offline Docling PDF processing
 requires prefetched assets and explicit fidelity review; poor output remains
 discovery-only. Near duplicates contribute one representative, preserving all source

@@ -63,6 +63,12 @@ def validate_payload(payload: dict, stage: str, *, require_quality: bool = False
         if stage == "cpt":
             if row.get("synthetic") or not isinstance(row.get("text"), str) or not row["text"].strip():
                 raise ValueError("cpt_requires_original_source_text")
+            review = row.get("quality_review")
+            if isinstance(review, dict) and review.get("reviewer_kind") == "automated":
+                from .curation_receipts import automated_review_reasons
+                source = {"id": row.get("representative_source_id"), "text": row["text"], "quality_review": review}
+                if automated_review_reasons(source, review):
+                    raise ValueError("automated_original_requires_valid_source_bound_review_receipt")
             groups = [row.get("family_id")]
         else:
             messages = row.get("messages")

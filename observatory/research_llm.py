@@ -58,14 +58,14 @@ class ResponsesResearchModel:
     provider = "openai"
 
     def __init__(self, model: str, api_key: str, *, client: Any = None, effort: str = "high", max_output_tokens: int = 12000,
-                 use_reasoning: bool = True):
+                 use_reasoning: bool = True, max_retries: int = 2):
         self.model = model
         self.effort = effort
         self.max_output_tokens = max_output_tokens
         self.use_reasoning = use_reasoning
         if client is None:
             from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=api_key, timeout=120, max_retries=2)
+            client = AsyncOpenAI(api_key=api_key, timeout=120, max_retries=max_retries)
         self.client = client
 
     @property
@@ -237,7 +237,7 @@ class MonitoredResearchModel:
         return result
 
 
-def researcher_model(settings, *, intent_store=None, scope: str | None = None):
+def researcher_model(settings, *, intent_store=None, scope: str | None = None, sdk_max_retries: int = 2):
     import os
     settings = validate_research_settings(settings, require_config=True)
     provider = settings.get("research_provider", settings.get("agent_provider", "x402"))
@@ -254,7 +254,7 @@ def researcher_model(settings, *, intent_store=None, scope: str | None = None):
         if not key:
             raise ValueError("Connect an OpenAI API key in operator setup")
         return ResponsesResearchModel(model or "gpt-6-astra", key, effort=settings.get("reasoning_effort", "high"),
-                                      max_output_tokens=settings.get("research_max_output_tokens", 12000))
+                                      max_output_tokens=settings.get("research_max_output_tokens", 12000), max_retries=sdk_max_retries)
     if provider == "anthropic":
         from browser_use import ChatAnthropic
         key = settings.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
@@ -262,6 +262,6 @@ def researcher_model(settings, *, intent_store=None, scope: str | None = None):
             raise ValueError("Connect a Claude API key in operator setup")
         import httpx
         return ChatAnthropic(model=model or "claude-fable-5-1", api_key=key, thinking={"type": "adaptive"},
-                             max_tokens=settings.get("research_max_output_tokens", 12000), max_retries=2,
+                             max_tokens=settings.get("research_max_output_tokens", 12000), max_retries=sdk_max_retries,
                              http_client=httpx.AsyncClient(timeout=120))
     raise ValueError("Select x402, OpenAI or Claude as the researcher model provider")

@@ -62,6 +62,21 @@ def test_masked_settings_do_not_replace_credentials(store):
         store.save_settings({"admin_token": "cannot_save_owner_token"})
 
 
+def test_automated_review_receipts_are_immutable_and_public_state_hides_passages(store):
+    review = store.put("curation_reviews", {"id": "review-fixture", "immutable": True,
+        "decision": "accepted", "model": "fixture-reviewer", "rationale": "Source qualified",
+        "reviews": [{"stage": "primary", "verdict": {"rationale": "Private detailed review quotation", "quotes": ["Original copyrighted passage must stay private"]}}],
+        "receipt": {"quotes": ["Original copyrighted passage must stay private"]}})
+    with pytest.raises(ValueError, match="immutable"):
+        store.put("curation_reviews", {**review, "decision": "rejected"})
+    public = store.state()["curation_reviews"][0]
+    assert public["decision"] == "accepted" and public["model"] == "fixture-reviewer"
+    assert "receipt" not in public
+    assert "reviews" not in public
+    assert "Private detailed review quotation" not in json.dumps(public)
+    assert "Original copyrighted passage" not in json.dumps(public)
+
+
 def test_generated_key_file_is_persistent_and_protected(tmp_path, monkeypatch):
     import os
     monkeypatch.delenv("OBSERVATORY_SECRET_KEY", raising=False)

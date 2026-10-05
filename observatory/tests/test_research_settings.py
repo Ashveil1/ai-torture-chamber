@@ -16,12 +16,22 @@ def store(tmp_path):
     {"research_provider": ["x402"]}, {"browser_provider": {}},
     {"browser_provider": "my-personal-browser"}, {"research_model": ""},
     {"research_max_output_tokens": -1},
+    {"auto_curation_enabled": "true"}, {"auto_curation_enabled": True},
+    {"auto_curation_policy_ack": {}}, {"auto_curation_policy_ack": "any-document"},
 ])
 def test_invalid_control_settings_do_not_replace_saved_configuration(store, updates):
     store.save_settings({"agent_count": 2, "research_provider": "x402"})
     with pytest.raises(ValueError):
         store.save_settings(updates)
     assert store.get_settings(private=True) == {"agent_count": 2, "research_provider": "x402"}
+
+
+def test_automatic_curation_requires_an_explicit_policy_choice(store):
+    assert not store.get_settings().get("auto_curation_enabled", False)
+    store.save_settings({"auto_curation_enabled": True, "auto_curation_policy_ack": "originals-v1"})
+    assert store.get_settings()["auto_curation_enabled"] is True
+    store.save_settings({"auto_curation_enabled": False, "auto_curation_policy_ack": ""})
+    assert store.get_settings()["auto_curation_enabled"] is False
 
 
 def test_x402_settings_and_environment_signer_isolation(store, monkeypatch):

@@ -311,7 +311,7 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
         application.state.store = store or Store(os.environ.get("OBSERVATORY_DB", "./.observatory/state.sqlite3"))
         application.state.services = {}
         if enable_runtime:
-            for name, class_name in (("research", "ResearchSupervisor"), ("training", "TrainingCoordinator")):
+            for name, class_name in (("research", "ResearchSupervisor"), ("automatic_curation", "AutomaticCurationWorker"), ("training", "TrainingCoordinator")):
                 try:
                     module = importlib.import_module("observatory." + name)
                     service = getattr(module, class_name)(application.state.store)
@@ -453,6 +453,29 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
                      data={"request_id": request_id, "state": result["state"]})
         return JSONResponse({"acknowledged": True, "request_id": request_id, "state": result["state"]},
                             headers={"Cache-Control": "no-store"})
+
+    @application.post("/api/admin/curation/recovery", dependencies=[Depends(owner)])
+    def recover_curation(request: Request, payload: dict = Body(...), db: Store = Depends(current_store)):
+        if set(payload) != {"reviewed", "review_id"} or payload.get("reviewed") is not True or not isinstance(payload.get("review_id"), str):
+            raise HTTPException(422, "Explicitly inspect the interrupted review and supply reviewed: true with its review_id")
+        worker = service(request, "automatic_curation")
+        with db._lock:
+            mission = db.get_mission()
+            if mission.get("status") not in {"paused", "faulted", "stopped"}:
+                raise HTTPException(409, "Pause or stop research before authorizing an interrupted review retry")
+            if worker._lock.locked():
+                raise HTTPException(409, "The curation worker still has a review in flight")
+            if db.pending_research_requests("automatic-curation"):
+                raise HTTPException(409, "Reconcile the pending automatic-curation payment before retrying its review")
+            work = db.get("curation_work", "automatic-curation")
+            if not work or work.get("review_id") != payload["review_id"]:
+                raise HTTPException(409, "The interrupted review changed; inspect its current record")
+            if work.get("status") != "reviewing" or work.get("call_state") not in {"in_flight", "awaiting_operator"}:
+                raise HTTPException(409, "This review has no interrupted stage requiring recovery")
+            db.put("curation_work", {**work, "call_state": "retry_authorized"})
+            db.event("curation.recovery_authorized", "Owner authorized an interrupted review retry; completed verdicts were preserved",
+                     data={"review_id": work["review_id"], "source_id": work.get("source_id"), "stage": work.get("active_stage")})
+        return {"acknowledged": True, "review_id": work["review_id"], "resume_required": True}
 
     @application.get("/api/admin/datasets/{snapshot_id}/export", dependencies=[Depends(owner)])
     def export_dataset(snapshot_id: str, db: Store = Depends(current_store)):

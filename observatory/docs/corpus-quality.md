@@ -10,7 +10,8 @@ teacher-output authorization gates pass.
 
 An article's machine-readable CC license can establish a rights candidate. It
 does **not** grant quality approval, relevance approval or extraction fidelity.
-Every collected or manually imported original requires an owner source review:
+Every collected or manually imported original requires a source quality review.
+The owner can supply that review directly:
 
 ```json
 {
@@ -24,6 +25,14 @@ Every collected or manually imported original requires an owner source review:
   }
 }
 ```
+
+Alternatively, the opt-in [automatic originals policy](automatic-curation.md)
+can supply quality approval after two blind, source-grounded review passes agree.
+These approvals are explicitly labeled `reviewer_kind: automated`, are bound to
+the exact source text, model and policy, and retain an immutable review receipt.
+They are not presented as human reviews. Deterministic rights, extraction and
+contamination requirements still apply. The worker cannot approve unknown rights,
+override failed extraction, remove evaluation exclusions or authorize teacher output.
 
 `evidence_stance` is one of `supportive`, `skeptical`, `uncertain`, `mixed`, or
 `methodological`. It classifies the document's argument about machine

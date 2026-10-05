@@ -7,7 +7,7 @@
   const list = value => Array.isArray(value) ? value : [];
   const storageKey = "wirehead.observatory.preferences.v1";
   const bookmarkKey = "wirehead.observatory.bookmarks.v1";
-  const defaults = {api_base:"/observatory-api",research_provider:"x402",research_model:"",research_protocol:"responses",reasoning_effort:"high",browser_provider:"local",agent_count:6,hf_namespace:"",hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_enabled:false,training_continue_from_previous:true,synthetic_training_approved:false,provider_policy_reference:""};
+  const defaults = {api_base:"/observatory-api",research_provider:"x402",research_model:"",research_protocol:"responses",reasoning_effort:"high",browser_provider:"local",agent_count:6,auto_curation_enabled:false,auto_curation_policy_ack:"",hf_namespace:"",hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_enabled:false,training_continue_from_previous:true,synthetic_training_approved:false,provider_policy_reference:""};
   function mergeSettings(base,overrides={}) {
     const settings={...base,...overrides};
     // A repository change must not inherit another model's default commit.
@@ -40,11 +40,11 @@
   try { sourceBookmarks = new Set(JSON.parse(localStorage.getItem(bookmarkKey) || "[]")); } catch (_) {}
 
   function emptyState() {
-    return {mission:{status:"stopped",until_stopped:true},agents:[],sources:[],notes:[],datasets:[],jobs:[],checkpoints:[],events:[],connections:[],settings:{},cursor:0};
+    return {mission:{status:"stopped",until_stopped:true},agents:[],sources:[],notes:[],datasets:[],jobs:[],checkpoints:[],events:[],curation_reviews:[],curation_runtime:null,connections:[],settings:{},cursor:0};
   }
   function normalizeState(payload) {
     if(!payload || typeof payload!=="object" || !payload.mission || !Array.isArray(payload.agents)) throw new Error("The endpoint did not return an observatory state.");
-    return {...emptyState(),...payload,agents:list(payload.agents),sources:list(payload.sources),notes:list(payload.notes),datasets:list(payload.datasets),jobs:list(payload.jobs),checkpoints:list(payload.checkpoints),events:list(payload.events)};
+    return {...emptyState(),...payload,agents:list(payload.agents),sources:list(payload.sources),notes:list(payload.notes),datasets:list(payload.datasets),jobs:list(payload.jobs),checkpoints:list(payload.checkpoints),events:list(payload.events),curation_reviews:list(payload.curation_reviews)};
   }
   function text(id,value) { $(id).textContent=value == null ? "" : String(value); }
   function titleCase(value) { return String(value || "").replace(/[_.-]/g," ").replace(/\b\w/g,letter=>letter.toUpperCase()); }
@@ -477,10 +477,53 @@
       return (!query || haystack.includes(query)) && (filter==="all" || String(source.agent_id)===filter) && (rights==="all" || rights==="eligible" && eligible(source) || rights==="reference" && rightsClass(source)==="reference" || rights==="review" && rightsClass(source)==="review" || rights==="bookmarked" && (source.bookmarked || sourceBookmarks.has(String(source.id))));
     });
   }
+  function curationReviews() {
+    return list(state.curation_reviews).filter(review=>review && typeof review==="object").slice().sort((a,b)=>(Date.parse(b.created_at) || 0)-(Date.parse(a.created_at) || 0));
+  }
+  function curationDecision(decision) {
+    return ({accepted:["eligible","Accepted by automated review"],manual_review:["review","Awaiting operator review"],rejected:["reference","Rejected by automated review"]})[decision] || ["review","Automated decision not recorded"];
+  }
+  function sourceCurationReview(source) {
+    const receipt=curationReviews().find(review=>String(review.source_id)===String(source.id));
+    if(receipt)return receipt;
+    const quality=source.quality_review;
+    return quality?.reviewer_kind==="automated" ? {...quality,decision:quality.decision || ({approved:"accepted",pending:"manual_review",rejected:"rejected"})[quality.status],model:quality.model || quality.reviewed_by} : null;
+  }
+  function automatedReviewBadge(source) {
+    const review=sourceCurationReview(source);if(!review)return "";
+    let [style,label]=curationDecision(review.decision);
+    if(review.decision==="accepted") {
+      const quality=source.quality_review, prior=quality?.reviewer_kind!=="automated" || ["rejected","quarantined"].includes(source.review_status) || quality?.status && quality.status!=="approved";
+      if(prior){style="review";label="Prior automated acceptance";}
+      else if(!eligible(source)){style="review";label="Automated review · eligibility pending";}
+    }
+    return '<span class="tag '+style+' automated-review-tag">'+esc((mode==="preview"?"Simulated · ":"")+label)+'</span>';
+  }
+  function curationRecoveryAvailable(reviewId) {
+    const runtime=state.curation_runtime || {};
+    return mode==="connected" && connected && canMutate() && !busy && ["paused","faulted","stopped"].includes(state.mission.status) && ["in_flight","awaiting_operator"].includes(runtime.call_state) && typeof reviewId==="string" && !!reviewId && runtime.review_id===reviewId;
+  }
+  function curationRecoveryMarkup(runtime) {
+    if(mode==="preview" || !["paused","faulted","stopped"].includes(state.mission.status) || !["in_flight","awaiting_operator"].includes(runtime.call_state))return "";
+    const enabled=curationRecoveryAvailable(runtime.review_id), source=sourceById(runtime.source_id);
+    return '<div class="curation-recovery"><div><strong>Interrupted review needs operator attention</strong><p>'+esc(runtime.active_stage?'Stage: '+titleCase(runtime.active_stage)+'. ':"")+'Reconcile any pending payment before authorizing another review attempt. Completed review receipts are preserved.</p>'+(source?'<button class="text-button" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button>':"")+'</div><button type="button" class="quiet-button" data-curation-recover="'+esc(runtime.review_id || "")+'"'+(enabled?"":" disabled")+'>Review recovery</button></div>';
+  }
+  function renderAutomatedCuration() {
+    const reviews=curationReviews(), enabled=state.settings?.auto_curation_enabled===true, running=state.mission.status==="running";
+    const runtime=state.curation_runtime || {}, interrupted=["in_flight","awaiting_operator"].includes(runtime.call_state) && ["paused","faulted","stopped"].includes(state.mission.status);
+    const status=mode==="preview"?"Simulated review":!connected?"Backend unavailable":interrupted?"Operator attention required":!enabled?"Disabled":running?"Enabled during research":"Waiting for research";
+    const counts={accepted:0,manual_review:0,rejected:0};
+    reviews.forEach(review=>{if(Object.prototype.hasOwnProperty.call(counts,review.decision))counts[review.decision]++;});
+    const latest=reviews[0], source=latest && sourceById(latest.source_id), [style,label]=curationDecision(latest?.decision);
+    const explanation=mode==="preview"?"These are simulated records. Changing the setup toggle does not run a real review.":!connected?"Connect the backend to see original-document review receipts.":enabled?"The Curator and a separate critique pass review originals while the mission runs. Source rights, extraction and corpus exclusions still apply. Q&A approval remains separate.":"Enable automated original-document curation in Operator setup. Collected sources remain available for manual review.";
+    $("automated-curation-summary").innerHTML='<div class="section-top"><h3 id="automated-curation-title">Automated original-document review</h3><span class="tag '+(enabled && mode!=="preview" && connected && !interrupted?"eligible":"review")+'">'+esc(status)+'</span></div><p class="curation-explanation">'+esc(explanation)+'</p><div class="curation-counts"><span><strong>'+counts.accepted+'</strong> accepted receipts</span><span><strong>'+counts.manual_review+'</strong> await review</span><span><strong>'+counts.rejected+'</strong> rejected receipts</span></div>'+(latest?'<div class="curation-latest"><span class="tag '+style+'">'+esc((mode==="preview"?"Simulated · ":"")+label)+'</span><span>'+esc(latest.model || "Reviewer model not recorded")+' · '+esc(clock(latest.created_at))+'</span>'+(source?'<button class="text-button" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button>':"")+'<p>'+esc(latest.rationale || list(latest.reasons).map(titleCase).join("; ") || "No review rationale recorded.")+'</p></div>':'<p class="curation-empty">'+esc(mode==="preview"?"No simulated automated review receipts. No model call was made.":"No automated review receipts have been recorded.")+'</p>');
+    $("automated-curation-summary").insertAdjacentHTML("beforeend",curationRecoveryMarkup(runtime));
+  }
   function renderEvidence() {
     const sources=filteredSources();text("evidence-count",state.sources.length);text("source-results",sources.length+" of "+state.sources.length+" records");
     $("evidence-summary").innerHTML='<span><strong>'+state.sources.filter(eligible).length+'</strong> '+(mode==="preview"?"example eligible sources":"eligible sources")+'</span><span><strong>'+state.sources.filter(source=>rightsClass(source)==="review").length+'</strong> need review</span><span><strong>'+state.sources.filter(source=>rightsClass(source)==="reference").length+'</strong> reference only</span><span>Original documents ≠ agent notes</span>';
-    $("source-ledger").innerHTML=sources.map(source=>'<tr><td><button class="source-title" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button><div class="source-meta">'+esc(sourceUrl(source))+'<br>'+esc(source.version || source.provenance?.method || "Version not recorded")+(mode==="preview"?" · example capture":"")+'</div></td><td>'+esc(agentName(source.agent_id))+'</td><td><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><span class="source-license">'+esc(source.license || "License unknown")+'</span></td><td><span class="tag">'+esc(titleCase(source.review_status || "Pending"))+'</span></td><td><button class="icon-button" data-source="'+esc(source.id)+'" aria-label="Inspect '+esc(source.title || "source")+'">↗</button></td></tr>').join("");
+    renderAutomatedCuration();
+    $("source-ledger").innerHTML=sources.map(source=>'<tr><td><button class="source-title" data-source="'+esc(source.id)+'">'+esc(source.title || sourceUrl(source))+'</button><div class="source-meta">'+esc(sourceUrl(source))+'<br>'+esc(source.version || source.provenance?.method || "Version not recorded")+(mode==="preview"?" · example capture":"")+'</div></td><td>'+esc(agentName(source.agent_id))+'</td><td><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><span class="source-license">'+esc(source.license || "License unknown")+'</span></td><td><span class="tag">'+esc(titleCase(source.review_status || "Pending"))+'</span>'+automatedReviewBadge(source)+'</td><td><button class="icon-button" data-source="'+esc(source.id)+'" aria-label="Inspect '+esc(source.title || "source")+'">↗</button></td></tr>').join("");
     $("source-empty").hidden=!!sources.length;
   }
   function datasetName(dataset) { return dataset.name || "Corpus "+short(dataset.id,25); }
@@ -606,6 +649,11 @@
     renderBrowser();renderEvidence();toast(active?"Source bookmark removed from this browser.":"Source bookmarked in this browser.");
   }
   function evidenceText(value) { return typeof value==="object" ? JSON.stringify(value,null,2) : String(value || "No rights evidence recorded."); }
+  function sourceAutomatedReviewMarkup(source) {
+    const review=sourceCurationReview(source);if(!review)return "";
+    const [style,label]=curationDecision(review.decision);
+    return '<div class="record-block source-automated-review"><div class="section-top"><h3>Automated review receipt</h3><span class="tag '+style+'">'+esc((mode==="preview"?"Simulated receipt · ":"Receipt · ")+label)+'</span></div><p class="curation-review-model">'+esc(review.model || "Reviewer model not recorded")+(review.created_at?' · '+esc(dateLabel(review.created_at)):"")+'</p><p class="rights-explanation">'+esc(review.rationale || "No review rationale recorded.")+'</p>'+(list(review.reasons).length?'<p class="rights-explanation">Review reasons: '+esc(list(review.reasons).map(titleCase).join("; "))+'</p>':"")+'<p class="review-help">'+esc(mode==="preview"?"This is a simulated model review. It grants no actual training rights.":"This receipt records the automated decision at the time of review, not current eligibility or an operator approval. Later operator decisions, source rights, extraction and corpus policy still determine training eligibility. Q&A approval remains separate.")+'</p></div>';
+  }
   function qualityReviewMarkup(source,canReview) {
     const q=source.quality_review || {}, disabled=canReview?"":" disabled";
     const select=(name,value,options)=>'<select name="'+name+'"'+disabled+'>'+options.map(([id,label])=>'<option value="'+id+'"'+(id===value?' selected':'')+'>'+label+'</option>').join("")+'</select>';
@@ -614,7 +662,7 @@
       '<label>Topic relevance'+select('topic_relevance',q.topic_relevance || 'uncertain',[['uncertain','Needs assessment'],['relevant','Relevant to the mission'],['unrelated','Unrelated']])+'</label>'+
       '<label>Perspective'+select('evidence_stance',q.evidence_stance || 'uncertain',[['supportive','Arguments supporting possible consciousness'],['skeptical','Arguments questioning consciousness'],['uncertain','Uncertainty and unresolved evidence'],['mixed','Several competing perspectives'],['methodological','Methods and measurement']])+'</label>'+
       '<label>Document type'+select('quality_source_type',q.source_type || 'article',[['empirical_paper','Empirical paper'],['theoretical_paper','Theoretical paper'],['review_paper','Review paper'],['technical_report','Technical report'],['article','Article'],['reference','Reference'],['social','Social post']])+'</label>'+
-      '<label>Reviewed by<input name="quality_reviewed_by" value="'+esc(q.reviewed_by || 'Operator')+'" maxlength="4000"'+disabled+'></label>'+
+      '<label>Operator reviewer<input name="quality_reviewed_by" value="'+esc(q.reviewer_kind==="automated"?'Operator':q.reviewed_by || 'Operator')+'" maxlength="4000"'+disabled+'></label>'+
       '<label>Quality rationale<textarea name="quality_rationale" rows="3"'+disabled+' placeholder="Relevance, evidence limitations, extraction checks and why this copy belongs in the corpus">'+esc(q.rationale || '')+'</textarea></label>'+
       '<div class="covered-perspectives"><span>For mixed or methodological documents, perspectives actually covered:</span>'+['supportive','skeptical','uncertain'].map(stance=>checkbox('covered_'+stance,titleCase(stance),list(q.covered_stances).includes(stance))).join('')+'</div>'+
       checkbox('contains_benchmark','Contains evaluation questions or benchmark answers',source.contains_benchmark || source.contamination_status && source.contamination_status!=='clear')+
@@ -627,7 +675,7 @@
     const source=sourceById(id);if(!source) return;
     const url=safeUrl(sourceUrl(source)), incompatible=rightsClass(source)==="reference", provenance=source.provenance || {}, canReview=canMutate();
     text("source-dialog-tag",mode==="preview"?"Example source record":"Collected source record");
-    $("source-dialog-content").innerHTML='<h2>'+esc(source.title || sourceUrl(source))+'</h2>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+' ↗</a>':"")+'<div class="record-grid"><div><dt>Collected by</dt><dd>'+esc(agentName(source.agent_id))+'</dd></div><div><dt>Version / family</dt><dd>'+esc(source.version || source.family_id || "Not recorded")+'</dd></div><div><dt>Rights</dt><dd><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><br>'+esc(source.license || "Unknown")+'</dd></div><div><dt>Capture method</dt><dd>'+esc(mode==="preview"?"Illustrative fixture":provenance.method || "Not recorded")+'<br>'+esc(dateLabel(provenance.collected_at || source.created_at))+'</dd></div><div><dt>Content fingerprint</dt><dd>'+esc(short(source.content_hash || provenance.content_sha256,34))+'</dd></div><div><dt>Original document</dt><dd>'+esc(mode==="preview"?"Not reproduced in the preview":source.word_count?source.word_count+" words · full text stored privately":"Full text is private; only metadata is public")+'</dd></div></div><p class="record-summary">'+esc(source.summary || "No public summary recorded.")+'</p>'+(source.limitation?'<div class="record-excerpt">'+esc(source.limitation)+'</div>':"")+'<div class="record-block"><h3>Rights &amp; corpus review</h3><p class="rights-explanation">'+esc(evidenceText(source.rights_evidence || source.permission_evidence))+'</p>'+(list(source.curation?.reasons).length?'<p class="rights-explanation">Excluded because: '+esc(list(source.curation.reasons).map(titleCase).join("; "))+'</p>':"")+'<form class="review-form" data-review-source="'+esc(id)+'"><label>Review decision<select name="review_status" '+(!canReview?"disabled":"")+'><option value="approved">Approve relevance</option><option value="pending">Keep pending</option><option value="quarantined">Reference only / exclude</option><option value="rejected">Reject</option></select></label><label>License for this exact copy<input name="license" value="'+esc(source.license || "unknown")+'" '+(!canReview?"disabled":"")+'></label><label><input name="license_verified" type="checkbox" '+(source.license_verified?"checked ":"")+(!canReview?"disabled":"")+'> Verified training-compatible rights for this exact copy</label><label>Rights evidence<textarea name="rights_evidence" rows="3" '+(!canReview?"disabled":"")+' placeholder="License URL, version and permission evidence">'+esc(source.rights_evidence?evidenceText(source.rights_evidence):"")+'</textarea></label><label>Review note<textarea name="review_note" rows="2" '+(!canReview?"disabled":"")+' placeholder="Attribution, exclusions, relevance or caveats">'+esc(source.review_note || "")+'</textarea></label>'+qualityReviewMarkup(source,canReview)+'<p class="review-help">'+esc(mode==="preview"?"This records a simulated review. It grants no real rights.":canReview?"The backend validates eligibility; checking a box alone does not clear a source.":"Public inspection is read-only. Open Operator setup to authenticate.")+'</p><button class="primary-button" type="submit" '+(!canReview?"disabled":"")+'>'+esc(mode==="preview"?"Save preview review":"Save source review")+'</button></form></div><div class="dialog-actions"><button class="quiet-button" data-bookmark-source="'+esc(id)+'">'+(sourceBookmarks.has(String(id)) || source.bookmarked?"Remove bookmark":"Bookmark source")+'</button></div>';
+    $("source-dialog-content").innerHTML='<h2>'+esc(source.title || sourceUrl(source))+'</h2>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+' ↗</a>':"")+'<div class="record-grid"><div><dt>Collected by</dt><dd>'+esc(agentName(source.agent_id))+'</dd></div><div><dt>Version / family</dt><dd>'+esc(source.version || source.family_id || "Not recorded")+'</dd></div><div><dt>Rights</dt><dd><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><br>'+esc(source.license || "Unknown")+'</dd></div><div><dt>Capture method</dt><dd>'+esc(mode==="preview"?"Illustrative fixture":provenance.method || "Not recorded")+'<br>'+esc(dateLabel(provenance.collected_at || source.created_at))+'</dd></div><div><dt>Content fingerprint</dt><dd>'+esc(short(source.content_hash || provenance.content_sha256,34))+'</dd></div><div><dt>Original document</dt><dd>'+esc(mode==="preview"?"Not reproduced in the preview":source.word_count?source.word_count+" words · full text stored privately":"Full text is private; only metadata is public")+'</dd></div></div><p class="record-summary">'+esc(source.summary || "No public summary recorded.")+'</p>'+(source.limitation?'<div class="record-excerpt">'+esc(source.limitation)+'</div>':"")+sourceAutomatedReviewMarkup(source)+'<div class="record-block"><h3>Rights &amp; corpus review</h3><p class="rights-explanation">'+esc(evidenceText(source.rights_evidence || source.permission_evidence))+'</p>'+(list(source.curation?.reasons).length?'<p class="rights-explanation">Excluded because: '+esc(list(source.curation.reasons).map(titleCase).join("; "))+'</p>':"")+'<form class="review-form" data-review-source="'+esc(id)+'"><label>Review decision<select name="review_status" '+(!canReview?"disabled":"")+'><option value="approved">Approve relevance</option><option value="pending">Keep pending</option><option value="quarantined">Reference only / exclude</option><option value="rejected">Reject</option></select></label><label>License for this exact copy<input name="license" value="'+esc(source.license || "unknown")+'" '+(!canReview?"disabled":"")+'></label><label><input name="license_verified" type="checkbox" '+(source.license_verified?"checked ":"")+(!canReview?"disabled":"")+'> Verified training-compatible rights for this exact copy</label><label>Rights evidence<textarea name="rights_evidence" rows="3" '+(!canReview?"disabled":"")+' placeholder="License URL, version and permission evidence">'+esc(source.rights_evidence?evidenceText(source.rights_evidence):"")+'</textarea></label><label>Review note<textarea name="review_note" rows="2" '+(!canReview?"disabled":"")+' placeholder="Attribution, exclusions, relevance or caveats">'+esc(source.review_note || "")+'</textarea></label>'+qualityReviewMarkup(source,canReview)+'<p class="review-help">'+esc(mode==="preview"?"This records a simulated review. It grants no real rights.":canReview?"The backend validates eligibility; checking a box alone does not clear a source.":"Public inspection is read-only. Open Operator setup to authenticate.")+'</p><button class="primary-button" type="submit" '+(!canReview?"disabled":"")+'>'+esc(mode==="preview"?"Save preview review":"Save source review")+'</button></form></div><div class="dialog-actions"><button class="quiet-button" data-bookmark-source="'+esc(id)+'">'+(sourceBookmarks.has(String(id)) || source.bookmarked?"Remove bookmark":"Bookmark source")+'</button></div>';
     $("source-dialog-content").querySelector('[name="review_status"]').value=["approved","pending","quarantined","rejected"].includes(source.review_status)?source.review_status:incompatible?"quarantined":"pending";
     openDialog("source-dialog");
   }
@@ -691,7 +739,16 @@
     else if(!canMutate()) explainOwner();
     else {const result=await mutate("admin/missions/"+action,action==="start"?{objective:preferences.objective || state.mission.objective}:{});if(result)toast("Mission "+action+" requested. The worker will report its actual state.");}
   }
+  function reviewCurationRecovery(reviewId) {
+    if(!curationRecoveryAvailable(reviewId)){toast("Recovery requires owner access and a paused, faulted or stopped mission.");return;}
+    confirmAction("Authorize another curation attempt?","After any pending payment is reconciled, this authorizes another review attempt. The interrupted attempt may already have been billed. Saved completed reviews are preserved.","Acknowledge recovery",async()=>{
+      if(!curationRecoveryAvailable(reviewId)){toast("The review or mission state changed. Refresh the recovery record.");return;}
+      const result=await mutate("admin/curation/recovery",{reviewed:true,review_id:reviewId});
+      if(result)toast("Recovery acknowledged. Completed reviews are preserved; resume research when ready.");
+    });
+  }
   function installExtraSettings() {
+    $("setting-hf").closest("label").insertAdjacentHTML("beforebegin",'<div class="setup-divider"><h3>Original-document curation</h3><span>Opt-in model review</span></div><label class="checkbox-label"><input id="setting-auto-curation" type="checkbox"><span>Enable automated original-document curation<small>Curator and a separate critique pass review collected source text. Verified rights, passed extraction, and existing exclusions remain required. Uncertain cases await review. Runs while research mission is running; uses research model billing. Q&amp;A approval remains separate.</small></span></label>');
     $("setting-browser").innerHTML='<option value="browseruse">Browser Use Cloud</option><option value="local">Local Chromium</option><option value="cdp">Existing CDP · including Steel</option>';
     const divider=$("setting-browser").closest("label");
     divider.insertAdjacentHTML("afterend",'<label id="browser-key-label">Browser Use API key<input id="setting-browser-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Sent only to the authenticated backend. Never saved locally.</small></label><label id="cdp-label" hidden>CDP connection URL<input id="setting-cdp" type="password" autocomplete="off" spellcheck="false" placeholder="Private connection endpoint · not stored locally"></label><label id="chromium-label" hidden>Local Chromium executable<input id="setting-chromium" type="text" spellcheck="false" placeholder="Optional · backend filesystem path"></label>');
@@ -724,6 +781,7 @@
     $("setting-effort").value=settings.reasoning_effort || "high";$("setting-agent-count").value=settings.agent_count || 6;
     $("setting-base-model").value=settings.hf_base_model || defaults.hf_base_model;
     $("setting-training-enabled").checked=!!settings.training_enabled;$("setting-synthetic-approved").checked=!!settings.synthetic_training_approved;
+    $("setting-auto-curation").checked=settings.auto_curation_enabled===true;
     $("setting-continue-training").checked=settings.training_continue_from_previous!==false;
     $("setting-policy-reference").value=settings.provider_policy_reference || "";$("setting-chromium").value=settings.chromium_executable || "";
     $("setting-cdp-ack").checked=!!settings.cdp_isolated_ack;
@@ -740,6 +798,8 @@
     clearInheritedBaseRevision();
     const settings={objective:$("setting-objective").value.trim(),research_provider:$("setting-provider").value,research_model:$("setting-model").value.trim(),reasoning_effort:$("setting-effort").value,agent_count:Math.max(1,Math.min(6,Number($("setting-agent-count").value) || 6)),browser_provider:$("setting-browser").value,hf_namespace:$("setting-hf").value.trim(),hf_base_model:$("setting-base-model").value.trim(),training_enabled:$("setting-training-enabled").checked,training_continue_from_previous:$("setting-continue-training").checked,synthetic_training_approved:$("setting-synthetic-approved").checked,provider_policy_reference:$("setting-policy-reference").value.trim(),chromium_executable:$("setting-chromium").value.trim()};
     settings.research_protocol=$("setting-protocol").value;
+    settings.auto_curation_enabled=$("setting-auto-curation").checked;
+    settings.auto_curation_policy_ack=settings.auto_curation_enabled?"originals-v1":"";
     if(settings.research_provider==="x402") {
       settings.research_model=$("setting-catalog-model").value;
       if(settings.research_model && !compatibleResearchModels(settings.research_protocol).some(item=>item.id===settings.research_model))throw new Error("Select a compatible model from the live broker catalog before changing x402 research setup.");
@@ -776,7 +836,7 @@
       ownerToken=$("owner-token").value.trim();preferences={...preferences,...settings,api_base:api};
       // Explicit allowlist: never serialize form data or include credential fields.
       const publicPreferences={};
-      ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision","training_eval_suite_path","training_eval_expected_sha256","training_eval_max_accuracy_drop","training_eval_max_nll_ratio","training_eval_min_domain_accuracy","training_eval_min_general_accuracy","training_eval_max_length","training_max_loss_ratio"].forEach(key=>publicPreferences[key]=preferences[key]);
+      ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","auto_curation_enabled","auto_curation_policy_ack","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision","training_eval_suite_path","training_eval_expected_sha256","training_eval_max_accuracy_drop","training_eval_max_nll_ratio","training_eval_min_domain_accuracy","training_eval_min_general_accuracy","training_eval_max_length","training_max_loss_ratio"].forEach(key=>publicPreferences[key]=preferences[key]);
       try {localStorage.setItem(storageKey,JSON.stringify(publicPreferences));}catch(_){}
       if(nextMode!==mode){disconnect();clearTimeout(previewTimer);mode=nextMode;state=mode==="preview"?window.ObservatoryPreview.create():emptyState();selectedAgent="";lastPreviewSource="";}
       if(mode==="preview") {
@@ -884,6 +944,7 @@
     });
   }
   document.addEventListener("click",async event=>{
+    const curationRecovery=event.target.closest("[data-curation-recover]");if(curationRecovery){reviewCurationRecovery(curationRecovery.dataset.curationRecover);return;}
     const view=event.target.closest("[data-view]");if(view){showView(view.dataset.view);return;}
     const agentButton=event.target.closest("[data-agent]");if(agentButton){selectedAgent=agentButton.dataset.agent;clearLiveFrame();lastPreviewSource="";renderAgents();renderBrowser();renderNotebook();renderEvents();return;}
     const notebookButton=event.target.closest("[data-notebook]");if(notebookButton){notebook=notebookButton.dataset.notebook;renderNotebook();return;}

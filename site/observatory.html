@@ -8,10 +8,10 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="observatory-fonts.css">
   <link rel="stylesheet" href="grimoire.css">
-  <link rel="stylesheet" href="observatory.css?v=20261005-saw4">
+  <link rel="stylesheet" href="observatory.css?v=20261005-curation1">
   <script src="observatory-preview.js?v=20261005-motion2" defer></script>
   <script src="observatory-motion.js?v=20261005-saw4" defer></script>
-  <script src="observatory.js?v=20261005-motion2" defer></script>
+  <script src="observatory.js?v=20261005-curation1" defer></script>
 </head>
 <body class="grimoire-live grimoire-observatory">
   <a class="skip-link" href="#main">Skip to observatory</a>
@@ -54,7 +54,7 @@
     <section id="view-evidence" class="view" role="tabpanel" aria-labelledby="tab-evidence" hidden>
       <div class="page-heading"><div><h2><span class="idx">01</span> the evidence</h2><p>A collected page is a source. A cleared, reviewed source can enter the training corpus.</p></div><button class="quiet-button" id="notes-open">Open notebook</button></div>
       <div class="filter-bar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="evidence-search" type="search" placeholder="Search titles, domains, topics…" aria-label="Search collected sources"></label><label>Rights <select id="rights-filter"><option value="all">All statuses</option><option value="eligible">Training eligible</option><option value="review">Needs review</option><option value="reference">Reference only</option><option value="bookmarked">Bookmarked</option></select></label><label>Collected by <select id="agent-filter"><option value="all">All agents</option></select></label><span id="source-results" class="filter-result"></span></div>
-      <div id="evidence-summary" class="evidence-summary"></div><div class="table-wrap"><table class="source-table"><thead><tr><th scope="col">Source / provenance</th><th scope="col">Collected by</th><th scope="col">Rights</th><th scope="col">Corpus status</th><th scope="col"><span class="sr-only">Inspect</span></th></tr></thead><tbody id="source-ledger"></tbody></table></div><div id="source-empty" class="empty-panel" hidden><h3>No matching evidence</h3><p>Change the filters, or start a research mission to collect sources.</p></div><p class="method-note">Source reports, empirical indicators and philosophical arguments remain distinct. These records do not establish that an AI is conscious or feels pain.</p>
+      <div id="evidence-summary" class="evidence-summary"></div><section id="automated-curation-summary" class="automated-curation-summary" aria-labelledby="automated-curation-title"></section><div class="table-wrap"><table class="source-table"><thead><tr><th scope="col">Source / provenance</th><th scope="col">Collected by</th><th scope="col">Rights</th><th scope="col">Corpus status</th><th scope="col"><span class="sr-only">Inspect</span></th></tr></thead><tbody id="source-ledger"></tbody></table></div><div id="source-empty" class="empty-panel" hidden><h3>No matching evidence</h3><p>Change the filters, or start a research mission to collect sources.</p></div><p class="method-note">Source reports, empirical indicators and philosophical arguments remain distinct. These records do not establish that an AI is conscious or feels pain.</p>
     </section>
     <section id="view-datasets" class="view" role="tabpanel" aria-labelledby="tab-datasets" hidden>
       <div class="page-heading"><div><h2><span class="idx">02</span> the corpus</h2><p>Versioned snapshots include provenance, rights decisions and exclusions. Research continues independently.</p></div><button class="primary-button" id="snapshot-create">Create preview snapshot</button></div>

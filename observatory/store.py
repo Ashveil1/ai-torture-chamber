@@ -34,8 +34,9 @@ _PRIVATE_FIELDS = {
     "text", "fulltext", "raw_html", "html", "original_text", "synthetic_sft", "records",
     "payment_signature", "signed_payment", "payment_payload", "signed_transaction",
     "passage", "supporting_passage", "document_key", "expires_monotonic",
+    "receipt", "quotes",
 }
-_PUBLIC_KINDS = ("agents", "sources", "notes", "datasets", "jobs", "checkpoints", "connections")
+_PUBLIC_KINDS = ("agents", "sources", "notes", "datasets", "jobs", "checkpoints", "connections", "curation_reviews")
 
 
 class Store:
@@ -175,8 +176,8 @@ class Store:
             raise ValueError("record id must be nonempty")
         with self._lock:
             old = self.get(kind, str(record["id"]))
-            if kind == "datasets" and old and old.get("immutable") and record != old:
-                raise ValueError("Dataset snapshots are immutable; create a new snapshot")
+            if kind in {"datasets", "curation_reviews"} and old and old.get("immutable") and record != old:
+                raise ValueError("Dataset snapshots and curation receipts are immutable; create a new record")
             record.setdefault("created_at", old.get("created_at", utc_now()) if old else utc_now())
             record["updated_at"] = utc_now()
             self._db.execute(
@@ -273,6 +274,14 @@ class Store:
         result["jobs"] += self.sanitize(self.list_records("training_runs"))
         # Notes retain their user-facing text, without exposing raw source content.
         result["notes"] = self.sanitize(self.list_records("notes"), strip_content=False)
+        # Publish only receipt summaries. Detailed reviewer output and supporting
+        # quotes stay in the private source-bound audit record.
+        result["curation_reviews"] = [self.sanitize({key: value for key, value in review.items()
+                                                   if key != "reviews"})
+                                     for review in self.list_records("curation_reviews")]
+        work = self.get("curation_work", "automatic-curation") or {}
+        result["curation_runtime"] = {key: work.get(key) for key in
+                                     ("status", "call_state", "active_stage", "review_id", "source_id")}
         result.update(mission=self.sanitize(self.get_mission()), settings=self.get_settings(),
                       events=self.events_after(max(0, last - 100)), cursor=last)
         return result

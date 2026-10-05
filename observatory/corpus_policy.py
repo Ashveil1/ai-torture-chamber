@@ -1,7 +1,8 @@
 """Explicit corpus review, contamination exclusion and inspectable coverage.
 
 Evidence stance describes the reviewed document's argument, not its truth.
-No automated sentiment/classification result grants training eligibility.
+A classifier alone cannot grant training eligibility. Explicit owner policies
+may authorize source-bound, verified two-pass automated approval receipts.
 """
 from __future__ import annotations
 
@@ -12,9 +13,8 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-REQUIRED_PERSPECTIVES = ("supportive", "skeptical", "uncertain")
-EVIDENCE_STANCES = {*REQUIRED_PERSPECTIVES, "mixed", "methodological"}
-SOURCE_TYPES = {"empirical_paper", "theoretical_paper", "review_paper", "technical_report", "article", "reference", "social"}
+from .curation_receipts import EVIDENCE_STANCES, REQUIRED_PERSPECTIVES, SOURCE_TYPES, automated_review_reasons
+
 SCIENTIFIC_SOURCE_TYPES = {"empirical_paper", "theoretical_paper", "review_paper", "technical_report"}
 
 
@@ -114,6 +114,10 @@ def quality_review_reasons(source: dict) -> list[str]:
         reasons.append("invalid_reviewed_perspective_coverage")
     if review.get("evidence_stance") in REQUIRED_PERSPECTIVES and covered and set(covered) != {review["evidence_stance"]}:
         reasons.append("perspective_coverage_conflicts_with_reviewed_stance")
+    if review.get("reviewer_kind", "human") == "automated":
+        reasons.extend(automated_review_reasons(source, review))
+    elif review.get("reviewer_kind", "human") != "human":
+        reasons.append("unsupported_source_review_actor")
     return reasons
 
 
