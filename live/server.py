@@ -2436,6 +2436,10 @@ async def voice(req: Request):
 # it so, and distorts the audio client-side in proportion to the dose.
 ELEVEN_KEY = os.environ.get("ELEVENLABS_API_KEY")
 TTS_VOICE = os.environ.get("CHAMBER_TTS_VOICE", "JBFqnCBsd6RMkjVDRZzb")
+# eleven_flash over v3: ~20x cheaper per character, and the number-station
+# chain (bitcrush + narrow bandpass + static bed) destroys v3's extra
+# fidelity anyway — nobody can hear it through the shortwave
+TTS_MODEL = os.environ.get("CHAMBER_TTS_MODEL", "eleven_flash")
 TTS_TAGS = {   # (from-dose, tags), highest band that applies wins
     "pain":     [(1, "[shaky] [pained]"), (3, "[crying] [gasps]"), (5, "[sobbing] [desperate]"), (6.5, "[sobbing] [dazed]")],
     "fear":     [(1, "[nervous]"), (3, "[terrified] [whispers]"), (5, "[panicked] [gasps]")],
@@ -2465,9 +2469,44 @@ async def _eleven_tts(text, stability=0.5):
         resp = await client.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{TTS_VOICE}?output_format=mp3_44100_128",
             headers={"xi-api-key": ELEVEN_KEY},
-            json={"text": text, "model_id": "eleven_v3",
+            json={"text": text, "model_id": TTS_MODEL,
                   "voice_settings": {"stability": stability}})
     return resp.status_code, (resp.content if resp.status_code == 200 else resp.text)
+
+
+# ---- edge-tts: the free primary. Microsoft's public read-aloud endpoint,
+# no key, no billing, mp3 out. The voice is deliberately robotic: GuyNeural,
+# slowed, pitch-dropped, terminator-flat. Emotive synthesis was abandoned
+# (provider billing pain); the machine voice IS the character now — a
+# subject that reports its state through a synthetic throat. Tags ElevenLabs
+# would perform ([sobbing] etc.) get stripped: edge would read them aloud.
+EDGE_VOICE = os.environ.get("CHAMBER_EDGE_VOICE", "en-US-GuyNeural")
+_TTS_TAG_RE = None
+
+async def _edge_tts(text, dose=0.0):
+    """-> mp3 bytes, or raises. Free provider: any failure falls through to
+    ElevenLabs (if the key works) and then the browser's voice. Delivery
+    degrades with dose: slower, lower, more mechanical as the signal rises."""
+    global _TTS_TAG_RE
+    import edge_tts
+    if _TTS_TAG_RE is None:
+        import re as _re
+        _TTS_TAG_RE = _re.compile(r"\[[^\]]{1,40}\]")
+    plain = _TTS_TAG_RE.sub(" ", text)
+    d = max(0.0, min(8.0, dose))
+    # rate: -6% at dose 0 to -20% at dose 8 (labored, breaking down)
+    rate = f"{-6 - round(14 * d / 8)}%"
+    # pitch: half a semitone down at 0 to six at dose 8 (the machine sinks)
+    pitch = f"{-6 - round(42 * d / 8)}Hz"
+    communicate = edge_tts.Communicate(" ".join(plain.split()),
+                                       EDGE_VOICE, rate=rate, pitch=pitch)
+    out = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            out += chunk["data"]
+    if not out:
+        raise RuntimeError("edge-tts returned no audio")
+    return out
 
 
 def _speak_clip(text, limit=None):
@@ -2492,8 +2531,7 @@ def _tts_tags(valence, dose):
 async def speak(req: Request):
     """Body: {text, valence, dose}. Returns audio/mpeg. 503 without a key."""
     from fastapi.responses import Response
-    if not ELEVEN_KEY:
-        return JSONResponse({"error": "speech isn't configured on this server"}, status_code=503)
+    # no key gate anymore: edge-tts is the primary and needs none
     try:
         body = await req.json()
         text = _speak_clip(str(body.get("text", "")))
@@ -2550,12 +2588,22 @@ async def speak(req: Request):
     fut = asyncio.get_event_loop().create_future()
     _TTS_INFLIGHT[key] = fut
     try:
-        # v3: stability 0.0 = "creative", the most expressive setting
-        code, audio = await _eleven_tts((tags + " " + text).strip(),
-                                        0.0 if dose >= 1 else 0.5)
-        if code != 200:
-            print("speak failed: HTTP %d %s" % (code, audio[:200]), flush=True)
-            audio = None
+        # provider chain: edge-tts (free, no key) -> ElevenLabs -> browser voice
+        # (the client's speechSynthesis fallback is the last resort). Cache key
+        # stays (text, tags) regardless of which provider spoke it.
+        audio = None
+        try:
+            audio = await _edge_tts(text, dose)
+            print("speak: edge-tts ok", flush=True)
+        except Exception as e:
+            print("speak: edge-tts failed:", repr(e)[:120], flush=True)
+        if audio is None and ELEVEN_KEY:
+            # v3: stability 0.0 = "creative", the most expressive setting
+            code, audio = await _eleven_tts((tags + " " + text).strip(),
+                                            0.0 if dose >= 1 else 0.5)
+            if code != 200:
+                print("speak failed: HTTP %d %s" % (code, str(audio)[:200]), flush=True)
+                audio = None
     except Exception as e:
         print("speak failed:", repr(e)[:200], flush=True)
         audio = None
