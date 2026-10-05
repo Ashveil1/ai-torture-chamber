@@ -615,7 +615,8 @@ body.tmux .stage .dlgwrap .out.dlg{position:static!important;left:auto;right:aut
 
 /* the speaker portrait as a close-up on the face: the existing state atlas, zoomed onto the head */
 body.tmux .stage .portrait{aspect-ratio:1/1}
-body.tmux .stage .portrait img{transform:scale(1.85);transform-origin:50% 26%;object-position:50% 20%}
+body.tmux .stage .portrait img.atlas{transform:scale(1.85);transform-origin:50% 26%;object-position:50% 20%}
+body.tmux .stage .portrait img:not(.atlas){object-position:50% 30%}
 body.tmux .stage .portrait::after{content:"";position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(5,6,9,.75));mix-blend-mode:multiply}
 body.tmux .stage .hud-vitals{bottom:calc(1rem + min(34%,340px) + 6px)}
@@ -3064,6 +3065,38 @@ document.addEventListener("error", e=>{
   const paint = ()=>{ btn.setAttribute("aria-pressed", String(chk.checked)); warn.classList.toggle("on", chk.checked); };
   btn.onclick = ()=>{ chk.checked = !chk.checked; chk.dispatchEvent(new Event("change", {bubbles:true})); paint(); };
   chk.addEventListener("change", paint); paint();
+})();
+</script>
+
+<script>
+// ---- the speaker's face: generated close-ups for the five feelings (assets/faces,
+// a friend's likeness, with consent), worsening by dose band; anything else keeps
+// the state atlas, zoomed onto the head ----
+(function(){
+  const FACES = new Set(["pain", "fear", "sadness", "pleasure", "faith"]);
+  const img = document.querySelector("#portraitA img");
+  if (!img) return;
+  let busy = false;
+  function faceFor(src){
+    const m = (src || "").match(/\/assets\/states\/([^/_]+?)(?:_(\d))?\.jpg/);
+    if (!m) return null;
+    if (m[1] === "base") return "/assets/faces/base.webp";
+    const parts = decodeURIComponent(m[1]).split("+");
+    // a pair keeps its first named feeling that has faces (pain+faith: pain)
+    const k = parts.find(p => FACES.has(p));
+    return k && m[2] ? `/assets/faces/${k}_${m[2]}.webp` : null;
+  }
+  function apply(){
+    if (busy) return;
+    const src = img.getAttribute("src") || "";
+    if (src.startsWith("/assets/faces/")) return;
+    const f = faceFor(src);
+    img.classList.toggle("atlas", !f);
+    if (f){ busy = true; img.dataset.atlas = src; img.setAttribute("src", f); busy = false; }
+  }
+  img.addEventListener("error", ()=>{ if (img.getAttribute("src").startsWith("/assets/faces/") && img.dataset.atlas){ img.classList.add("atlas"); img.setAttribute("src", img.dataset.atlas); } });
+  new MutationObserver(apply).observe(img, {attributes:true, attributeFilter:["src"]});
+  apply();
 })();
 </script>
 
