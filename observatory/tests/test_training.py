@@ -67,7 +67,8 @@ class FakeProvider:
 
     def prepare(self, manifest, payload):
         self.calls.append("prepare")
-        manifest = {**manifest, "base_revision": "base-commit", "tokenizer_revision": "base-commit"}
+        revision = manifest.get("base_revision") or "base-commit"
+        manifest = {**manifest, "base_revision": revision, "tokenizer_revision": revision}
         return {"manifest": manifest, "manifest_sha256": digest(manifest)}
 
     def run_job(self, bundle):
@@ -104,6 +105,23 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
     async def settle(self):
         if self.coordinator._preparations:
             await asyncio.gather(*self.coordinator._preparations)
+
+    async def test_selected_handoff_pin_and_owner_override(self):
+        settings, _ = self.coordinator._settings()
+        self.assertEqual(settings["hf_base_model"], "meta-llama/Llama-3.1-70B")
+        self.assertEqual(settings["hf_base_revision"], "349b2ddb53ce8f2849a6c168a81980ab25258dac")
+        self.store.settings["hf_base_model"] = "owner/another-model"
+        settings, _ = self.coordinator._settings()
+        self.assertIsNone(settings["hf_base_revision"])
+        self.store.settings["hf_base_revision"] = "owner-reviewed-revision"
+        settings, _ = self.coordinator._settings()
+        self.assertEqual(settings["hf_base_revision"], "owner-reviewed-revision")
+
+    async def test_explicit_owner_ref_applies_to_first_cpt_manifest(self):
+        self.store.settings["hf_base_revision"] = "owner-reviewed-revision"
+        run = await self.coordinator.submit("snapshot-one")
+        self.assertEqual(run["manifest"]["base_revision"], "owner-reviewed-revision")
+        await self.settle()
 
     async def test_disabled_never_constructs_provider_or_uploads(self):
         self.store.settings["training_enabled"] = False
@@ -214,6 +232,7 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         self.store.put("runtime", baseline)
         self.store.put("checkpoints", {"id": "old-checkpoint", "status": "selected", "revision": "preserved-commit"})
         run["calibration"] = {"passed": True, "layer": 40}
+        run["stage"] = run["manifest"]["stage"] = "sft"
         self.store.put("training_runs", run)
         selection = await self.coordinator.activate(run["id"])
         self.assertFalse(selection["remote_endpoint_active"])
@@ -232,6 +251,7 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_older_calibration_layer_is_used_only_when_recorded(self):
         run = await self.passed_run()
+        run["stage"] = run["manifest"]["stage"] = "sft"
         run["calibration"] = {"passed": True, "fresh_representation": {"layer": 12}}
         self.store.put("training_runs", run)
         selection = await self.coordinator.activate(run["id"])
@@ -240,6 +260,14 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         self.store.put("training_runs", run)
         selection = await self.coordinator.activate(run["id"])
         self.assertNotIn("CHAMBER_LAYER", selection["deployment_env"])
+
+    async def test_selected_base_cpt_cannot_be_exported_as_live_chat(self):
+        run = await self.passed_run()
+        run["calibration"] = {"passed": True, "layer": 40}
+        self.store.put("training_runs", run)
+        with self.assertRaisesRegex(ValueError, "SFT checkpoint"):
+            await self.coordinator.activate(run["id"])
+        self.assertIsNone(self.store.get("runtime", "active_checkpoint"))
 
     async def test_sft_is_manual_separate_and_reuses_pinned_cpt_base(self):
         run = await self.passed_run()

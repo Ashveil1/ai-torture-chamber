@@ -6,13 +6,16 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 from typing import Any
 from uuid import uuid4
 
+SELECTED_MODEL = json.loads(Path(__file__).with_name("selected-model.json").read_text(encoding="utf-8"))
+SELECTED_SETTINGS = SELECTED_MODEL["settings"]
+
 DEFAULTS = {
     "training_enabled": False, "training_provider": "hf_jobs",
-    "hf_base_model": "meta-llama/Llama-3.1-70B", "hf_base_revision": None,
     "training_hardware": "a100-large", "training_interval_hours": 4,
     "training_timeout_seconds": 14400, "training_mode": "qlora",
     "publish_policy": "private", "activation_policy": "manual",
@@ -24,6 +27,7 @@ DEFAULTS = {
     "training_max_loss_ratio": 1.05, "training_calibration_episodes": 40,
     "training_calibration_min_rate": 0.65, "training_budget_usd": None,
     "training_continue_from_previous": True,
+    **SELECTED_SETTINGS,
 }
 ACTIVE = {"preparing", "submitting", "submission_unknown", "submitted", "running"}
 HARDWARE = {"a100-large", "h200"}
@@ -180,7 +184,12 @@ class TrainingCoordinator:
         self._preparations: set[asyncio.Task] = set()
 
     def _settings(self) -> tuple[dict, str]:
-        settings = {**DEFAULTS, **self.store.get_settings(private=True)}
+        saved = self.store.get_settings(private=True)
+        settings = {**DEFAULTS, **saved}
+        # The handoff pin belongs to its selected repository. An owner-selected
+        # model without an explicit ref must resolve its own revision in prepare.
+        if settings["hf_base_model"] != SELECTED_SETTINGS["hf_base_model"] and "hf_base_revision" not in saved:
+            settings["hf_base_revision"] = None
         token = os.environ.get("HF_TOKEN") or settings.get("hf_token", "")
         # An empty saved field must not override an explicitly configured environment.
         for name in ("hf_namespace", "hf_dataset_repo", "hf_model_repo", "training_image"):
@@ -513,6 +522,8 @@ class TrainingCoordinator:
                 raise ValueError("Activation requires measured, passed chamber task calibration")
             if not run.get("artifact_revision") or not run.get("published"):
                 raise ValueError("Activation requires a published, revision-pinned adapter")
+            if run["manifest"]["base_model"] == SELECTED_SETTINGS["hf_base_model"] and run.get("stage") != "sft":
+                raise ValueError("The selected Llama Base has no chat template; live Chamber selection requires a separately validated SFT checkpoint and its tokenizer. CPT remains available for completion-based research.")
             active = self.store.get("runtime", "active_checkpoint")
             if not self.store.get("runtime", "baseline_checkpoint"):
                 settings, _token = self._settings()

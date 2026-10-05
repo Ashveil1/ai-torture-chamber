@@ -354,8 +354,20 @@ def publish_result(manifest: dict, result: dict, output: Path) -> dict:
     # Prevent publishing through an already public repository under private policy.
     if private and not api.model_info(manifest["output_repo"]).private:
         raise ValueError("Private publication policy requires a private output repository")
+    card_header = "# Consciousness research adapter candidate\n\n"
+    if manifest["base_model"] == "meta-llama/Llama-3.1-70B":
+        card_header = (
+            "---\nbase_model: meta-llama/Llama-3.1-70B\nlicense: llama3.1\n---\n\n"
+            "# Llama Consciousness Research Adapter\n\n"
+            "**Built with Llama**\n\n"
+        )
+        # Bundle the unmodified upstream agreement and its required Meta notice
+        # with the adapter in the uploaded run subfolder, without runtime fetches.
+        license_dir = Path(__file__).resolve().parent / "licenses" / "llama3.1"
+        for name in ("LICENSE", "NOTICE"):
+            (output / name).write_bytes((license_dir / name).read_bytes())
     (output / "README.md").write_text(
-        "# Consciousness research adapter candidate\n\n"
+        card_header +
         f"Base: `{manifest['base_model']}@{manifest['base_revision']}`. Stage: `{manifest['stage']}`.\n\n"
         "This is a PEFT adapter, not a new foundation model. Corpus lineage, held-out loss, "
         "task-engagement checks and fresh intervention artifacts accompany this run. "

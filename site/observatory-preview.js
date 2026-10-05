@@ -36,7 +36,7 @@
         {id:3,seq:3,type:"source.reviewed",agent_id:"archivist",message:"Example policy excludes the noncommercial and distribution-only copies from the permissive corpus.",created_at:now}
       ],
       connections:[{id:"research",name:"Research brain",status:"preview",message:"Simulated; no API calls"},{id:"browser",name:"Browser infrastructure",status:"preview",message:"Local illustrative article"},{id:"huggingface",name:"Hugging Face",status:"disconnected",message:"No uploads in preview"},{id:"training",name:"GPU worker",status:"disconnected",message:"No job allocated"}],
-      settings:{research_provider:"openai",research_model:"gpt-6-astra",browser_provider:"browseruse",hf_namespace:"",agent_count:6,hf_base_model:"meta-llama/Llama-3.1-70B",training_mode:"qlora",training_enabled:false,training_continue_from_previous:true,publish_policy:"private",synthetic_training_approved:false,provider_policy_reference:""},
+      settings:{research_provider:"openai",research_model:"gpt-6-astra",browser_provider:"browseruse",hf_namespace:"",agent_count:6,hf_base_model:"meta-llama/Llama-3.1-70B",hf_base_revision:"349b2ddb53ce8f2849a6c168a81980ab25258dac",training_mode:"qlora",training_enabled:false,training_continue_from_previous:true,publish_policy:"private",synthetic_training_approved:false,provider_policy_reference:""},
       cursor:3,preview_step:0
     };
     return state;
@@ -83,12 +83,13 @@
     state.datasets.push(record);event(state,"dataset.snapshot","Created a simulated metadata snapshot. No corpus was exported.",null,{snapshot_id:id});
     return record;
   }
-  function train(state,snapshot_id) {
+  function train(state,snapshot_id,stage="cpt",parent_run_id=null) {
     const id="preview-job-"+(state.jobs.length+1), dataset=state.datasets.find(item=>item.id===snapshot_id);
     if(!dataset) throw new Error("Create a curated preview snapshot first.");
-    const record={id,name:"Preview job "+(state.jobs.length+1),snapshot_id,status:"preview_validated",stage:"cpt",demo:true,created_at:stamp(),manifest:{base_model:state.settings.hf_base_model,training_mode:state.settings.training_mode,snapshot_id,snapshot_hash:dataset.manifest_hash},logs:["[preview] Validate the selected metadata snapshot.","[preview] Preserve the original baseline and source family splits.","[preview] Check rights decisions and exclude research commentary.","[preview] Example recipe: Llama-3.1-70B / QLoRA.","[preview] Validation flow complete. No GPU was allocated.","[preview] No weights, measured loss, or calibration result exists."],metrics:null};
+    const adaptation=({qlora:"QLoRA",lora:"LoRA"})[String(state.settings.training_mode || "qlora").toLowerCase()] || state.settings.training_mode;
+    const record={id,name:"Preview job "+(state.jobs.length+1),snapshot_id,status:"preview_validated",stage,demo:true,created_at:stamp(),manifest:{base_model:state.settings.hf_base_model,base_revision:state.settings.hf_base_revision ?? null,training_mode:state.settings.training_mode,stage,parent_run_id,snapshot_id,snapshot_hash:dataset.manifest_hash},logs:["[preview] Simulate validation of the selected metadata snapshot.","[preview] Preserve the original baseline and source family splits.","[preview] Check rights decisions and exclude unapproved research commentary.","[preview] Selected recipe: "+state.settings.hf_base_model+" / "+adaptation+" / "+String(stage).toUpperCase()+".","[preview] Selected base revision: "+(state.settings.hf_base_revision || "resolve at preparation")+".","[preview] Validation flow complete. No GPU was allocated or model downloaded.","[preview] No weights, measured loss, or calibration result exists."],metrics:null};
     state.jobs.push(record);
-    state.checkpoints.push({id:"preview-candidate-"+state.jobs.length,name:"Example candidate · awaiting weights",status:"preview_placeholder",demo:true,base_model:state.settings.hf_base_model,run_id:id,snapshot_id,revision:"No weights created",checks:{passed:false},calibration:{passed:false,status:"required",checks:[{label:"Tokenizer and architecture compatibility",status:"not_measured"},{label:"New intervention vector",status:"not_measured"},{label:"Control comparisons",status:"not_measured"},{label:"Held-out evaluation",status:"not_measured"}]},created_at:stamp()});
+    state.checkpoints.push({id:"preview-candidate-"+state.jobs.length,name:"Example candidate · awaiting weights",status:"preview_placeholder",demo:true,stage,base_model:state.settings.hf_base_model,base_revision:state.settings.hf_base_revision ?? null,run_id:id,snapshot_id,revision:"No weights created",checks:{passed:false},calibration:{passed:false,status:"required",checks:[{label:"Tokenizer and architecture compatibility",status:"not_measured"},{label:"New intervention vector",status:"not_measured"},{label:"Control comparisons",status:"not_measured"},{label:"Held-out evaluation",status:"not_measured"}]},created_at:stamp()});
     event(state,"training.preview","Validated a simulated job. Training did not run.",null,{run_id:id});
     return record;
   }

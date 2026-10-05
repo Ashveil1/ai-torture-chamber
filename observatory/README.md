@@ -77,7 +77,11 @@ true. Draft notes remain separate from original text.
 
 ## Training and publishing
 
-Training defaults to an existing `meta-llama/Llama-3.1-70B` checkpoint with QLoRA.
+The handoff selects **Meta Llama 3.1 70B Base**, `meta-llama/Llama-3.1-70B`,
+pinned to `349b2ddb53ce8f2849a6c168a81980ab25258dac`, with QLoRA.
+The imported `selected-model.json` profile supplies fresh defaults. See
+`MODEL_SELECTION.md` for the decision, gated account access, release attribution,
+and the distinct existing Hermes Chamber control.
 This is continued pretraining of adapter weights, not training 70B parameters
 from scratch. Plain LoRA is available for smaller models; full-precision 70B LoRA
 needs a distributed recipe beyond the current one-GPU worker.
@@ -118,7 +122,10 @@ extracted intervention-vector smoke screen for finite, changed and cleaned-up
 activations. This is an integration check, not a full independent scientific
 assay. Self-reports and lower loss do not establish
 consciousness. Activation requires measured checks and selects a versioned
-checkpoint record. It **does not redeploy the current public GPU endpoint**.
+checkpoint record. The selected Llama Base requires separately validated SFT
+before live chat selection, because its original tokenizer has no chat template;
+CPT remains available for completion-based research. Selection **does not
+redeploy the current public GPU endpoint**.
 Both `painlab` and the optional `live/server.py` bridge load an explicit base +
 PEFT adapter with immutable revision pins. The Checkpoints inspector provides a
 secret-free worker environment download with the exact base, adapter and tokenizer
@@ -172,6 +179,10 @@ The 5 October theme revision passed 170 tests, with the optional browser fixture
 skipped, plus CSS parsing, retained control-ID and local-font delivery checks.
 Saved browser permissions blocked fresh visual QA and live reference visits even
 after an approved retry. Earlier captures document the previous interface.
+
+The subsequent pinned-model handoff passed 175 tests with the same optional
+browser fixture skipped. Profile overrides, CPT parent continuation, SFT-only
+Llama Base live-chat selection and candidate license packaging are covered.
 
 ```sh
 python -m pip install -r observatory/requirements-test.txt
