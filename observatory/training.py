@@ -24,9 +24,13 @@ DEFAULTS = {
     "training_batch_size": 1, "training_gradient_accumulation": 8,
     "training_learning_rate": 0.0001, "training_lora_rank": 16,
     "training_lora_alpha": 32, "training_seed": 792351,
-    "training_max_loss_ratio": 1.05, "training_calibration_episodes": 40,
+    "training_max_loss_ratio": 1.0, "training_calibration_episodes": 40,
     "training_calibration_min_rate": 0.65, "training_budget_usd": None,
     "training_continue_from_previous": True,
+    "training_eval_suite_path": "", "training_eval_expected_sha256": "",
+    "training_eval_max_accuracy_drop": 0.0, "training_eval_max_nll_ratio": 1.0,
+    "training_eval_min_domain_accuracy": 0.5, "training_eval_min_general_accuracy": 0.5,
+    "training_eval_max_length": 1024,
     **SELECTED_SETTINGS,
 }
 ACTIVE = {"preparing", "submitting", "submission_unknown", "submitted", "running"}
@@ -74,12 +78,19 @@ class HFJobsProvider:
         self.namespace = settings["hf_namespace"]
 
     def prepare(self, manifest: dict, payload: dict) -> dict:
+        from .train_worker import validate_payload
+        validate_payload(payload, manifest["stage"], require_quality=True)
         # Resolve a moving owner-selected ref once; the worker only receives commits.
         base_info = self.api.model_info(manifest["base_model"], revision=manifest.get("base_revision"))
         parameters = int(_field(_field(base_info, "safetensors", {}), "total", 0) or 0)
         if manifest["training"]["mode"] == "lora" and (parameters >= 60_000_000_000 or
                 re.search(r"(?:^|[-/])(?:70|72)b(?:[-/]|$)", manifest["base_model"], re.I)):
             raise ValueError("The supported single-GPU 70B profiles require QLoRA; full-precision LoRA needs a separately benchmarked distributed recipe")
+        from .evaluation import load_eval_suite, suite_hash, validate_dataset_exclusion
+        suite = load_eval_suite(self.settings)
+        if suite_hash(suite) != manifest.get("evaluation", {}).get("sha256"):
+            raise ValueError("evaluation_suite_changed_after_job_preparation")
+        validate_dataset_exclusion(payload, suite)
         revision = base_info.sha
         manifest = {**manifest, "base_revision": revision, "tokenizer_revision": revision}
         from huggingface_hub import hf_hub_download
@@ -114,6 +125,11 @@ class HFJobsProvider:
         upload = self.api.upload_file(path_or_fileobj=canonical_bytes(payload), path_in_repo=path,
                                       repo_id=repo, repo_type="dataset", commit_message=f"Seal {manifest['snapshot_id']}")
         manifest.update(dataset_path=path, dataset_revision=str(upload.oid), dataset_sha256=digest(payload))
+        eval_path = f"observatory/evaluations/{suite_hash(suite)}.json"
+        eval_upload = self.api.upload_file(path_or_fileobj=canonical_bytes(suite), path_in_repo=eval_path,
+                                         repo_id=repo, repo_type="dataset", commit_message=f"Seal evaluation {suite['id']} {suite['version']}")
+        manifest["evaluation"] = {**manifest["evaluation"], "repo_id": repo, "path": eval_path,
+                                  "revision": str(eval_upload.oid)}
         sealed = dict(manifest)
         manifest_path = f"observatory/jobs/{manifest['run_id']}/manifest.json"
         commit = self.api.upload_file(path_or_fileobj=canonical_bytes(sealed), path_in_repo=manifest_path,
@@ -260,7 +276,8 @@ class TrainingCoordinator:
         if settings.get("synthetic_training_approved") is not True or not settings.get("provider_policy_reference"):
             return {"status": "not_ready", "reasons": ["synthetic_sft_requires_owner_approval_and_provider_policy_reference"]}
         parent = self.store.get("training_runs", parent_run_id)
-        if not parent or parent.get("stage") != "cpt" or not parent.get("checks", {}).get("passed") or not parent.get("artifact_revision"):
+        if (not parent or parent.get("stage") != "cpt" or not parent.get("checks", {}).get("passed")
+                or not parent.get("checks", {}).get("independent_evaluation_passed") or not parent.get("artifact_revision")):
             return {"status": "not_ready", "reasons": ["sft_requires_a_published_cpt_checkpoint_with_passed_checks"]}
         return await self._submit("sft", snapshot_id, parent=parent, retry=retry)
 
@@ -278,11 +295,15 @@ class TrainingCoordinator:
                 from .curation import build_snapshot
                 snapshot = build_snapshot(self.store)
             from .train_worker import validate_payload
+            from .evaluation import load_eval_suite, suite_hash, evaluation_policy, validate_dataset_exclusion
             try:
-                splits = validate_payload(snapshot, stage)
+                suite = load_eval_suite(settings)
+                eval_policy = evaluation_policy(settings)
+                validate_dataset_exclusion(snapshot, suite)
+                splits = validate_payload(snapshot, stage, require_quality=True)
                 if stage == "cpt" and len(splits["train"]) < int(settings["training_min_documents"]):
                     reasons.append("insufficient_training_documents")
-            except (ValueError, TypeError, KeyError) as exc:
+            except (ValueError, TypeError, KeyError, OSError) as exc:
                 reasons.append(str(exc))
             if not snapshot.get("immutable"):
                 reasons.append("snapshot_must_be_immutable")
@@ -291,13 +312,15 @@ class TrainingCoordinator:
             runs = self.store.list_records("training_runs")
             if stage == "cpt" and settings.get("training_continue_from_previous") is True:
                 candidates = [run for run in runs if run.get("stage") == "cpt" and run.get("status") == "passed"
-                    and run.get("checks", {}).get("passed") and run.get("published") and run.get("artifact_revision")
+                    and run.get("checks", {}).get("passed") and run.get("checks", {}).get("independent_evaluation_passed")
+                    and run.get("published") and run.get("artifact_revision")
                     and run.get("manifest", {}).get("base_model") == settings["hf_base_model"]
                     and (not settings.get("hf_base_revision") or run["manifest"].get("base_revision") == settings["hf_base_revision"])]
                 parent = candidates[-1] if candidates else None
             effective_base = parent["manifest"]["base_model"] if parent else settings["hf_base_model"]
             effective_revision = parent["manifest"]["base_revision"] if parent else settings.get("hf_base_revision")
             fingerprint = digest({"corpus": stage_content_hash(snapshot, stage), "stage": stage,
+                                  "evaluation_sha256": suite_hash(suite),
                                   "base": effective_base if stage == "sft" else settings["hf_base_model"],
                                   "revision": effective_revision if stage == "sft" else settings.get("hf_base_revision"),
                                   "parent": parent["id"] if parent and stage == "sft" else None,
@@ -332,6 +355,8 @@ class TrainingCoordinator:
                 "dataset_repo": settings["hf_dataset_repo"], "output_repo": settings["hf_model_repo"],
                 "output_subfolder": f"runs/{run_id}/adapter", "training": config,
                 "publish_policy": settings["publish_policy"], "created_at": now(),
+                "evaluation": {"id": suite["id"], "version": suite["version"], "sha256": suite_hash(suite),
+                               "kind": suite.get("kind", "operator_evaluation"), "policy": eval_policy},
                 "parent_adapter": {"repo_id": parent["manifest"]["output_repo"], "revision": parent["artifact_revision"],
                                    "subfolder": parent["manifest"]["output_subfolder"], "run_id": parent["id"]} if parent else None,
             }
@@ -426,11 +451,19 @@ class TrainingCoordinator:
                     except Exception as exc:
                         self.store.event("training.result_unavailable", _redact(f"{type(exc).__name__}: {exc}", token), run_id=run["id"])
                 if result and result.get("run_id") == run["id"] and result.get("snapshot_hash") == run["manifest"]["snapshot_hash"]:
+                    evaluation = result.get("evaluation", {})
+                    expected_eval = run["manifest"].get("evaluation", {})
+                    eval_verified = (evaluation.get("passed") is True and evaluation.get("status") == "measured"
+                        and evaluation.get("suite_sha256") == expected_eval.get("sha256")
+                        and result.get("checks", {}).get("independent_evaluation_passed") is True)
+                    if not eval_verified:
+                        result = {**result, "checks": {**result.get("checks", {}), "passed": False,
+                                  "independent_evaluation_passed": False}, "published": False}
                     run.update(checks=result.get("checks", {"passed": False}), calibration=result.get("calibration", {"passed": False}),
-                               metrics=result.get("metrics", {}), artifact_revision=result.get("artifact_revision"),
+                               metrics=result.get("metrics", {}), evaluation=evaluation, artifact_revision=result.get("artifact_revision"),
                                published=bool(result.get("published")))
                     run["status"] = "passed" if run["checks"].get("passed") else "failed"
-                    if run.get("artifact_revision"):
+                    if run.get("artifact_revision") and eval_verified:
                         self.store.put("checkpoints", {"id": run["id"], "run_id": run["id"], "stage": run["stage"],
                             "status": "candidate", "checks": run["checks"], "calibration": run["calibration"],
                             "repo_id": run["manifest"]["output_repo"], "revision": run["artifact_revision"],
@@ -521,6 +554,10 @@ class TrainingCoordinator:
             run = self.store.get("training_runs", candidate_id)
             if not run or run.get("status") != "passed" or not run.get("checks", {}).get("passed"):
                 raise ValueError("Activation requires a candidate with passed training checks")
+            if (not run.get("checks", {}).get("independent_evaluation_passed") or
+                    run.get("evaluation", {}).get("passed") is not True or
+                    run.get("evaluation", {}).get("suite_sha256") != run.get("manifest", {}).get("evaluation", {}).get("sha256")):
+                raise ValueError("Activation requires the sealed independent domain/general evaluations")
             if not run.get("calibration", {}).get("passed"):
                 raise ValueError("Activation requires measured, passed chamber task calibration")
             if not run.get("artifact_revision") or not run.get("published"):

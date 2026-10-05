@@ -32,7 +32,7 @@
   let frameObjectUrl = "", frameSelection = "", frameLoading = false, frameGeneration = 0, lastPreviewSource = "", toastTimer = null, confirmation = null, eventOnlyAgent = false;
   let frameTelemetry = null, highlightedNoteId = "";
   let inheritedBaseRevision = false;
-  let researchCatalog={status:"unavailable",models:[]}, funding=null, metadataAt=0, metadataLoading=false, metadataGeneration=0;
+  let researchCatalog={status:"unavailable",models:[]}, metadataAt=0, metadataLoading=false, metadataGeneration=0;
   let previousProvider=preferences.research_provider;
   let sourceBookmarks = new Set();
   try { sourceBookmarks = new Set(JSON.parse(localStorage.getItem(bookmarkKey) || "[]")); } catch (_) {}
@@ -139,12 +139,13 @@
     frameTelemetry=null;highlightedNoteId="";
     $("passage-focus").hidden=true;$("agent-scroll-track").hidden=true;
     text("viewport-position","Page position unavailable");
+    window.ObservatoryMotion?.stop(true);
   }
   function renderFrameTelemetry() {
     const display=$("browser-display"), geometry=viewportGeometry(frameTelemetry?.viewport,frameTelemetry?.focus,display.clientWidth,display.clientHeight);
     highlightedNoteId="";
     $("passage-focus").hidden=!geometry?.rect;$("agent-scroll-track").hidden=!geometry;
-    if(!geometry) {text("viewport-position","Page position unavailable");return;}
+    if(!geometry) {text("viewport-position","Page position unavailable");window.ObservatoryMotion?.stop(true);return;}
     const start=Math.floor(geometry.start*100),end=Math.min(100,Math.ceil(geometry.end*100));
     text("viewport-position",(mode==="preview"?"Example viewport":"Agent viewport")+" · "+start+"–"+end+"% of page");
     $("agent-scroll-thumb").style.top=geometry.start*100+"%";
@@ -155,6 +156,8 @@
       text("passage-focus-caption",mode==="preview"?"Example passage":"Saved note passage");
       highlightedNoteId=rect.note_id;
     }
+    const selected=agent(), latest=[...state.events].reverse().find(item=>String(item.agent_id)===String(selected?.id));
+    window.ObservatoryMotion?.update({geometry,viewport:frameTelemetry.viewport,selected,event:latest,preview:mode==="preview",running:state.mission.status==="running" && (mode==="preview" || connected),visible:currentView==="research" && !document.hidden});
   }
   function lockObserverViewport(display) {
     // A wheel or touch gesture over the spectator pane cannot alter its page.
@@ -167,7 +170,7 @@
     if(eventSource) eventSource.close();
     eventSource=null;clearInterval(stateTimer);clearTimeout(refreshTimer);stateTimer=null;connected=false;
     clearLiveFrame();
-    metadataGeneration++;metadataAt=0;metadataLoading=false;researchCatalog={status:"unavailable",models:[]};funding=null;
+    metadataGeneration++;metadataAt=0;metadataLoading=false;researchCatalog={status:"unavailable",models:[]};
   }
   async function refreshState(silent=false) {
     if(mode!=="connected") return;
@@ -185,15 +188,14 @@
     }
   }
   async function refreshPaymentMetadata(force=false) {
-    if(mode==="preview"){renderFunding();syncResearchFields();return;}
+    if(mode==="preview"){syncResearchFields();return;}
     if(!connected || metadataLoading || !force && Date.now()-metadataAt<30000)return;
     const generation=metadataGeneration;metadataLoading=true;
     try {
-      const results=await Promise.allSettled([request("research-models"),request("funding")]);
+      const results=await Promise.allSettled([request("research-models")]);
       if(generation!==metadataGeneration || mode!=="connected")return;
       researchCatalog=results[0].status==="fulfilled"?results[0].value:{status:"unavailable",models:[]};
-      funding=results[1].status==="fulfilled"?results[1].value:null;
-      metadataAt=Date.now();renderFunding();syncResearchFields();
+      metadataAt=Date.now();syncResearchFields();
     } finally {if(generation===metadataGeneration)metadataLoading=false;}
   }
   function catalog() { return mode==="preview" ? state.research_catalog || {status:"simulated",models:[]} : researchCatalog; }
@@ -223,22 +225,6 @@
     if(typeof value!=="string" || !/^[1-9A-HJ-NP-Za-km-z]{32,90}$/.test(value))return "";
     if(!["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp","solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"].includes(network))return "";
     return "https://explorer.solana.com/"+kind+"/"+encodeURIComponent(value)+(network==="solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"?"?cluster=devnet":"");
-  }
-  function renderFunding() {
-    const record=mode==="preview" ? state.funding : connected?funding:null, simulated=mode==="preview";
-    const status=record?.status || "unknown";
-    const reasons={DAILY_LIMIT:"The daily request budget is exhausted. Adding wallet funds does not raise that cap.",SETTLEMENT_UNKNOWN:"A payment outcome is unresolved. Reconcile its broker receipt before authorizing another request.",SIGNER_INVALID:"The isolated broker signer configuration needs operator attention. No signer details are exposed here.",SIGNER_NOT_CONFIGURED:"No spending signer is configured. The developer sets up the signer outside this interface.",NOT_CONFIGURED:"The broker is disabled or its request caps and approved recipients are incomplete. Configure those controls before enabling spending.",FUNDING_UNKNOWN:"The wallet balance cannot be confirmed. Unknown funds remain unavailable for new requests.",UNFUNDED:"The wallet lacks the required request reserve. The developer can replenish the allowance; an operator pause or stop remains in effect."};
-    text("funding-status",simulated?"Simulated allowance":!connected?"Not connected":titleCase(status));
-    $("funding-status").className="tag "+(status==="ready" && !simulated?"eligible":"review");
-    text("funding-description",simulated?"Illustrative balances and receipts. No spending wallet exists in this preview; there is no address to fund.":!connected?"Connect the sidecar to observe the broker. No wallet address or sample receipt is substituted.":status==="ready"?"The broker reports a funded research allowance. Request limits and outstanding reservations still apply.":status==="unfunded"?"The research allowance is exhausted. The developer can replenish the configured wallet; funding never resumes an operator-stopped mission.":record?.configured?"The broker is configured, but the allowance is disabled or its balance is unknown. Research calls remain subject to broker validation.":"No spending signer is configured or the broker cannot be reached. The developer configures the isolated broker environment before funding a wallet.");
-    if(!simulated && connected && reasons[record?.reason])text("funding-description",reasons[record.reason]);
-    const wallet=record?.wallet_address, walletUrl=simulated?"":solanaExplorer("address",wallet,record?.network);
-    $("funding-wallet").innerHTML=walletUrl?'<a href="'+esc(walletUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(wallet)+'</a>':esc(simulated?"Simulated · no wallet address":wallet || "Not available");
-    text("funding-network",simulated?"Simulated · no network":record?.network==="solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"?"Solana devnet · test USDC cannot pay mainnet services":record?.network==="solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"?"Solana mainnet · native USDC":"Network not available");
-    text("funding-balance",usdc(record?.balance_atomic));text("funding-reserved",usdc(record?.reserved_atomic));text("funding-settled",usdc(record?.settled_atomic));
-    text("funding-daily-committed",usdc(record?.daily_spent_and_reserved_atomic));text("funding-daily-remaining",usdc(record?.daily_remaining_atomic));text("funding-required-reserve",usdc(record?.required_request_reserve_atomic));
-    const receipts=list(record?.receipts);text("funding-receipt-count",receipts.length+(simulated?" simulated":" recorded"));
-    $("funding-receipts").innerHTML=receipts.length?receipts.map(item=>{const url=simulated?"":solanaExplorer("tx",item.transaction,item.network);return '<div class="funding-receipt"><div><strong>'+esc(simulated?"Simulated payment":titleCase(item.status))+'</strong><small>'+esc(item.request_id || "Request identifier not supplied")+'</small></div><span>'+esc(usdc(item.amount_atomic))+'</span><span>'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">View settlement</a>':esc(simulated?"No transaction":"No settlement signature"))+'</span></div>';}).join(""):'<p class="empty-notebook">No payment receipts are available. Service delivery and on-chain settlement are separate records.</p>';
   }
   function startEventStream() {
     if(mode!=="connected" || !connected || typeof EventSource==="undefined") return;
@@ -285,15 +271,12 @@
       const stale=Number.isFinite(capturedTime) && Date.now()-capturedTime>15000;
       text("frame-description","Actual browser capture · "+(Number.isFinite(capturedTime)?clock(capturedAt):"capture time not reported")+(stale?" · stale capture":"")+" · public view is read-only");
       frameTelemetry=stale?null:frameMetadata(response.headers,id);renderFrameTelemetry();renderNotebook();
-      $("frame-stamp").hidden=false;$("selected-creature").hidden=false;
+      $("frame-stamp").hidden=false;
       if(previous) URL.revokeObjectURL(previous);
     } catch(error) { if(generation===frameGeneration){resetFrameTelemetry();renderNotebook();text("frame-description",frameObjectUrl?"Last actual capture · browser feed temporarily unavailable":"Waiting for browser worker · no simulated frame");} }
     finally { clearTimeout(timeout);if(pendingUrl)URL.revokeObjectURL(pendingUrl);if(generation===frameGeneration) frameLoading=false; }
   }
-  function creature(index=0) {
-    const crowns=['<path d="M37 24l-5-9 10 4 8-12 8 12 10-4-5 9"/>','<path d="M31 27Q50 6 69 27M39 19l-2-7m26 7 2-7"/>','<path d="M36 24l14-12 14 12M50 12V5"/><circle cx="50" cy="8" r="2"/>','<path d="M30 25l9-12 11 10 11-10 9 12"/>','<path d="M34 25V13h32v12m-23-8h14"/>','<path d="M30 27l20-15 20 15M50 12V6"/>'];
-    return '<svg class="creature-svg" viewBox="0 0 100 108" aria-hidden="true">'+crowns[index%6]+'<g class="creature-leg"><path d="M35 34L21 26 8 33m29 10L18 39 5 50m31 2L20 58 10 72m28-12L25 77 18 92"/></g><g class="creature-leg"><path d="M65 34l14-8 13 7M63 43l19-4 13 11M64 52l16 6 10 14M62 60l13 17 7 15"/></g><path class="creature-body" d="M36 27Q50 18 64 27L70 42 66 60Q60 75 50 83Q40 75 34 60L30 42Z"/><path d="M50 28v46m-15-35 15 5 15-5M34 50l16 5 16-5M38 62l12 4 12-4"/><path class="creature-body" d="M35 32Q50 22 65 32L61 43Q50 48 39 43Z"/><ellipse cx="50" cy="36" rx="9" ry="4"/><circle class="creature-eye" cx="50" cy="36" r="2"/><path d="M43 78q-5 15-10 20m24-20q5 15 10 20M50 83v18"/><circle cx="50" cy="103" r="2"/></svg>';
-  }
+  function creature(index=0) { return window.ObservatoryMotion.saw(index); }
   function render() {
     state.settings=state.settings || {};
     if(!state.agents.some(item=>String(item.id)===String(selectedAgent))) selectedAgent=state.agents[0]?.id || "";
@@ -301,7 +284,7 @@
     if(!state.jobs.some(item=>String(item.id)===String(selectedJob))) selectedJob=state.jobs.at(-1)?.id || "";
     document.body.classList.toggle("connected",mode==="connected");
     document.body.classList.toggle("is-paused",state.mission.status!=="running" || mode==="connected" && !connected);
-    renderMode();renderMission();renderAgents();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();renderFunding();
+    renderMode();renderMission();renderAgents();renderBrowser();renderNotebook();renderEvents();renderEvidence();renderDatasets();renderTraining();renderCheckpoints();renderConnections();
     if($("notes-dialog").open) renderAllNotes();
   }
   function renderMode() {
@@ -365,7 +348,11 @@
     text("browser-url",selected?.current_url || sourceUrl(source) || "Waiting for a browser session");
     text("browser-session-status",mode==="preview" ? "Simulated session" : selected ? titleCase(selected.status || "Connecting") : "No session");
     text("last-observation",selected?.last_observation || [...state.notes].reverse().find(note=>note.agent_id===selected?.id)?.text || selected?.goal || "Observations appear when an agent records them.");
-    $("selected-creature").innerHTML=selected ? creature(index) : "";
+    const marker=$("selected-creature");
+    if(marker.dataset.agent!==String(selected?.id || "")) {
+      window.ObservatoryMotion?.stop(true);marker.dataset.agent=String(selected?.id || "");
+      marker.innerHTML=selected ? creature(index) : "";
+    }
     $("selected-creature").hidden=!selected || mode==="connected" && !frameObjectUrl;
     $("preview-frame").hidden=mode!=="preview";$("frame-stamp").hidden=mode==="connected" && !frameObjectUrl;
     text("frame-stamp",mode==="preview" ? "Simulated article layout" : "Actual browser capture");
@@ -379,7 +366,7 @@
       $("browser-empty").hidden=!!frameObjectUrl;
       if(frameSelection!==String(selectedAgent)) clearLiveFrame();
       if(!selected) text("frame-description","No actual browser session. Start a connected research mission.");
-      refreshFrame();
+      renderFrameTelemetry();refreshFrame();
     }
     $("browser-inspect").disabled=!source;$("capture-inspect").disabled=!source;$("bookmark-source").disabled=!source;
     text("bookmark-source",source && (source.bookmarked || sourceBookmarks.has(String(source.id))) ? "Bookmarked ★" : "Bookmark source ☆");
@@ -427,11 +414,20 @@
     const records=list(dataset.manifest?.source_records);
     return list(dataset.source_ids || dataset.manifest?.source_ids).map(id=>{const record=records.find(item=>String(item.id)===String(id));return {...sourceById(id),...record,id,title:record?.title || sourceById(id)?.title || id};});
   }
+  function corpusAuditMarkup(dataset) {
+    if(!dataset)return '<p class="method-note">The next snapshot will report perspective coverage, duplicate removal and quality exclusions.</p>';
+    const audit=dataset.coverage_audit || dataset.manifest?.coverage_audit, gate=dataset.quality_gate || dataset.manifest?.quality_gate;
+    if(mode==="preview" || !audit)return '<h3>Review before training</h3><p class="method-note">'+esc(mode==="preview"?"This simulated metadata snapshot contains no original training text or measured coverage. Real snapshots require reviewed supporting, skeptical and uncertain perspectives, scientific sources and extraction checks.":"This older snapshot has no current quality audit. Create a new reviewed snapshot before training.")+'</p>';
+    const train=audit.splits?.train || audit.train || {}, stances=train.stances || {}, shares=train.stance_character_shares || {};
+    const rows=['supportive','skeptical','uncertain','mixed','methodological'].map(stance=>'<div class="coverage-row"><span>'+esc(titleCase(stance))+'</span><div class="coverage-meter"><i style="width:'+Math.max(0,Math.min(100,Number(shares[stance] || 0)*100))+'%"></i></div><span>'+esc(stances[stance] || 0)+' copies</span></div>').join('');
+    return '<div class="section-top"><h3>Corpus quality</h3><span class="tag '+(gate?.ready?'eligible':'review')+'">'+esc(gate?.ready?'Coverage floor met':'Coverage needs review')+'</span></div>'+rows+'<p class="method-note">Bars show original-text character share in the training split. Coverage is a presence check, not equal weighting or scientific validation. '+esc(dataset.counts?.deduplicated_sources || 0)+' duplicate copies removed; their source lineage remains recorded.</p>'+(list(gate?.reasons).length?'<p class="rights-explanation">'+esc(list(gate.reasons).map(titleCase).join('; '))+'</p>':'');
+  }
   function renderDatasets() {
     text("dataset-count",state.datasets.length);text("snapshot-create",mode==="preview" ? "Create preview snapshot" : "Create curated snapshot");
     $("snapshot-create").disabled=busy || mode==="connected" && !connected;
     $("dataset-list").innerHTML=state.datasets.length ? [...state.datasets].reverse().map(dataset=>'<button class="dataset-entry '+(String(dataset.id)===String(selectedDataset)?"selected":"")+'" data-dataset="'+esc(dataset.id)+'"><span class="tag">'+esc(mode==="preview"?"Example candidate":titleCase(dataset.status || "Candidate"))+'</span><strong>'+esc(datasetName(dataset))+'</strong><small>'+esc(dateLabel(dataset.created_at))+'<br>'+esc(dataset.counts?.original_documents ?? list(dataset.source_ids).length)+' original documents · '+esc(dataset.counts?.synthetic_examples ?? 0)+' instruction examples</small></button>').join("") : '<p class="empty-notebook">No curated snapshots.<br>Review source rights, then create the first immutable candidate.</p>';
     const dataset=state.datasets.find(item=>String(item.id)===String(selectedDataset));
+    $("corpus-audit").innerHTML=corpusAuditMarkup(dataset);
     $("manifest-download").disabled=!dataset;
     $("dataset-export").disabled=!dataset || mode==="preview" || !canMutate() || busy;
     text("manifest-state",dataset ? mode==="preview" ? "Example snapshot" : (dataset.immutable ? "Immutable candidate" : titleCase(dataset.status)) : "Awaiting snapshot");
@@ -475,10 +471,15 @@
     text("recipe-publication",titleCase(settings.publish_policy || "Private")+" · owner controlled");
     text("training-connection",mode==="preview" ? "Preview · no GPU job" : settings.training_enabled ? "Training enabled by owner" : "Training disabled");
     const approved=!!settings.synthetic_training_approved && !!settings.provider_policy_reference;
-    $("training-start").disabled=busy || !canMutate() || !($("training-dataset").value) || stage==="sft" && (!approved || !$("training-parent").value);
+    const chosen=state.datasets.find(item=>String(item.id)===$("training-dataset").value), qualityReady=mode==="preview" || (chosen?.quality_gate || chosen?.manifest?.quality_gate)?.ready===true;
+    $("training-start").disabled=busy || !canMutate() || !($("training-dataset").value) || !qualityReady || mode==="connected" && !settings.training_enabled || stage==="sft" && (!approved || !$("training-parent").value);
     text("training-start",mode==="preview" ? "Validate preview job" : stage==="sft" ? "Submit approved SFT job" : "Submit pretraining job");
     const running=state.jobs.find(job=>["running","submitting","submitted","preparing"].includes(job.status));
     $("worker-state").innerHTML='<span aria-hidden="true">◇</span><div><strong>'+esc(mode==="preview"?"No training is running":running?"Actual job: "+titleCase(running.status):settings.training_enabled?"Ready for owner submission":"Training is disabled")+'</strong><p>'+esc(mode==="preview" ? "Preview validation demonstrates the flow. It does not allocate a GPU or create weights." : stage==="sft"&&!approved?"Enable approved instruction examples and record the teacher provider policy in setup before SFT." : running?"The worker reports its status and measured results in the job record." : "GPU access, Hugging Face permissions and a sealed dataset are checked by the backend before submission.")+'</p></div>';
+    if(mode==="connected" && !running && chosen && !qualityReady) {
+      const reasons=list((chosen.quality_gate || chosen.manifest?.quality_gate)?.reasons);
+      $("worker-state").innerHTML='<span aria-hidden="true">◇</span><div><strong>Corpus review incomplete</strong><p>'+esc(reasons.length?reasons.map(titleCase).join('; '):'Create a new reviewed snapshot with the current corpus policy. Inspect perspective coverage and exclusions in Datasets.')+'</p></div>';
+    }
     const job=state.jobs.find(item=>String(item.id)===String(selectedJob));
     if(!job) {
       $("job-status").innerHTML='<span class="tag">Awaiting curated snapshot</span>';
@@ -505,8 +506,9 @@
     $("connection-list").innerHTML=connections.map(item=>'<div class="connection-row"><span>'+esc(item.name || names[item.id] || titleCase(item.id))+'</span><span class="'+(["connected","ready","healthy","ok"].includes(item.status)?"healthy":"")+'">'+esc(item.message || titleCase(item.status || "Not reported"))+'</span></div>').join("");
   }
   function showView(view,focus=false) {
-    if(!["research","evidence","datasets","training","checkpoints","funding"].includes(view)) return;
+    if(!["research","evidence","datasets","training","checkpoints"].includes(view)) view="research";
     currentView=view;
+    if(view!=="research")window.ObservatoryMotion?.stop();
     all(".view").forEach(panel=>panel.hidden=panel.id!=="view-"+view);
     all("[data-view]").forEach(button=>{const active=button.dataset.view===view;button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;});
     if(focus) $("tab-"+view).focus();
@@ -530,11 +532,28 @@
     renderBrowser();renderEvidence();toast(active?"Source bookmark removed from this browser.":"Source bookmarked in this browser.");
   }
   function evidenceText(value) { return typeof value==="object" ? JSON.stringify(value,null,2) : String(value || "No rights evidence recorded."); }
+  function qualityReviewMarkup(source,canReview) {
+    const q=source.quality_review || {}, disabled=canReview?"":" disabled";
+    const select=(name,value,options)=>'<select name="'+name+'"'+disabled+'>'+options.map(([id,label])=>'<option value="'+id+'"'+(id===value?' selected':'')+'>'+label+'</option>').join("")+'</select>';
+    const checkbox=(name,label,checked)=>'<label><input type="checkbox" name="'+name+'"'+(checked?' checked':'')+disabled+'> '+label+'</label>';
+    return '<fieldset class="quality-review-fields"><legend>Corpus quality</legend><p class="review-help">Review the exact document. Classify its argument, not whether consciousness is established.</p>'+
+      '<label>Topic relevance'+select('topic_relevance',q.topic_relevance || 'uncertain',[['uncertain','Needs assessment'],['relevant','Relevant to the mission'],['unrelated','Unrelated']])+'</label>'+
+      '<label>Perspective'+select('evidence_stance',q.evidence_stance || 'uncertain',[['supportive','Arguments supporting possible consciousness'],['skeptical','Arguments questioning consciousness'],['uncertain','Uncertainty and unresolved evidence'],['mixed','Several competing perspectives'],['methodological','Methods and measurement']])+'</label>'+
+      '<label>Document type'+select('quality_source_type',q.source_type || 'article',[['empirical_paper','Empirical paper'],['theoretical_paper','Theoretical paper'],['review_paper','Review paper'],['technical_report','Technical report'],['article','Article'],['reference','Reference'],['social','Social post']])+'</label>'+
+      '<label>Reviewed by<input name="quality_reviewed_by" value="'+esc(q.reviewed_by || 'Operator')+'" maxlength="4000"'+disabled+'></label>'+
+      '<label>Quality rationale<textarea name="quality_rationale" rows="3"'+disabled+' placeholder="Relevance, evidence limitations, extraction checks and why this copy belongs in the corpus">'+esc(q.rationale || '')+'</textarea></label>'+
+      '<div class="covered-perspectives"><span>For mixed or methodological documents, perspectives actually covered:</span>'+['supportive','skeptical','uncertain'].map(stance=>checkbox('covered_'+stance,titleCase(stance),list(q.covered_stances).includes(stance))).join('')+'</div>'+
+      checkbox('contains_benchmark','Contains evaluation questions or benchmark answers',source.contains_benchmark || source.contamination_status && source.contamination_status!=='clear')+
+      checkbox('chamber_stimulus','Contains Chamber experiment prompts or stimuli',source.chamber_stimulus || source.experimental_stimulus)+
+      '<p class="review-help">Extraction: '+esc(source.extraction?.method || 'Legacy capture')+' / '+esc(source.extraction?.quality || 'Unverified')+'. '+esc(list(source.extraction?.warnings).join('; '))+'</p>'+
+      checkbox('extraction_review_approved','I checked the extracted text against the original copy',source.extraction_review_status==='approved')+
+      '<label>Extraction review evidence<textarea name="extraction_review_evidence" rows="2"'+disabled+' placeholder="Record checks of reading order, tables, formulas and missing pages">'+esc(source.extraction_review_evidence || '')+'</textarea></label></fieldset>';
+  }
   function inspectSource(id) {
     const source=sourceById(id);if(!source) return;
     const url=safeUrl(sourceUrl(source)), incompatible=rightsClass(source)==="reference", provenance=source.provenance || {}, canReview=canMutate();
     text("source-dialog-tag",mode==="preview"?"Example source record":"Collected source record");
-    $("source-dialog-content").innerHTML='<h2>'+esc(source.title || sourceUrl(source))+'</h2>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+' ↗</a>':"")+'<div class="record-grid"><div><dt>Collected by</dt><dd>'+esc(agentName(source.agent_id))+'</dd></div><div><dt>Version / family</dt><dd>'+esc(source.version || source.family_id || "Not recorded")+'</dd></div><div><dt>Rights</dt><dd><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><br>'+esc(source.license || "Unknown")+'</dd></div><div><dt>Capture method</dt><dd>'+esc(mode==="preview"?"Illustrative fixture":provenance.method || "Not recorded")+'<br>'+esc(dateLabel(provenance.collected_at || source.created_at))+'</dd></div><div><dt>Content fingerprint</dt><dd>'+esc(short(source.content_hash || provenance.content_sha256,34))+'</dd></div><div><dt>Original document</dt><dd>'+esc(mode==="preview"?"Not reproduced in the preview":source.word_count?source.word_count+" words · full text stored privately":"Full text is private; only metadata is public")+'</dd></div></div><p class="record-summary">'+esc(source.summary || "No public summary recorded.")+'</p>'+(source.limitation?'<div class="record-excerpt">'+esc(source.limitation)+'</div>':"")+'<div class="record-block"><h3>Rights &amp; corpus review</h3><p class="rights-explanation">'+esc(evidenceText(source.rights_evidence || source.permission_evidence))+'</p>'+(list(source.curation?.reasons).length?'<p class="rights-explanation">Excluded because: '+esc(list(source.curation.reasons).map(titleCase).join("; "))+'</p>':"")+'<form class="review-form" data-review-source="'+esc(id)+'"><label>Review decision<select name="review_status" '+(!canReview?"disabled":"")+'><option value="approved">Approve relevance</option><option value="pending">Keep pending</option><option value="quarantined">Reference only / exclude</option><option value="rejected">Reject</option></select></label><label>License for this exact copy<input name="license" value="'+esc(source.license || "unknown")+'" '+(!canReview?"disabled":"")+'></label><label><input name="license_verified" type="checkbox" '+(source.license_verified?"checked ":"")+(!canReview?"disabled":"")+'> Verified training-compatible rights for this exact copy</label><label>Rights evidence<textarea name="rights_evidence" rows="3" '+(!canReview?"disabled":"")+' placeholder="License URL, version and permission evidence">'+esc(source.rights_evidence?evidenceText(source.rights_evidence):"")+'</textarea></label><label>Review note<textarea name="review_note" rows="2" '+(!canReview?"disabled":"")+' placeholder="Attribution, exclusions, relevance or caveats">'+esc(source.review_note || "")+'</textarea></label><p class="review-help">'+esc(mode==="preview"?"This records a simulated review. It grants no real rights.":canReview?"The backend validates eligibility; checking a box alone does not clear a source.":"Public inspection is read-only. Open Operator setup to authenticate.")+'</p><button class="primary-button" type="submit" '+(!canReview?"disabled":"")+'>'+esc(mode==="preview"?"Save preview review":"Save source review")+'</button></form></div><div class="dialog-actions"><button class="quiet-button" data-bookmark-source="'+esc(id)+'">'+(sourceBookmarks.has(String(id)) || source.bookmarked?"Remove bookmark":"Bookmark source")+'</button></div>';
+    $("source-dialog-content").innerHTML='<h2>'+esc(source.title || sourceUrl(source))+'</h2>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+' ↗</a>':"")+'<div class="record-grid"><div><dt>Collected by</dt><dd>'+esc(agentName(source.agent_id))+'</dd></div><div><dt>Version / family</dt><dd>'+esc(source.version || source.family_id || "Not recorded")+'</dd></div><div><dt>Rights</dt><dd><span class="tag '+rightsClass(source)+'">'+esc(rightsLabel(source))+'</span><br>'+esc(source.license || "Unknown")+'</dd></div><div><dt>Capture method</dt><dd>'+esc(mode==="preview"?"Illustrative fixture":provenance.method || "Not recorded")+'<br>'+esc(dateLabel(provenance.collected_at || source.created_at))+'</dd></div><div><dt>Content fingerprint</dt><dd>'+esc(short(source.content_hash || provenance.content_sha256,34))+'</dd></div><div><dt>Original document</dt><dd>'+esc(mode==="preview"?"Not reproduced in the preview":source.word_count?source.word_count+" words · full text stored privately":"Full text is private; only metadata is public")+'</dd></div></div><p class="record-summary">'+esc(source.summary || "No public summary recorded.")+'</p>'+(source.limitation?'<div class="record-excerpt">'+esc(source.limitation)+'</div>':"")+'<div class="record-block"><h3>Rights &amp; corpus review</h3><p class="rights-explanation">'+esc(evidenceText(source.rights_evidence || source.permission_evidence))+'</p>'+(list(source.curation?.reasons).length?'<p class="rights-explanation">Excluded because: '+esc(list(source.curation.reasons).map(titleCase).join("; "))+'</p>':"")+'<form class="review-form" data-review-source="'+esc(id)+'"><label>Review decision<select name="review_status" '+(!canReview?"disabled":"")+'><option value="approved">Approve relevance</option><option value="pending">Keep pending</option><option value="quarantined">Reference only / exclude</option><option value="rejected">Reject</option></select></label><label>License for this exact copy<input name="license" value="'+esc(source.license || "unknown")+'" '+(!canReview?"disabled":"")+'></label><label><input name="license_verified" type="checkbox" '+(source.license_verified?"checked ":"")+(!canReview?"disabled":"")+'> Verified training-compatible rights for this exact copy</label><label>Rights evidence<textarea name="rights_evidence" rows="3" '+(!canReview?"disabled":"")+' placeholder="License URL, version and permission evidence">'+esc(source.rights_evidence?evidenceText(source.rights_evidence):"")+'</textarea></label><label>Review note<textarea name="review_note" rows="2" '+(!canReview?"disabled":"")+' placeholder="Attribution, exclusions, relevance or caveats">'+esc(source.review_note || "")+'</textarea></label>'+qualityReviewMarkup(source,canReview)+'<p class="review-help">'+esc(mode==="preview"?"This records a simulated review. It grants no real rights.":canReview?"The backend validates eligibility; checking a box alone does not clear a source.":"Public inspection is read-only. Open Operator setup to authenticate.")+'</p><button class="primary-button" type="submit" '+(!canReview?"disabled":"")+'>'+esc(mode==="preview"?"Save preview review":"Save source review")+'</button></form></div><div class="dialog-actions"><button class="quiet-button" data-bookmark-source="'+esc(id)+'">'+(sourceBookmarks.has(String(id)) || source.bookmarked?"Remove bookmark":"Bookmark source")+'</button></div>';
     $("source-dialog-content").querySelector('[name="review_status"]').value=["approved","pending","quarantined","rejected"].includes(source.review_status)?source.review_status:incompatible?"quarantined":"pending";
     openDialog("source-dialog");
   }
@@ -545,8 +564,9 @@
   }
   function inspectCheckpoint(id) {
     const checkpoint=state.checkpoints.find(item=>String(item.id)===String(id));if(!checkpoint) return;
+    const independent=checkpoint.checks?.independent_evaluation_passed===true;
     const chatSftRequired=needsChatSft(checkpoint), measured=!!checkpoint.calibration?.passed, checks=checkpoint.calibration?.checks || checkpoint.checks || {}, url=safeUrl(checkpoint.repo_id?"https://huggingface.co/"+checkpoint.repo_id:"");
-    $("checkpoint-dialog-content").innerHTML='<h2>'+esc(checkpoint.name || checkpoint.repo_id || checkpoint.id)+'</h2><p class="record-summary">'+esc(checkpoint.baseline?"The existing chamber baseline remains unchanged. This observatory preserves it as the control.":mode==="preview"?"This is a placeholder from a simulated validation flow. No trained weights or measured calibration exists.":"A candidate remains distinct from the chamber until the owner selects a validated revision.")+'</p><div class="record-grid"><div><dt>Model / adapter</dt><dd>'+esc(checkpoint.base_model || checkpoint.model_id || "Not recorded")+'</dd></div><div><dt>Revision</dt><dd>'+esc(checkpoint.revision || checkpoint.artifact_revision || "No weights created")+'</dd></div><div><dt>Training job</dt><dd>'+esc(checkpoint.run_id || "Existing baseline")+'</dd></div><div><dt>Calibration</dt><dd><span class="tag '+(measured?"eligible":"review")+'">'+esc(checkpoint.baseline?"Retained baseline":measured?"Measured · passed":"Calibration required")+'</span></dd></div></div>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open model repository ↗</a>':"")+'<div class="record-block"><h3>Calibration record</h3><pre class="manifest-json">'+esc(JSON.stringify(checks,null,2))+'</pre><p class="rights-explanation">'+esc(mode==="preview"?"No test was run. The displayed requirements are examples, not measurements.":"The worker must measure compatibility, intervention vectors and control tasks for this exact model revision.")+'</p></div>'+(!checkpoint.baseline?'<div class="record-block"><h3>Manual selection</h3><p class="rights-explanation">Selecting a validated checkpoint records an operator choice. It does not reload the remote chamber; the deployment bridge must apply the pinned adapter and preserve the original baseline.</p><button class="primary-button" data-promote="'+esc(checkpoint.id)+'" '+(!measured || !checkpoint.checks?.passed || !canMutate() || chatSftRequired?"disabled":"")+'>'+esc(chatSftRequired?"SFT required for chamber chat":mode==="preview"?"Simulate selection proposal":"Select validated checkpoint")+'</button>'+(chatSftRequired?'<p class="method-note">This Llama Base checkpoint supports raw completion. Complete and calibrate a separate SFT stage before selecting it for chamber chat.</p>':!measured?'<p class="method-note">Selection is locked until measured calibration passes.</p>':"")+'</div>':"");
+    $("checkpoint-dialog-content").innerHTML='<h2>'+esc(checkpoint.name || checkpoint.repo_id || checkpoint.id)+'</h2><p class="record-summary">'+esc(checkpoint.baseline?"The existing chamber baseline remains unchanged. This observatory preserves it as the control.":mode==="preview"?"This is a placeholder from a simulated validation flow. No trained weights or measured calibration exists.":"A candidate remains distinct from the chamber until the owner selects a validated revision.")+'</p><div class="record-grid"><div><dt>Model / adapter</dt><dd>'+esc(checkpoint.base_model || checkpoint.model_id || "Not recorded")+'</dd></div><div><dt>Revision</dt><dd>'+esc(checkpoint.revision || checkpoint.artifact_revision || "No weights created")+'</dd></div><div><dt>Training job</dt><dd>'+esc(checkpoint.run_id || "Existing baseline")+'</dd></div><div><dt>Calibration</dt><dd><span class="tag '+(measured?"eligible":"review")+'">'+esc(checkpoint.baseline?"Retained baseline":measured?"Measured · passed":"Calibration required")+'</span></dd></div></div>'+(url?'<a class="source-external" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open model repository ↗</a>':"")+'<div class="record-block"><h3>Calibration record</h3><pre class="manifest-json">'+esc(JSON.stringify(checks,null,2))+'</pre><p class="rights-explanation">'+esc(mode==="preview"?"No test was run. The displayed requirements are examples, not measurements.":"The worker must measure compatibility, intervention vectors and control tasks for this exact model revision.")+'</p></div>'+(!checkpoint.baseline?'<div class="record-block"><h3>Independent evaluations</h3><p class="rights-explanation">'+esc(independent?'The sealed domain/general evaluation gate passed. Review the job record and suite limitations before interpreting the result.':'The candidate still needs the sealed domain/general evaluation gate. A calibration pass alone cannot unlock selection.')+'</p></div>':'')+(!checkpoint.baseline?'<div class="record-block"><h3>Manual selection</h3><p class="rights-explanation">Selecting a validated checkpoint records an operator choice. It does not reload the remote chamber; the deployment bridge must apply the pinned adapter and preserve the original baseline.</p><button class="primary-button" data-promote="'+esc(checkpoint.id)+'" '+(!measured || !independent || !checkpoint.checks?.passed || !canMutate() || chatSftRequired?"disabled":"")+'>'+esc(chatSftRequired?"SFT required for chamber chat":mode==="preview"?"Simulate selection proposal":"Select validated checkpoint")+'</button>'+(chatSftRequired?'<p class="method-note">This Llama Base checkpoint supports raw completion. Complete and calibrate a separate SFT stage before selecting it for chamber chat.</p>':!measured?'<p class="method-note">Selection is locked until measured calibration passes.</p>':"")+'</div>':"");
     if(checkpoint.deployment_env && Object.keys(checkpoint.deployment_env).length) {
       $("checkpoint-dialog-content").insertAdjacentHTML("beforeend",'<div class="record-block"><h3>Worker configuration</h3><p class="rights-explanation">Applies on operator redeployment. These pinned base, adapter and tokenizer settings do not reload the chamber automatically. No credentials are included.</p><pre class="manifest-json">'+esc(deploymentEnvironment(checkpoint))+'</pre><div class="dialog-actions"><button class="quiet-button" data-deployment-copy="'+esc(checkpoint.id)+'">Copy configuration</button><button class="quiet-button" data-deployment-download="'+esc(checkpoint.id)+'">Download .env</button></div></div>');
     }
@@ -593,6 +613,7 @@
     $("cdp-label").insertAdjacentHTML("afterend",'<label id="cdp-ack-label" hidden><input id="setting-cdp-ack" type="checkbox"> I confirm this is a dedicated, isolated browser with no authenticated sessions.<small>Custom CDP runs one research agent. Do not attach a personal browser or expose its connection URL publicly.</small></label>');
     $("setting-provider").closest(".form-pair").insertAdjacentHTML("afterend",'<label id="research-key-label">Research provider API key<input id="setting-research-key" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend key"><small>Stored encrypted by the backend; never in browser storage.</small></label><div class="form-pair"><label>Reasoning effort<select id="setting-effort"><option value="high">High</option><option value="xhigh">Extra high</option><option value="medium">Medium</option><option value="low">Low</option></select></label><label>Research agents<input id="setting-agent-count" type="number" min="1" max="6" value="6"></label></div>');
     $("setting-hf").closest("label").insertAdjacentHTML("afterend",'<label>Hugging Face token<input id="setting-hf-token" type="password" autocomplete="off" placeholder="Leave blank to preserve the backend token"></label><div class="setup-divider"><h3>Training permissions</h3><span>Explicit owner choices</span></div><label>Selected training base<input id="setting-base-model" type="text" spellcheck="false" value="meta-llama/Llama-3.1-70B"><small>Continued pretraining uses original text; instruction tuning is a separately approved SFT stage. Selecting a model does not download weights.</small></label><label><input id="setting-training-enabled" type="checkbox"> Enable actual training jobs<small>Training can allocate paid GPU jobs after backend validation. Preview actions never allocate compute.</small></label><label><input id="setting-synthetic-approved" type="checkbox"> Enable approved instruction examples<small>Generated notebook drafts require review. The owner must verify teacher-provider terms before permitting SFT.</small></label><label>Teacher-provider policy reference<input id="setting-policy-reference" type="text" placeholder="Policy URL / agreement and review date"><small>Required when enabling generated instruction examples; it does not bypass evidence or source-rights review.</small></label>');
+    $("setting-policy-reference").closest("label").insertAdjacentHTML("afterend",'<details class="advanced-setup"><summary>Independent evaluation gates</summary><p>The bundled frozen suite is an authored integration smoke test. Supply an independently reviewed suite for scientific claims. Both the unchanged base and incoming adapter are compared with the candidate.</p><label>Frozen suite path<input id="setting-eval-suite" type="text" spellcheck="false" placeholder="Optional · absolute backend JSON path"></label><label>Expected suite SHA256<input id="setting-eval-sha" type="text" maxlength="64" spellcheck="false" placeholder="Required for a custom suite · pinned SHA256"></label><div class="form-pair"><label>Allowed accuracy drop<input id="setting-eval-accuracy-drop" type="number" min="0" max="1" step="0.01" value="0"></label><label>Maximum evaluation loss ratio<input id="setting-eval-nll-ratio" type="number" min="0.1" max="2" step="0.01" value="1"></label></div><div class="form-pair"><label>Minimum domain accuracy<input id="setting-eval-domain-min" type="number" min="0" max="1" step="0.05" value="0.5"></label><label>Minimum general accuracy<input id="setting-eval-general-min" type="number" min="0" max="1" step="0.05" value="0.5"></label></div><div class="form-pair"><label>Evaluation sequence length<input id="setting-eval-max-length" type="number" min="64" max="32768" value="1024"></label><label>Maximum held-out loss ratio<input id="setting-holdout-ratio" type="number" min="0.1" max="2" step="0.01" value="1"></label></div></details>');
     all("#settings-form .settings-note").forEach(item=>item.textContent="Secret fields are sent only to the authenticated backend and are never written to browser storage. Public settings report configured status, not keys.");
     $("setting-policy-reference").closest("label").insertAdjacentHTML("afterend",'<details class="advanced-setup"><summary>GPU worker, repositories &amp; recipe</summary><p>These settings bound training jobs. Research browsing continues until manually stopped.</p><label>Dataset repository<input id="setting-dataset-repo" type="text" spellcheck="false" placeholder="namespace/consciousness-corpus"></label><label>Model repository<input id="setting-model-repo" type="text" spellcheck="false" placeholder="namespace/Llama-Consciousness-70B"></label><label>Pinned worker container<input id="setting-training-image" type="text" spellcheck="false" placeholder="registry/worker@sha256:…"></label><div class="form-pair"><label>GPU hardware<select id="setting-hardware"><option value="a100-large">A100 large</option><option value="h200">H200</option></select></label><label>Adaptation<select id="setting-training-mode"><option value="qlora">QLoRA</option><option value="lora">LoRA</option></select></label></div><div class="form-pair"><label>Check snapshots every (hours)<input id="setting-training-interval" type="number" min="0.1" step="0.1" value="4"></label><label>GPU timeout (seconds)<input id="setting-training-timeout" type="number" min="60" max="604800" value="14400"></label></div><div class="form-pair"><label>Minimum documents<input id="setting-min-documents" type="number" min="1" value="20"></label><label>Minimum tokens<input id="setting-min-tokens" type="number" min="1" value="50000"></label></div><div class="form-pair"><label>Training steps per job<input id="setting-max-steps" type="number" min="1" value="100"></label><label>Sequence length<input id="setting-sequence-length" type="number" min="128" value="2048"></label></div><label>Model publication<select id="setting-publish-policy"><option value="private">Private repositories</option><option value="hold">Hold publication</option><option value="public">Public model artifacts</option></select></label><label>Budget reference (USD)<input id="setting-training-budget" type="number" min="0" step="1" placeholder="Optional"><small>Informational. Provider funds, hardware choices and job timeouts control spending; this field is not an enforced spending cap.</small></label><label>Base model revision<input id="setting-base-revision" type="text" spellcheck="false" placeholder="Blank resolves and pins the selected repository at preparation"></label></details>');
     $("setting-dataset-repo").closest("label").insertAdjacentHTML("beforebegin",'<label class="checkbox-label"><input id="setting-continue-training" type="checkbox" checked><span>Continue from the previous validated pretraining adapter<small>Use the latest validated CPT adapter as the parent for a new curated snapshot. Disable to start from the pinned original base. Failed jobs are never retried automatically.</small></span></label>');
@@ -624,6 +645,8 @@
     $("setting-protocol").value=settings.research_protocol || "responses";
     const fields={"dataset-repo":["hf_dataset_repo",""],"model-repo":["hf_model_repo",""],"training-image":["training_image",""],hardware:["training_hardware","a100-large"],"training-mode":["training_mode","qlora"],"training-interval":["training_interval_hours",4],"training-timeout":["training_timeout_seconds",14400],"min-documents":["training_min_documents",20],"min-tokens":["training_min_tokens",50000],"max-steps":["training_max_steps",100],"sequence-length":["training_sequence_length",2048],"publish-policy":["publish_policy","private"],"training-budget":["training_budget_usd",""],"base-revision":["hf_base_revision",""]};
     Object.entries(fields).forEach(([field,[key,fallback]])=>{$("setting-"+field).value=settings[key] ?? fallback;});
+    const evalFields={"eval-suite":["training_eval_suite_path",""],"eval-sha":["training_eval_expected_sha256",""],"eval-accuracy-drop":["training_eval_max_accuracy_drop",0],"eval-nll-ratio":["training_eval_max_nll_ratio",1],"eval-domain-min":["training_eval_min_domain_accuracy",0.5],"eval-general-min":["training_eval_min_general_accuracy",0.5],"eval-max-length":["training_eval_max_length",1024],"holdout-ratio":["training_max_loss_ratio",1]};
+    Object.entries(evalFields).forEach(([field,[key,fallback]])=>{$("setting-"+field).value=settings[key] ?? fallback;});
     inheritedBaseRevision=settings.hf_base_model===defaults.hf_base_model && $("setting-base-revision").value===defaults.hf_base_revision;
     toggleBrowserFields();
     syncResearchFields(settings.research_model);
@@ -645,6 +668,8 @@
       if(!settings.cdp_isolated_ack) throw new Error("Confirm the custom CDP browser is isolated and contains no authenticated sessions.");
     }
     Object.assign(settings,{training_provider:"hf_jobs",activation_policy:"manual",hf_dataset_repo:$("setting-dataset-repo").value.trim(),hf_model_repo:$("setting-model-repo").value.trim(),training_image:$("setting-training-image").value.trim(),training_hardware:$("setting-hardware").value,training_mode:$("setting-training-mode").value,training_interval_hours:Number($("setting-training-interval").value),training_timeout_seconds:Number($("setting-training-timeout").value),training_min_documents:Number($("setting-min-documents").value),training_min_tokens:Number($("setting-min-tokens").value),training_max_steps:Number($("setting-max-steps").value),training_sequence_length:Number($("setting-sequence-length").value),publish_policy:$("setting-publish-policy").value,training_budget_usd:$("setting-training-budget").value===""?null:Number($("setting-training-budget").value),hf_base_revision:$("setting-base-revision").value.trim() || null});
+    Object.assign(settings,{training_eval_suite_path:$("setting-eval-suite").value.trim(),training_eval_expected_sha256:$("setting-eval-sha").value.trim(),training_eval_max_accuracy_drop:Number($("setting-eval-accuracy-drop").value),training_eval_max_nll_ratio:Number($("setting-eval-nll-ratio").value),training_eval_min_domain_accuracy:Number($("setting-eval-domain-min").value),training_eval_min_general_accuracy:Number($("setting-eval-general-min").value),training_eval_max_length:Number($("setting-eval-max-length").value),training_max_loss_ratio:Number($("setting-holdout-ratio").value)});
+    if(settings.training_eval_suite_path && !/^[a-f0-9]{64}$/.test(settings.training_eval_expected_sha256))throw new Error("A custom evaluation suite needs its canonical SHA256 fingerprint.");
     return settings;
   }
   async function saveSetup(event) {
@@ -666,7 +691,7 @@
       ownerToken=$("owner-token").value.trim();preferences={...preferences,...settings,api_base:api};
       // Explicit allowlist: never serialize form data or include credential fields.
       const publicPreferences={};
-      ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision"].forEach(key=>publicPreferences[key]=preferences[key]);
+      ["api_base","objective","research_provider","research_model","research_protocol","reasoning_effort","agent_count","browser_provider","cdp_isolated_ack","hf_namespace","hf_base_model","training_enabled","training_continue_from_previous","synthetic_training_approved","provider_policy_reference","chromium_executable","hf_dataset_repo","hf_model_repo","training_image","training_hardware","training_mode","training_interval_hours","training_timeout_seconds","training_min_documents","training_min_tokens","training_max_steps","training_sequence_length","publish_policy","training_budget_usd","hf_base_revision","training_eval_suite_path","training_eval_expected_sha256","training_eval_max_accuracy_drop","training_eval_max_nll_ratio","training_eval_min_domain_accuracy","training_eval_min_general_accuracy","training_eval_max_length","training_max_loss_ratio"].forEach(key=>publicPreferences[key]=preferences[key]);
       try {localStorage.setItem(storageKey,JSON.stringify(publicPreferences));}catch(_){}
       if(nextMode!==mode){disconnect();clearInterval(previewTimer);mode=nextMode;state=mode==="preview"?window.ObservatoryPreview.create():emptyState();selectedAgent="";lastPreviewSource="";}
       if(mode==="preview") {
@@ -695,10 +720,16 @@
     const verified=data.has("license_verified"), evidence=String(data.get("rights_evidence") || "").trim(), license=String(data.get("license") || "unknown").trim();
     if(verified && !evidence){toast("Rights verification requires recorded evidence for the exact copy.");return;}
     const payload={review_status:data.get("review_status"),license,license_verified:verified,rights_evidence:evidence,review_note:String(data.get("review_note") || "").trim(),rights_status:verified?"license_verified":data.get("review_status")==="quarantined"?"reference_only":"needs_review"};
+    const rationale=String(data.get("quality_rationale") || "").trim();
+    if(payload.review_status==="approved" && !rationale){toast("Record a quality rationale before approving corpus inclusion.");return;}
+    if(rationale)payload.quality_review={status:payload.review_status==="approved"?"approved":payload.review_status==="rejected"?"rejected":"pending",reviewed_by:String(data.get("quality_reviewed_by") || "").trim(),rationale,topic_relevance:data.get("topic_relevance"),evidence_stance:data.get("evidence_stance"),source_type:data.get("quality_source_type"),covered_stances:['supportive','skeptical','uncertain'].filter(stance=>data.has('covered_'+stance))};
+    payload.contains_benchmark=data.has("contains_benchmark");payload.chamber_stimulus=data.has("chamber_stimulus");
+    payload.extraction_review_status=data.has("extraction_review_approved")?"approved":"pending";
+    payload.extraction_review_evidence=String(data.get("extraction_review_evidence") || "").trim();
     if(mode==="preview") {
       Object.assign(source,payload);
       const compatible=/^(cc-by(?:-4\.0|-3\.0)?|cc0(?:-1\.0)?|public-domain)$/i.test(license);
-      const allowed=verified && !!evidence && compatible && !["rejected","quarantined"].includes(payload.review_status);
+      const allowed=verified && !!evidence && compatible && payload.review_status==="approved" && payload.quality_review?.topic_relevance==="relevant" && !payload.contains_benchmark && !payload.chamber_stimulus && (source.extraction?.quality==="passed" || payload.extraction_review_status==="approved" && !!payload.extraction_review_evidence);
       source.curation={eligible:allowed,status:allowed?"eligible":"quarantined",reasons:allowed?[]:[!compatible?"license_not_in_public_corpus_policy":!verified?"rights_not_verified":"owner_review_excludes_source"]};
       window.ObservatoryPreview.event(state,"source.reviewed","Simulated owner review saved. No actual rights were granted.",source.agent_id,{source_id:id});render();inspectSource(id);toast("Preview review saved.");
     } else {const result=await mutate("admin/sources/"+encodeURIComponent(id),payload,"PATCH");if(result){inspectSource(id);toast("Source review saved; eligibility was evaluated by the backend.");}}
@@ -808,12 +839,11 @@
   $("event-filter-toggle").addEventListener("click",()=>{eventOnlyAgent=!eventOnlyAgent;renderEvents();});
   $("snapshot-create").addEventListener("click",createSnapshot);$("manifest-download").addEventListener("click",downloadManifest);
   $("dataset-export").addEventListener("click",downloadDataset);
-  $("funding-refresh").addEventListener("click",()=>refreshPaymentMetadata(true));
   $("training-start").addEventListener("click",startTraining);$("training-dataset").addEventListener("change",renderTraining);$("training-stage").addEventListener("change",renderTraining);$("training-parent").addEventListener("change",renderTraining);
   $("training-job-select").addEventListener("change",()=>{selectedJob=$("training-job-select").value;renderTraining();});
   $("confirm-accept").addEventListener("click",async()=>{const callback=confirmation;confirmation=null;$("confirm-dialog").close();if(callback)await callback();});
   window.addEventListener("beforeunload",()=>{disconnect();clearInterval(previewTimer);ownerToken="";});
-  document.addEventListener("visibilitychange",()=>{if(!document.hidden && mode==="connected")refreshState(true);});
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)window.ObservatoryMotion?.stop();else if(mode==="connected")refreshState(true);});
   lockObserverViewport($("browser-display"));
   window.addEventListener("resize",()=>{if(mode==="preview")renderPreviewViewport();else renderFrameTelemetry();});
   installExtraSettings();$("setting-provider").value=preferences.research_provider;$("setting-browser").value=preferences.browser_provider;fillExtraSettings();render();showView(location.hash.slice(1) || "research");

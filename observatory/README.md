@@ -20,7 +20,8 @@ mode contains explicitly authored example traces, browser facsimiles, datasets,
 training receipts and checkpoints. It makes no provider calls. Switching to a
 connected endpoint never silently substitutes those examples for a failed API.
 
-The six views cover research, evidence, datasets, training, checkpoints and funding.
+The five views cover research, evidence, datasets, training and checkpoints.
+Funding has no public page; the isolated x402 backend and its operator configuration remain available.
 Operator setup and mission controls are separate from the public watch surface.
 The interface inherits the existing `grimoire-live` theme and its card/banner
 surfaces, uses the live page's 1180px layout, and self-hosts the same Cormorant
@@ -34,6 +35,11 @@ the visible portion of the document. A saved note's supporting passage is marked
 only when it can be matched to visible page text in that exact screenshot; a
 matching notebook entry is identified. This is source geometry, not a measure of
 attention or consciousness. Stale captures or missing geometry clear the marker.
+A brass saw replaces the fixed bug illustration. It moves with observed viewport
+progress, docks beside screenshot-bound saved evidence and spins briefly on a
+new action. Repeated unchanged frames do not restart its motion; pause, stale
+frames and hidden views stop it. The scan sweep illustrates browser activity,
+not a measured gaze path. Reduced-motion preferences are respected.
 The preview demonstrates agent-controlled scrolling in a noninteractive local
 article surface, with explicitly simulated notes. The surrounding website and
 notebook remain available to scroll normally.
@@ -189,12 +195,27 @@ read-only cache. These infrastructure-specific values and credentials are not
 included in the public environment download. Deployment is an explicit operator
 action, separate from checkpoint selection.
 
-Current curation does not enforce a corpus topic-relevance score or exclude
-original-source benchmark content. Passage matching verifies quotation provenance,
-not the truth of a claim. No frozen consciousness-understanding or general
-capability-retention benchmark suite is implemented. The default held-out loss threshold
-allows up to 5% regression, so a passed checkpoint does not demonstrate improved
-domain competence. The dose receipt guard checks formatting and exact deployment
+Corpus policy v2 requires recorded relevance, perspective, source type and extraction
+review, in addition to reuse rights. Original paragraphs and scientific structure
+are retained where extraction supports them. Optional offline Docling PDF processing
+requires prefetched assets and explicit fidelity review; poor output remains
+discovery-only. Near duplicates contribute one representative, preserving all source
+lineage. Distinct numbers, negation and mathematical relationships remain separate.
+Coverage reports show stance/type counts and text shares; a minimum perspective
+presence floor is required, without claiming statistical balance. Identified
+evaluation sources and Chamber stimuli are excluded from originals and SFT.
+See [extraction](EXTRACTION.md) and [corpus quality](docs/corpus-quality.md).
+
+Every provisioned job seals a separate frozen domain/general evaluation suite.
+The worker compares the unchanged base, incoming adapter and trained candidate
+using one loaded model. Default loss and independent evaluation tolerances require
+non-regression. The bundled sixteen tasks are authored engineering smoke checks,
+not a scientifically validated benchmark; freeze a larger independently reviewed
+suite before drawing scientific conclusions. Custom suites require a SHA256 pin.
+Passing these gates does not establish domain mastery or subjective experience.
+See [evaluation inputs and interpretation](EVALUATION.md). Passage matching verifies
+quotation origin, not claim truth. Leakage guards cannot detect every paraphrase
+or upstream pretraining exposure. The dose receipt guard checks exact deployment
 bindings; the owner must perform and retain the actual sweep measurements.
 
 ## Deployment alongside the existing website
@@ -253,9 +274,9 @@ unpaid request with a broker cancellation record before changing research contex
 Unknown payments cannot be cleared by acknowledgement. The Docker build context
 excludes payment ledgers, keys and SDK review scratch files.
 
-The Funding view relays allowlisted public address/balance/reservation/receipt data
-and distinguishes unknown settlement from insufficient funding. No wallet is
-created by this PR. The owner funds an existing dedicated spending wallet; there
+The backend funding endpoint retains allowlisted public balance/receipt data for
+operator integrations; the website no longer displays a Funding view. No wallet
+is created by this PR. The owner funds an existing dedicated spending wallet; there
 is no visitor donation flow. No paid gateway call or on-chain transfer was performed
 for verification. A fixture suite exercises the real official SDK's transaction
 construction and Ed25519 signature with mocked mint/blockhash RPC, without transfer.
@@ -291,7 +312,7 @@ license URLs, separate permission for social-domain subdomains and standalone
 navigation. Docker persistence instructions were corrected; container execution
 remains unverified.
 
-The x402 implementation passed **553 combined tests**, with three skips: the
+The x402 implementation passed **628 combined tests**, with three skips: the
 optional browser fixture and two official-SDK tests omitted in the research
 environment. Those SDK cases pass in the separate payments environment's
 **77-test payment suite**. The suite covers real offline SDK construction/signature,
@@ -299,8 +320,10 @@ funding state/control races, explicit capability records, quote/receipt handling
 sealed export, immutable GPU images and adapter-specific dose receipt bindings.
 Recovery tests exercise actual sidecar/client/broker ASGI integration, encrypted
 caller restart records, owner-only inspection and delayed-request cancellation.
-Source-only UI checks pass 148 assertions. The dedicated viewer checks cover
+Source-only UI checks pass 157 assertions. The dedicated viewer checks cover
 scroll locking, passage alignment, preview steps and late-response races.
+`ui-motion.cjs` exercises scroll/evidence animation, repeated-frame idleness,
+pause/stale clearing and reduced-motion behavior without a browser or network.
 JS syntax/CSS parsing and compose
 isolation assertions pass, and both Python environments pass dependency checks.
 There was no new browser visual review, paid gateway call, transfer, Docker build
@@ -313,7 +336,7 @@ python -m pytest observatory/tests -q
 
 That command runs the sidecar suite; its tiny-model test is skipped without the
 optional model stack. `requirements-test.txt` also supplies the repository's
-NumPy/PyYAML dependencies. The reported 553-test handoff used the combined
+NumPy/PyYAML dependencies. The reported 628-test handoff used the combined
 `tests` and `observatory/tests` scope, including real CPU model/PEFT tests. To
 reproduce that scope in the separate test environment, add the CPU model stack
 while retaining the sidecar's Hub pin:

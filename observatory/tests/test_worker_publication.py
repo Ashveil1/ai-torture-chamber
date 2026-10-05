@@ -21,8 +21,10 @@ class WorkerPublicationTests(unittest.TestCase):
             "run_id": "candidate-one",
             "output_repo": "owner/research-adapters",
             "publish_policy": "private",
+            "evaluation": {"sha256": "frozen-suite-hash"},
         }
-        result = {"checks": {"passed": True}, "published": False}
+        result = {"checks": {"passed": True, "independent_evaluation_passed": True}, "published": False,
+                  "evaluation": {"passed": True, "status": "measured", "suite_sha256": "frozen-suite-hash"}}
         uploads, repositories, tokens = [], [], []
 
         class FakeHfApi:
@@ -93,6 +95,7 @@ class WorkerPublicationTests(unittest.TestCase):
             "# Consciousness research adapter candidate\n\n"
             "Base: `Qwen/Qwen3-4B-Base@base-pinned-revision`. Stage: `cpt`.\n\n"
             "This is a PEFT adapter, not a new foundation model. Corpus lineage, held-out loss, "
+            "frozen domain/general engineering evaluations against the unadapted base and incoming adapter, "
             "task-engagement checks and fresh intervention artifacts accompany this run. "
             "These measurements do not establish consciousness or pain.\n")
         self.assertNotIn("LICENSE", files)

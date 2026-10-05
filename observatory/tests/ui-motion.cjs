@@ -1,0 +1,36 @@
+/* Exercise activity animation against real helper code; no browser/network. */
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const nodes=new Map(),timers=new Map();let sequence=0,reduced=false;
+function node(id){if(!nodes.has(id)){const classes=new Set();nodes.set(id,{style:{},dataset:{},hidden:false,clientWidth:600,clientHeight:425,textContent:'',classList:{add:(...items)=>items.forEach(x=>classes.add(x)),remove:(...items)=>items.forEach(x=>classes.delete(x)),toggle:(item,on)=>on?classes.add(item):classes.delete(item),contains:item=>classes.has(item)}});}return nodes.get(id);}
+const context={window:{},document:{getElementById:node},Math,String,Number,matchMedia:()=>({matches:reduced}),setTimeout:(callback,duration)=>{const id=++sequence;timers.set(id,{callback,duration});return id;},clearTimeout:id=>timers.delete(id)};
+vm.createContext(context);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../../site/observatory-motion.js'),'utf8'),context);
+const motion=context.window.ObservatoryMotion;
+const input={geometry:{rect:null},viewport:{scroll_y:0,document_height:1600,viewport_height:800},selected:{id:'scholar',current_url:'https://example.org/paper'},event:{id:1},preview:false,running:true,visible:true};
+motion.update(input);
+assert.equal(node('selected-creature').hidden,false);assert.ok(node('selected-creature').classList.contains('is-working'));
+assert.equal(node('crawler-activity').textContent,'Page opened');
+assert.equal(node('selected-creature').style.top,'46px');
+assert.equal(motion.activity(input).pulse,false,'Repeated identical frame cannot invent a fresh action');
+motion.update({...input,viewport:{...input.viewport,scroll_y:400}});
+assert.ok(node('browser-display').classList.contains('is-scanning'));
+assert.equal(node('crawler-activity').textContent,'Agent scrolling');
+assert.equal(node('selected-creature').style.top,'212.5px');
+const saved={...input,event:{id:2},viewport:{...input.viewport,scroll_y:400},geometry:{rect:{left:40,top:200,width:400,height:45,note_id:'note-2'}}};
+motion.update(saved);
+assert.equal(node('selected-creature').style.left,'452px');assert.equal(node('selected-creature').style.top,'222.5px');
+assert.equal(node('crawler-activity').textContent,'Evidence saved');assert.ok(node('browser-display').classList.contains('is-saving-evidence'));
+assert.equal(motion.activity(saved).pulse,false);
+motion.update({...saved,running:false});
+assert.ok(!node('selected-creature').classList.contains('is-working'));assert.equal(timers.size,0);
+assert.equal(node('crawler-activity').textContent,'Mission paused');
+motion.update({...saved,visible:false});
+assert.equal(node('selected-creature').hidden,true);assert.equal(timers.size,0);
+motion.update({...input,geometry:null});assert.equal(node('selected-creature').hidden,true);
+motion.update({...input,selected:{...input.selected,id:'skeptic'}});assert.equal(node('crawler-activity').textContent,'Page opened');
+motion.stop(true);reduced=true;motion.update({...input,preview:true});
+assert.equal([...timers.values()][0].duration,100);assert.ok(node('crawler-activity').textContent.startsWith('Example · '));
+motion.stop(true);
+assert.ok(motion.saw(0).includes('saw-blade'));assert.ok(motion.saw(5).includes('>6</text>'));
+const extreme=motion.activity({...input,geometry:{rect:{left:590,top:420,width:90,height:20,note_id:'n'}}});
+assert.equal(extreme.x,572);assert.equal(extreme.y,390);
+console.log(JSON.stringify({activityMotion:'passed',scrollAndEvidenceLinked:true,repeatedFramesIdle:true,pausedAndStaleStopped:true,reducedMotion:true,noNetwork:true}));

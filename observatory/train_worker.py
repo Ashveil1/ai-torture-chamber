@@ -26,11 +26,22 @@ def emit(event_type: str, **data) -> None:
     print("OBS_EVENT " + json.dumps({"type": event_type, **data}, allow_nan=False), flush=True)
 
 
-def validate_payload(payload: dict, stage: str) -> dict[str, list[dict]]:
+def validate_payload(payload: dict, stage: str, *, require_quality: bool = False) -> dict[str, list[dict]]:
     if stage not in {"cpt", "sft"}:
         raise ValueError("unsupported_training_stage")
     if not payload.get("immutable") or not payload.get("manifest_hash"):
         raise ValueError("immutable_snapshot_and_manifest_hash_required")
+    policy_version = payload.get("manifest", {}).get("policy_version", payload.get("policy_version"))
+    if require_quality and not payload.get("manifest"):
+        raise ValueError("sealed_reviewed_corpus_manifest_required")
+    if require_quality and policy_version != "consciousness-corpus-v2":
+        raise ValueError("current_reviewed_corpus_policy_required")
+    if policy_version == "consciousness-corpus-v2":
+        gate = payload.get("manifest", {}).get("quality_gate", payload.get("quality_gate", {}))
+        if payload.get("manifest") and payload.get("quality_gate", gate) != gate:
+            raise ValueError("quality_gate_differs_from_sealed_manifest")
+        if gate.get("ready") is not True:
+            raise ValueError("corpus_quality_and_perspective_coverage_required")
     if payload.get("manifest") and digest(payload["manifest"]) != payload["manifest_hash"]:
         raise ValueError("snapshot_manifest_hash_mismatch")
     key = "original_text" if stage == "cpt" else "synthetic_sft"
@@ -97,7 +108,7 @@ def load_sealed_job(env: dict | None = None) -> tuple[dict, dict]:
         raise ValueError("Dataset export hash mismatch")
     if not payload.get("manifest"):
         raise ValueError("Dataset export requires its source provenance manifest")
-    validate_payload(payload, manifest["stage"])
+    validate_payload(payload, manifest["stage"], require_quality=True)
     return manifest, payload
 
 
@@ -244,12 +255,20 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
     output.mkdir(parents=True, exist_ok=True)
     cfg = manifest["training"]
     set_seed(int(cfg["seed"]))
-    splits = validate_payload(payload, manifest["stage"])
+    injected = model is not None
+    splits = validate_payload(payload, manifest["stage"], require_quality=not injected)
     heldout = set(manifest.get("heldout_family_ids", []))
     if any(heldout & set(row.get("family_ids", [row.get("family_id")])) for row in splits["train"]):
         raise ValueError("Training would reuse a held-out family from this checkpoint lineage")
     token = os.environ.get("HF_TOKEN")
-    injected = model is not None
+    from .evaluation import load_job_suite, validate_dataset_exclusion, evaluation_policy, score_suite, compare_evaluations
+    suite = load_job_suite(manifest, injected=injected)
+    validate_dataset_exclusion(payload, suite)
+    eval_policy = manifest.get("evaluation", {}).get("policy") or evaluation_policy(
+        {"training_eval_" + key: value for key, value in cfg.get("evaluation_policy", {}).items()})
+    # Validate sealed thresholds too; a hand-edited worker manifest must not
+    # silently bypass the coordinator's preflight validation.
+    eval_policy = evaluation_policy({"training_eval_" + key: value for key, value in eval_policy.items()})
     if tokenizer is None:
         parent = manifest.get("parent_adapter")
         tokenizer = AutoTokenizer.from_pretrained(parent["repo_id"] if parent else manifest["base_model"],
@@ -272,6 +291,16 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
         if cfg["mode"] == "qlora":
             model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     model.config.use_cache = False
+    max_positions = getattr(model.config, "max_position_embeddings", None)
+    if max_positions and int(cfg["sequence_length"]) > int(max_positions):
+        raise ValueError("training_sequence_length_exceeds_model_context")
+    if max_positions and eval_policy["max_length"] > int(max_positions):
+        # The explicit tiny test path can cap evaluation to its test model's
+        # capacity; provisioned jobs must declare a compatible evaluation limit.
+        if injected:
+            eval_policy["max_length"] = int(max_positions)
+        else:
+            raise ValueError("evaluation_sequence_length_exceeds_model_context")
     parent = manifest.get("parent_adapter")
     if parent:
         model = PeftModel.from_pretrained(model, parent["repo_id"], revision=parent["revision"],
@@ -279,6 +308,10 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
     elif not isinstance(model, PeftModel):
         model = get_peft_model(model, LoraConfig(task_type="CAUSAL_LM", r=int(cfg["lora_rank"]),
             lora_alpha=int(cfg["lora_alpha"]), lora_dropout=0.05, target_modules="all-linear", bias="none"))
+    base_eval = score_suite(model, tokenizer, suite, max_length=eval_policy["max_length"], disable_adapter=True)
+    incoming_eval = score_suite(model, tokenizer, suite, max_length=eval_policy["max_length"])
+    emit("evaluation", phase="controls", suite_id=suite["id"], suite_sha256=base_eval["suite_sha256"],
+         unadapted_base=base_eval["groups"], incoming_parent=incoming_eval["groups"])
     datasets, counts = make_datasets(splits, manifest["stage"], tokenizer, int(cfg["sequence_length"]))
     if counts["train_tokens"] < int(cfg.get("min_tokens", 256)):
         raise ValueError("Insufficient actual tokenizer-counted training tokens")
@@ -287,6 +320,7 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
         raise ValueError("No trainable adapter parameters")
     lineage = {key: manifest.get(key) for key in ("run_id", "stage", "snapshot_id", "snapshot_hash", "base_model", "base_revision", "tokenizer_revision", "parent_adapter")}
     lineage.update(training=cfg, counts=counts, manifest_hash=digest(manifest),
+                   evaluation_suite_id=suite["id"], evaluation_suite_sha256=base_eval["suite_sha256"],
                    objective="original_text_next_token" if manifest["stage"] == "cpt" else "supported_messages_assistant_only")
 
     class Progress(TrainerCallback):
@@ -322,14 +356,27 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
                  for name, parameter in trainer.model.named_parameters() if name in trainable_before)
     changed = math.isfinite(change) and change > 0
     finite_loss = math.isfinite(before) and math.isfinite(after)
-    loss_passed = finite_loss and after <= before * float(cfg.get("max_loss_ratio", 1.05))
+    loss_passed = finite_loss and after <= before * float(cfg.get("max_loss_ratio", 1.0))
+    candidate_eval = score_suite(trainer.model, tokenizer, suite, max_length=eval_policy["max_length"])
+    evaluation = compare_evaluations(suite, base_eval, incoming_eval, candidate_eval, eval_policy)
+    evaluation_dir = output / "evaluation"
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
+    (evaluation_dir / "summary.json").write_bytes(canonical_bytes(evaluation))
+    # Source manifests are publicable metadata. Do not copy operator-private
+    # benchmark prompts/answers into the model artifact.
+    (evaluation_dir / "provenance.json").write_bytes(canonical_bytes({"id": suite["id"], "version": suite["version"],
+        "sha256": base_eval["suite_sha256"], "kind": suite.get("kind"), "provenance": suite["provenance"],
+        "sources": suite["sources"], "limitations": suite["limitations"]}))
+    emit("evaluation", phase="candidate", passed=evaluation["passed"], reasons=evaluation["reasons"],
+         suite_sha256=evaluation["suite_sha256"], groups=candidate_eval["groups"])
     adapter_dir = output / "adapter"
     trainer.model.save_pretrained(adapter_dir)
     tokenizer.save_pretrained(adapter_dir)
     (adapter_dir / "observatory_lineage.json").write_bytes(canonical_bytes(lineage))
     checks = {"passed": changed and loss_passed, "family_split_verified": True, "holdout_loss_passed": loss_passed,
+              "independent_evaluation_passed": evaluation["passed"], "evaluation_source_exclusion_verified": True,
               "adapter_weights_changed": changed, "adapter_saved": (adapter_dir / "adapter_config.json").is_file()}
-    checks["passed"] = checks["passed"] and checks["adapter_saved"]
+    checks["passed"] = checks["passed"] and checks["adapter_saved"] and evaluation["passed"]
     calibration = {"passed": False, "status": "not_run"}
     if run_calibration and checks["passed"]:
         try:
@@ -337,7 +384,7 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
         except Exception as exc:
             calibration = {"passed": False, "status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     result = {"run_id": manifest["run_id"], "snapshot_hash": manifest["snapshot_hash"], "stage": manifest["stage"],
-              "checks": checks, "calibration": calibration, "published": False,
+              "checks": checks, "calibration": calibration, "evaluation": evaluation, "published": False,
               "metrics": {"baseline_holdout_loss": before, "candidate_holdout_loss": after,
                           "adapter_parameter_squared_change": change, "trained_steps": trainer.state.global_step, **counts}}
     (output / "result.json").write_bytes(canonical_bytes(result))
@@ -345,7 +392,12 @@ def train_adapter(manifest: dict, payload: dict, output: str | Path, *, model: A
 
 
 def publish_result(manifest: dict, result: dict, output: Path) -> dict:
-    if not result["checks"].get("passed") or manifest.get("publish_policy") == "hold":
+    evaluation = result.get("evaluation", {})
+    expected_eval = manifest.get("evaluation", {})
+    verified = (evaluation.get("passed") is True and evaluation.get("status") == "measured"
+                and bool(expected_eval.get("sha256")) and evaluation.get("suite_sha256") == expected_eval["sha256"]
+                and result.get("checks", {}).get("independent_evaluation_passed") is True)
+    if not result["checks"].get("passed") or not verified or manifest.get("publish_policy") == "hold":
         return result
     from huggingface_hub import HfApi
     api = HfApi(token=os.environ.get("HF_TOKEN"))
@@ -369,7 +421,8 @@ def publish_result(manifest: dict, result: dict, output: Path) -> dict:
     (output / "README.md").write_text(
         card_header +
         f"Base: `{manifest['base_model']}@{manifest['base_revision']}`. Stage: `{manifest['stage']}`.\n\n"
-        "This is a PEFT adapter, not a new foundation model. Corpus lineage, held-out loss, "
+        "This is a PEFT adapter, not a new foundation model. Corpus lineage, held-out loss, frozen domain/general "
+        "engineering evaluations against the unadapted base and incoming adapter, "
         "task-engagement checks and fresh intervention artifacts accompany this run. "
         "These measurements do not establish consciousness or pain.\n", encoding="utf-8")
     result = {**result, "published": True}

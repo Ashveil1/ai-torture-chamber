@@ -113,7 +113,11 @@ def test_social_roots_and_subdomains_require_permission_even_with_cc_license(sto
     assert not source["curation"]["eligible"]
     assert "social_content_requires_separate_permission" in source["curation"]["reasons"]
     permitted = {**source, "rights_status": "permission_granted",
-                 "permission_evidence": "Owner-recorded explicit permission from the author"}
+                 "permission_evidence": "Owner-recorded explicit permission from the author",
+                 "quality_review": {"status": "approved", "reviewed_by": "owner",
+                     "rationale": "Relevant welfare testimony; uncertainty and original context reviewed.",
+                     "topic_relevance": "relevant", "evidence_stance": "uncertain", "source_type": "social"},
+                 "extraction_review_status": "approved", "extraction_review_evidence": "Owner compared saved text against original."}
     assert eligibility(permitted)["eligible"]
 
 
@@ -128,7 +132,8 @@ def test_social_publisher_lookalikes_remain_ordinary_articles(store, host):
                            text="Original research compares evidence with competing explanations. " * 8,
                            html=html, agent_id="scholar", scope="article")
     assert source["source_type"] == "article"
-    assert source["curation"]["eligible"]
+    assert not source["curation"]["eligible"]  # Licensing alone cannot replace quality review.
+    assert "social_content_requires_separate_permission" not in source["curation"]["reasons"]
 
 
 def test_document_versions_and_literal_provenance(store):
@@ -327,7 +332,8 @@ def test_article_isolation_does_not_license_publisher_surroundings(store):
     text, scope = extract_html(html)
     assert scope == "article" and "Publisher" not in text and "Ad copy" not in text and "Reader comments" not in text
     source = save_document(store, url="https://example.org/article", title="Research", text=text, html=html, agent_id="scholar", scope=scope)
-    assert source["curation"]["eligible"]
+    assert source["license_verified"] and not source["curation"]["eligible"]
+    assert source["extraction"]["quality"] == "passed"
     ambiguous = save_document(store, url="https://example.org/home", title="Page", text=original, html=html, agent_id="scholar", scope="body")
     assert not ambiguous["license_verified"] and not ambiguous["curation"]["eligible"]
 

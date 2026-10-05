@@ -24,6 +24,9 @@ def source(identifier="paper1", **updates):
             "rights_evidence": "https://creativecommons.org/licenses/by/4.0/",
             "provenance": {"title": "Pain tradeoffs", "authors": ["Researcher"], "version": "v1"},
             "text": ("The experimental result describes stipulated pain rather than demonstrated phenomenal experience. " * 15),
+            "quality_review": {"status": "approved", "reviewed_by": "fixture-owner", "rationale": "Reviewed original scientific source",
+                               "topic_relevance": "relevant", "evidence_stance": "uncertain", "source_type": "empirical_paper"},
+            "extraction_review_status": "approved", "extraction_review_evidence": "Fixture original text compared with supplied source",
             **updates}
 
 
@@ -172,7 +175,8 @@ def test_near_duplicate_mirrors_share_a_holdout_group(store):
     store.put("sources", source("mirror", family_id="different-url", text=" ".join(words[:-5] + ["changed"] * 5), split="heldout"))
     snapshot = build_snapshot(store)
     assert snapshot["counts"]["train_documents"] == 0
-    assert snapshot["counts"]["validation_documents"] == 2
+    assert snapshot["counts"]["validation_documents"] == 1
+    assert snapshot["original_text"][0]["source_ids"] == ["mirror", "paper"]
     assert len(snapshot["heldout_family_ids"]) == 1
 
 

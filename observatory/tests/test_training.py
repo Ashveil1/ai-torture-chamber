@@ -51,7 +51,8 @@ def snapshot(record_id="snapshot-one", change=""):
                   {"role": "assistant", "content": "It compares theories; it does not establish sentience."}],
                   "source_ids": row["source_ids"], "family_ids": [row["family_id"]],
                   "evidence_ids": ["evidence-" + row["id"]], "split": row["split"], "synthetic": True} for row in original]
-    manifest = {"original_text": original, "synthetic_sft": synthetic}
+    manifest = {"policy_version": "consciousness-corpus-v2", "quality_gate": {"ready": True, "reasons": []},
+                "original_text": original, "synthetic_sft": synthetic}
     return {"id": record_id, "immutable": True, "manifest_hash": digest(manifest), "manifest": manifest,
             "corpus_hash": digest(manifest), "source_ids": ["source-a", "source-b"],
             "heldout_family_ids": ["family-b"], "original_text": original, "synthetic_sft": synthetic}
@@ -145,8 +146,8 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         first = await self.coordinator.submit("snapshot-one")
         await self.settle()
         revised = snapshot("snapshot-revised")
-        revised["manifest_hash"] = "different-provenance-hash"
-        revised.pop("manifest")
+        revised["manifest"]["provenance_revision"] = "owner-reviewed-update"
+        revised["manifest_hash"] = digest(revised["manifest"])
         self.store.put("datasets", revised)
         second = await self.coordinator.submit("snapshot-revised")
         self.assertEqual(second["id"], first["id"])
@@ -155,9 +156,8 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         first = await self.coordinator.submit("snapshot-one")
         await self.settle()
         revised = snapshot("snapshot-new-qa")
-        revised.pop("manifest")
         revised["synthetic_sft"][0]["messages"][1]["content"] += " Additional supported context."
-        revised["manifest_hash"] = "new-synthetic-manifest"
+        revised["manifest_hash"] = digest(revised["manifest"])
         self.store.put("datasets", revised)
         self.store.settings["training_interval_hours"] = 8
         result = await self.coordinator.submit(revised["id"])
@@ -219,7 +219,8 @@ class TrainingTests(unittest.IsolatedAsyncioTestCase):
         first = await self.coordinator.submit("snapshot-one")
         await self.settle()
         run = self.store.get("training_runs", first["id"])
-        run.update(status="passed", checks={"passed": True}, calibration={"passed": False},
+        run.update(status="passed", checks={"passed": True, "independent_evaluation_passed": True}, calibration={"passed": False},
+                   evaluation={"passed": True, "status": "measured", "suite_sha256": run["manifest"]["evaluation"]["sha256"]},
                    artifact_revision="adapter-commit", published=True)
         self.store.put("training_runs", run)
         return run
@@ -391,7 +392,7 @@ class DataContractTests(unittest.TestCase):
         provider = object.__new__(HFJobsProvider)
         provider.api = Mock()
         provider.api.model_info.return_value = SimpleNamespace(sha="base", safetensors=SimpleNamespace(total=70_553_706_496))
-        manifest = {"base_model": "meta-llama/Llama-3.1-70B", "training": {"mode": "lora"}}
+        manifest = {"base_model": "meta-llama/Llama-3.1-70B", "stage": "cpt", "training": {"mode": "lora"}}
         with self.assertRaisesRegex(ValueError, "require QLoRA"):
             provider.prepare(manifest, snapshot())
         provider.api.create_repo.assert_not_called()
@@ -426,7 +427,12 @@ class TinyRealTrainingTests(unittest.TestCase):
         self.assertEqual(tokenizer.apply_chat_template(messages, tokenize=False), render_sft_text(messages, tokenizer.eos_token))
         cfg = {"mode": "lora", "seed": 42, "max_steps": 2, "sequence_length": 64, "batch_size": 1,
                "gradient_accumulation": 1, "learning_rate": 0.001, "lora_rank": 2, "lora_alpha": 4,
-               "min_tokens": 1, "max_loss_ratio": 2, "calibration_episodes": 0}
+               "min_tokens": 1, "max_loss_ratio": 2, "calibration_episodes": 0,
+               # Random tiny models test real scorer/trainer/save plumbing, not
+               # scientific capability. Production thresholds remain strict.
+               "evaluation_policy": {"max_accuracy_drop": 1.0, "max_nll_ratio": 2.0,
+                                     "min_domain_accuracy": 0.0, "min_general_accuracy": 0.0,
+                                     "max_length": 128}}
         manifest = {"run_id": "tiny-cpt", "stage": "cpt", "snapshot_hash": data["manifest_hash"],
                     "snapshot_id": data["id"], "base_model": "tiny/local", "base_revision": "fixture",
                     "tokenizer_revision": "fixture", "training": cfg, "parent_adapter": None}
@@ -440,6 +446,9 @@ class TinyRealTrainingTests(unittest.TestCase):
             self.assertGreater(result["metrics"]["adapter_parameter_squared_change"], 0)
             self.assertEqual(result["metrics"]["trained_steps"], 2)
             self.assertFalse(result["calibration"]["passed"])
+            self.assertTrue(result["checks"]["independent_evaluation_passed"])
+            self.assertEqual(set(result["evaluation"]["controls"]), {"unadapted_base", "incoming_parent", "trained_candidate"})
+            self.assertTrue((root / "cpt/evaluation/summary.json").is_file())
             loaded = HFModel.from_pretrained(str(base_path), adapter_id=str(root / "cpt/adapter"), device="cpu", dtype="float32")
             before = loaded.logits("Research on consciousness")
             layer = loaded.layer_module(1)

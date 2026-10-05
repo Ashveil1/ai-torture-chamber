@@ -23,7 +23,7 @@ const assert=require('node:assert/strict');
   await page.locator('#mission-step').click();
   await page.locator('[data-agent]').nth(1).click();
   await page.locator('#toast').waitFor({state:'hidden'});
-  for(const view of ['evidence','datasets','training','checkpoints','funding']){
+  for(const view of ['evidence','datasets','training','checkpoints']){
     await page.locator('[data-view="'+view+'"]').click();
     await page.screenshot({path:path.join(output,view+'-desktop.png'),fullPage:true});
   }
@@ -49,7 +49,7 @@ const assert=require('node:assert/strict');
   await page.locator('#setup-dialog [data-close-dialog]').click();
   assert.ok(!await page.evaluate(()=>JSON.stringify({...localStorage}).includes('UI_SECRET_MUST_NOT_PERSIST')));
   await page.setViewportSize({width:390,height:844});
-  for(const view of ['research','evidence','datasets','training','checkpoints','funding']){
+  for(const view of ['research','evidence','datasets','training','checkpoints']){
     await page.locator('[data-view="'+view+'"]').click();
     await page.screenshot({path:path.join(output,view+'-mobile.png'),fullPage:true});
     const overflow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll('body *')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0 && r.right>innerWidth+1}).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:Math.round(el.getBoundingClientRect().right),width:Math.round(el.getBoundingClientRect().width)})).slice(0,18)}));

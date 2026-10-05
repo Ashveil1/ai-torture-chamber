@@ -117,7 +117,11 @@ def add_source(db, identifier, **updates):
         "license": "CC-BY-4.0", "license_verified": True,
         "rights_evidence": "https://creativecommons.org/licenses/by/4.0/",
         "provenance": {"title": "Primary source " + identifier, "authors": ["Researcher"], "version": "v1"},
-        "text": ("Evidence and uncertainty for " + identifier + ". ") * 100, **updates})
+        "text": ("Evidence and uncertainty for " + identifier + ". ") * 100,
+        "quality_review": {"status": "approved", "reviewed_by": "fixture-owner", "rationale": "Source fixture reviewed",
+                           "topic_relevance": "relevant", "evidence_stance": "uncertain", "source_type": "empirical_paper"},
+        "extraction_review_status": "approved", "extraction_review_evidence": "Fixture source text verified",
+        **updates})
 
 
 def test_export_requires_header_auth_and_contains_sealed_splits_and_hashes(db):

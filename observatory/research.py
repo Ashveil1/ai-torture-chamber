@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager, suppress
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
@@ -24,6 +23,7 @@ from uuid import uuid4
 import httpx
 
 from .curation import eligibility, family_id
+from .extraction import Extraction, extract_html_document, extract_pdf_document, extract_plain_document, structured_text
 from .network import CollectionPolicy, USER_AGENT, canonical_url, public_get, public_url
 from .research_llm import MonitoredResearchModel, researcher_model, validate_research_settings
 from .store import Store, utc_now
@@ -63,14 +63,8 @@ def normalize(value: str) -> str:
 
 
 def extract_html(html: str) -> tuple[str, str]:
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup.select("script, style, nav, footer, aside, form, [role='complementary'], .comments, #comments, .related-articles"):
-        tag.decompose()
-    articles = soup.find_all("article")
-    scope = "article" if len(articles) == 1 else "main" if soup.find("main") else "body"
-    root = articles[0] if scope == "article" else soup.find(scope) or soup
-    return normalize(root.get_text(" ", strip=True)), scope
+    result = extract_html_document(html)
+    return result.text, result.scope
 
 
 def document_metadata(html: str) -> dict:
@@ -128,9 +122,20 @@ def document_metadata(html: str) -> dict:
 
 
 def save_document(store: Store, *, url: str, title: str, text: str, html: str = "", agent_id: str,
-                  method: str = "browser_dom", content_type: str = "text/html", scope: str = "body") -> dict:
+                  method: str = "browser_dom", content_type: str = "text/html", scope: str = "body",
+                  extraction: Extraction | None = None) -> dict:
     url = canonical_url(url)
-    text = normalize(text)
+    # Structure is original training material; whitespace normalization belongs
+    # only in duplicate/provenance comparisons, never in persisted documents.
+    text = structured_text(text)
+    if extraction is None:
+        extraction = extract_html_document(html) if html else None
+        if extraction is None or extraction.text != text:
+            extraction = Extraction(text, scope, "supplied_text", needs_fidelity_review=True,
+                                    warnings=["supplied_text_fidelity_requires_owner_review"])
+    elif extraction.text != text:
+        raise ValueError("Extraction provenance must describe the persisted original text")
+    extraction_metadata = extraction.metadata()
     content_hash = hashlib.sha256(text.encode()).hexdigest()
     source_id = "source-" + hashlib.sha256((url + "\n" + content_hash).encode()).hexdigest()[:24]
     old = store.get("sources", source_id)
@@ -142,8 +147,11 @@ def save_document(store: Store, *, url: str, title: str, text: str, html: str = 
               "text": text, "content_hash": content_hash, "agent_id": agent_id,
               "license": "unknown", "license_verified": False, "review_status": "pending",
               "source_type": "social" if social else "article",
+              "extraction": extraction_metadata,
               "provenance": {"collected_at": utc_now(), "method": method, "content_type": content_type,
                              "extraction_scope": scope,
+                             "extraction_method": extraction_metadata["method"],
+                             "extraction_quality": extraction_metadata["quality"],
                              "content_sha256": content_hash, "collector_version": "observatory-0.1"},
               **document_metadata(html)}
     if source["license_verified"] and scope != "article":
@@ -612,11 +620,12 @@ class ResearchSupervisor:
                         title = await page.title()
                         if page.url != url or await current_page() is not page:
                             return None
-                        text, scope = extract_html(html)
+                        extracted = extract_html_document(html)
+                        text, scope = extracted.text, extracted.scope
                         if len(normalize(text)) < 200:
                             return None
                         current_source = save_document(self.store, url=url, title=title, text=text,
-                                                       html=html, agent_id=agent_id, scope=scope)
+                                                       html=html, agent_id=agent_id, scope=scope, extraction=extracted)
                         return current_source
 
                 @tools.action("Save a concise public research observation or lead with an exact supporting passage from the current page. Optional question/answer drafts are kept separate from original documents.")
@@ -634,20 +643,19 @@ class ResearchSupervisor:
                     response.raise_for_status()
                     content_type = response.headers.get("content-type", "")
                     if "pdf" in content_type or response.content.startswith(b"%PDF"):
-                        from pypdf import PdfReader
-                        reader = await asyncio.to_thread(PdfReader, io.BytesIO(response.content))
-                        text = await asyncio.to_thread(lambda: "\n".join(page.extract_text() or "" for page in reader.pages))
+                        extracted = await asyncio.to_thread(extract_pdf_document, response.content)
                         html = ""
-                        scope = "pdf"
                     elif "html" in content_type or "text/plain" in content_type:
-                        from bs4 import BeautifulSoup
                         html = response.text if "html" in content_type else ""
-                        text, scope = extract_html(html) if html else (response.text, "plain_text")
+                        extracted = extract_html_document(html) if html else extract_plain_document(response.text)
                     else:
                         return ActionResult(error="Only public PDF or text/HTML documents can enter the notebook")
+                    text, scope = extracted.text, extracted.scope
                     current_source = save_document(self.store, url=str(response.url), title=url.rsplit("/", 1)[-1], text=text,
-                                                   html=html, agent_id=agent_id, method="public_document", content_type=content_type, scope=scope)
-                    return ActionResult(extracted_content=f"Collected source {current_source['id']}. Original document:\n{text[:60000]}")
+                                                   html=html, agent_id=agent_id, method="public_document", content_type=content_type, scope=scope,
+                                                   extraction=extracted)
+                    quality = current_source["extraction"]["quality"]
+                    return ActionResult(extracted_content=f"Collected source {current_source['id']}; extraction={quality}. Rights, relevance and extraction fidelity review remain separate. Original document:\n{text[:60000]}")
 
                 async def next_step(state, output, step):
                     if self.store.get_mission().get("status") != "running":

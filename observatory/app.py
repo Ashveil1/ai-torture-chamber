@@ -542,13 +542,45 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
         source = db.get("sources", source_id)
         if not source:
             raise HTTPException(404, "Source not found")
-        allowed = {"review_status", "rights_status", "review_note", "rights_evidence", "permission_evidence", "license", "license_verified", "split", "held_out"}
+        allowed = {"review_status", "rights_status", "review_note", "rights_evidence", "permission_evidence", "license", "license_verified", "split", "held_out",
+                   "quality_review", "contains_benchmark", "chamber_stimulus", "experimental_stimulus", "contamination_status",
+                   "extraction_review_status", "extraction_review_evidence"}
+        # Collection provenance and original source_type remain immutable. A
+        # reviewer classifies the document inside quality_review instead.
+        if "quality_review" in updates:
+            quality = updates["quality_review"]
+            if not isinstance(quality, dict):
+                raise HTTPException(422, "Quality review must be an object")
+            choices = {"status": {"approved", "pending", "rejected"},
+                       "topic_relevance": {"relevant", "unrelated", "uncertain"},
+                       "evidence_stance": {"supportive", "skeptical", "uncertain", "mixed", "methodological"},
+                       "source_type": {"empirical_paper", "theoretical_paper", "review_paper", "technical_report", "article", "reference", "social"}}
+            for key, values in choices.items():
+                if not isinstance(quality.get(key), str) or quality[key] not in values:
+                    raise HTTPException(422, "Invalid quality review " + key)
+            for key in ("reviewed_by", "rationale"):
+                if not isinstance(quality.get(key), str) or not quality[key].strip() or len(quality[key]) > 4000:
+                    raise HTTPException(422, "Quality review requires a recorded " + key)
+            covered = quality.get("covered_stances", [])
+            if not isinstance(covered, list) or any(not isinstance(item, str) or item not in {"supportive", "skeptical", "uncertain"} for item in covered):
+                raise HTTPException(422, "Invalid covered perspectives")
+            updates["quality_review"] = {key: quality[key] for key in (*choices, "reviewed_by", "rationale")}
+            updates["quality_review"]["covered_stances"] = sorted(set(covered))
+        for key in ("contains_benchmark", "chamber_stimulus", "experimental_stimulus"):
+            if key in updates and not isinstance(updates[key], bool):
+                raise HTTPException(422, key + " must be a boolean")
+        if "contamination_status" in updates and (not isinstance(updates["contamination_status"], str) or updates["contamination_status"] not in {"clear", "suspected", "confirmed"}):
+            raise HTTPException(422, "Invalid contamination status")
+        if "extraction_review_status" in updates and (not isinstance(updates["extraction_review_status"], str) or updates["extraction_review_status"] not in {"approved", "pending", "rejected"}):
+            raise HTTPException(422, "Invalid extraction review status")
+        if "extraction_review_evidence" in updates and (not isinstance(updates["extraction_review_evidence"], str) or len(updates["extraction_review_evidence"]) > 8000):
+            raise HTTPException(422, "Extraction review evidence must be text")
         if (updates.get("license_verified") or updates.get("rights_status") == "permission_granted") and not (
             updates.get("rights_evidence") or updates.get("permission_evidence") or source.get("rights_evidence")
         ):
             raise HTTPException(422, "Rights verification requires recorded evidence")
         source.update({key: value for key, value in updates.items() if key in allowed})
-        source["curation"] = eligibility(source)
+        source["curation"] = eligibility(source, settings=db.get_settings(private=True))
         db.put("sources", source)
         db.event("source.reviewed", "Owner reviewed a source", data={"source_id": source_id, "curation": source["curation"]})
         return db.sanitize(source)
@@ -595,7 +627,7 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
 
     @application.get("/{asset}")
     def static_asset(asset: str):
-        if asset not in {"observatory.css", "observatory-fonts.css", "observatory.js", "observatory-preview.js", "grimoire.css", "favicon.svg", "icon.svg"}:
+        if asset not in {"observatory.css", "observatory-fonts.css", "observatory.js", "observatory-preview.js", "observatory-motion.js", "grimoire.css", "favicon.svg", "icon.svg"}:
             raise HTTPException(404, "Not found")
         return FileResponse(SITE / asset)
 

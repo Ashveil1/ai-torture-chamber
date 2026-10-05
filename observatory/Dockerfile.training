@@ -12,7 +12,8 @@ RUN pip install -r /app/observatory/requirements-worker.txt \
     && useradd --create-home --uid 10001 trainer \
     && mkdir -p /workspace/hf /workspace/output \
     && chown -R trainer:trainer /workspace
-COPY observatory/__init__.py observatory/train_worker.py /app/observatory/
+COPY observatory/__init__.py observatory/train_worker.py observatory/evaluation.py /app/observatory/
+COPY observatory/evals /app/observatory/evals
 COPY observatory/licenses /app/observatory/licenses
 COPY painlab /app/painlab
 USER trainer

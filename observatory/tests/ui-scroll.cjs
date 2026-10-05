@@ -9,6 +9,7 @@ function extract(name){
 const nodes=new Map(),labels={};
 function node(id){if(!nodes.has(id))nodes.set(id,{hidden:false,style:{},clientWidth:600,clientHeight:425});return nodes.get(id);}
 const context={Number,Math,JSON,mode:'connected',currentView:'research',frameTelemetry:null,highlightedNoteId:'',
+  window:{},document:{hidden:false},connected:true,state:{events:[],mission:{status:'paused'}},
   $:node,text:(id,value)=>labels[id]=value,agent:()=>({preview_scroll_phase:2,preview_focus_note_id:'preview-note-7'})};
 vm.createContext(context);
 vm.runInContext(['viewportGeometry','frameMetadata','resetFrameTelemetry','renderFrameTelemetry','lockObserverViewport','renderPreviewViewport','refreshFrame'].map(extract).join('\n')+

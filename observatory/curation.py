@@ -5,11 +5,14 @@ import hashlib
 import heapq
 import json
 import re
+from collections import Counter
 from urllib.parse import urlsplit, urlunsplit
 
+from .corpus_policy import (contamination_reasons, coverage_audit, extraction_reasons,
+                            evaluation_reservations, interleave_originals, quality_review_reasons, reviewed_perspectives)
 from .store import Store, utc_now
 
-POLICY_VERSION = "consciousness-corpus-v1"
+POLICY_VERSION = "consciousness-corpus-v2"
 ALLOWED_LICENSES = {"cc0", "cc0-1.0", "public-domain", "cc-by", "cc-by-4.0", "cc-by-3.0"}
 
 
@@ -30,7 +33,7 @@ def family_id(source: dict) -> str:
     return "url:" + urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
 
 
-def eligibility(source: dict) -> dict:
+def eligibility(source: dict, *, settings: dict | None = None, reservations: dict | None = None) -> dict:
     reasons: list[str] = []
     license_name = str(source.get("license", "unknown")).lower().replace("_", "-").replace(" ", "-")
     has_permission = source.get("rights_status") == "permission_granted" and bool(source.get("permission_evidence"))
@@ -46,15 +49,34 @@ def eligibility(source: dict) -> dict:
         reasons.append("missing_canonical_url")
     if len(str(source.get("text", "")).strip()) < 200:
         reasons.append("insufficient_original_text")
-    if source.get("source_type") in {"social", "social_post", "reddit", "x", "twitter"} and not has_permission:
+    original_type = source.get("source_type")
+    review = source.get("quality_review") if isinstance(source.get("quality_review"), dict) else {}
+    hostname = urlsplit(str(source.get("canonical_url", ""))).hostname or ""
+    social_host = any(hostname == host or hostname.endswith("." + host) for host in ("reddit.com", "x.com", "twitter.com"))
+    if (original_type in {"social", "social_post", "reddit", "x", "twitter"} or review.get("source_type") == "social" or social_host) and not has_permission:
         reasons.append("social_content_requires_separate_permission")
     if source.get("review_status") in {"rejected", "quarantined"}:
         reasons.append("owner_review_excludes_source")
-    return {"status": "eligible" if not reasons else "quarantined", "eligible": not reasons, "reasons": reasons}
+    reasons.extend(quality_review_reasons(source))
+    reasons.extend(extraction_reasons(source))
+    reasons.extend(contamination_reasons(source, family=family_id(source), settings=settings, reservations=reservations))
+    return {"status": "eligible" if not reasons else "quarantined", "eligible": not reasons, "reasons": sorted(set(reasons))}
 
 
 def _normalize(text: str) -> str:
     return " ".join(re.findall(r"\w+", text.lower()))
+
+
+def _dedup_normalize(text: str) -> str:
+    # Whitespace-only normalization preserves scientific operators, punctuation
+    # and case-sensitive variable names in hashes and exact duplicate checks.
+    return " ".join(text.split())
+
+
+def _critical_signature(text: str) -> Counter:
+    # Conservative changes to numbers, negation or mathematical relationships
+    # retain a separate original even when the surrounding prose is very similar.
+    return Counter(re.findall(r"\b(?:not|no|never|cannot|neither|without)\b|(?<!\w)[+-]?\d+(?:\.\d+)?(?!\w)|!=|<=|>=|[=<>±∓≠≤≥∀∃∧∨]", text.lower()))
 
 
 def _shingles(text: str) -> set[str]:
@@ -62,11 +84,69 @@ def _shingles(text: str) -> set[str]:
     return {" ".join(words[i:i + 5]) for i in range(max(0, len(words) - 4))}
 
 
+def _representatives(group: list[dict], shingles: dict[str, set[str]]) -> list[tuple[dict, list[dict]]]:
+    """Collapse actual near duplicates, while keeping different family versions.
+
+    Every removed text is compared directly to its retained representative.
+    A chain of A≈B≈C therefore does not automatically discard C when A≉C.
+    """
+    rank = lambda source: ((source.get("extraction") or {}).get("quality") != "passed",
+                           -len(source["text"]), source["id"])
+    clusters: dict[str, list[dict]] = {}
+    fingerprints: dict[bytes, set[str]] = {}
+    exact: dict[str, str] = {}
+    for source in sorted(group, key=rank):
+        identifier = source["id"]
+        text_hash = hashlib.sha256(_dedup_normalize(source["text"]).encode()).hexdigest()
+        grams = shingles[identifier]
+        keys = heapq.nsmallest(24, (hashlib.blake2b(gram.encode(), digest_size=8).digest() for gram in grams))
+        candidates = {exact[text_hash]} if text_hash in exact else set()
+        for key in keys:
+            candidates.update(fingerprints.get(key, set()))
+        representative = next((candidate for candidate in sorted(candidates)
+                               if text_hash == hashlib.sha256(_dedup_normalize(clusters[candidate][0]["text"]).encode()).hexdigest()
+                               or (_critical_signature(source["text"]) == _critical_signature(clusters[candidate][0]["text"])
+                                   and len(grams & shingles[candidate]) / max(1, len(grams | shingles[candidate])) >= 0.85)), None)
+        if representative:
+            clusters[representative].append(source)
+            continue
+        clusters[identifier] = [source]
+        exact[text_hash] = identifier
+        for key in keys:
+            fingerprints.setdefault(key, set()).add(identifier)
+    return [(members[0], sorted(members, key=lambda source: source["id"])) for members in clusters.values()]
+
+
 def build_snapshot(store: Store) -> dict:
     """Never includes raw research notes; only evidence-checked Q&A can enter SFT."""
     sources = store.list_records("sources")
-    allowed = sorted((source for source in sources if eligibility(source)["eligible"]), key=lambda source: source["id"])
-    rejected = [{"source_id": source["id"], **eligibility(source)} for source in sources if not eligibility(source)["eligible"]]
+    settings = store.get_settings(private=True)
+    reservations = evaluation_reservations(settings)
+    decisions = {source["id"]: eligibility(source, settings=settings, reservations=reservations) for source in sources}
+    contaminated = [source for source in sources if contamination_reasons(source, family=family_id(source), settings=settings, reservations=reservations)]
+    contaminated_families = {family_id(source) for source in contaminated}
+    contamination_shingles = {source["id"]: _shingles(str(source.get("text") or "")) for source in contaminated}
+    contamination_fingerprints: dict[bytes, set[str]] = {}
+    for identifier, grams in contamination_shingles.items():
+        for fingerprint in heapq.nsmallest(24, (hashlib.blake2b(gram.encode(), digest_size=8).digest() for gram in grams)):
+            contamination_fingerprints.setdefault(fingerprint, set()).add(identifier)
+    for source in sources:
+        if not decisions[source["id"]]["eligible"]:
+            continue
+        reason = None
+        if family_id(source) in contaminated_families:
+            reason = "benchmark_or_chamber_contaminated_family"
+        elif contamination_fingerprints:
+            grams = _shingles(source["text"])
+            candidates = set()
+            for fingerprint in heapq.nsmallest(24, (hashlib.blake2b(gram.encode(), digest_size=8).digest() for gram in grams)):
+                candidates.update(contamination_fingerprints.get(fingerprint, set()))
+            if any(len(grams & contamination_shingles[candidate]) / max(1, len(grams | contamination_shingles[candidate])) >= 0.85 for candidate in candidates):
+                reason = "near_duplicate_of_excluded_evaluation_or_chamber_source"
+        if reason:
+            decisions[source["id"]] = {"status": "quarantined", "eligible": False, "reasons": [reason]}
+    allowed = sorted((source for source in sources if decisions[source["id"]]["eligible"]), key=lambda source: source["id"])
+    rejected = [{"source_id": source["id"], **decisions[source["id"]]} for source in sources if not decisions[source["id"]]["eligible"]]
     parents = {source["id"]: source["id"] for source in allowed}
 
     def find(item: str) -> str:
@@ -107,6 +187,7 @@ def build_snapshot(store: Store) -> dict:
     for source in allowed:
         groups.setdefault(find(source["id"]), []).append(source)
     original: list[dict] = []
+    deduplicated_sources: list[dict] = []
     assignment: dict[str, str] = {}
     group_ids: dict[str, str] = {}
     # Explicit holdout propagates across duplicate groups and document versions.
@@ -131,24 +212,33 @@ def build_snapshot(store: Store) -> dict:
             if not store.get("family_splits", canonical_hash(family_id(source))):
                 store.put("family_splits", {"id": canonical_hash(family_id(source)), "family_id": family_id(source),
                                             "split": split, "policy_version": POLICY_VERSION})
-        seen_text: set[str] = set()
-        for source in group:
-            text_hash = hashlib.sha256(_normalize(source["text"]).encode()).hexdigest()
-            if text_hash in seen_text:
-                continue
-            seen_text.add(text_hash)
+        for source, members in _representatives(group, shingles):
+            text_hash = hashlib.sha256(_dedup_normalize(source["text"]).encode()).hexdigest()
+            for member in members:
+                if member["id"] != source["id"]:
+                    deduplicated_sources.append({"source_id": member["id"], "representative_source_id": source["id"],
+                                                 "reason": "exact_or_near_duplicate_original", "training_weight": 0})
             original.append({
                 "id": "doc-" + text_hash[:24], "text": source["text"],
-                "source_ids": [source["id"]], "family_id": group_family, "split": split,
-                "license": source["license"], "rights_evidence": source.get("rights_evidence", source.get("permission_evidence")),
+                "source_ids": sorted(member["id"] for member in members), "family_id": group_family, "split": split,
+                "license": source.get("license", "permission-granted"), "rights_evidence": source.get("rights_evidence") or source.get("permission_evidence"),
                 "provenance": source["provenance"], "canonical_url": source["canonical_url"],
                 "source_version": source.get("version"), "content_hash": text_hash,
-                "synthetic": False,
+                "synthetic": False, "training_weight": 1,
+                "quality_review": source["quality_review"], "reviewed_perspectives": reviewed_perspectives(source),
+                "representative_source_id": source["id"],
+                "source_lineage": [{"source_id": member["id"], "family_id": family_id(member),
+                                    "canonical_url": member["canonical_url"], "source_version": member.get("version"),
+                                    "content_hash": hashlib.sha256(_dedup_normalize(member["text"]).encode()).hexdigest(),
+                                    "license": member.get("license", "permission-granted"), "rights_evidence": member.get("rights_evidence") or member.get("permission_evidence"),
+                                    "rights_status": member.get("rights_status"), "permission_evidence": member.get("permission_evidence"),
+                                    "provenance": member["provenance"], "quality_review": member["quality_review"]} for member in members],
             })
+    original = interleave_originals(original)
+    coverage = coverage_audit(original)
     synthetic: list[dict] = []
     seen_instructions: set[str] = set()
     excluded_notes: list[dict] = []
-    settings = store.get_settings(private=True)
     provider_policy_reference = settings.get("provider_policy_reference", "")
     synthetic_policy_approved = settings.get("synthetic_training_approved") is True and isinstance(provider_policy_reference, str) and bool(provider_policy_reference.strip())
     for note in sorted(store.list_records("notes"), key=lambda item: item["id"]):
@@ -170,7 +260,8 @@ def build_snapshot(store: Store) -> dict:
             and isinstance(message.get("content"), str) and message["content"].strip() for message in messages
         ) or not any(message.get("role") == "assistant" for message in (messages or []) if isinstance(message, dict)):
             reasons.append("not_a_supported_instruction_example")
-        if note.get("contains_benchmark") or note.get("review_status") in {"rejected", "quarantined"}:
+        note_text = " ".join(str(message.get("content", "")) for message in (messages or []) if isinstance(message, dict))
+        if contamination_reasons({**note, "text": note_text}, settings=settings, reservations=reservations) or note.get("review_status") in {"rejected", "quarantined"}:
             reasons.append("excluded_by_review_or_benchmark_policy")
         evidence = [store.get("evidence", evidence_id) for evidence_id in note.get("evidence_ids", [])]
         if not evidence or any(not item or not item.get("support_verified") or not item.get("source_id") in source_ids
@@ -204,11 +295,17 @@ def build_snapshot(store: Store) -> dict:
                              "provider_policy_reference": provider_policy_reference if synthetic_policy_approved else None},
         "source_ids": sorted(assignment),
         "source_records": [{"id": source["id"], "version": source.get("version"),
+                            "family_id": family_id(source), "canonical_url": source["canonical_url"],
                             "text_hash": hashlib.sha256(source["text"].encode()).hexdigest(),
-                            "license": source.get("license"), "rights_evidence": source.get("rights_evidence"),
-                            "provenance": source.get("provenance")} for source in allowed],
+                            "license": source.get("license", "permission-granted"), "rights_evidence": source.get("rights_evidence") or source.get("permission_evidence"),
+                            "rights_status": source.get("rights_status"), "permission_evidence": source.get("permission_evidence"),
+                            "provenance": source.get("provenance"), "quality_review": source["quality_review"],
+                            "extraction": source.get("extraction"), "extraction_review_status": source.get("extraction_review_status"),
+                            "extraction_review_evidence": source.get("extraction_review_evidence")} for source in allowed],
         "original_text": original, "synthetic_sft": synthetic,
         "excluded_sources": rejected, "excluded_notes": excluded_notes,
+        "deduplicated_sources": deduplicated_sources,
+        "coverage_audit": coverage, "quality_gate": {"ready": coverage["coverage_ready"], "reasons": coverage["reasons"]},
     }
     manifest_hash = canonical_hash(manifest)
     corpus_hash = canonical_hash({
@@ -226,11 +323,13 @@ def build_snapshot(store: Store) -> dict:
         "immutable": True, "status": "candidate", "created_at": utc_now(),
         "source_ids": sorted(assignment), "train_family_ids": train_families,
         "heldout_family_ids": heldout_families, "original_text": original, "synthetic_sft": synthetic,
+        "coverage_audit": coverage, "quality_gate": manifest["quality_gate"],
         "manifest": manifest,
         "counts": {"original_documents": len(original), "original_characters": sum(len(item["text"]) for item in original),
                    "train_documents": sum(item["split"] == "train" for item in original),
                    "validation_documents": sum(item["split"] == "validation" for item in original),
-                   "synthetic_examples": len(synthetic), "excluded_sources": len(rejected), "excluded_notes": len(excluded_notes)},
+                   "synthetic_examples": len(synthetic), "excluded_sources": len(rejected), "excluded_notes": len(excluded_notes),
+                   "deduplicated_sources": len(deduplicated_sources)},
     })
     store.event("dataset.snapshot", "Created immutable corpus candidate", data={"snapshot_id": snapshot_id, "counts": record["counts"]})
     return record
