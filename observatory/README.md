@@ -15,8 +15,11 @@ connected endpoint never silently substitutes those examples for a failed API.
 
 The five views cover research, evidence, datasets, training and checkpoints.
 Operator setup and mission controls are separate from the public watch surface.
-All styles are plain CSS using the site's grimoire palette and font family; no
-frontend framework or build step is introduced.
+The interface inherits the existing `grimoire-live` theme and its card/banner
+surfaces, uses the live page's 1180px layout, and self-hosts the same Cormorant
+Garamond heading font. Font licenses and provenance are in `site/assets/fonts/`.
+No frontend framework or build step is introduced. `CRAWLNET_REVIEW.md` documents
+the inspected Queen artifacts and the distinction from this 70B adapter recipe.
 
 ## Run the real sidecar
 
@@ -164,6 +167,11 @@ selects the local sidecar path. Only `?preview=1` (or `?mode=preview`) enables
 authored example records. A disconnected live page never substitutes examples.
 
 ## Verification and practical limits
+
+The 5 October theme revision passed 170 tests, with the optional browser fixture
+skipped, plus CSS parsing, retained control-ID and local-font delivery checks.
+Saved browser permissions blocked fresh visual QA and live reference visits even
+after an approved retry. Earlier captures document the previous interface.
 
 ```sh
 python -m pip install -r observatory/requirements-test.txt

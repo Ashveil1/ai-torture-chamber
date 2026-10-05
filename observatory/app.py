@@ -217,9 +217,20 @@ def create_app(store: Store | None = None, *, enable_runtime: bool = True) -> Fa
 
     @application.get("/{asset}")
     def static_asset(asset: str):
-        if asset not in {"observatory.css", "observatory.js", "observatory-preview.js", "grimoire.css", "favicon.svg", "icon.svg"}:
+        if asset not in {"observatory.css", "observatory-fonts.css", "observatory.js", "observatory-preview.js", "grimoire.css", "favicon.svg", "icon.svg"}:
             raise HTTPException(404, "Not found")
         return FileResponse(SITE / asset)
+
+    @application.get("/assets/fonts/{filename}")
+    def font_asset(filename: str):
+        allowed = {
+            "cormorant-garamond-latin-normal.woff2", "cormorant-garamond-latin-500-italic.woff2",
+            "ibm-plex-mono-latin-400-normal.woff2", "ibm-plex-mono-latin-500-normal.woff2",
+            "ibm-plex-mono-latin-600-normal.woff2",
+        }
+        if filename not in allowed:
+            raise HTTPException(404, "Not found")
+        return FileResponse(SITE / "assets" / "fonts" / filename, media_type="font/woff2")
 
     return application
 

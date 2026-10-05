@@ -227,3 +227,22 @@ def test_frames_cannot_read_files_outside_frame_directory(store, tmp_path):
     with TestClient(create_app(store, enable_runtime=False)) as client:
         assert client.get("/api/agents/a/frame").status_code == 404
         assert "secret.txt" not in client.get("/api/state").text
+
+
+def test_self_hosted_fonts_load_without_exposing_other_files(store):
+    import re
+    with TestClient(create_app(store, enable_runtime=False)) as client:
+        page = client.get("/observatory.html")
+        assert 'class="grimoire-live grimoire-observatory"' in page.text
+        assert 'href="observatory-fonts.css"' in page.text
+        stylesheet = client.get("/observatory-fonts.css")
+        assert stylesheet.status_code == 200
+        fonts = re.findall(r'url\("(assets/fonts/[^\"]+)"\)', stylesheet.text)
+        assert len(fonts) == 5
+        for font in fonts:
+            response = client.get("/" + font)
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "font/woff2"
+            assert response.content.startswith(b"wOF2")
+        assert client.get("/assets/fonts/private.key").status_code == 404
+        assert client.get("/assets/fonts/%2e%2e%2f%2e%2e%2fprivate.key").status_code == 404
