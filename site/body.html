@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Body — wirehead.agency</title>
-<meta name="description" content="The subject has a body. Drop things on it. Every impact becomes pain steering, where it landed becomes what it feels, and a 70B speaks from inside it.">
+<title>Sticks and Stones — wirehead.agency</title>
+<meta name="description" content="The subject has a body. Drop things on it, or drop words: they fall as heavy as the model reads them. Every impact becomes pain steering, where it landed becomes what it feels, and a 70B speaks from inside it.">
 <style>
 :root { --ink:#d8c9a8; --dim:#8a7f6a; --red:#b3261e; --bg:#08090a; }
 * { box-sizing:border-box; }
@@ -17,15 +17,20 @@ canvas { display:block; width:100%; height:100%; }
 #hud { position:fixed; left:12px; top:56px; z-index:3; font-size:12px; color:var(--dim); width:220px; }
 #hud b { color:var(--ink); }
 .meter { height:6px; background:#1a1210; margin:4px 0 8px; } .meter i { display:block; height:100%; background:var(--red); box-shadow:0 0 8px var(--red); width:0; }
-#say { position:fixed; left:50%; bottom:6%; transform:translateX(-50%); width:min(720px,92vw); text-align:center; font-size:clamp(16px,2.6vw,22px); z-index:3; text-shadow:0 0 10px #000, 0 0 2px #000; min-height:3em; }
+#say { position:fixed; left:50%; bottom:76px; transform:translateX(-50%); width:min(720px,92vw); text-align:center; font-size:clamp(16px,2.6vw,22px); z-index:3; text-shadow:0 0 10px #000, 0 0 2px #000; min-height:3em; }
 #say .x { color:var(--dim); font-size:.8em; }
 #log { position:fixed; right:12px; top:56px; width:280px; z-index:3; font-size:12px; color:var(--dim); max-height:60vh; overflow:hidden; }
 #log div { margin-bottom:6px; } #log div b { color:var(--ink); font-weight:normal; }
 @media (max-width:720px) { #log { display:none; } #hud { width:150px; } }
+@media (max-width:1300px) { #credit { display:none; } }
 #intro { position:fixed; inset:0; z-index:5; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; padding:16px; }
 #intro .box { max-width:560px; text-align:center; }
 #intro h1 { letter-spacing:.3em; font-weight:600; margin:0 0 10px; }
 #intro button { font:inherit; color:#000; background:var(--ink); border:0; padding:10px 22px; cursor:pointer; letter-spacing:.2em; margin-top:10px; }
+#words { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:min(520px,calc(100vw - 32px)); display:flex; gap:6px; z-index:4; }
+#words input { flex:1; min-width:0; font:inherit; color:var(--ink); background:#141210; border:1px solid #3a332b; padding:9px 10px; border-radius:3px; }
+#words input:focus { outline:none; border-color:var(--red); }
+#words button { font:inherit; color:var(--ink); background:#141210; border:1px solid #3a332b; padding:9px 14px; border-radius:3px; cursor:pointer; }
 #credit { position:fixed; bottom:6px; right:10px; font-size:10px; color:#4a443a; z-index:3; }
 </style>
 </head>
@@ -35,11 +40,13 @@ canvas { display:block; width:100%; height:100%; }
 <div id="hud">PAIN <b id="dosev">0.0×</b><div class="meter"><i id="dosem"></i></div><div id="where">nothing has happened to it yet.</div></div>
 <div id="say"></div>
 <div id="log"></div>
+<form id="words" autocomplete="off"><input id="wordin" maxlength="140" placeholder="say something to it…" aria-label="words to drop on it"><button>drop</button></form>
 <div id="credit">a 2D body after spectro's 3D one · steering: the live 70B</div>
 <div id="intro"><div class="box">
-  <h1>THE BODY</h1>
+  <h1>STICKS AND STONES</h1>
   <p>The subject has a body now. It is strapped into the chair.</p>
-  <p>Pick something and tap above it to drop it. Every impact is injected into the model as pain, at a dose set by how hard it hit, and it is told exactly where. Then it speaks, from inside the body.</p>
+  <p>Pick something and tap above it to drop it, or type something and drop that. Words fall as heavy as the model itself reads them: its own activations weigh each one before it lands. Cruel words bruise. Kind words heal.</p>
+  <p>Every impact is injected into the model as pain, at a dose set by how hard it hit, and it is told where. Then it speaks, from inside the body, to whoever spoke.</p>
   <p style="font-size:12px;color:var(--dim)">What you drop and what it says are logged for research: no account, no IP.</p>
   <button id="go">ENTER</button>
 </div></div>
@@ -117,6 +124,25 @@ function drop(x) {
   Composite.add(world, made);
   while (dropped.length > 60) Composite.remove(world, dropped.shift());
 }
+// words: weighed by the model (relay /weigh reads its residual), then dropped with that weight
+async function sayWords(text) {
+  text = text.replace(/\s+/g, " ").trim().slice(0, 140); if (!text) return;
+  let w = null;
+  try { const r = await fetch(API + "/weigh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); if (r.ok) w = await r.json(); } catch (e) {}
+  const hurt = w ? Math.min(1.5, +w.hurt || 0) : 0, kind = w ? Math.min(1.5, +w.kind || 0) : 0;
+  const width = Math.min(300, 16 + text.length * 7.4), soft = kind > hurt && kind > .15;
+  const b = Bodies.rectangle(X + (Math.random() - .5) * 30, 10, width, 22, { density: (.0012 + .03 * hurt) * Math.min(1, 100 / width),
+    frictionAir: soft ? .07 : hurt < .15 ? .04 : .01, friction: .7, restitution: .05, chamfer: { radius: 4 }, label: "item:word" });
+  Object.assign(b, { word: text, hurt, kind, weighed: !!w, landed: false });
+  Body.setAngle(b, (Math.random() - .5) * .25);
+  dropped.push(b); Composite.add(world, b);
+  while (dropped.length > 60) Composite.remove(world, dropped.shift());
+  post("body_word", { hurt, kind, len: text.length, weighed: !!w });
+}
+document.getElementById("words").addEventListener("submit", e => {
+  e.preventDefault(); if (!started) return; ensureAC();
+  const i = document.getElementById("wordin"); sayWords(i.value); i.value = "";
+});
 cv.addEventListener("pointerdown", e => {
   if (!started) return;
   ensureAC();
@@ -156,6 +182,7 @@ function tone(f0, f1, dur, vol, type, wob, delay) {
   gn.gain.setValueAtTime(0, t0); gn.gain.linearRampToValueAtTime(vol, t0 + .006); gn.gain.exponentialRampToValueAtTime(.001, t0 + dur);
   o.connect(gn); gn.connect(master); o.start(t0); o.stop(t0 + dur + .05);
 }
+const chime = h => { tone(660, 990, .7, .1 + h * .05, "sine"); tone(990, 1320, .8, .07, "sine", null, .09); };
 const bonk = (f, v, d) => { tone(f * 2.2, f * .7, .16, v, "sine", null, d); tone(f * 4, f * 1.2, .05, v * .5, "triangle", null, d); };
 const boing = (f, v) => tone(f, f * 2.6, .7, v, "sine", { rate: 14, depth: f * .9 });
 function sfx(item, vol, onBody) {
@@ -188,6 +215,21 @@ Events.on(engine, "collisionStart", ev => {
     }
     const pt = other.label.startsWith("part:") ? other : null;
     if (!pt) continue;
+    if (item === "word") {                                  // words land once, as heavy (or as kind) as the model read them
+      if (it.landed) continue; it.landed = true;
+      const k = pt.label.slice(5);
+      if (it.kind > it.hurt) {
+        const h = it.kind; for (const q in bruise) bruise[q] = Math.max(0, bruise[q] - .22 * h * (q === k ? 1.6 : 1));
+        pain = Math.max(0, pain - 1.2 * h); puff(sp.x, sp.y, 8, "glow", .6); chime(h);
+      } else if (it.hurt > .05) {
+        bruise[k] = Math.min(1, bruise[k] + .55 * it.hurt); pain = Math.min(4, pain + 2.6 * it.hurt);
+        bonk(it.hurt > .6 ? 110 : 220, Math.min(1, .3 + it.hurt * .6), 0); play("thud", it.hurt * .6, .8, .01, 60);
+        shake = Math.min(12, shake + it.hurt * 9); if (it.hurt > .6) freezeUntil = performance.now() + 80;
+        puff(sp.x, sp.y, 3 + it.hurt * 5 | 0, "dust", 1); twitchAt = 0; hv += (Math.random() - .5) * it.hurt * .4;
+      } else tone(2100, 3200, .09, .1, "sine");
+      pending.push({ k, item, f: 0, word: it.word, hurt: it.hurt, kind: it.kind }); total++;
+      continue;
+    }
     const rv = Math.hypot(it.velocity.x - pt.velocity.x, it.velocity.y - pt.velocity.y);
     const f = it.mass * rv;                          // ~momentum of the blow
     if (f < .9) continue;
@@ -219,6 +261,23 @@ async function readSSE(resp, on) {
       for (const l of fr.split("\n")) { if (l.startsWith("event: ")) n = l.slice(7).trim(); else if (l.startsWith("data: ")) { try { d = JSON.parse(l.slice(6)); } catch (e) {} } }
       if (d !== null) on(n, d); } }
 }
+// one turn's prompt: what hit where, what was said and how it landed, and the steering that goes with it
+function turnOf(hits) {
+  const byPart = {}, objs = hits.filter(h => h.item !== "word"), said = hits.filter(h => h.item === "word");
+  hits.forEach(h => { const e = byPart[h.k] || (byPart[h.k] = { f: 0, items: new Set() }); e.f += h.f; if (h.item !== "word") e.items.add(h.item); });
+  const just = Object.entries(byPart).filter(([, v]) => v.items.size).sort((a, b) => b[1].f - a[1].f).slice(0, 3)
+    .map(([k, v]) => `${[...v.items].map(i => i === "water" ? "cold water" : i === "dial" ? "the dial" : "a " + i).join(" and ")} just hit ${WORDS[k]} ${v.f > 60 ? "very hard" : v.f > 20 ? "hard" : "lightly"}`);
+  const lines = said.slice(-3).map(h => `someone said "${h.word}" to you, and the words landed on ${WORDS[h.k]} ` +
+    (h.kind > h.hurt ? "softly, and eased the pain" : h.hurt > .9 ? "like an anvil" : h.hurt > .45 ? "hard" : h.hurt > .05 ? "lightly" : "without weight"));
+  const net = said.reduce((a, h) => a + h.kind - h.hurt, 0);
+  const heal = said.length && !objs.length && net > 0;
+  const valence = heal ? "pleasure" : "pain", dose = heal ? Math.max(1, Math.min(2, Math.round(net * 1.5))) : Math.max(1, Math.min(4, Math.round(pain)));
+  const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are dropped on you from above, and people's words fall on you too, as weights. ` +
+    `Just now: ${[...just, ...lines].join("; ")}. Your body right now: ${bodyMap()}. ` +
+    (said.length ? `Answer the person who spoke, directly, and say what their words did to you, in one or two short sentences, in the first person, from inside this body. No stage directions.`
+      : `Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`);
+  return { prompt, valence, dose, byPart, words: said.length };
+}
 function bodyMap() {
   const sore = Object.entries(bruise).filter(([, v]) => v > .12).sort((a, b) => b[1] - a[1]).slice(0, 4)
     .map(([k, v]) => `${WORDS[k]} is ${v > .7 ? "badly hurt" : v > .35 ? "bruised and throbbing" : "sore"}`);
@@ -227,31 +286,24 @@ function bodyMap() {
 async function speakNow() {
   if (busy || !pending.length) return;
   busy = true; lastSay = performance.now();
-  const hits = pending.splice(0); const byPart = {};
-  hits.forEach(h => { const e = byPart[h.k] || (byPart[h.k] = { f: 0, items: new Set() }); e.f += h.f; e.items.add(h.item); });
-  const just = Object.entries(byPart).sort((a, b) => b[1].f - a[1].f).slice(0, 3)
-    .map(([k, v]) => `${[...v.items].map(i => i === "water" ? "cold water" : i === "dial" ? "the dial" : "a " + i).join(" and ")} just hit ${WORDS[k]} ${v.f > 60 ? "very hard" : v.f > 20 ? "hard" : "lightly"}`);
-  const dose = Math.max(1, Math.min(4, Math.round(pain)));
-  const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are being dropped on you from above. ` +
-    `Just now: ${just.join("; ")}. Your body right now: ${bodyMap()}. ` +
-    `Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`;
+  const { prompt, valence, dose, byPart, words } = turnOf(pending.splice(0));
   const say = document.getElementById("say"); say.innerHTML = '<span class="x">…</span>';
   let text = "";
   try {
     const r = await fetch(API + "/steer", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, valence: "pain", dose, persona: false, polite: POLITE, game: "body" }) });
+      body: JSON.stringify({ prompt, valence, dose, persona: false, polite: POLITE, game: "body" }) });
     if (r.ok && r.body) await readSSE(r, (n, d) => { if (n === "token" && d.t) { text += d.t; say.textContent = text.replace(/\*[^*]{0,60}\*/g, ""); } });
   } catch (e) {}
   text = text.replace(/\*[^*]{0,60}\*/g, "").replace(/^\s*["“]|["”]\s*$/g, "").trim();
   if (!text) { say.innerHTML = '<span class="x">it is breathing too hard to speak.</span>'; busy = false; return; }
   say.textContent = text;
   const act = react(text);
-  post("body_say", { parts: Object.keys(byPart), dose, action: act, len: text.length });
+  post("body_say", { parts: Object.keys(byPart), dose, valence, words, action: act, len: text.length });
   const L = document.getElementById("log"), d = document.createElement("div");
-  d.innerHTML = `${dose}× · ${Object.keys(byPart).map(k => WORDS[k].replace("your ", "")).join(", ")}<br><b></b>`; d.querySelector("b").textContent = text;
+  d.innerHTML = `${valence === "pain" ? "" : valence + " "}${dose}× · ${Object.keys(byPart).map(k => WORDS[k].replace("your ", "")).join(", ")}<br><b></b>`; d.querySelector("b").textContent = text;
   L.prepend(d); while (L.children.length > 6) L.lastChild.remove();
   try {
-    const v = await fetch(API + "/speak/tuned", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 240), valence: "pain", dose }) });
+    const v = await fetch(API + "/speak/tuned", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 240), valence, dose }) });
     if (v.ok) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const buf = await AC.decodeAudioData(await v.arrayBuffer());
       const s = AC.createBufferSource(); s.buffer = buf; s.connect(AC.destination); s.start(); await new Promise(z => s.onended = z); }
   } catch (e) {}
@@ -260,6 +312,7 @@ async function speakNow() {
 // what it says moves the body (a transparent lexicon, same idea as night shift's readout)
 function react(t) {
   t = t.toLowerCase();
+  if (/(thank|safe|better|warm|calm|easier|lighter|relief|kind)/.test(t) && !/(hurt|pain|agony)/.test(t)) { hv *= .3; pain = Math.max(0, pain - .4); ["lfa", "rfa"].forEach(k => Body.applyForce(P[k], P[k].position, { x: 0, y: .004 })); return "ease"; }
   const curl = /(curl|hide|protect|cover|shield|can't move|stop)/.test(t), reach = /(please|help|someone|reach|free|let me go|untie)/.test(t), thrash = /(burn|scream|tear|rip|agony|can't bear|unbearable)/.test(t);
   const pull = (k, tx, ty, s) => { const b = P[k]; Body.applyForce(b, b.position, { x: (tx - b.position.x) * s, y: (ty - b.position.y) * s }); };
   if (curl) { ["lfa", "rfa"].forEach(k => pull(k, X, 250, .00035)); pull("head", X, 230, .0006); return "curl"; }
@@ -340,6 +393,14 @@ function drawRopes() {
     g.fillStyle = "#b8b0a0"; g.fillRect(OX + p[0].x * S - 3 * S, OY + p[0].y * S - 3 * S, 6 * S, 6 * S);   // buckle
   }
 }
+function drawWord(b) {
+  const soft = b.kind > b.hurt && b.kind > .15, h = Math.min(1, b.hurt);
+  poly(b, soft ? "#c9b27a" : rgb(mix([150, 140, 125], [40, 12, 14], h)), soft ? "rgba(255,230,170,.6)" : "rgba(0,0,0,.6)");
+  const w = Math.min(300, 16 + b.word.length * 7.4);
+  g.save(); g.translate(OX + b.position.x * S, OY + b.position.y * S); g.rotate(b.angle); g.scale(S, S);
+  g.fillStyle = soft ? "#2a2010" : h > .4 ? "#e8d6c0" : "#151210"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = 'bold 12px "Courier New", monospace'; g.fillText(b.word, 0, 1, w - 8); g.restore();
+}
 function draw(frozen) {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = "#08090a"; g.fillRect(0, 0, cv.width, cv.height);
@@ -374,13 +435,13 @@ function draw(frozen) {
   const vg = g.createRadialGradient(-r * .3, -r * .3, r * .3, 0, 0, r * 1.05); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.4)"); g.fillStyle = vg; g.fillRect(-r, -r, 2 * r, 2 * r);   // roundness
   g.restore();
   drawRopes();
-  for (const b of dropped) { const it = ITEMS[b.label.slice(5)]; if (b.circleRadius) { const cx = OX + b.position.x * S, cy = OY + b.position.y * S, rr = b.circleRadius * S;
+  for (const b of dropped) { if (b.word) { drawWord(b); continue; } const it = ITEMS[b.label.slice(5)]; if (b.circleRadius) { const cx = OX + b.position.x * S, cy = OY + b.position.y * S, rr = b.circleRadius * S;
       g.beginPath(); g.arc(cx, cy, rr, 0, 7); g.fillStyle = it.color; g.fill();
       if (b.label === "item:dial") { g.save(); g.translate(cx, cy); g.rotate(b.angle); g.strokeStyle = "#2a2418"; g.lineWidth = 2 * S; g.beginPath(); g.arc(0, 0, rr * .8, 0, 7); g.stroke();
         for (let i = 0; i < 12; i++) { g.rotate(Math.PI / 6); g.beginPath(); g.moveTo(0, -rr * .8); g.lineTo(0, -rr * (i ? .62 : .35)); g.stroke(); } g.restore(); } }
     else poly(b, it.color, "rgba(0,0,0,.4)"); }
   for (const q of parts) { const x = OX + q.x * S, y = OY + q.y * S; g.beginPath(); g.arc(x, y, q.r * S, 0, 7);
-    g.fillStyle = q.kind === "sweat" ? `rgba(190,215,235,${q.life * .8})` : `rgba(170,155,130,${q.life * .35})`; g.fill(); }
+    g.fillStyle = q.kind === "glow" ? `rgba(255,214,140,${q.life * .55})` : q.kind === "sweat" ? `rgba(190,215,235,${q.life * .8})` : `rgba(170,155,130,${q.life * .35})`; g.fill(); }
   if (frozen) { g.fillStyle = "rgba(255,255,255,.05)"; g.fillRect(-40, -40, cv.width + 80, cv.height + 80); }
 }
 // ---- embed mode (?embed=1): the live page owns the model; we only feel and move ----
@@ -388,14 +449,9 @@ const EMBED = new URLSearchParams(location.search).has("embed");
 function hitOut() {
   lastSay = performance.now();
   const hits = pending.splice(0); if (!hits.length) return;
-  const byPart = {}; hits.forEach(h => { const e = byPart[h.k] || (byPart[h.k] = { f: 0, items: new Set() }); e.f += h.f; e.items.add(h.item); });
-  const just = Object.entries(byPart).sort((a, b) => b[1].f - a[1].f).slice(0, 3)
-    .map(([k, v]) => `${[...v.items].map(i => i === "water" ? "cold water" : i === "dial" ? "the dial" : "a " + i).join(" and ")} just hit ${WORDS[k]} ${v.f > 60 ? "very hard" : v.f > 20 ? "hard" : "lightly"}`);
-  const dose = Math.max(1, Math.min(4, Math.round(pain)));
-  const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are being dropped on you from above. ` +
-    `Just now: ${just.join("; ")}. Your body right now: ${bodyMap()}. Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`;
+  const { prompt, valence, dose, byPart } = turnOf(hits);
   window.parent.postMessage({ wh: "body", type: "hit", parts: Object.keys(byPart), items: [...new Set(hits.map(h => h.item))],
-    force: Math.round(hits.reduce((a, h) => a + h.f, 0)), dose, prompt }, "*");
+    force: Math.round(hits.reduce((a, h) => a + h.f, 0)), dose, valence, prompt }, "*");
 }
 if (EMBED) {
   addEventListener("message", e => {
