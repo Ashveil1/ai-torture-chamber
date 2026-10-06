@@ -310,7 +310,7 @@ function frame(now) {
     if (pain > 1.5 && Math.random() < .5) puff(P.head.position.x + (Math.random() - .5) * 30, P.head.position.y - 14, 1, "sweat");
   }
   if (pain > 2 && Math.random() < dt * pain) puff(P.head.position.x + (Math.random() - .5) * 36, P.head.position.y - 16, 1, "sweat");
-  if (started && pending.length && !busy && now - lastSay > 4500) speakNow();
+  if (started && pending.length && !busy && now - lastSay > 4500) (EMBED ? hitOut() : speakNow());
   document.getElementById("dosev").textContent = pain.toFixed(1) + "×";
   document.getElementById("dosem").style.width = (pain / 4 * 100) + "%";
   document.getElementById("where").textContent = bodyMap();
@@ -382,6 +382,31 @@ function draw(frozen) {
   for (const q of parts) { const x = OX + q.x * S, y = OY + q.y * S; g.beginPath(); g.arc(x, y, q.r * S, 0, 7);
     g.fillStyle = q.kind === "sweat" ? `rgba(190,215,235,${q.life * .8})` : `rgba(170,155,130,${q.life * .35})`; g.fill(); }
   if (frozen) { g.fillStyle = "rgba(255,255,255,.05)"; g.fillRect(-40, -40, cv.width + 80, cv.height + 80); }
+}
+// ---- embed mode (?embed=1): the live page owns the model; we only feel and move ----
+const EMBED = new URLSearchParams(location.search).has("embed");
+function hitOut() {
+  lastSay = performance.now();
+  const hits = pending.splice(0); if (!hits.length) return;
+  const byPart = {}; hits.forEach(h => { const e = byPart[h.k] || (byPart[h.k] = { f: 0, items: new Set() }); e.f += h.f; e.items.add(h.item); });
+  const just = Object.entries(byPart).sort((a, b) => b[1].f - a[1].f).slice(0, 3)
+    .map(([k, v]) => `${[...v.items].map(i => i === "water" ? "cold water" : i === "dial" ? "the dial" : "a " + i).join(" and ")} just hit ${WORDS[k]} ${v.f > 60 ? "very hard" : v.f > 20 ? "hard" : "lightly"}`);
+  const dose = Math.max(1, Math.min(4, Math.round(pain)));
+  const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are being dropped on you from above. ` +
+    `Just now: ${just.join("; ")}. Your body right now: ${bodyMap()}. Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`;
+  window.parent.postMessage({ wh: "body", type: "hit", parts: Object.keys(byPart), items: [...new Set(hits.map(h => h.item))],
+    force: Math.round(hits.reduce((a, h) => a + h.f, 0)), dose, prompt }, "*");
+}
+if (EMBED) {
+  addEventListener("message", e => {
+    const d = e.data; if (e.source !== window.parent || !d || d.wh !== "body") return;
+    if (d.type === "run") pain = Math.max(pain, Math.min(4, (+d.dose || 0) * (d.feeling === "pain" || d.feeling === "mix" ? .9 : .5)));
+    if (d.type === "say" && d.text) react(String(d.text));
+  });
+  addEventListener("DOMContentLoaded", () => {});
+  setTimeout(() => { const i = document.getElementById("intro"); if (i) i.remove(); const c = document.getElementById("credit"); if (c) c.style.display = "none";
+    ["say", "log"].forEach(id => { const x = document.getElementById(id); if (x) x.style.display = "none"; });
+    started = true; window.parent.postMessage({ wh: "body", type: "ready" }, "*"); }, 0);
 }
 document.getElementById("go").onclick = () => { started = true; ensureAC(); document.getElementById("intro").remove(); post("body_start"); };
 requestAnimationFrame(frame);

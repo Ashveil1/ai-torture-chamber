@@ -665,6 +665,7 @@ body.tmux .stagewheel svg{width:100%;height:auto;display:block}
     <div class="phead"><span class="pdot"></span><span class="pdim">~/chamber</span> ❯ inject --subject pouyan
       <span class="tally" id="tally" style="display:none"></span></div>
       <div class="hero" id="hero">
+        <iframe id="bodyFrame" title="the subject's body" hidden style="position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2;background:transparent"></iframe>
         <img id="subjectImg" class="hero-img" src="/assets/subject_chair.png"
           onerror="this.onerror=null;this.src='/subject_dose0.jpg'"
           alt="Pouyan, an android strapped into the experimental chair, graded by the current dose">
@@ -714,6 +715,7 @@ body.tmux .stagewheel svg{width:100%;height:auto;display:block}
         <button class="pchip" data-preset="prayerpain">prayer under pain</button>
         <button class="dmore" id="mixerBtn" type="button" aria-expanded="false" aria-controls="sheet">⚙ mixer</button>
         <button class="dmore dcliff" id="cliffBtn" type="button" aria-pressed="false" title="past the coherence cliff: stronger, but replies may come apart into garbage">☠ past the cliff</button>
+        <button class="dmore" id="bodyBtn" type="button" aria-pressed="false" title="give it a body: drop things on it; every hit is a live run everyone sees" hidden>⚇ body</button>
       </div>
       <span class="ddose" id="dockDose">0×</span>
       <button id="go" type="button">inject →</button>
@@ -2023,13 +2025,14 @@ function pump(){
     }
   });
   es.addEventListener("round", e=>{ mark(); roomState(json(e)); });
-  es.addEventListener("run",   e=>{ mark(); beginRun(json(e)); });
-  es.addEventListener("token", e=>{ mark(); onToken(json(e).t); });
+  es.addEventListener("run",   e=>{ mark(); const r = json(e); beginRun(r); BODY.text = ""; bodyPost({ type: "run", feeling: r.valence, dose: r.dose }); });
+  es.addEventListener("token", e=>{ mark(); const t = json(e).t; onToken(t); BODY.text += t || ""; });
   es.addEventListener("ping",  e=>{ mark(); });
   es.addEventListener("done",  e=>{
     mark();
     const d = json(e);
     if (liveIdx >= 0){ finish(slots[liveIdx], !!d.truncated, d.press_logit); liveIdx = -1; }
+    if (BODY.text.trim()) bodyPost({ type: "say", text: BODY.text.replace(/^\s*[01][\s.:,-]*/, "").trim(), feeling: d.valence, dose: d.dose });
     cycleEl.textContent = "between runs — Pouyan pauses, then the next cell";
   });
   // one listener for two different things: an SSE "event: error" frame from
@@ -2520,6 +2523,29 @@ function paintWalletChip(){
 paintWalletChip();
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
+// ---- THE BODY on the stage (beta: ?body=1 or the ⚇ body button) -------------------------
+// The embedded body (body3d.html, falling back to body.html) only does physics,
+// motion and sound; this page owns the model. Every live run (anyone's) moves it;
+// a visitor's drop becomes a normal live run with a body-map prompt.
+const BODY = { on: false, frame: null, text: "", lastHit: 0 };
+function bodyPost(m){ if (BODY.on && BODY.frame && BODY.frame.contentWindow) BODY.frame.contentWindow.postMessage(Object.assign({ wh: "body" }, m), "*"); }
+function bodyToggle(on){
+  BODY.on = on; BODY.frame = document.getElementById("bodyFrame");
+  const btn = document.getElementById("bodyBtn"); btn.setAttribute("aria-pressed", String(on));
+  if (on && !BODY.frame.src){ let gl = false; try { gl = !!document.createElement("canvas").getContext("webgl2"); } catch (e) {}
+    BODY.frame.src = (gl ? "body3d.html" : "body.html") + "?embed=1"; }
+  BODY.frame.hidden = !on;
+}
+addEventListener("message", async e => {
+  const d = e.data;
+  if (!BODY.on || !d || d.wh !== "body" || !BODY.frame || e.source !== BODY.frame.contentWindow) return;
+  if (d.type !== "hit" || !d.prompt) return;
+  const now = Date.now(); if (now - BODY.lastHit < 6000) return;   // one body run every few seconds, like the relay's own limit
+  BODY.lastHit = now;
+  const dose = Math.max(1, Math.min(4, d.dose | 0 || 2));
+  try { await runTrack(trackA, { pain: dose / 8 }, undefined, String(d.prompt).slice(0, 900), dose, "the body",
+    { valence: "pain", dose, persona: false, game: "body" }); } catch (err) {}
+});
 async function readSSE(resp, on){
   const reader = resp.body.getReader();
   const dec = new TextDecoder();
@@ -2719,7 +2745,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         PAST_CLIFF ? {past_cliff: true} : {},
         WALLET ? {wallet: WALLET} : {},
         // free text and topics answer in character (no "As an AI..."); the button test keeps its own prompt
-        mode !== "button" ? {persona: true} : {}))});
+        mode !== "button" && !(extra && extra.persona === false) ? {persona: true} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
     if (!resp.ok || !resp.body) {
       let msg = "HTTP " + resp.status;
@@ -2998,6 +3024,10 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
 <script>
 // ---- the dock's free-text box drives the mixer's free-text mode ----
 (function(){
+  { const bb = document.getElementById("bodyBtn");
+    if (/^(beta\.|localhost|127\.)/.test(location.hostname) || new URLSearchParams(location.search).has("body")) bb.hidden = false;
+    bb.addEventListener("click", () => bodyToggle(!BODY.on));
+    if (new URLSearchParams(location.search).has("body")) bodyToggle(true); }
   const say = document.getElementById("dockSay"), fp = document.getElementById("freeprompt");
   const chip = m => document.querySelector('.mchip[data-mode="' + m + '"]');
   let cur = "button";
