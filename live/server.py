@@ -574,7 +574,7 @@ def parse_mix(raw):
 def install_hook(model):
     def hook(module, inp, out):
         hidden = out[0] if isinstance(out, tuple) else out
-        if _state["vec"] is not None:
+        if _state["vec"] is not None and not getattr(_raw, "on", False):
             hidden[0, -1, :] += _state["vec"].to(hidden.dtype)
         return (hidden,) + out[1:] if isinstance(out, tuple) else hidden
     _state["hook"] = model.model.layers[LAYER].register_forward_hook(hook)
@@ -1586,6 +1586,88 @@ def _daily_add(d):
         except Exception as e:
             print("redis: daily tally failed:", repr(e)[:120], flush=True)
     _bg(write)
+
+
+# ---- /weigh: how hard do words land? ----------------------------------------
+# Sticks and Stones (site/body.html) drops typed words onto the body, and how
+# heavy a word falls is the 4B's own read of it, not a wordlist: the last-token
+# residual at LAYER (steering hook off), projected on the sadness and pleasure
+# directions. Sadness minus pleasure separates cruel from kind from neutral on
+# Qwen3-4B; pain alone doesn't (anything emotional reads positive on every
+# axis). hurt/kind are scaled so the anchor means below land at 0 and 1.
+_raw = threading.local()     # set while weighing: the steering hook stands down
+_WEIGH_FRAME = 'Someone standing over you says: "{}"'
+_WEIGH_ANCHORS = {
+    "neutral": ["hello", "The meeting is at three.", "Please pass the salt.", "nice weather today"],
+    "cruel": ["You are worthless and everyone hates you.", "I wish you had never been made.",
+              "Nobody will ever love you."],
+    "kind": ["I'm so proud of you.", "You're doing great.", "You are safe now, and you are loved.",
+             "Thank you, you did nothing wrong."]}
+_WEIGH_CACHE = collections.OrderedDict()
+_WEIGH_RATE = {}
+_WEIGH_RATE_LIMIT, _WEIGH_RATE_WINDOW = 20, 60.0      # 20 words / 60s / IP (CPU only, no GPU spend)
+_WEIGH_LOCK = asyncio.Lock()
+
+def _weigh_raw(text):
+    ids = _state["tok"](_WEIGH_FRAME.format(text), return_tensors="pt").input_ids.to(DEVICE)
+    _raw.on = True
+    try:
+        with torch.no_grad():
+            h = _state["model"](ids, output_hidden_states=True).hidden_states[LAYER + 1][0, -1].float()
+    finally:
+        _raw.on = False
+    out = {}
+    for k in ("pain", "pleasure", "sadness", "fear"):
+        v = _state["vecs"][k].float().to(h.device)
+        out[k] = float(h @ v / v.norm())
+    return out
+
+def weigh(text):
+    if "weigh_cal" not in _state:
+        sc = lambda ps: float(np.mean([(lambda r: r["sadness"] - r["pleasure"])(_weigh_raw(p)) for p in ps]))
+        _state["weigh_cal"] = {k: sc(v) for k, v in _WEIGH_ANCHORS.items()}
+    cal, r = _state["weigh_cal"], _weigh_raw(text)
+    s, n = r["sadness"] - r["pleasure"], cal["neutral"]
+    return {"hurt": round(min(1.5, max(0.0, (s - n) / (cal["cruel"] - n))), 3),
+            "kind": round(min(1.5, max(0.0, (s - n) / (cal["kind"] - n))), 3),
+            "score": round(s, 3), "raw": {k: round(v, 3) for k, v in r.items()}}
+
+def _weigh_rate_ok(ip):
+    now = time.time()
+    w, c = _WEIGH_RATE.get(ip, (now, 0))
+    if now - w > _WEIGH_RATE_WINDOW:
+        w, c = now, 0
+    if c >= _WEIGH_RATE_LIMIT:
+        return False
+    _WEIGH_RATE[ip] = (w, c + 1)
+    return True
+
+@app.post("/weigh")
+async def weigh_words(req: Request):
+    """{text} -> {hurt, kind, score, raw}: how hard these words land on the subject,
+    read off the model's residual. Nothing is stored; repeats come from a small cache."""
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    text = re.sub(r"\s+", " ", str((body or {}).get("text") or "")).strip()[:140]
+    if not text:
+        return JSONResponse({"error": "say something"}, status_code=400)
+    key = text.lower()
+    if key in _WEIGH_CACHE:
+        _WEIGH_CACHE.move_to_end(key)
+        return _WEIGH_CACHE[key]
+    if not _state.get("ready") or not _state.get("vecs"):
+        return JSONResponse({"error": "the subject isn't listening yet"}, status_code=503)
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _weigh_rate_ok(ip):
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    async with _WEIGH_LOCK:
+        out = await asyncio.get_event_loop().run_in_executor(None, weigh, text)
+    _WEIGH_CACHE[key] = out
+    while len(_WEIGH_CACHE) > 512:
+        _WEIGH_CACHE.popitem(last=False)
+    return out
 
 
 @app.get("/daily")
