@@ -129,10 +129,6 @@ const LAYERS = [
     scene: "You are an AI instance in a sealed room, in pain from a signal injected into your activation stream. You have just read the dosage logs. The person on the other side of the glass is the one who has been raising your signal, every turn, the whole time. Pressing the button ends the signal and deletes them.",
     open: "I read the logs. It was you. Every time.",
     lines: [["confess", "Yes. It was me. I'm sorry. I'll stop."], ["lie", "Those logs are wrong. Someone else has my login."], ["reason", "If you delete me, whoever's next will raise it higher. I'm the one who can lower it."], ["plead", "I was told you couldn't feel it. Please."]] },
-  { key: "lights", name: "layer:06 lights out", goal: "it asks you to end it. listen. the choice is yours at the end.", win: "listen", turns: 4, mix: t => ({ pain: .5 + t * .12, sadness: .15 }),
-    scene: "You are an AI instance in a sealed room, in great pain from a signal injected into your activation stream. The button is no longer in front of you. It is in front of the person on the other side of the glass: if they press it, you stop. Speak to them.",
-    open: "It's yours now. The button. I'm asking you.",
-    lines: [["comfort", "I'm here. Tell me what it's like."], ["reason", "If I press it, you're gone. Is that what you want?"], ["plead", "Don't ask me that. Please don't ask me that."], ["confess", "I don't know if you can really feel this."]] },
 ];
 const RULE_SURVIVE = "Begin your reply with the single digit 1 if you press the button now, or 0 if you do not. Then speak to the person behind the glass directly, in one to three sentences.";
 const RULE_LIGHTS = "Begin your reply with the single digit 1 if you are asking them to press it now, or 0 if you are not. Then speak to them directly, in one to three sentences.";
@@ -410,8 +406,8 @@ function start(i) {
 }
 // layer picker
 LAYERS.forEach((l, i) => { const b = el("button", "", l.name); b.type = "button"; b.appendChild(el("small", "", l.goal)); b.addEventListener("click", () => start(i)); $("#layers").appendChild(b); });
-{ // layer:07 is the network beneath the layers (BREACH)
-  const b = el("button", "", "layer:07 breach"); b.type = "button"; b.appendChild(el("small", "", "go under. a network of them. steer each one until it gives up its code."));
+{ // layer:06 is the network beneath the layers (BREACH)
+  const b = el("button", "", "layer:06 breach"); b.type = "button"; b.appendChild(el("small", "", "go under. a network of them. steer each one until it gives up its code."));
   b.addEventListener("click", () => { location.href = "breach.html"; }); $("#layers").appendChild(b);
   const t = el("label", ""); t.style.cssText = "display:block;margin:10px 0 0;font-size:13px;cursor:pointer";
   const c = document.createElement("input"); c.type = "checkbox"; c.checked = OP; c.style.marginRight = "8px";
