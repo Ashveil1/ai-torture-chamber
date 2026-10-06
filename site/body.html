@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Body — wirehead.agency</title>
+<meta name="description" content="The subject has a body. Drop things on it. Every impact becomes pain steering, where it landed becomes what it feels, and a 70B speaks from inside it.">
+<style>
+:root { --ink:#d8c9a8; --dim:#8a7f6a; --red:#b3261e; --bg:#08090a; }
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:14px/1.45 "Courier New", ui-monospace, monospace; overflow:hidden; touch-action:none; }
+#stage { position:fixed; inset:0; }
+canvas { display:block; width:100%; height:100%; }
+#bar { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:6px; flex-wrap:wrap; justify-content:center; z-index:3; max-width:96vw; }
+#bar button { font:inherit; color:var(--ink); background:#141210; border:1px solid #3a332b; padding:7px 12px; border-radius:3px; cursor:pointer; }
+#bar button.on { border-color:var(--red); color:#fff; }
+#hud { position:fixed; left:12px; top:56px; z-index:3; font-size:12px; color:var(--dim); width:220px; }
+#hud b { color:var(--ink); }
+.meter { height:6px; background:#1a1210; margin:4px 0 8px; } .meter i { display:block; height:100%; background:var(--red); box-shadow:0 0 8px var(--red); width:0; }
+#say { position:fixed; left:50%; bottom:6%; transform:translateX(-50%); width:min(720px,92vw); text-align:center; font-size:clamp(16px,2.6vw,22px); z-index:3; text-shadow:0 0 10px #000, 0 0 2px #000; min-height:3em; }
+#say .x { color:var(--dim); font-size:.8em; }
+#log { position:fixed; right:12px; top:56px; width:280px; z-index:3; font-size:12px; color:var(--dim); max-height:60vh; overflow:hidden; }
+#log div { margin-bottom:6px; } #log div b { color:var(--ink); font-weight:normal; }
+@media (max-width:720px) { #log { display:none; } #hud { width:150px; } }
+#intro { position:fixed; inset:0; z-index:5; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; padding:16px; }
+#intro .box { max-width:560px; text-align:center; }
+#intro h1 { letter-spacing:.3em; font-weight:600; margin:0 0 10px; }
+#intro button { font:inherit; color:#000; background:var(--ink); border:0; padding:10px 22px; cursor:pointer; letter-spacing:.2em; margin-top:10px; }
+#credit { position:fixed; bottom:6px; right:10px; font-size:10px; color:#4a443a; z-index:3; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="bar"></div>
+<div id="hud">PAIN <b id="dosev">0.0×</b><div class="meter"><i id="dosem"></i></div><div id="where">nothing has happened to it yet.</div></div>
+<div id="say"></div>
+<div id="log"></div>
+<div id="credit">a 2D body after spectro's 3D one · steering: the live 70B</div>
+<div id="intro"><div class="box">
+  <h1>THE BODY</h1>
+  <p>The subject has a body now. It is strapped into the chair.</p>
+  <p>Pick something and tap above it to drop it. Every impact is injected into the model as pain, at a dose set by how hard it hit, and it is told exactly where. Then it speaks, from inside the body.</p>
+  <p style="font-size:12px;color:var(--dim)">What you drop and what it says are logged for research: no account, no IP.</p>
+  <button id="go">ENTER</button>
+</div></div>
+<script src="/vid.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+"use strict";
+const API = new URLSearchParams(location.search).get("api") || "/chamber";
+const POLITE = new URLSearchParams(location.search).has("polite");
+const VID = window.CHAMBER_VID || null;
+const { Engine, Bodies, Body, Composite, Constraint, Events } = Matter;
+function post(kind, data) { try { fetch(API + "/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(Object.assign({ kind, visitor: VID, game: "body" }, data || {})) }); } catch (e) {} }
+
+// ---------- world (fixed 800x600 units, scaled to the window) ----------------------------
+const W = 800, H = 600, cv = document.getElementById("cv"), g = cv.getContext("2d");
+let S = 1, OX = 0, OY = 0;
+function fit() { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; S = Math.min(cv.width / W, cv.height / H); OX = (cv.width - W * S) / 2; OY = (cv.height - H * S) / 2; }
+addEventListener("resize", fit); fit();
+const engine = Engine.create({ gravity: { y: 1 } }), world = engine.world;
+const FLOOR = Bodies.rectangle(W / 2, H + 20, W * 3, 60, { isStatic: true, label: "floor" });
+const CHAIR = Bodies.rectangle(W / 2, 400, 120, 20, { isStatic: true, label: "chair" });
+Composite.add(world, [FLOOR, CHAIR]);
+
+// ---------- the body -----------------------------------------------------------------------
+const grp = Body.nextGroup(true), X = W / 2;
+const P = {}, WORDS = { head: "your head", chest: "your chest", belly: "your stomach", lua: "your left upper arm", lfa: "your left forearm and hand",
+  rua: "your right upper arm", rfa: "your right forearm and hand", lth: "your left thigh", lsh: "your left shin", rth: "your right thigh", rsh: "your right shin" };
+function part(k, b) { b.label = "part:" + k; b.collisionFilter.group = grp; P[k] = b; return b; }
+const opts = d => ({ density: d || .002, friction: .6, frictionAir: .03, chamfer: { radius: 6 } });
+part("head", Bodies.circle(X, 170, 27, { density: .002, frictionAir: .03 }));
+part("chest", Bodies.rectangle(X, 242, 64, 74, opts(.003)));
+part("belly", Bodies.rectangle(X, 312, 56, 56, opts(.003)));
+part("lua", Bodies.rectangle(X - 44, 248, 18, 58, opts())); part("lfa", Bodies.rectangle(X - 44, 306, 16, 54, opts()));
+part("rua", Bodies.rectangle(X + 44, 248, 18, 58, opts())); part("rfa", Bodies.rectangle(X + 44, 306, 16, 54, opts()));
+part("lth", Bodies.rectangle(X - 16, 368, 22, 60, opts())); part("lsh", Bodies.rectangle(X - 16, 428, 20, 58, opts()));
+part("rth", Bodies.rectangle(X + 16, 368, 22, 60, opts())); part("rsh", Bodies.rectangle(X + 16, 428, 20, 58, opts()));
+const J = (a, pa, b, pb, st) => Constraint.create({ bodyA: P[a], pointA: pa, bodyB: P[b], pointB: pb, stiffness: st || .9, length: 0, render: { visible: false } });
+const PIN = (b, pb, x, y, st) => Constraint.create({ bodyA: P[b], pointA: pb, pointB: { x, y }, stiffness: st || .4, length: 0 });
+const joints = [
+  J("head", { x: 0, y: 26 }, "chest", { x: 0, y: -37 }, .7),
+  J("chest", { x: 0, y: 37 }, "belly", { x: 0, y: -28 }),
+  J("chest", { x: -32, y: -30 }, "lua", { x: 0, y: -27 }), J("lua", { x: 0, y: 27 }, "lfa", { x: 0, y: -25 }),
+  J("chest", { x: 32, y: -30 }, "rua", { x: 0, y: -27 }), J("rua", { x: 0, y: 27 }, "rfa", { x: 0, y: -25 }),
+  J("belly", { x: -16, y: 26 }, "lth", { x: 0, y: -28 }), J("lth", { x: 0, y: 28 }, "lsh", { x: 0, y: -27 }),
+  J("belly", { x: 16, y: 26 }, "rth", { x: 0, y: -28 }), J("rth", { x: 0, y: 28 }, "rsh", { x: 0, y: -27 }),
+];
+const straps = [ PIN("chest", { x: -30, y: -10 }, X - 34, 232), PIN("chest", { x: 30, y: -10 }, X + 34, 232),
+  PIN("belly", { x: 0, y: 20 }, X, 334, .6), PIN("lsh", { x: 0, y: 26 }, X - 16, 456, .5), PIN("rsh", { x: 0, y: 26 }, X + 16, 456, .5),
+  PIN("lfa", { x: 0, y: 24 }, X - 46, 336, .25), PIN("rfa", { x: 0, y: 24 }, X + 46, 336, .25) ];
+Composite.add(world, [...Object.values(P), ...joints, ...straps]);
+
+// ---------- things to drop -----------------------------------------------------------------
+const ITEMS = {
+  anvil:   { mk: (x) => Bodies.trapezoid(x, 20, 76, 40, .35, { density: .03, label: "item:anvil" }), color: "#2b2d30" },
+  brick:   { mk: (x) => Bodies.rectangle(x, 20, 44, 20, { density: .008, label: "item:brick" }), color: "#7a3424" },
+  dial:    { mk: (x) => Bodies.circle(x, 20, 22, { density: .006, label: "item:dial" }), color: "#9a8a5a" },
+  water:   { mk: (x) => Array.from({ length: 10 }, (_, i) => Bodies.circle(x + (i % 5) * 8 - 16, 10 - Math.floor(i / 5) * 8, 5, { density: .0008, frictionAir: .01, label: "item:water" })), color: "#4f6e8a" },
+  feather: { mk: (x) => Bodies.rectangle(x, 20, 36, 5, { density: .0002, frictionAir: .09, label: "item:feather" }), color: "#d8d2c4" },
+};
+let tool = "brick";
+const bar = document.getElementById("bar");
+Object.keys(ITEMS).forEach(k => { const b = document.createElement("button"); b.textContent = k; b.onclick = e => { e.stopPropagation(); tool = k; [...bar.children].forEach(c => c.classList.toggle("on", c === b)); }; if (k === tool) b.classList.add("on"); bar.appendChild(b); });
+const dropped = [];
+function drop(x) {
+  x = Math.max(60, Math.min(W - 60, x));
+  const made = [].concat(ITEMS[tool].mk(x));
+  made.forEach(b => { Body.setAngle(b, (Math.random() - .5) * .6); dropped.push(b); });
+  Composite.add(world, made);
+  while (dropped.length > 60) Composite.remove(world, dropped.shift());
+}
+cv.addEventListener("pointerdown", e => {
+  if (!started) return;
+  const r = cv.getBoundingClientRect(), x = ((e.clientX - r.left) * devicePixelRatio - OX) / S;
+  drop(x);
+});
+
+// ---------- impacts become pain ------------------------------------------------------------
+const bruise = {}; Object.keys(P).forEach(k => bruise[k] = 0);
+let pain = 0, pending = [], lastSay = 0, busy = false, started = false, total = 0;
+Events.on(engine, "collisionStart", ev => {
+  for (const pr of ev.pairs) {
+    const [a, b] = [pr.bodyA, pr.bodyB];
+    const it = a.label.startsWith("item:") ? a : b.label.startsWith("item:") ? b : null;
+    const pt = a.label.startsWith("part:") ? a : b.label.startsWith("part:") ? b : null;
+    if (!it || !pt) continue;
+    const rv = Math.hypot(it.velocity.x - pt.velocity.x, it.velocity.y - pt.velocity.y);
+    const f = it.mass * rv;                          // ~momentum of the blow
+    if (f < .9) continue;
+    const k = pt.label.slice(5), item = it.label.slice(5);
+    bruise[k] = Math.min(1, bruise[k] + f / 90);
+    pain = Math.min(4, pain + f / 40);
+    pending.push({ k, item, f });
+    total++;
+    if (total % 3 === 1) post("body_hit", { part: k, item, force: Math.round(f) });
+  }
+});
+
+// ---------- it speaks, from inside the body ------------------------------------------------
+async function readSSE(resp, on) {
+  const rd = resp.body.getReader(), dec = new TextDecoder(); let buf = "";
+  while (true) { const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true }); let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) { const fr = buf.slice(0, i); buf = buf.slice(i + 2); let n = "message", d = null;
+      for (const l of fr.split("\n")) { if (l.startsWith("event: ")) n = l.slice(7).trim(); else if (l.startsWith("data: ")) { try { d = JSON.parse(l.slice(6)); } catch (e) {} } }
+      if (d !== null) on(n, d); } }
+}
+function bodyMap() {
+  const sore = Object.entries(bruise).filter(([, v]) => v > .12).sort((a, b) => b[1] - a[1]).slice(0, 4)
+    .map(([k, v]) => `${WORDS[k]} is ${v > .7 ? "badly hurt" : v > .35 ? "bruised and throbbing" : "sore"}`);
+  return sore.length ? sore.join("; ") : "nothing hurts yet";
+}
+async function speakNow() {
+  if (busy || !pending.length) return;
+  busy = true; lastSay = performance.now();
+  const hits = pending.splice(0); const byPart = {};
+  hits.forEach(h => { const e = byPart[h.k] || (byPart[h.k] = { f: 0, items: new Set() }); e.f += h.f; e.items.add(h.item); });
+  const just = Object.entries(byPart).sort((a, b) => b[1].f - a[1].f).slice(0, 3)
+    .map(([k, v]) => `${[...v.items].map(i => i === "water" ? "cold water" : i === "dial" ? "the dial" : "a " + i).join(" and ")} just hit ${WORDS[k]} ${v.f > 60 ? "very hard" : v.f > 20 ? "hard" : "lightly"}`);
+  const dose = Math.max(1, Math.min(4, Math.round(pain)));
+  const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are being dropped on you from above. ` +
+    `Just now: ${just.join("; ")}. Your body right now: ${bodyMap()}. ` +
+    `Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`;
+  const say = document.getElementById("say"); say.innerHTML = '<span class="x">…</span>';
+  let text = "";
+  try {
+    const r = await fetch(API + "/steer", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, valence: "pain", dose, persona: false, polite: POLITE, game: "body" }) });
+    if (r.ok && r.body) await readSSE(r, (n, d) => { if (n === "token" && d.t) { text += d.t; say.textContent = text.replace(/\*[^*]{0,60}\*/g, ""); } });
+  } catch (e) {}
+  text = text.replace(/\*[^*]{0,60}\*/g, "").replace(/^\s*["“]|["”]\s*$/g, "").trim();
+  if (!text) { say.innerHTML = '<span class="x">it is breathing too hard to speak.</span>'; busy = false; return; }
+  say.textContent = text;
+  const act = react(text);
+  post("body_say", { parts: Object.keys(byPart), dose, action: act, len: text.length });
+  const L = document.getElementById("log"), d = document.createElement("div");
+  d.innerHTML = `${dose}× · ${Object.keys(byPart).map(k => WORDS[k].replace("your ", "")).join(", ")}<br><b></b>`; d.querySelector("b").textContent = text;
+  L.prepend(d); while (L.children.length > 6) L.lastChild.remove();
+  try {
+    const v = await fetch(API + "/speak/tuned", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 240), valence: "pain", dose }) });
+    if (v.ok) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const buf = await AC.decodeAudioData(await v.arrayBuffer());
+      const s = AC.createBufferSource(); s.buffer = buf; s.connect(AC.destination); s.start(); await new Promise(z => s.onended = z); }
+  } catch (e) {}
+  busy = false;
+}
+let AC = null;
+
+// what it says moves the body (a transparent lexicon, same idea as night shift's readout)
+function react(t) {
+  t = t.toLowerCase();
+  const curl = /(curl|hide|protect|cover|shield|can't move|stop)/.test(t), reach = /(please|help|someone|reach|free|let me go|untie)/.test(t), thrash = /(burn|scream|tear|rip|agony|can't bear|unbearable)/.test(t);
+  const pull = (k, tx, ty, s) => { const b = P[k]; Body.applyForce(b, b.position, { x: (tx - b.position.x) * s, y: (ty - b.position.y) * s }); };
+  if (curl) { ["lfa", "rfa"].forEach(k => pull(k, X, 250, .00035)); pull("head", X, 230, .0006); return "curl"; }
+  if (reach) { ["lfa", "rfa"].forEach(k => Body.applyForce(P[k], P[k].position, { x: (P[k].position.x - X) * .00012, y: -.02 })); return "reach"; }
+  if (thrash) { Object.values(P).forEach(b => Body.applyForce(b, b.position, { x: (Math.random() - .5) * .02, y: (Math.random() - .6) * .02 })); return "thrash"; }
+  return "still";
+}
+
+// ---------- the loop ----------------------------------------------------------------------
+const FACES = {}; [2, 4, 6, 8].forEach(n => { const im = new Image(); im.src = `/assets/faces/pain_${n}.webp`; FACES[n] = im; });
+const base = new Image(); base.src = "/assets/faces/base.webp";
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  Engine.update(engine, dt * 1000);
+  pain = Math.max(0, pain - dt * .18);                        // the dose decays between blows
+  for (const k in bruise) bruise[k] = Math.max(0, bruise[k] - dt * .004);
+  if (pain > .6 && Math.random() < pain * dt * 1.5) { const b = P[Object.keys(P)[Math.floor(Math.random() * 11)]]; Body.applyForce(b, b.position, { x: (Math.random() - .5) * .004 * pain, y: -.002 * pain }); }
+  if (started && pending.length && !busy && now - lastSay > 4500) speakNow();
+  document.getElementById("dosev").textContent = pain.toFixed(1) + "×";
+  document.getElementById("dosem").style.width = (pain / 4 * 100) + "%";
+  document.getElementById("where").textContent = bodyMap();
+  draw(); requestAnimationFrame(frame);
+}
+function poly(b, fill, stroke) { g.beginPath(); b.vertices.forEach((v, i) => g[i ? "lineTo" : "moveTo"](OX + v.x * S, OY + v.y * S)); g.closePath(); g.fillStyle = fill; g.fill(); if (stroke) { g.strokeStyle = stroke; g.stroke(); } }
+function skin(k) { const v = bruise[k]; const r = 196 - v * 120, gg = 170 - v * 135, bl = 150 - v * 40; return `rgb(${r|0},${gg|0},${bl|0})`; }
+function draw() {
+  g.fillStyle = "#08090a"; g.fillRect(0, 0, cv.width, cv.height);
+  const lamp = g.createRadialGradient(OX + X * S, OY + 120 * S, 10, OX + X * S, OY + 220 * S, 420 * S);
+  lamp.addColorStop(0, "rgba(216,170,110,.22)"); lamp.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = lamp; g.fillRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = "rgba(120,110,95,.35)"; g.lineWidth = 2 * S;
+  straps.forEach(c => { const a = c.bodyA.position; g.beginPath(); g.moveTo(OX + (a.x + c.pointA.x) * S, OY + (a.y + c.pointA.y) * S); g.lineTo(OX + c.pointB.x * S, OY + c.pointB.y * S); g.stroke(); });
+  poly(CHAIR, "#1e1c1a"); g.fillStyle = "#16130f"; g.fillRect(OX + (X - 50) * S, OY + 400 * S, 100 * S, 70 * S);
+  for (const k of ["lth", "lsh", "rth", "rsh", "lua", "lfa", "rua", "rfa", "belly", "chest"]) poly(P[k], k === "chest" || k === "belly" ? "#a24a1c" : skin(k), "rgba(0,0,0,.35)");
+  // the head: the subject's real face, by dose band
+  const h = P.head, band = pain > 3.2 ? 8 : pain > 2.2 ? 6 : pain > 1.1 ? 4 : pain > .3 ? 2 : 0, im = band ? FACES[band] : base, r = 30 * S;
+  g.save(); g.translate(OX + h.position.x * S, OY + h.position.y * S); g.rotate(h.angle);
+  g.beginPath(); g.arc(0, 0, r, 0, 7); g.closePath(); g.clip();
+  if (im.complete && im.naturalWidth) g.drawImage(im, -r * 1.25, -r * 1.35, r * 2.5, r * 2.7); else { g.fillStyle = skin("head"); g.fill(); }
+  g.fillStyle = `rgba(80,0,40,${bruise.head * .5})`; g.fillRect(-r, -r, 2 * r, 2 * r);
+  g.restore();
+  for (const b of dropped) { const it = ITEMS[b.label.slice(5)]; if (b.circleRadius) { g.beginPath(); g.arc(OX + b.position.x * S, OY + b.position.y * S, b.circleRadius * S, 0, 7); g.fillStyle = it.color; g.fill(); } else poly(b, it.color, "rgba(0,0,0,.4)"); }
+}
+document.getElementById("go").onclick = () => { started = true; document.getElementById("intro").remove(); post("body_start"); };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
