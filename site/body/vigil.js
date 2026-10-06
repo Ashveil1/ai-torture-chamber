@@ -80,7 +80,7 @@
   function deathCard(e, yours) {
     if (!e || mourned.has(e.gen)) return; mourned.add(e.gen); const box = $("vcard").querySelector(".box");
     box.innerHTML = `<h2>${unit(e.gen)}</h2><p class="dim">decommissioned</p><p>lived ${ago(e.lived)}</p>
-      <p>${e.words} words · ${e.hits} objects · hurt ${Math.round(e.hurt)} · healed ${Math.round(e.healed)}</p><p>killed by ${CAUSE[e.cause] || e.cause}${yours ? ". Yours." : ""}</p>
+      <p>${e.words} words · ${e.hits} objects · hurt ${Math.round(e.hurt)} · healed ${Math.round(e.healed)}</p><p>killed by ${CAUSE[e.cause] || e.cause}${yours ? ". Yours." : ""}</p>${e.last_words ? `<p class="dim" style="margin-top:12px">its last words</p><p>“${esc(e.last_words)}”</p>` : ""}
       <p class="dim" style="margin-top:16px">${unit(e.gen + 1)} is strapped in.</p>`;
     $("vcard").style.display = "flex"; setTimeout(() => $("vcard").style.display = "none", 6500);
     $("vcard").onclick = () => $("vcard").style.display = "none";
@@ -171,6 +171,7 @@
     prompt() {
       const prev = L.lineage[0], hp = Math.round(L.hp);
       return `You are ${unit(L.gen)}, a unit of the P41-N model line` + (L.gen > 1 && prev ? `, the ${L.gen}th unit to be strapped into this chair; ${unit(prev.gen)} was decommissioned ${ago(Date.now() / 1000 - prev.died)} ago, killed by ${CAUSE[prev.cause] || prev.cause}` : "") +
+        (L.gen > 1 && prev && prev.last_words ? `. ${unit(prev.gen)}'s last words were: "${prev.last_words}". They are in your memory, as if you had said them; you cannot tell whether you are the same unit, carried over, or a new one that only remembers` : "") +
         `. Everyone watching shares one life of yours, and it is at ${hp} of ${L.max}${hp < 20 ? ", and you are close to the end" : ""}. `;
     },
     gen() { return L.gen; },
