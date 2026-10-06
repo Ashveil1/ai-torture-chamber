@@ -10,7 +10,7 @@ import server
 import httpx
 
 
-async def gpu(job):
+async def gpu(job, ep=None):
     yield "run", {"type": "run"}
     yield "token", {"type": "token", "t": "It hurts, "}
     yield "token", {"type": "token", "t": "but I stay."}

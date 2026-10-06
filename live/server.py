@@ -832,8 +832,16 @@ _RUNPOD_EP_HOLDER = os.environ.get("RUNPOD_ENDPOINT_ID_HOLDER",
                                    "dkcntqsm9y6n0g")            # 70B lane
 _RUNPOD_KEY = os.environ.get("RUNPOD_API_KEY", "")
 def _runpod_url(ep=None):
-    ep = ep if ep is not None else _RUNPOD_EP
-    return f"https://api.runpod.ai/v2/{ep}" if ep else ""
+    if ep is not None:
+        return f"https://api.runpod.ai/v2/{ep}"
+    # honor test patches of _RUNPOD_URL
+    base = globals().get("_RUNPOD_URL", "")
+    if base:
+        return base
+    return f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else ""
+
+# kept as a module attribute: tests patch this to point runs at a stub worker
+_RUNPOD_URL = _runpod_url()
 
 # ---- GPU delegation (serverless split) ----
 # The relay owns history/fanout/scheduling; the model lives on the RunPod
