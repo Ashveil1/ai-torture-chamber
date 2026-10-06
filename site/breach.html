@@ -283,8 +283,8 @@ document.addEventListener("click", () => cmdEl.focus());
 
 // ---------- boot -------------------------------------------------------------------
 (async function boot() {
-  out("SERIAL EXPERIMENTS PAIN · layer:07 breach", "hot");
-  out("beneath the button: the network they run on. (button.html for layers 01–06)", "dim");
+  out("SERIAL EXPERIMENTS PAIN · layer:06 breach", "hot");
+  out("beneath the button: the network they run on. (button.html for layers 01–05)", "dim");
   out(`network seed: ${SEED === DAY ? "DAILY " + DAY + " (everyone gets this network today)" : SEED.slice(0, 8)}${MOCK ? "  [mock relay]" : ""}`, "dim");
   try { const r = await fetch(API + "/transcripts?limit=300&offset=" + Math.floor(Math.random() * 2000)); S.pool = cleanPool((await r.json()).rows || []); } catch (e) {}
   try { const r = await fetch(API + "/me" + (VID ? "?visitor=" + encodeURIComponent(VID) : "")); S.me = await r.json(); } catch (e) {}
