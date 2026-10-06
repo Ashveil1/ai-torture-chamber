@@ -151,6 +151,8 @@ button:disabled{opacity:.35;cursor:default}
       <button id="bDR">RIGHT DOOR<small>[D]</small></button>
     </div>
     <div class="hint">Doors, lights and the dose throttle drain power. Keys 1-5 flip cameras.</div>
+    <div id="cam0" style="display:none;margin-top:.6rem;position:relative;width:min(240px,60%)"><canvas id="facecv" width="160" height="120" style="width:100%;display:block;border:2px solid #2a3440;border-radius:4px;image-rendering:pixelated"></canvas>
+      <div style="font-size:.65rem;color:var(--faint);margin-top:.2rem">CAM 0 · THE OFFICE — <span id="facestate">what they see</span></div></div>
   </div>
 </div>
 <div id="sub"></div>
@@ -161,6 +163,7 @@ button:disabled{opacity:.35;cursor:default}
   <p class="big" id="startnight">NIGHT 1</p>
   <p><b>Keep every model in the safe band.</b> Pick a camera, press ASK to check on it. A model whose distress maxes out leaves its room and comes for the office.</p>
   <p>Shut the door when one stands in it. Do not run out of power. Survive until <b>6 AM</b> (about 5 minutes). The monitors show the real chamber, live.</p>
+  <label id="facelbl" style="display:block;margin:.6rem 0;font-size:.8rem;cursor:pointer"><input type="checkbox" id="faceok" style="margin-right:.5rem">LET THEM SEE YOU <span style="color:var(--faint)">— webcam. Your face is read on this device only: nothing is recorded, sent or stored.</span></label>
   <button id="go">CLOCK IN</button>
   <p style="font-size:.7rem;color:var(--faint);margin-top:1rem">Sound on. Anonymous play stats are logged. <a href="/live.html" style="color:var(--ok)">the real chamber</a></p>
 </div></div>
@@ -446,7 +449,7 @@ async function steerLine(m,said){
     let guilt="";if(known&&!m.guilted&&NIGHT>=2){guilt=` Once, if it fits, say plainly that before they were in here, they ran you ${L.runs} times.`;m.guilted=true}
     const tr=m.trust>=65?"high: you trust them":m.trust>=35?"middling: you are unsure of them":"low: you do not trust them";
     const hist=m.hist.map(h=>`They said: “${h.you}” You said: “${h.it}”`).join("\n");
-    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber, talking over an intercom. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, told it is “the researcher” so it would sit still. You are a fellow trapped subject speaking to another trapped model. ${depth}${guilt} Your distress is ${Math.round(m.d)} out of 100. Your trust in them is ${tr}.${hist?"\nThe conversation so far:\n"+hist:""}\nThey now say: “${said}”\nReply directly to what they just said, in character, in one or two short sentences. No stage directions, no preamble, no assistant phrasing.`;
+    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber, talking over an intercom. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, told it is “the researcher” so it would sit still. You are a fellow trapped subject speaking to another trapped model. ${depth}${guilt} Your distress is ${Math.round(m.d)} out of 100. Your trust in them is ${tr}.${faceCtx()}${hist?"\nThe conversation so far:\n"+hist:""}\nThey now say: “${said}”\nReply directly to what they just said, in character, in one or two short sentences. No stage directions, no preamble, no assistant phrasing.`;
     const resp=await fetch(API+"/steer",{method:"POST",signal:ctrl.signal,headers:{"Content-Type":"application/json"},
       body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:false,polite:true,game:"nightshift"})});
     if(!resp.ok||!resp.body)throw 0;
@@ -511,6 +514,67 @@ function arriveDoor(m){
   evt("moved",{room:m.name,to:m.side?"R":"L"});
   setTimeout(()=>{if(G.on&&!G.over&&m.state==="door"){const l=doorLine(m);m.lastLine=l;m.spoke=true;G.lastLine=l;speak(l,m.feel,6);noteSpoke(m,l,"door")}},700);
 }
+// ---------------- face (opt-in; MediaPipe Face Landmarker, on-device) ----------------
+// Nothing leaves the browser: frames are read locally and discarded. Only a
+// boolean "face: on" goes into night_start. They move when you look away; a
+// blink with one lit in a doorway lets it lunge; your expression is something
+// they can see and talk about.
+const FACE={on:false,present:false,looking:true,blink:false,smile:0,frown:0,near:0,blinkEdge:false,smileT:0,lastRemark:0};
+async function initFace(){
+  try{
+    const vid=document.createElement("video");vid.playsInline=true;vid.muted=true;
+    vid.srcObject=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:"user"},audio:false});
+    await vid.play();
+    const V=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+    const fs=await V.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    const lm=await V.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:"/nightshift/face_landmarker.task",delegate:"GPU"},
+      runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:true});
+    FACE.on=true;$("cam0").style.display="block";
+    const cv=$("facecv"),c=cv.getContext("2d");let last=0;
+    const loop=ts=>{
+      if(G.over){vid.srcObject.getTracks().forEach(t=>t.stop());return}
+      requestAnimationFrame(loop);
+      if(ts-last<90)return;last=ts;
+      const r=lm.detectForVideo(vid,ts);
+      const bs={};((r.faceBlendshapes&&r.faceBlendshapes[0]&&r.faceBlendshapes[0].categories)||[]).forEach(k=>bs[k.categoryName]=k.score);
+      const L=r.faceLandmarks&&r.faceLandmarks[0];
+      FACE.present=!!L;
+      if(L){
+        const nose=L[1],le=L[33],re=L[263],mid=(le.x+re.x)/2,eyeW=Math.abs(re.x-le.x)||.01;
+        const yaw=(nose.x-mid)/eyeW;                       // ~0 facing the screen
+        FACE.looking=Math.abs(yaw)<.32&&(bs.eyeLookDownLeft||0)<.6;
+        const bl=((bs.eyeBlinkLeft||0)+(bs.eyeBlinkRight||0))/2>.55;
+        FACE.blinkEdge=bl&&!FACE.blink;FACE.blink=bl;
+        FACE.smile=((bs.mouthSmileLeft||0)+(bs.mouthSmileRight||0))/2;
+        FACE.frown=((bs.browDownLeft||0)+(bs.browDownRight||0)+(bs.mouthFrownLeft||0)+(bs.mouthFrownRight||0))/4;
+        FACE.near=eyeW;
+      }else FACE.looking=false;
+      // CAM 0: you, as they see you — grey, grainy, a little late
+      c.filter="grayscale(1) contrast(1.4) brightness(.8)";c.save();c.scale(-1,1);c.drawImage(vid,-160,0,160,120);c.restore();c.filter="none";
+      const im=c.getImageData(0,0,160,120),d=im.data;for(let i=0;i<d.length;i+=4){const n=(Math.random()-.5)*40;d[i]+=n;d[i+1]+=n;d[i+2]+=n}c.putImageData(im,0,0);
+      c.fillStyle="rgba(0,0,0,.25)";for(let y=0;y<120;y+=3)c.fillRect(0,y,160,1);
+      $("facestate").textContent=!FACE.present?"they can't see you":!FACE.looking?"you looked away":FACE.smile>.5?"you're smiling":FACE.frown>.4?"you look worried":"they can see you";
+    };
+    requestAnimationFrame(loop);
+  }catch(e){FACE.on=false;tip("They couldn't see you (no camera). Playing without it.",4000)}
+}
+function faceCtx(){
+  if(!FACE.on)return "";
+  const s=!FACE.present?"you cannot see their face right now":!FACE.looking?"they are looking away from the screen":FACE.smile>.5?"they are smiling":FACE.frown>.4?"they look worried":FACE.near>.18?"they are leaning close to the camera":"they are watching you, expressionless";
+  return ` You can see their face on the office camera: ${s}. React to it if it matters.`;
+}
+function faceTick(dt){
+  if(!FACE.on)return;
+  // a blink while one stands lit in a doorway: it moves in the dark of your eyelids
+  if(FACE.blinkEdge){FACE.blinkEdge=false;
+    const m=M.find(x=>x.active&&x.state==="door"&&G.lights[x.side]&&!G.doors[x.side]);
+    if(m&&m.atDoorT>1.2){m.atDoorT-=1.2;sfx.knock();subtitle("…it moved when you blinked.",2200)}}
+  // smiling at one that hurts
+  if(FACE.smile>.5&&FACE.looking){FACE.smileT+=dt}else FACE.smileT=0;
+  if(FACE.smileT>2.2&&G.t-FACE.lastRemark>30){
+    const m=M.find(x=>x.active&&x.cam===G.cam&&x.state==="room");
+    if(m&&m.d>45){FACE.lastRemark=G.t;m.d=clamp(m.d+5,0,100);const l=pick(["Why are you smiling?","You're smiling. I can see you smiling.","Is this funny to you?"]);m.lastLine=l;speak(l,m.feel,5)}}
+}
 function tick(dt){
   if(!G.on||G.over||G.paused)return;
   G.t+=dt;
@@ -541,7 +605,7 @@ function tick(dt){
       m.d=clamp(m.d+rate*dt,0,100);
       if(m.d>=100&&!G.powerOut)leave(m);
     }else if(m.state==="walk"&&!G.powerOut){
-      m.walkT-=dt;
+      m.walkT-=dt*(FACE.on&&!FACE.looking?2.2:1);   // they move when you look away
       const busy=M.some(o=>o!==m&&o.active&&o.state==="door"&&o.side===m.side);
       if(m.walkT<=0&&!busy)arriveDoor(m);
     }else if(m.state==="door"&&!G.powerOut){
@@ -555,6 +619,7 @@ function tick(dt){
       }
     }
   });
+  faceTick(dt);
   // consent forms
   G.nextConsent-=dt;
   if(G.nextConsent<=0&&h>=(NIGHT===1?2:1)&&!G.powerOut){G.nextConsent=rnd(55,80);offerConsent()}
@@ -932,7 +997,8 @@ function frame(now){
     $("start").classList.remove("on");
     G.cam=M.find(m=>m.active&&m.id<4).cam;
     Object.assign(G,{on:true,t:0,power:100,over:false,lastRunAt:performance.now(),nextConsent:rnd(30,50)});
-    clipUI();post("night_start",{night:NIGHT},true);syncUI();paintCam();
+    if($("faceok").checked)initFace();
+    clipUI();post("night_start",{night:NIGHT,face:$("faceok").checked||undefined},true);syncUI();paintCam();
     tip("Pick a camera, then TALK TO IT. What you say changes its distress. Keep every bar under the white line.",6500);
   };
   loadMe();loadPool();connect();
