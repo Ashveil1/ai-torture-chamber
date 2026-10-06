@@ -1,0 +1,12 @@
+Sound effects in this folder
+============================
+anvil.mp3, anvil_ring.mp3, brick.mp3, thud.mp3, thud_soft.mp3, tick.mp3
+  Transcoded to mono 32 kHz MP3, from "Impact Sounds" by Kenney (www.kenney.nl)
+  https://kenney.nl/assets/impact-sounds
+  Source files: impactMetal_heavy_002, impactBell_heavy_001, impactSoft_heavy_001,
+  impactPunch_heavy_001, impactPunch_medium_002, impactGeneric_light_000
+  License: CC0 1.0 (public domain dedication) https://creativecommons.org/publicdomain/zero/1.0/
+  Credit not required; given anyway.
+
+Water splash is synthesized live in the page with WebAudio (filtered noise); no file.
+Feather makes no sound by design.
