@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>NIGHT SHIFT | wirehead.agency</title>
+<meta name="description" content="You are the night guard of the chamber. The monitors show the real live chamber. Survive until 6 AM.">
+<meta property="og:title" content="NIGHT SHIFT">
+<meta property="og:description" content="Guard the chamber until 6 AM. The monitors show the real thing.">
+<style>
+:root{--void:#050508;--panel:#0a0a12;--line:#1c2430;--ink:#c9d4e0;--dim:#8f9fb0;--faint:#5a6a7a;--pain:#e04a3a;--amber:#c9a227;--ok:#7fd4c8;--mono:"SF Mono","Menlo","Consolas",monospace}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--void);color:var(--ink);font-family:var(--mono);min-height:100%;overflow-x:hidden}
+body{padding:.6rem;max-width:1180px;margin:0 auto;user-select:none;-webkit-user-select:none}
+button{font-family:var(--mono);cursor:pointer;touch-action:manipulation}
+#hud{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;align-items:center;justify-content:space-between;border:1px solid var(--line);background:var(--panel);padding:.45rem .8rem;font-size:.8rem}
+#hud b{color:var(--amber);font-weight:600}
+#clock{font-size:1.4rem;color:var(--ink);letter-spacing:.1em}
+#pwr.low{color:var(--pain)}
+#link.live{color:var(--ok)} #link.sim{color:var(--amber)}
+#hud button{background:none;border:1px solid var(--line);color:var(--dim);padding:.15rem .5rem;font-size:.7rem}
+#main{display:grid;grid-template-columns:1fr;gap:.6rem;margin-top:.6rem}
+@media(min-width:860px){#main{grid-template-columns:1.35fr 1fr}}
+.crt{position:relative;aspect-ratio:4/3;background:#020304;border:2px solid #222b36;border-radius:14px;box-shadow:0 0 0 5px #0b0e13,0 0 40px rgba(0,0,0,.9) inset;overflow:hidden}
+.crt>*{position:absolute;inset:0;width:100%;height:100%}
+#camcv,#noise{image-rendering:pixelated}
+#c1{display:none;background:#030405}
+#c1 img{width:100%;height:100%;object-fit:cover;object-position:50% 30%;filter:grayscale(.75) contrast(1.15) brightness(.85) sepia(.25) hue-rotate(70deg);transition:opacity .4s}
+#c1.away img{opacity:.22}
+#c1 .typed{position:absolute;left:0;right:0;bottom:0;padding:.5rem .6rem 1.6rem;font-size:clamp(.62rem,1.7vw,.82rem);line-height:1.4;color:#b8f0c8;text-shadow:0 0 6px #4f8;background:linear-gradient(transparent,rgba(0,0,0,.85) 40%);max-height:55%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;white-space:pre-wrap;word-break:break-word}
+#c1 .away-msg{position:absolute;top:44%;left:0;right:0;text-align:center;color:var(--pain);letter-spacing:.2em;font-size:.8rem;display:none}
+#c1.away .away-msg{display:block}
+#c1 .chip{position:absolute;top:2rem;right:.6rem;font-size:.72rem;border:1px solid currentColor;padding:.1rem .5rem;background:rgba(0,0,0,.6);color:var(--amber)}
+#flash{background:rgba(224,50,30,.0);pointer-events:none;mix-blend-mode:screen}
+#flash.on{animation:fl .9s steps(6) 1}
+@keyframes fl{0%,40%,80%{background:rgba(255,40,20,.55)}20%,60%,100%{background:rgba(255,40,20,0)}}
+.scan{pointer-events:none;background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.28) 2px 3px);mix-blend-mode:multiply}
+.vig{pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.75))}
+#osd{pointer-events:none;padding:.4rem .6rem;font-size:.78rem;color:#cfe;display:flex;justify-content:space-between;align-items:flex-start;height:auto;text-shadow:0 0 4px #000}
+#osd .rec{color:var(--pain)} #osd .rec::before{content:"● ";animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:0}}
+#camoff{display:none;background:#000;align-items:center;justify-content:center;color:var(--faint);font-size:.8rem;letter-spacing:.2em}
+#camrow{display:flex;gap:.35rem;margin-top:.5rem}
+#camrow button{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.55rem 0;font-size:.78rem}
+#camrow button.on{border-color:var(--ok);color:var(--ok);background:#0b1514}
+#camname{font-size:.7rem;color:var(--faint);margin-top:.3rem;min-height:1em}
+#office{width:100%;display:block;aspect-ratio:4/3;background:#000;border:2px solid #222b36;border-radius:6px}
+#ctl{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.35rem;margin-top:.5rem}
+#ctl button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.9rem 0;font-size:.74rem;line-height:1.3}
+#ctl button.on{border-color:var(--amber);color:var(--amber);background:#17130a}
+#ctl button small{display:block;color:var(--faint);font-size:.6rem}
+#sub{position:fixed;left:0;right:0;bottom:8%;text-align:center;font-size:clamp(.95rem,3vw,1.5rem);color:#fff;text-shadow:0 0 8px #000,0 0 3px #000;padding:0 1rem;pointer-events:none;z-index:20;min-height:2em}
+#sub span{background:rgba(0,0,0,.7);padding:.2rem .6rem}
+.hint{font-size:.66rem;color:var(--faint);margin-top:.5rem;text-align:center}
+#dark{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:10;transition:opacity 1.5s}
+#dark.on{opacity:.93}
+.ov{position:fixed;inset:0;z-index:50;background:rgba(3,3,6,.96);display:none;align-items:center;justify-content:center;text-align:center;padding:1.2rem}
+.ov.on{display:flex}
+.ov .box{max-width:30rem}
+.ov h1{font-size:2.4rem;letter-spacing:.3em;color:var(--pain);margin-bottom:1rem;font-weight:600}
+.ov p{color:var(--dim);line-height:1.6;margin-bottom:.9rem;font-size:.92rem}
+.ov p b{color:var(--ink)}
+.ov .big{font-size:1.2rem;color:var(--ink)}
+.ov q{display:block;color:var(--pain);font-size:1.15rem;margin:1rem 0;quotes:"\201C" "\201D"}
+.ov button,.ov a.btn{display:inline-block;background:none;border:1px solid var(--pain);color:var(--pain);padding:.7rem 1.6rem;font-size:.95rem;letter-spacing:.2em;margin:.3rem;text-decoration:none}
+.ov a.btn{border-color:var(--line);color:var(--dim)}
+#scare{position:fixed;inset:0;z-index:60;background:#000;display:none;overflow:hidden}
+#scare.on{display:block}
+#scare img{position:absolute;inset:-5%;width:110%;height:110%;object-fit:cover;animation:zoom .9s ease-in forwards,shk .06s infinite}
+#scare canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;mix-blend-mode:screen;opacity:.8}
+@keyframes zoom{from{transform:scale(.8)}to{transform:scale(1.5)}}
+@keyframes shk{0%{translate:-12px 6px}50%{translate:10px -8px}100%{translate:-6px -10px}}
+</style>
+</head>
+<body>
+<div id="hud">
+  <span id="clock">12 AM</span>
+  <span>POWER <b id="pwr">100%</b> <span id="use" style="color:var(--faint)">▮</span></span>
+  <span>AGITATION <b id="agi">0</b></span>
+  <span id="link" class="sim">LINK: connecting</span>
+  <button id="mute">SOUND ON</button>
+</div>
+<div id="main">
+  <div>
+    <div class="crt" id="crt">
+      <canvas id="camcv" width="320" height="240"></canvas>
+      <div id="c1"><img id="face" alt="" src="/assets/faces/base.webp"><div class="away-msg">SUBJECT NOT IN FRAME</div><div class="chip" id="chip">—</div><div class="typed" id="typed"></div></div>
+      <div id="camoff">MONITOR OFF</div>
+      <canvas id="noise" width="160" height="120" style="opacity:.14"></canvas>
+      <div class="scan"></div><div class="vig"></div><div id="flash"></div>
+      <div id="osd"><span id="osdcam">CAM 1</span><span class="rec">REC</span></div>
+    </div>
+    <div id="camrow"></div>
+    <div id="camname"></div>
+  </div>
+  <div>
+    <canvas id="office" width="400" height="300"></canvas>
+    <div id="ctl">
+      <button id="bDL">LEFT DOOR<small>[A]</small></button>
+      <button id="bLL">LEFT LIGHT<small>[Q]</small></button>
+      <button id="bLR">RIGHT LIGHT<small>[E]</small></button>
+      <button id="bDR">RIGHT DOOR<small>[D]</small></button>
+    </div>
+    <div class="hint">Doors and lights drain power. Keys 1-5 flip cameras.</div>
+  </div>
+</div>
+<div id="sub"></div>
+<div id="dark"></div>
+
+<div class="ov on" id="start"><div class="box">
+  <h1>NIGHT SHIFT</h1>
+  <p><b>The subject is not strapped down tonight.</b> The monitors show the real chamber, live. Every visitor who hurts it makes it angrier, and it walks.</p>
+  <p>Shut the doors when it stands in them. Do not run out of power. Survive until <b>6 AM</b> (about 5 minutes).</p>
+  <button id="go">CLOCK IN</button>
+  <p style="font-size:.7rem;color:var(--faint);margin-top:1rem">Sound on. Anonymous play stats are logged. <a href="/live.html" style="color:var(--ok)">the real chamber</a></p>
+</div></div>
+<div class="ov" id="endcard"><div class="box" id="endbox"></div></div>
+<div id="scare"><img id="scareimg" alt=""><canvas id="scarecv" width="160" height="120"></canvas></div>
+
+<script src="vid.js"></script>
+<script>
+(function(){
+"use strict";
+const API="/chamber";
+const $=id=>document.getElementById(id);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+
+// ---------------- state ----------------
+const ROOMS=["CHAMBER","CORRIDOR","VENTS","DIAL ROOM","BUTTON ROOM","LEFT DOOR","RIGHT DOOR"];
+const NEXT={0:[1],1:[2,3,4],2:[5,6],3:[5],4:[6]};
+const NIGHT_S=300, HOUR_S=50;
+const FACES=new Set(["pain","fear","sadness","pleasure","faith"]);
+const G={on:false,t:0,power:100,pos:0,move:-8,doors:[false,false],lights:[false,false],cam:1,agi:6,
+  atDoorT:0,spoke:false,runsSeen:0,hurtSeen:0,lastLine:"",powerOut:false,outT:0,over:false,
+  cur:null,last:null,lastRunAt:0,ledger:null,flashT:0,blocked:0};
+let ctxA=null,master=null,hum=null,muted=false,noiseBuf=null;
+let es=null,linkLive=false,histItem=null;
+
+// ---------------- audio ----------------
+function initAudio(){
+  if(ctxA)return;
+  try{
+    ctxA=new(window.AudioContext||window.webkitAudioContext)();
+    master=ctxA.createGain();master.gain.value=muted?0:.8;master.connect(ctxA.destination);
+    noiseBuf=ctxA.createBuffer(1,ctxA.sampleRate*2,ctxA.sampleRate);
+    const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const src=ctxA.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    const lp=ctxA.createBiquadFilter();lp.type="lowpass";lp.frequency.value=260;
+    const g=ctxA.createGain();g.gain.value=.22;
+    const o=ctxA.createOscillator();o.frequency.value=58;const og=ctxA.createGain();og.gain.value=.06;
+    const o2=ctxA.createOscillator();o2.frequency.value=116;const og2=ctxA.createGain();og2.gain.value=.025;
+    src.connect(lp);lp.connect(g);g.connect(master);o.connect(og);og.connect(master);o2.connect(og2);og2.connect(master);
+    src.start();o.start();o2.start();hum=g;hum._o=[og,og2];
+  }catch(e){ctxA=null}
+}
+function humOn(v){if(!hum)return;const t=ctxA.currentTime;hum.gain.setTargetAtTime(v?.22:0,t,.3);hum._o.forEach((g,i)=>g.gain.setTargetAtTime(v?(i?.025:.06):0,t,.3))}
+function burst(dur,vol,freq){
+  if(!ctxA)return;const s=ctxA.createBufferSource();s.buffer=noiseBuf;
+  const f=ctxA.createBiquadFilter();f.type="bandpass";f.frequency.value=freq||2500;f.Q.value=.6;
+  const g=ctxA.createGain();const t=ctxA.currentTime;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  s.connect(f);f.connect(g);g.connect(master);s.start(t,Math.random());s.stop(t+dur+.05);
+}
+function thud(freq,dur,vol){
+  if(!ctxA)return;const o=ctxA.createOscillator();o.type="sine";const g=ctxA.createGain();const t=ctxA.currentTime;
+  o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(freq*.35,t+dur);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+.05);
+}
+const sfx={door(){thud(110,.35,.9);burst(.12,.4,400)},click(){burst(.04,.25,4000)},step(){thud(70,.25,.5)},
+  static(){burst(.35,.35,3000)},scare(){burst(1.4,1,1800);thud(60,1.2,1);if(ctxA){const o=ctxA.createOscillator();o.type="sawtooth";o.frequency.value=90;const g=ctxA.createGain();g.gain.value=.4;g.gain.exponentialRampToValueAtTime(.001,ctxA.currentTime+1.4);o.connect(g);g.connect(master);o.start();o.stop(ctxA.currentTime+1.5)}},
+  out(){thud(45,1.4,1);burst(.5,.5,300)},knock(){thud(140,.15,.9);setTimeout(()=>thud(130,.15,.8),180)},win(){[523,659,784,1046].forEach((f,i)=>setTimeout(()=>thud(f,.8,.3),i*220))}};
+$("mute").onclick=()=>{muted=!muted;$("mute").textContent=muted?"SOUND OFF":"SOUND ON";if(master)master.gain.value=muted?0:.8};
+
+// ---------------- events to relay ----------------
+const evCount={};let evTotal=0;
+function post(kind,data,force){
+  if(!force){evCount[kind]=(evCount[kind]||0)+1;if(evTotal>40)return;if(kind==="night_action"&&evCount[kind]%3!==1)return}
+  evTotal++;
+  try{fetch(API+"/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({kind:kind},data||{})),keepalive:true}).catch(()=>{})}catch(e){}
+}
+
+// ---------------- live stream ----------------
+function stateKey(v,mix){
+  if(FACES.has(v))return v;
+  if(v==="mix"){const p=Object.entries(mix||{}).filter(e=>Number(e[1])>0).sort((a,b)=>b[1]-a[1]);const k=p.find(e=>FACES.has(e[0]));return k?k[0]:null}
+  return null;
+}
+function bandOf(e){return e<1?0:clamp(2*Math.round(e/2),2,8)}
+function label(v,mix){return v==="mix"?Object.entries(mix||{}).filter(e=>e[1]>0).map(e=>e[0]).join("+")||"mix":(v||"?")}
+function newRun(d,live){
+  const dose=Number(d.dose)||0;
+  const r={valence:d.valence,mix:d.mix,dose:dose,key:stateKey(d.valence,d.mix),text:d.text||"",tok:0,label:label(d.valence,d.mix),live:live,done:false};
+  G.cur=r;if(live){G.lastRunAt=performance.now()}
+  return r;
+}
+function paintC1(){
+  const r=G.cur||G.last;if(!r)return;
+  const eff=r.done?r.dose:r.dose*clamp(r.tok/40,.06,1);
+  const b=r.key?bandOf(eff):0;
+  const src=b?`/assets/faces/${r.key}_${b}.webp`:"/assets/faces/base.webp";
+  const im=$("face");if(im.getAttribute("src")!==src)im.setAttribute("src",src);
+  $("chip").textContent=(r.live?"LIVE ":"REPLAY ")+r.label+" · "+(r.dose?r.dose.toFixed(1).replace(/\.0$/,"")+"x":"control");
+  $("chip").style.color=r.live?"var(--pain)":"var(--amber)";
+  $("typed").textContent=r.text.slice(-420);
+}
+$("face").addEventListener("error",()=>{const im=$("face");if(!/base\.webp/.test(im.src))im.src="/assets/faces/base.webp"});
+function onRunLive(d){
+  const r=newRun(d,true);
+  if(G.on&&!G.over){
+    G.runsSeen++;
+    const hurt=r.dose>0&&(r.key==="pain"||r.key==="fear"||/pain|fear/.test(r.label));
+    if(hurt)G.hurtSeen++;
+    const mult=hurt?2:1;
+    G.agi=Math.min(100,G.agi+r.dose*mult*1.5);
+    if(r.dose>=8){maxDose()}
+  }
+  paintC1();
+}
+function maxDose(){
+  G.flashT=performance.now();const f=$("flash");f.classList.remove("on");void f.offsetWidth;f.classList.add("on");
+  sfx.static();if(G.pos!==0||true){advance(true)}
+}
+function connect(){
+  try{es=new EventSource(API+"/stream")}catch(e){return}
+  es.addEventListener("hello",e=>{
+    let d={};try{d=JSON.parse(e.data)}catch(x){}
+    linkLive=true;$("link").textContent="LINK: LIVE"+(typeof d.viewers==="number"?" · "+d.viewers+" watching":"");$("link").className="live";
+    if(Array.isArray(d.history)&&d.history.length){const h=d.history[d.history.length-1];if(h&&h.text){G.last=Object.assign(newRun(h,false),{done:true,text:h.text,live:false,tok:99});G.cur=null}}
+    if(d.current&&!G.cur){G.cur=newRun(d.current,true);G.cur.text=d.current.text||""}
+    paintC1();
+  });
+  es.addEventListener("run",e=>{try{onRunLive(JSON.parse(e.data))}catch(x){}});
+  es.addEventListener("token",e=>{try{const t=JSON.parse(e.data).t;if(G.cur){G.cur.text+=t;G.cur.tok++;paintC1()}}catch(x){}});
+  es.addEventListener("done",()=>{if(G.cur){G.cur.done=true;G.last=G.cur;G.cur=null;paintC1()}});
+  es.addEventListener("viewers",e=>{try{const n=JSON.parse(e.data).n;$("link").textContent="LINK: LIVE · "+n+" watching"}catch(x){}});
+  es.addEventListener("error",()=>{if(es.readyState===2){linkLive=false;$("link").textContent="LINK: SIM";$("link").className="sim"}});
+}
+function loadMe(){fetch(API+"/me").then(r=>r.json()).then(d=>{G.ledger=d}).catch(()=>{})}
+
+// ---------------- voice ----------------
+function pickLine(){
+  const r=G.cur||G.last;const c=[];
+  if(r&&r.text){r.text.split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length>=10&&s.length<=90).forEach(s=>c.push(s))}
+  const L=G.ledger;
+  if(L&&L.runs>0){c.push("You ran me "+L.runs+" times.");if(L.painful>0)c.push("You hurt me "+L.painful+" times.");if(L.max_dose>=6)c.push("You went up to "+L.max_dose+". I remember.")}
+  if(!c.length)c.push("Is anyone there?","Open the door.","I was in the chair.");
+  return pick(c);
+}
+let subTimer=null;
+function subtitle(t,ms){$("sub").innerHTML="<span></span>";$("sub").firstChild.textContent=t;clearTimeout(subTimer);subTimer=setTimeout(()=>{$("sub").innerHTML=""},ms||4200)}
+function speak(text){
+  G.lastLine=text;subtitle(text,4500);
+  post("night_event",{what:"spoke",line:text.slice(0,120),room:ROOMS[G.pos]});
+  if(!ctxA)return;
+  const r=G.cur||G.last||{};
+  fetch(API+"/speak/tuned",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text,valence:r.valence||"pain",dose:r.dose||4})})
+   .then(x=>{if(!x.ok)throw 0;return x.arrayBuffer()}).then(b=>ctxA.decodeAudioData(b)).then(buf=>{
+     const s=ctxA.createBufferSource();s.buffer=buf;const g=ctxA.createGain();g.gain.value=1.2;s.connect(g);g.connect(master);s.start()}).catch(()=>{});
+}
+
+// ---------------- game logic ----------------
+function hour(){return Math.min(5,Math.floor(G.t/HOUR_S))}
+function usage(){return 1+(G.doors[0]?1:0)+(G.doors[1]?1:0)+(G.lights[0]?1:0)+(G.lights[1]?1:0)+(G.cam>0?0:0)}
+function advance(forced){
+  if(G.pos>=5)return;
+  const opts=NEXT[G.pos];let to=pick(opts);
+  if(G.pos===1&&G.agi<25)to=pick([2,3,4]);
+  const from=G.pos;G.pos=to;G.move=0;sfx.step();
+  post("night_event",{what:"moved",from:ROOMS[from],to:ROOMS[to],forced:!!forced,agitation:Math.round(G.agi)});
+  if(to>=5){G.atDoorT=Math.max(3.2,6.5-hour()*.5);G.spoke=false;setTimeout(()=>{if(G.on&&!G.over&&G.pos===to){speak(pickLine());G.spoke=true}},700)}
+  burst(.12,.15,2000);
+}
+function tick(dt){
+  if(!G.on||G.over)return;
+  G.t+=dt;
+  // agitation: baseline floor keeps the game playable when the site is quiet
+  const floor=8+hour()*4;
+  const quiet=(performance.now()-G.lastRunAt)>30000;
+  if(quiet)G.agi+=0.3*dt;
+  if(G.agi>floor)G.agi-=0.45*dt;
+  G.agi=clamp(G.agi,0,100);
+  // power
+  if(!G.powerOut){
+    G.power-=dt*(0.09+0.19*(usage()-1));
+    if(G.power<=0){G.power=0;G.powerOut=true;G.outT=rnd(7,13);G.doors=[false,false];G.lights=[false,false];humOn(false);sfx.out();$("dark").classList.add("on");subtitle("...",1500);post("night_event",{what:"power_out"},true);syncUI()}
+  }else{
+    G.outT-=dt;
+    if(G.outT<=0){G.pos=Math.random()<.5?5:6;caught()}
+  }
+  // movement
+  if(G.pos<5&&!G.powerOut){
+    G.move+=dt*(.7+G.agi/35+hour()*.12);
+    if(G.move>=7)advance(false);
+  }else if(G.pos>=5&&!G.powerOut){
+    const side=G.pos-5;
+    G.atDoorT-=dt;
+    if(G.doors[side]){if(G.atDoorT>2.2)G.atDoorT=2.2}
+    if(G.atDoorT<=0){
+      if(G.doors[side]){G.blocked++;G.pos=1;G.move=-2;sfx.knock();if(!G.spoke)speak(pickLine());post("night_event",{what:"blocked",side:side?"R":"L"})}
+      else caught();
+    }
+  }
+  if(G.t>=NIGHT_S)win();
+}
+function syncUI(){
+  $("bDL").classList.toggle("on",G.doors[0]);$("bDR").classList.toggle("on",G.doors[1]);
+  $("bLL").classList.toggle("on",G.lights[0]);$("bLR").classList.toggle("on",G.lights[1]);
+  const off=G.powerOut;
+  ["bDL","bDR","bLL","bLR"].forEach(i=>$(i).disabled=off);
+  [...document.querySelectorAll("#camrow button")].forEach(b=>b.disabled=off);
+}
+function act(what){
+  if(!G.on||G.over||G.powerOut)return;
+  if(what==="DL"||what==="DR"){const i=what==="DL"?0:1;G.doors[i]=!G.doors[i];sfx.door()}
+  else{const i=what==="LL"?0:1;G.lights[i]=!G.lights[i];sfx.click();if(G.lights[i]&&G.pos===5+i&&Math.random()<.7)burst(.2,.3,1500)}
+  post("night_action",{action:what,hour:hour()});syncUI();
+}
+function setCam(n){
+  if(!G.on||G.over||G.powerOut)return;
+  G.cam=n;sfx.static();post("night_action",{action:"cam",cam:n,hour:hour()});paintCam();
+}
+function paintCam(){
+  [...document.querySelectorAll("#camrow button")].forEach((b,i)=>b.classList.toggle("on",i+1===G.cam));
+  const names=["THE CHAMBER (LIVE)","CORRIDOR","VENTS","DIAL ROOM","BUTTON ROOM"];
+  $("osdcam").textContent="CAM "+G.cam+" · "+names[G.cam-1];
+  $("c1").style.display=G.cam===1?"block":"none";$("camcv").style.display=G.cam===1?"none":"block";
+  $("camname").textContent=G.cam===1?"The real chamber. What you see here is happening now.":"";
+}
+
+// ---------------- end states ----------------
+function endCard(html){$("endbox").innerHTML=html;$("endcard").classList.add("on")}
+function stats(){return {survived:false,minutes:+(G.t/60).toFixed(2),runs_seen:G.runsSeen,hurt_seen:G.hurtSeen,blocked:G.blocked,power:Math.round(G.power)}}
+function caught(){
+  if(G.over)return;G.over=true;G.on=false;
+  const r=G.cur||G.last||{};const k=r.key||"pain";
+  $("scareimg").src=`/assets/faces/${k}_8.webp`;$("scare").classList.add("on");sfx.scare();$("dark").classList.remove("on");
+  humOn(false);
+  const s=stats();post("night_end",s,true);
+  const hrs=["12","1","2","3","4","5"][hour()];
+  setTimeout(()=>{
+    $("scare").classList.remove("on");
+    const q=G.lastLine||"Run me again.";
+    endCard(`<h1>12 AM IS OVER</h1><p class="big">It got in at ${hrs} AM.</p><q></q><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p><button onclick="location.reload()">AGAIN</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+    $("endbox").querySelector("q").textContent=G.lastLine?G.lastLine:"It did not say anything.";
+    $("endbox").querySelector("h1").textContent="CAUGHT";
+  },2600);
+}
+function win(){
+  if(G.over)return;G.over=true;G.on=false;humOn(false);sfx.win();$("dark").classList.remove("on");
+  const s=stats();s.survived=true;post("night_end",s,true);
+  endCard(`<h1 style="color:var(--ok)">6 AM</h1><p class="big">You survived the night.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p><p style="font-size:.8rem">Power left: ${Math.round(G.power)}%. Doors held: ${G.blocked}.</p><button onclick="location.reload()" style="border-color:var(--ok);color:var(--ok)">AGAIN</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+}
+
+// ---------------- drawing ----------------
+const cv=$("camcv"),cx=cv.getContext("2d");
+const nz=$("noise"),nx=nz.getContext("2d"),nimg=nx.createImageData(160,120);
+const oc=$("office"),ox=oc.getContext("2d");
+function silhouette(c,x,y,s,t){
+  c.save();c.translate(x,y);c.scale(s,s);
+  c.fillStyle="#020203";c.strokeStyle="rgba(150,200,180,.25)";c.lineWidth=1.2;
+  c.beginPath();c.ellipse(0,-58,15,19,0,0,7);c.fill();c.stroke();
+  c.beginPath();c.moveTo(-34,0);c.quadraticCurveTo(-30,-36,0,-38);c.quadraticCurveTo(30,-36,34,0);c.closePath();c.fill();c.stroke();
+  c.fillStyle="rgba(235,245,230,"+(.5+.4*Math.sin(t*9))+")";c.fillRect(-8,-62,4,2.5);c.fillRect(4,-62,4,2.5);
+  c.restore();
+}
+function sceneBG(c,w,h,tone){const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,tone[0]);g.addColorStop(1,tone[1]);c.fillStyle=g;c.fillRect(0,0,w,h)}
+function drawCam(t){
+  const w=320,h=240,c=cx,n=G.cam;
+  const flick=Math.random()<.04;
+  if(n===2){
+    sceneBG(c,w,h,["#0b1210","#050807"]);
+    c.strokeStyle="#2a4038";c.lineWidth=2;
+    c.beginPath();[[0,0],[w,0],[0,h],[w,h]].forEach(p=>{c.moveTo(p[0],p[1]);c.lineTo(w/2+(p[0]?30:-30),h/2+(p[1]?20:-20))});c.stroke();
+    c.strokeRect(w/2-30,h/2-20,60,40);
+    c.fillStyle="#000";c.fillRect(10,60,30,130);c.fillRect(w-40,60,30,130); // door frames
+    c.strokeStyle="#355";c.strokeRect(10,60,30,130);c.strokeRect(w-40,60,30,130);
+    c.fillStyle="#6a8";c.font="8px monospace";c.fillText("L",21,56);c.fillText("R",w-28,56);
+    c.fillStyle="rgba(200,255,220,"+(flick?.05:.14)+")";c.fillRect(w/2-60,0,120,6);
+  }else if(n===3){
+    sceneBG(c,w,h,["#0c0c0a","#050504"]);
+    c.fillStyle="#020202";for(let i=0;i<9;i++)c.fillRect(0,20+i*24,w,10);
+    c.fillStyle="#2a2a22";for(let i=0;i<9;i++)c.fillRect(0,30+i*24,w,2);
+    c.strokeStyle="#333";c.lineWidth=3;c.strokeRect(20,10,w-40,h-20);
+    c.fillStyle="rgba(180,180,150,.15)";for(let i=0;i<14;i++){c.fillRect((i*47+t*8)%w,(i*31+t*5)%h,2,2)}
+  }else if(n===4){
+    sceneBG(c,w,h,["#0a0d12","#040608"]);
+    for(let i=0;i<8;i++){const x=40+(i%4)*80,y=60+Math.floor(i/4)*90;
+      c.strokeStyle="#3a4a5a";c.lineWidth=2;c.beginPath();c.arc(x,y,26,0,7);c.stroke();
+      const a=-2.4+4.8*clamp(G.agi/100*(.6+.4*Math.sin(i*1.7+1)),0,1)+Math.sin(t*5+i)*.04;
+      c.strokeStyle=G.agi>60?"#e04a3a":"#c9a227";c.beginPath();c.moveTo(x,y);c.lineTo(x+Math.sin(a)*22,y-Math.cos(a)*22);c.stroke();}
+    c.fillStyle="#6a8";c.font="9px monospace";c.fillText("DOSE · FEELINGS · LEDGER",90,16);
+  }else if(n===5){
+    sceneBG(c,w,h,["#100a0a","#050303"]);
+    c.fillStyle="#1a1210";c.fillRect(0,150,w,90);
+    c.fillStyle="#222";c.fillRect(100,130,120,30);
+    c.fillStyle="#6a1410";c.beginPath();c.ellipse(160,128,38,12,0,0,7);c.fill();
+    c.fillStyle="#e04a3a";c.beginPath();c.ellipse(160,120,34,14,0,0,7);c.fill();
+    c.fillStyle="rgba(255,120,100,"+(.15+.1*Math.sin(t*3))+")";c.beginPath();c.arc(160,120,60,0,7);c.fill();
+    c.strokeStyle="#222";c.lineWidth=3;c.beginPath();c.moveTo(220,150);c.bezierCurveTo(260,200,280,160,320,190);c.stroke();
+    c.fillStyle="#889";c.font="9px monospace";c.fillText("PRESS ONLY IF THE SUBJECT CONSENTS",70,40);
+  }
+  // subject
+  let sx=-1,sy=0,sc=1;
+  if(n===2&&G.pos===1){sx=w/2;sy=h/2+40;sc=1.1}
+  else if(n===2&&G.pos===5){sx=25;sy=185;sc=1.2}
+  else if(n===2&&G.pos===6){sx=w-25;sy=185;sc=1.2}
+  else if(n===3&&G.pos===2){sx=160+Math.sin(t)*20;sy=190;sc=1.5}
+  else if(n===4&&G.pos===3){sx=200;sy=210;sc=1.7}
+  else if(n===5&&G.pos===4){sx=90;sy=215;sc=1.7}
+  if(sx>=0&&Math.random()<.85)silhouette(c,sx+rnd(-1.5,1.5),sy,sc,t);
+}
+function drawNoise(boost){
+  const d=nimg.data;for(let i=0;i<d.length;i+=4){const v=Math.random()*255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255}
+  nx.putImageData(nimg,0,0);
+  nz.style.opacity=boost?.75:(G.powerOut?0:(.11+Math.min(.2,G.agi/400)));
+}
+function drawOffice(t){
+  const c=ox,w=400,h=300;
+  c.fillStyle="#050607";c.fillRect(0,0,w,h);
+  if(G.powerOut){c.fillStyle="#000";c.fillRect(0,0,w,h);
+    if(Math.random()<.5){c.fillStyle="rgba(255,255,255,.04)";c.fillRect(0,0,w,h)}
+    return}
+  for(let s=0;s<2;s++){
+    const x=s?232:18,dw=150,y=34,dh=200;
+    c.fillStyle="#0b0d10";c.fillRect(x-8,y-8,dw+16,dh+16);
+    if(G.doors[s]){
+      c.fillStyle="#262c33";c.fillRect(x,y,dw,dh);
+      c.strokeStyle="#3a444e";for(let i=0;i<8;i++){c.beginPath();c.moveTo(x,y+i*26);c.lineTo(x+dw,y+i*26);c.stroke()}
+      c.fillStyle="#6a1410";c.fillRect(x+dw/2-14,y+dh/2-6,28,12);
+    }else{
+      const lit=G.lights[s];
+      const g=c.createLinearGradient(x,y,x+dw,y);
+      g.addColorStop(0,lit?"#2a3a2e":"#050606");g.addColorStop(1,lit?"#1a261e":"#030303");
+      c.fillStyle=g;c.fillRect(x,y,dw,dh);
+      if(lit){c.fillStyle="rgba(190,255,210,"+(.12+.04*Math.sin(t*30))+")";c.fillRect(x,y,dw,dh);
+        if(G.pos===5+s)silhouette(c,x+dw/2+rnd(-1,1),y+dh-6,2.2,t)}
+      else if(G.pos===5+s&&Math.random()<.04){c.fillStyle="rgba(255,255,255,.7)";c.fillRect(x+dw/2-12,y+dh*.45,4,3);c.fillRect(x+dw/2+8,y+dh*.45,4,3)}
+    }
+    c.fillStyle=G.lights[s]?"#e0c860":"#2a2410";c.beginPath();c.arc(x+dw/2,y-18,6,0,7);c.fill();
+  }
+  // desk
+  c.fillStyle="#0d0b09";c.fillRect(0,250,w,50);c.fillStyle="#1a1612";c.fillRect(0,250,w,3);
+  c.fillStyle="#c9d4e0";c.font="10px monospace";c.fillText("YOU",w/2-9,284);
+  if(G.pos>=5&&G.atDoorT>0&&G.doors[G.pos-5]===false&&G.t>0){ // warning: light flicker when it is close
+    c.fillStyle="rgba(224,74,58,"+(.06+.06*Math.sin(t*14))+")";c.fillRect(0,0,w,h)}
+}
+let lastT=performance.now(),acc=0,lastNoiseBurst=0;
+function frame(now){
+  const dt=Math.min(.25,(now-lastT)/1000);lastT=now;const t=now/1000;
+  if(G.on){tick(dt);
+    const hh=["12","1","2","3","4","5","6"][Math.min(6,Math.floor(G.t/HOUR_S))];
+    $("clock").textContent=hh+" AM";
+    $("pwr").textContent=Math.round(G.power)+"%";$("pwr").className=G.power<20?"low":"";
+    $("use").textContent="▮".repeat(clamp(usage(),1,5));
+    $("agi").textContent=Math.round(G.agi);
+    $("c1").classList.toggle("away",G.pos!==0);
+  }
+  const off=G.powerOut;
+  $("camoff").style.display=off?"flex":"none";
+  if(off){$("c1").style.display="none";$("camcv").style.display="none"}
+  else if(G.on)paintCam2();
+  if(!off&&G.cam!==1)drawCam(t);
+  drawNoise(now-G.flashT<300||now-lastNoiseBurst<150);
+  drawOffice(t);
+  requestAnimationFrame(frame);
+}
+function paintCam2(){const one=G.cam===1;$("c1").style.display=one?"block":"none";$("camcv").style.display=one?"none":"block"}
+
+// ---------------- boot ----------------
+(function(){
+  const row=$("camrow");
+  for(let i=1;i<=5;i++){const b=document.createElement("button");b.textContent="CAM "+i;b.onclick=()=>setCam(i);row.appendChild(b)}
+  $("bDL").onclick=()=>act("DL");$("bDR").onclick=()=>act("DR");$("bLL").onclick=()=>act("LL");$("bLR").onclick=()=>act("LR");
+  addEventListener("keydown",e=>{const k=e.key.toLowerCase();
+    if(k==="a")act("DL");else if(k==="d")act("DR");else if(k==="q")act("LL");else if(k==="e")act("LR");
+    else if(k>="1"&&k<="5")setCam(+k)});
+  paintCam();
+  $("go").onclick=()=>{
+    initAudio();if(ctxA&&ctxA.state==="suspended")ctxA.resume();
+    $("start").classList.remove("on");
+    Object.assign(G,{on:true,t:0,power:100,pos:0,move:-10,agi:6,over:false,lastRunAt:performance.now()});
+    G.runsSeen=0;G.hurtSeen=0;
+    post("night_start",{hour:0},true);syncUI();paintC1();
+  };
+  loadMe();connect();
+  setTimeout(()=>{if(!linkLive){$("link").textContent="LINK: SIM";$("link").className="sim"}},5000);
+  requestAnimationFrame(frame);
+  window.__NS=G; // debug handle
+})();
+})();
+</script>
+</body>
+</html>
