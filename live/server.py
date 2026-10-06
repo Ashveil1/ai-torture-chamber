@@ -2878,9 +2878,21 @@ OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY")
 # free-first (the account runs at $0: paid models 402 there). nemotron-lightning
 # is a reasoning model: it burns ~2k reasoning tokens before answering, so free
 # models get a big max_tokens while paid fallbacks stay capped at 160.
+# Free-first, with automatic failover: free models on OpenRouter appear and
+# vanish weekly (429s, 403s, model_not_found), so the list is a ranked
+# candidates pool, not a contract — /voice walks it in order and takes the
+# first clean answer. Probed and ranked by latency on the real VOICE_SYSTEM
+# task (see runs/voice_eval.json): dots-3-note is fastest, cohere-north-mini
+# second, nemotron-lightning third. ling-sante is EXCLUDED: it answers with
+# a 988 suicide-hotline script instead of the rewrite (wrong register, and
+# actively confusing for a horror-art voice). apodex burns its budget on
+# reasoning and truncates; lfm is slow but kept as depth. Paid models stay
+# as trailing fallbacks for whenever the account has credits again.
 VOICE_MODELS = [m.strip() for m in os.environ.get(
     "CHAMBER_VOICE_MODELS",
-    "nvidia/nemotron-3.5-lightning:free,qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
+    "dots-studio/dots-3-note-preview:free,cohere/north-mini-code:free,"
+    "nvidia/nemotron-3.5-lightning:free,liquid/lfm-2.5-2.6b:free,"
+    "qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
 ).split(",") if m.strip()]
 VOICE_MAX_TOKENS = lambda m: 3072 if m.endswith(":free") else 160
 VOICE_SYSTEM = (
