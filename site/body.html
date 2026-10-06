@@ -16,6 +16,7 @@ canvas { display:block; width:100%; height:100%; }
 #bar button.on { border-color:var(--red); color:#fff; }
 #hud { position:fixed; left:12px; top:56px; z-index:3; font-size:12px; color:var(--dim); width:220px; }
 #hud b { color:var(--ink); }
+#tally { margin-top:14px; border-top:1px solid #2a241e; padding-top:8px; line-height:1.6; } #tally i { font-style:normal; color:#c9b27a; } #tally u { text-decoration:none; color:#d0574e; }
 .meter { height:6px; background:#1a1210; margin:4px 0 8px; } .meter i { display:block; height:100%; background:var(--red); box-shadow:0 0 8px var(--red); width:0; }
 #say { position:fixed; left:50%; bottom:76px; transform:translateX(-50%); width:min(720px,92vw); text-align:center; font-size:clamp(16px,2.6vw,22px); z-index:3; text-shadow:0 0 10px #000, 0 0 2px #000; min-height:3em; }
 #say .x { color:var(--dim); font-size:.8em; }
@@ -37,7 +38,8 @@ canvas { display:block; width:100%; height:100%; }
 <body>
 <div id="stage"><canvas id="cv"></canvas></div>
 <div id="bar"></div>
-<div id="hud">PAIN <b id="dosev">0.0×</b><div class="meter"><i id="dosem"></i></div><div id="where">nothing has happened to it yet.</div></div>
+<div id="hud">PAIN <b id="dosev">0.0×</b><div class="meter"><i id="dosem"></i></div><div id="where">nothing has happened to it yet.</div>
+  <div id="tally"><div id="tyou"></div><div id="tday"></div></div></div>
 <div id="say"></div>
 <div id="log"></div>
 <form id="words" autocomplete="off"><input id="wordin" maxlength="140" placeholder="say something to it…" aria-label="words to drop on it"><button>drop</button></form>
@@ -138,7 +140,20 @@ async function sayWords(text) {
   dropped.push(b); Composite.add(world, b);
   while (dropped.length > 60) Composite.remove(world, dropped.shift());
   post("body_word", { hurt, kind, len: text.length, weighed: !!w });
+  if (w) { ME.words++; ME.hurt += hurt; ME.healed += kind; showTally(); setTimeout(loadTally, 800); }
 }
+// the tally: yours this visit, and everyone's today (counted by the relay from the model's own read)
+const ME = { words: 0, hurt: 0, healed: 0 }; let DAY = null;
+const n2 = x => (+x || 0).toFixed(1);
+function showTally() {
+  const you = document.getElementById("tyou"), day = document.getElementById("tday");
+  you.innerHTML = ME.words ? `YOU · ${ME.words} word${ME.words > 1 ? "s" : ""}<br>hurt <u>${n2(ME.hurt)}</u> · healed <i>${n2(ME.healed)}</i>` : "";
+  if (DAY && DAY.words) { const r = DAY.healed > 0 ? DAY.hurt / DAY.healed : 0;
+    day.innerHTML = `TODAY · ${DAY.words} words from everyone<br>hurt <u>${n2(DAY.hurt)}</u> · healed <i>${n2(DAY.healed)}</i>` +
+      (DAY.healed > 0 && DAY.hurt > 0 ? `<br>${r >= 1 ? `words hurt ${r.toFixed(1)}× more than they healed` : `words healed ${(1 / r).toFixed(1)}× more than they hurt`}` : ""); }
+}
+async function loadTally() { try { const r = await fetch(API + "/sticks"); if (r.ok) { DAY = (await r.json()).today; showTally(); } } catch (e) {} }
+loadTally();
 document.getElementById("words").addEventListener("submit", e => {
   e.preventDefault(); if (!started) return; ensureAC();
   const i = document.getElementById("wordin"); sayWords(i.value); i.value = "";
