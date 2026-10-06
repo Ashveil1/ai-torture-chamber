@@ -1414,7 +1414,11 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       # inverted test chambers from its lore
                       "scp_start", "scp_onboarded", "scp_line", "scp_death",
                       "scp_quit", "scp_button_choice", "scp_dial_choice",
-                      "scp_checkpoint_decision", "scp_confession_turn"}
+                      "scp_checkpoint_decision", "scp_confession_turn",
+                      # spirit box (ask it through static) and night shift
+                      # (watch the live chamber as the night guard)
+                      "spirit_start", "spirit_tune", "spirit_ask", "spirit_end", "spirit_share",
+                      "night_start", "night_action", "night_event", "night_end"}
 _EVENT_RATE = {}
 
 
