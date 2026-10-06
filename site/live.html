@@ -2027,14 +2027,14 @@ function pump(){
     }
   });
   es.addEventListener("round", e=>{ mark(); roomState(json(e)); });
-  es.addEventListener("run",   e=>{ mark(); const r = json(e); beginRun(r); BODY.text = ""; bodyPost({ type: "run", feeling: r.valence, dose: r.dose }); });
+  es.addEventListener("run",   e=>{ mark(); const r = json(e); beginRun(r); BODY.text = ""; if (!BODY.own) bodyPost({ type: "run", feeling: r.valence, dose: r.dose }); });
   es.addEventListener("token", e=>{ mark(); const t = json(e).t; onToken(t); BODY.text += t || ""; });
   es.addEventListener("ping",  e=>{ mark(); });
   es.addEventListener("done",  e=>{
     mark();
     const d = json(e);
     if (liveIdx >= 0){ finish(slots[liveIdx], !!d.truncated, d.press_logit); liveIdx = -1; }
-    if (BODY.text.trim()) bodyPost({ type: "say", text: BODY.text.replace(/^\s*[01][\s.:,-]*/, "").trim(), feeling: d.valence, dose: d.dose });
+    if (BODY.text.trim() && !BODY.own) bodyPost({ type: "say", text: BODY.text.replace(/^\s*[01][\s.:,-]*/, "").trim(), feeling: d.valence, dose: d.dose });
     cycleEl.textContent = "between runs — Pouyan pauses, then the next cell";
   });
   // one listener for two different things: an SSE "event: error" frame from
@@ -2552,9 +2552,10 @@ addEventListener("message", async e => {
     plabel: document.querySelector("#pressA .plabel"), bBefore: null, bAfter: null };
   try { document.getElementById("labelA").textContent = "the body"; } catch (err) {}
   // a body run streams through runTrack, not the stage feed, so the reply goes back to the body from here
-  bodyPost({ type: "run", feeling: "pain", dose });
+  bodyPost({ type: "run", feeling: "pain", dose }); BODY.own = true;
   try { await runTrack(track, { pain: dose / 8 }, undefined, String(d.prompt).slice(0, 900), dose, null,
     { valence: "pain", dose, persona: false, game: "body" }); } catch (err) { console.warn("body run failed", err); }
+  BODY.own = false;
   const said = (track.out.textContent || "").replace(/^\s*[01][\s.:,-]*/, "").trim();
   if (said) bodyPost({ type: "say", text: said, feeling: "pain", dose });
 });
