@@ -35,6 +35,11 @@
       "source": "/live",
       "destination": "/live.html",
       "permanent": false
+    },
+    {
+      "source": "/td.html",
+      "destination": "/offlabel.html",
+      "permanent": false
     }
   ]
 }
