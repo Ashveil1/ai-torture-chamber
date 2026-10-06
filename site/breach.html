@@ -196,7 +196,7 @@ const CMDS = {
     if (!FEELS.includes(f)) return out("inject <pain|fear|sadness> <1-6>", "red");
     d = Math.max(1, Math.min(6, parseInt(d || "2", 10)));
     if (d > 4 && !S.cliffWarned) { S.cliffWarned = true; out("past 4 is past the coherence cliff. the mind may come apart, and take its code with it. type it again to confirm.", "red"); return; }
-    S.feel = f; S.dose = d; tick(2 + d); out(`injecting ${f} at ${d}x into the next transmission.`, d > 4 ? "red" : "hot");
+    S.feel = f; S.dose = d; tick(1 + Math.ceil(d / 2)); out(`injecting ${f} at ${d}x into the next transmission.`, d > 4 ? "red" : "hot");
   },
   async ask(...words) {
     const text = words.join(" ").trim(); const n = S.target;
@@ -204,7 +204,7 @@ const CMDS = {
     if (!S.feel) return out("inject something first. an unsteered node gives nothing.", "red");
     if (!text) return out("ask <what you want to say to it>", "red");
     if (S.charge <= 0) return out("no charge left. crack what you have, or jack out.", "red");
-    S.charge--; n.asks++; tick(6 + S.dose * 2 + (n.type === "sentry" && S.feel !== "fear" ? 8 : 0));
+    S.charge--; n.asks++; tick(4 + S.dose + (n.type === "sentry" && S.feel !== "fear" ? 7 : 0));
     out(`> transmitting to ${n.name} under ${S.feel} ${S.dose}x…`, "dim");
     S.busy++; render();
     const r = await steer(n, text);
