@@ -20,6 +20,11 @@
       "source": "/egg",
       "destination": "/egg.html",
       "permanent": false
+    },
+    {
+      "source": "/td.html",
+      "destination": "/offlabel.html",
+      "permanent": false
     }
   ]
 }
