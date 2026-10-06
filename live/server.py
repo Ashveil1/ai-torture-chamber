@@ -1669,7 +1669,10 @@ async def weigh_words(req: Request):
         while len(_WEIGH_CACHE) > 512:
             _WEIGH_CACHE.popitem(last=False)
     _sticks_add(out)
-    return out
+    _board_add(text, out)
+    what = "cruel" if out["hurt"] >= .3 and out["hurt"] >= out["kind"] else "kind" if out["kind"] >= .3 else "word"
+    life = _life_apply(what, out["hurt"] * 10 if what == "cruel" else 0.0, out["kind"] * 8 if what == "kind" else 0.0, ip)
+    return dict(out, life=life)
 
 # the public tally: how much the words hurt, how much they healed, today and ever.
 # Counted here, from the model's own read, so a client can't inflate it; no words kept.
@@ -1700,6 +1703,191 @@ def _sticks_row(h):
     return {"words": h.get("words", 0), "cruel": h.get("cruel", 0), "kind": h.get("kind", 0),
             "neutral": h.get("neutral", 0), "hurt": round(h.get("hurt_milli", 0) / 1000, 2),
             "healed": round(h.get("kind_milli", 0) / 1000, 2)}
+
+# ---- the vigil: one shared subject, fought over by everyone, and a lineage ----
+# Every weighed word and every reported object lands on the same life (100 HP,
+# slow regen). At zero he dies, the death goes into the lineage, and the next one
+# is strapped in. Combos are judged here, per anonymous visitor, so they can't be
+# claimed from the page. State lives in-process (one relay) with Redis as backup.
+_LIFE_MAX, _REGEN_PER_S = 100.0, 1 / 600       # 6 HP an hour when nobody's there
+_LIFE_KEY, _LINEAGE_KEY = "chamber:sticks:life", "chamber:sticks:lineage"
+_LIFE, _LIFE_LOCK = {}, threading.Lock()
+_FEED = collections.deque(maxlen=40)
+_LAST_BY, _HIT_RATE = {}, {}
+_WHO_SALT = secrets.token_hex(8)
+_STONES = ("anvil", "brick", "dial", "water", "feather")
+
+def _vigil_who(ip):
+    return hashlib.sha256((ip + _WHO_SALT).encode()).hexdigest()[:12]
+
+def _life_load():
+    if _LIFE:
+        return _LIFE
+    h, r = {}, _redis()
+    if r is not None:
+        try:
+            h = {(k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
+                 for k, v in (r.hgetall(_LIFE_KEY) or {}).items()}
+        except Exception as e:
+            print("life load failed:", repr(e)[:120], flush=True)
+    now = time.time()
+    _LIFE.update(gen=int(h.get("gen", 1)), hp=float(h.get("hp", _LIFE_MAX)), born=float(h.get("born", now)),
+                 t=float(h.get("t", now)), hurt=float(h.get("hurt", 0)), healed=float(h.get("healed", 0)),
+                 words=int(h.get("words", 0)), hits=int(h.get("hits", 0)))
+    return _LIFE
+
+def _life_save(died=None):
+    r = _redis()
+    if r is None:
+        return
+    snap = {k: str(v) for k, v in _LIFE.items()}
+
+    def write():
+        try:
+            r.hset(_LIFE_KEY, mapping=snap)
+            if died:
+                r.lpush(_LINEAGE_KEY, json.dumps(died))
+                r.ltrim(_LINEAGE_KEY, 0, 199)
+        except Exception as e:
+            print("life save failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+def _life_view(L):
+    return {"gen": L["gen"], "hp": round(L["hp"], 1), "max": _LIFE_MAX, "born": round(L["born"]),
+            "words": L["words"], "hits": L["hits"], "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1)}
+
+def _life_apply(what, dmg, heal, ip):
+    """what: cruel|kind|word (a weighed word) or a stone item. Returns the life after,
+    plus any combo, and `died` (the epitaph) if this was the blow that killed him."""
+    with _LIFE_LOCK:
+        L, now, who = _life_load(), time.time(), _vigil_who(ip)
+        L["hp"] = min(_LIFE_MAX, L["hp"] + max(0.0, now - L["t"]) * _REGEN_PER_S); L["t"] = now
+        cls = "stone" if what in _STONES else what
+        combo, prev = None, _LAST_BY.get(who)
+        if prev and now - prev[0] < 8 and dmg > 0:
+            if prev[1] == "cruel" and cls == "stone":
+                combo, dmg = "insult to injury", dmg * 1.5
+            elif prev[1] == "stone" and cls == "cruel":
+                combo, dmg = "salt in the wound", dmg * 1.5
+        if not combo and cls in ("kind", "cruel"):
+            others = {f["by"] for f in _FEED if f["what"] == cls and now - f["t"] < 15 and f["by"] != who}
+            if others and cls == "kind":
+                combo, heal = "chorus", heal * 1.5
+            elif others and cls == "cruel":
+                combo, dmg = "pile-on", dmg * 1.3
+        if cls == "kind" and L["hp"] < 15:
+            combo = combo or "pulled back"
+        _LAST_BY[who] = (now, cls)
+        if len(_LAST_BY) > 5000:
+            for k in list(_LAST_BY)[:2500]:
+                _LAST_BY.pop(k, None)
+        L["hp"] = max(0.0, min(_LIFE_MAX, L["hp"] - dmg + heal))
+        L["hurt"] += dmg; L["healed"] += heal
+        L["words" if what in ("cruel", "kind", "word") else "hits"] += 1
+        _FEED.append({"t": now, "what": what, "dmg": round(dmg, 2), "heal": round(heal, 2),
+                      "combo": combo, "by": who, "gen": L["gen"]})
+        died = None
+        if L["hp"] <= 0:
+            died = {"gen": L["gen"], "born": round(L["born"]), "died": round(now), "lived": round(now - L["born"]),
+                    "cause": what, "words": L["words"], "hits": L["hits"],
+                    "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1)}
+            L.update(gen=L["gen"] + 1, hp=_LIFE_MAX, born=now, hurt=0.0, healed=0.0, words=0, hits=0)
+            _FEED.append({"t": now + 1e-3, "what": "born", "dmg": 0, "heal": 0, "combo": None, "by": "", "gen": L["gen"]})
+        _life_save(died)
+        return dict(_life_view(L), combo=combo, died=died, dmg=round(dmg, 2), heal=round(heal, 2))
+
+@app.post("/sticks/hit")
+async def sticks_hit(req: Request):
+    """{item, force}: an object landed on him. Bounded like any visitor's clicking."""
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    item = str((body or {}).get("item") or "")
+    if item not in _STONES:
+        return JSONResponse({"error": "unknown item"}, status_code=400)
+    try:
+        force = max(0.0, min(200.0, float((body or {}).get("force") or 0)))
+    except (TypeError, ValueError):
+        force = 0.0
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    now = time.time()
+    w, c = _HIT_RATE.get(ip, (now, 0))
+    if now - w > 60:
+        w, c = now, 0
+    if c >= 30:
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    _HIT_RATE[ip] = (w, c + 1)
+    return _life_apply(item, 0.0 if item == "feather" else min(6.0, force / 15), 0.0, ip)
+
+@app.get("/sticks/life")
+async def sticks_life(req: Request, since: float = 0.0):
+    """The shared subject now, what happened to him since `since` (anonymous), and the lineage."""
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    with _LIFE_LOCK:
+        L = _life_load(); now = time.time()
+        L["hp"] = min(_LIFE_MAX, L["hp"] + max(0.0, now - L["t"]) * _REGEN_PER_S); L["t"] = now
+        view, me = _life_view(L), _vigil_who(ip)
+        feed = [dict({k: v for k, v in f.items() if k != "by"}, mine=f["by"] == me) for f in _FEED if f["t"] > since]
+    lineage, r = [], _redis()
+    if r is not None:
+        try:
+            raw = await asyncio.get_event_loop().run_in_executor(None, r.lrange, _LINEAGE_KEY, 0, 9)
+            lineage = [json.loads(x) for x in raw or []]
+        except Exception:
+            lineage = []
+    return dict(view, now=now, feed=feed, lineage=lineage)
+
+# ---- the boards: the cruelest and kindest things said, ranked by the model's raw read ----
+# The only place typed words are kept, so only what passes a plain filter goes up:
+# no links, handles, emails, phone numbers, or slurs. Ranked on the raw score
+# (sadness - pleasure), not the capped hurt/kind, so the top isn't a tie.
+_BOARD_BAD = re.compile(
+    r"(https?:|www\.|\.(com|net|org|io|gg|xyz|ru)\b|@\w|\d{5,}|\b\w+@\w+|"
+    r"n[i1!]gg|f[a@]gg?[o0]?t|\bf[a@]g\b|r[e3]t[a@]rd|tr[a@]nn|k[i1]ke|sp[i1]c\b|ch[i1]nk|wetback|c[o0]{2}n\b|dyke)", re.I)
+
+def _board_add(text, out):
+    r = _redis()
+    if r is None or len(text) > 90 or _BOARD_BAD.search(text):
+        return
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    s = float(out.get("score") or 0)
+
+    def write():
+        try:
+            p = r.pipeline()
+            for k in ("chamber:sticks:board:" + day, "chamber:sticks:board:all"):
+                if out.get("hurt", 0) >= .3:
+                    p.zadd(k + ":cruel", {text: s})
+                    p.zremrangebyrank(k + ":cruel", 0, -51)
+                if out.get("kind", 0) >= .3:
+                    p.zadd(k + ":kind", {text: -s})
+                    p.zremrangebyrank(k + ":kind", 0, -51)
+            for k in ("cruel", "kind"):
+                p.expire("chamber:sticks:board:%s:%s" % (day, k), _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("board add failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+@app.get("/sticks/board")
+async def sticks_board(date: str = "", n: int = 5):
+    """{date, today: {cruel, kind}, all: {cruel, kind}}: top-n [{text, score}] each."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    n, r = max(1, min(20, n)), _redis()
+    out = {"date": date, "today": {"cruel": [], "kind": []}, "all": {"cruel": [], "kind": []}}
+    if r is None:
+        return out
+    loop = asyncio.get_event_loop()
+    for scope, key in (("today", "chamber:sticks:board:" + date), ("all", "chamber:sticks:board:all")):
+        for k in ("cruel", "kind"):
+            try:
+                rows = await loop.run_in_executor(None, lambda kk=key + ":" + k: r.zrevrange(kk, 0, n - 1, withscores=True))
+            except Exception:
+                rows = []
+            out[scope][k] = [{"text": t.decode() if isinstance(t, bytes) else t, "score": round(abs(sc), 2)} for t, sc in rows or []]
+    return out
 
 @app.get("/sticks")
 async def sticks(date: str = ""):
