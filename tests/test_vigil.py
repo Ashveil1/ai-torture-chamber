@@ -54,6 +54,16 @@ class VigilTests(unittest.TestCase):
         server._LIFE.clear()
         self.assertEqual(server._life_load()["gen"], 2)
 
+    def test_last_words_pass_to_the_next_unit(self):
+        server._vigil_last("  it is   so cold in here  ")
+        server._vigil_last("visit www.spam.com")          # filtered: the earlier words stand
+        for _ in range(9):
+            out = server._life_apply("cruel", 12.0, 0, "1.1.1.1")
+            if out["died"]: break
+        self.assertEqual(out["died"]["last_words"], "it is so cold in here")
+        self.assertEqual(server._LIFE["last"], "")
+        self.assertEqual(asyncio.run(server.sticks_life(Req(), since=0))["lineage"][0]["last_words"], "it is so cold in here")
+
     def test_combos(self):
         server._life_apply("cruel", 5.0, 0, "a")
         self.assertEqual(server._life_apply("brick", 4.0, 0, "a")["combo"], "insult to injury")

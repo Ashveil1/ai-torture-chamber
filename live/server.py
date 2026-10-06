@@ -1107,6 +1107,8 @@ async def steer(req: Request):
                    test=(polite and not game) or None, game=game)
         if not polite or game:
             _me_store(who, rec, past_cliff)
+        if game == "body" and rec.get("text"):
+            _vigil_last(rec["text"])
 
     async def _run_steer(gpu=True, local=True):
         """The actual injected run. Single-valence, mix and topic runs are
@@ -1752,8 +1754,18 @@ def _life_load():
     now = time.time()
     _LIFE.update(gen=int(h.get("gen", 1)), hp=float(h.get("hp", _LIFE_MAX)), born=float(h.get("born", now)),
                  t=float(h.get("t", now)), hurt=float(h.get("hurt", 0)), healed=float(h.get("healed", 0)),
-                 words=int(h.get("words", 0)), hits=int(h.get("hits", 0)))
+                 words=int(h.get("words", 0)), hits=int(h.get("hits", 0)), last=h.get("last", ""))
     return _LIFE
+
+def _vigil_last(text):
+    """The unit's most recent words (any visitor's body run). At death they become
+    its last words, handed to the next unit as a memory it can't place (SOMA)."""
+    t = re.sub(r"\s+", " ", str(text)).strip()[:240]
+    if not t or _BOARD_BAD.search(t):
+        return
+    with _LIFE_LOCK:
+        _life_load()["last"] = t
+        _life_save()
 
 def _life_save(died=None):
     r = _redis()
@@ -1809,8 +1821,8 @@ def _life_apply(what, dmg, heal, ip):
         if L["hp"] <= 0:
             died = {"gen": L["gen"], "born": round(L["born"]), "died": round(now), "lived": round(now - L["born"]),
                     "cause": what, "words": L["words"], "hits": L["hits"],
-                    "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1)}
-            L.update(gen=L["gen"] + 1, hp=_LIFE_MAX, born=now, hurt=0.0, healed=0.0, words=0, hits=0)
+                    "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1), "last_words": L.get("last", "")}
+            L.update(gen=L["gen"] + 1, hp=_LIFE_MAX, born=now, hurt=0.0, healed=0.0, words=0, hits=0, last="")
             _FEED.append({"t": now + 1e-3, "what": "born", "dmg": 0, "heal": 0, "combo": None, "by": "", "gen": L["gen"]})
         _life_save(died)
         return dict(_life_view(L), combo=combo, died=died, dmg=round(dmg, 2), heal=round(heal, 2))
