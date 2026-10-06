@@ -3199,6 +3199,37 @@ async def _deep_checks():
     return out
 
 
+@app.post("/speak/tuned")
+async def speak_tuned(req: Request):
+    """/speak, then the live page's autotune (voice_tune.py): for speakers
+    without WebAudio (the SCP game). Same body; returns audio/wav."""
+    from fastapi.responses import Response
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be {text, valence, dose}"}, status_code=400)
+    key = (str(body.get("text", "")), str(body.get("valence") or "pain"), float(body.get("dose") or 0))
+    if key in _TUNED_CACHE:
+        return Response(_TUNED_CACHE[key], media_type="audio/wav", headers={"X-Cached": "1"})
+    res = await speak(req)
+    if getattr(res, "media_type", "") != "audio/mpeg":
+        return res
+    try:
+        import voice_tune
+        wav = await asyncio.get_event_loop().run_in_executor(
+            None, voice_tune.tune_mp3, res.body, key[1], key[2])
+    except Exception as e:
+        print("speak/tuned: tuning failed, sending plain voice:", repr(e)[:160], flush=True)
+        return res
+    _TUNED_CACHE[key] = wav
+    while len(_TUNED_CACHE) > 200:
+        _TUNED_CACHE.pop(next(iter(_TUNED_CACHE)))
+    return Response(wav, media_type="audio/wav")
+
+
+_TUNED_CACHE = {}
+
+
 @app.get("/health/deep")
 async def health_deep():
     now = time.time()
