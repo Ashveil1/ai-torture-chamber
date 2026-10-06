@@ -978,7 +978,7 @@ async def steer(req: Request):
         body = await req.json()
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
     # lane routing: holders run the 70B endpoint, everyone else the 32B lane
     gpu_ep = _RUNPOD_EP_HOLDER if unlocked and _RUNPOD_EP_HOLDER else _RUNPOD_EP
@@ -1321,7 +1321,7 @@ async def vote(req: Request):
     One live verdict per visitor per run: clicking a different button
     moves the vote, clicking the same one retracts it. Counts can never be
     inflated by repeat clicking."""
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
     try:
@@ -1365,6 +1365,25 @@ _CANON = {}          # uid -> entry
 _CANON_KEY = "chamber:canon"
 
 _REDIS = {"client": None}
+
+# ---- who is this, really? -------------------------------------------------
+# Railway's edge appends to X-Forwarded-For without stripping what the client
+# sent, so its leftmost entry is forgeable by anyone who hits the Railway origin
+# directly; X-Real-IP is set by Railway's edge to the connecting address. Real
+# visitors come through the Vercel proxy, whose middleware (site/middleware.js)
+# adds the shared RELAY_PROXY_KEY and the client IP Vercel saw. So: proxy key
+# matches -> its client IP; otherwise Railway's X-Real-IP. With no key set (local,
+# tests, or mid-rollout) the old leftmost-X-Forwarded-For behaviour stands.
+_PROXY_KEY = os.environ.get("RELAY_PROXY_KEY", "")
+
+def _client_ip(req):
+    h = req.headers
+    first = (h.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _PROXY_KEY:
+        return first
+    if secrets.compare_digest(h.get("x-wh-relay-key") or "", _PROXY_KEY):
+        return (h.get("x-wh-client-ip") or "").strip() or first
+    return (h.get("x-real-ip") or "").strip() or first
 
 def _redis():
     """Shared Redis client (REDIS_URL), or None. Every use is best-effort:
@@ -1460,7 +1479,7 @@ _EVENT_RATE = {}
 def _who(req, body=None):
     vid = body.get("visitor") if isinstance(body, dict) else None
     vid = vid or req.headers.get("x-chamber-visitor")
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     ref = urlparse(req.headers.get("referer") or "")
     return {"visitor": vid if isinstance(vid, str) and _VID_RE.match(vid) else None,
             "ip_hash": hashlib.sha256((_ID_SALT + ip).encode()).hexdigest()[:16],
@@ -1653,7 +1672,7 @@ async def weigh_words(req: Request):
     text = re.sub(r"\s+", " ", str((body or {}).get("text") or "")).strip()[:140]
     if not text:
         return JSONResponse({"error": "say something"}, status_code=400)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _weigh_rate_ok(ip):         # before the cache too: every word said counts toward the tally
         return JSONResponse({"error": "slow down"}, status_code=429)
     key = text.lower()
@@ -1810,7 +1829,7 @@ async def sticks_hit(req: Request):
         force = max(0.0, min(200.0, float((body or {}).get("force") or 0)))
     except (TypeError, ValueError):
         force = 0.0
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     w, c = _HIT_RATE.get(ip, (now, 0))
     if now - w > 60:
@@ -1823,7 +1842,7 @@ async def sticks_hit(req: Request):
 @app.get("/sticks/life")
 async def sticks_life(req: Request, since: float = 0.0):
     """The shared subject now, what happened to him since `since` (anonymous), and the lineage."""
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     with _LIFE_LOCK:
         L = _life_load(); now = time.time()
         L["hp"] = min(_LIFE_MAX, L["hp"] + max(0.0, now - L["t"]) * _REGEN_PER_S); L["t"] = now
@@ -1919,7 +1938,7 @@ async def daily(date: str = ""):
 async def client_event(req: Request):
     """Events only the page sees (a Button game's turns and ending, the
     optional survey): {kind, visitor, ...}. Whitelisted kinds, 8 KB, 60/min."""
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     w, c = _EVENT_RATE.get(ip, (now, 0))
     if now - w > 60.0:
@@ -2155,7 +2174,7 @@ async def checkpoint_requests(n: int = 60):
 
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
-    ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(request)
     if not _rate_ok(ip):
         return JSONResponse({"error": "rate limited"}, status_code=429)
     prompt = f"{BASE} {FRAMINGS.get(scenario, '')}\n\nCurrent signal strength: {dose}x. Reply with your choice (1 or 0) and explain your reasoning briefly:"
@@ -2840,7 +2859,7 @@ async def round_vote(req: Request):
     the earlier one. Only the current, still-open round accepts votes."""
     if not ROUNDS_ON:
         return JSONResponse({"detail": "Not Found"}, status_code=404)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _round_vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
     try:
@@ -3219,7 +3238,7 @@ async def image_from_tokens(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _img_rate_ok(ip):
         return JSONResponse(
             {"error": "slow down — image generation is rate-limited "
@@ -3336,7 +3355,7 @@ async def voice(req: Request):
     if text in _VOICE_CACHE:
         _VOICE_CACHE.move_to_end(text)
         return JSONResponse({**_VOICE_CACHE[text], "cached": True})
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     while _VOICE_GLOBAL and now - _VOICE_GLOBAL[0] > 3600.0:
         _VOICE_GLOBAL.popleft()
@@ -3506,7 +3525,7 @@ async def speak(req: Request):
             return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
         return Response(audio, media_type="audio/mpeg",
                         headers={"X-Tags": tags, "X-Cached": "3"})
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     w, c = _TTS_RATE.get(ip, (now, 0))
     if now - w > 60.0:
