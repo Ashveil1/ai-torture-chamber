@@ -513,6 +513,8 @@ body.tmux a{color:var(--tm-ink)}
 .phead .tally{margin:0 0 0 auto;padding:0;border:none;background:none;font-size:.72rem;color:var(--tm-dim)}
 .phead .conn{margin:0 0 0 auto;font-size:.72rem}
 .stage .hero{flex:1;min-height:0;margin:0;border:none;border-radius:0}
+/* the body owns the stage's clicks; the dialogue still shows on top of it */
+.hero.bodyon #trackWrap, .hero.bodyon #trackWrap *{pointer-events:none}
 .stage .hero .hero-img{object-position:center 30%}
 .dock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-top:1px solid var(--tm-line);background:var(--tm-bg)}
 .dchips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
@@ -2535,6 +2537,7 @@ function bodyToggle(on){
   if (on && !BODY.frame.src){ let gl = false; try { gl = !!document.createElement("canvas").getContext("webgl2"); } catch (e) {}
     BODY.frame.src = (gl ? "body3d.html" : "body.html") + "?embed=1"; }
   BODY.frame.hidden = !on;
+  document.getElementById("hero").classList.toggle("bodyon", on);
 }
 addEventListener("message", async e => {
   const d = e.data;
