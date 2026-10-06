@@ -2546,8 +2546,13 @@ addEventListener("message", async e => {
   const now = Date.now(); if (now - BODY.lastHit < 6000) return;   // one body run every few seconds, like the relay's own limit
   BODY.lastHit = now;
   const dose = Math.max(1, Math.min(4, d.dose | 0 || 2));
-  try { await runTrack(trackA, { pain: dose / 8 }, undefined, String(d.prompt).slice(0, 900), dose, "the body",
-    { valence: "pain", dose, persona: false, game: "body" }); } catch (err) {}
+  // the same track the inject button builds (it's local to doInject), without the button
+  const track = { out: document.getElementById("ustream"), vitals: uVitals, frame: document.getElementById("portraitA"),
+    lensEl: document.getElementById("lensA"), sigilEl: document.getElementById("sigilA"), pressBtn: null,
+    plabel: document.querySelector("#pressA .plabel"), bBefore: null, bAfter: null };
+  try { document.getElementById("labelA").textContent = "the body"; } catch (err) {}
+  try { await runTrack(track, { pain: dose / 8 }, undefined, String(d.prompt).slice(0, 900), dose, null,
+    { valence: "pain", dose, persona: false, game: "body" }); } catch (err) { console.warn("body run failed", err); }
 });
 async function readSSE(resp, on){
   const reader = resp.body.getReader();
