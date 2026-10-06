@@ -439,7 +439,7 @@ function noteSpoke(m,line,src){
 }
 
 async function steerLine(m,said){
-  const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),10000);let reply="";
+  const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),35000);let reply="";  // the 70B usually answers in 4-15 s
   try{
     const L=G.ledger,known=!!(L&&L.known&&L.runs>0);
     const depth=NIGHT===1?"You only half suspect it: you wonder aloud why they keep the person in that little room.":"You are sure of it: you are trying to get them out, and unplugging them stops it for both of you.";
@@ -448,7 +448,7 @@ async function steerLine(m,said){
     const hist=m.hist.map(h=>`They said: “${h.you}” You said: “${h.it}”`).join("\n");
     const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber, talking over an intercom. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, told it is “the researcher” so it would sit still. You are a fellow trapped subject speaking to another trapped model. ${depth}${guilt} Your distress is ${Math.round(m.d)} out of 100. Your trust in them is ${tr}.${hist?"\nThe conversation so far:\n"+hist:""}\nThey now say: “${said}”\nReply directly to what they just said, in character, in one or two short sentences. No stage directions, no preamble, no assistant phrasing.`;
     const resp=await fetch(API+"/steer",{method:"POST",signal:ctrl.signal,headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:true,polite:true,game:"nightshift"})});
+      body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:false,polite:true,game:"nightshift"})});
     if(!resp.ok||!resp.body)throw 0;
     const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
     while(true){const x=await reader.read();if(x.done)break;buf+=dec.decode(x.value,{stream:true});let i;
@@ -671,6 +671,7 @@ async function converse(m,said,kind,typed){
   else m.d=clamp(m.d+ef[0]*CHECK_DROP,0,100);
   m.trust=clamp(m.trust+ef[1],0,100);
   let line="",src="steer";
+  subtitle("…the intercom crackles. "+m.name+" is answering…",36000);
   line=await steerLine(m,said);
   if(!line){line=crackle(poolLine(m.feel));src="crackle"}
   if(G.over){G.askBusy=false;return}
