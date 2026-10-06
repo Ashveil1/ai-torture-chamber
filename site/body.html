@@ -49,7 +49,7 @@ canvas { display:block; width:100%; height:100%; }
   <p>The subject has a body now. It is strapped into the chair.</p>
   <p>Pick something and tap above it to drop it, or type something and drop that. Words fall as heavy as the model itself reads them: its own activations weigh each one before it lands. Cruel words bruise. Kind words heal.</p>
   <p>Every impact is injected into the model as pain, at a dose set by how hard it hit, and it is told where. Then it speaks, from inside the body, to whoever spoke.</p>
-  <p>Everyone shares one of him. Hurt him enough, together, and he dies, and the next Pouyan is strapped in. Keep him alive.</p>
+  <p>Everyone shares one unit, P41-N. Hurt it enough, together, and it is decommissioned, and the next unit off the line is strapped in. Keep it running.</p>
   <p style="font-size:12px;color:var(--dim)">What you drop and what it says are logged for research: no account, no IP. The day's cruelest and kindest words go on a public board (links and slurs filtered out).</p>
   <button id="go">ENTER</button>
 </div></div>
@@ -446,7 +446,7 @@ function draw(frozen) {
     g.strokeStyle = "rgba(0,0,0,.4)"; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, -h / 2 + 4); g.lineTo(0, h / 2); g.stroke();                       // zipper
     g.beginPath(); g.moveTo(-14, -h / 2 + 2); g.lineTo(0, -h / 2 + 18); g.lineTo(14, -h / 2 + 2); g.stroke();                                             // collar
     g.fillStyle = "#6a5638"; g.fillRect(-w / 2, 18, w, 8); g.fillStyle = "#b8b0a0"; g.fillRect(-4, 17, 8, 10);                                         // chest belt + buckle
-    g.fillStyle = "#e8e0cc"; g.fillRect(-26, -8, 20, 12); g.fillStyle = "#222"; g.font = "bold 7px monospace"; g.fillText(window.VG ? VG.patch() : "D-9341", -25, 1);              // class-D patch
+    g.fillStyle = "#e8e0cc"; g.fillRect(-30, -8, 30, 11); g.fillStyle = "#222"; g.font = "bold 5.6px monospace"; g.fillText(window.VG ? VG.patch() : "P41-N/01", -29, 0.5);              // class-D patch
   });
   g.restore();
   if (window.VG) VG.scars();

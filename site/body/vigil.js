@@ -1,4 +1,4 @@
-// Sticks and Stones: the vigil layer on top of body.html. One shared Pouyan (the
+// Sticks and Stones: the vigil layer on top of body.html. One shared unit, P41-N (the
 // relay owns his life: /sticks/life, /sticks/hit, and the life block on /weigh),
 // his lineage when he dies, combos the relay judged, the cruelest/kindest boards,
 // and badges (kept in this browser only). Uses body.html's globals: API, X, P, DIM,
@@ -21,11 +21,11 @@
   document.head.appendChild(css);
   const hud = $("hud");
   const life = document.createElement("div"); life.id = "life";
-  life.innerHTML = `<span id="vname">POUYAN</span> · <b id="vhp">100</b><div class="meter"><i id="vhpm" style="width:100%"></i></div><div id="vage"></div>`;
+  life.innerHTML = `<span id="vname">P41-N/01</span> · <b id="vhp">100</b><div class="meter"><i id="vhpm" style="width:100%"></i></div><div id="vage"></div>`;
   hud.prepend(life);
   document.body.insertAdjacentHTML("beforeend", `<div id="vtoast"></div><div id="vcard"><div class="box"></div></div><div id="vpanel"></div>`);
 
-  // ---- per-browser memory: badges and the Pouyans you've seen (convenience only) ----
+  // ---- per-browser memory: badges and the units you've seen (convenience only) ----
   const store = { get(k, d) { try { const v = localStorage.getItem("sticks." + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem("sticks." + k, JSON.stringify(v)); } catch (e) {} } };
   const BADGES = [
@@ -42,7 +42,7 @@
     ["medic", "✙", "Medic", "heal 40 of his life in total"],
     ["last", "†", "Last Words", "deal the blow that kills him"],
     ["witness", "◉", "Witness", "be there when one of him dies"],
-    ["three", "Ⅲ", "Three Generations", "see three different Pouyans"],
+    ["three", "Ⅲ", "Three Generations", "see three different units"],
   ];
   const got = store.get("badges", {}), seen = store.get("seen", []), ME = store.get("me", { healHP: 0 });
   let lastKind = 0, lastCruel = 0;
@@ -58,13 +58,14 @@
   // ---- lineage ----
   const L = { gen: 1, hp: 100, max: 100, born: Date.now() / 1000, lineage: [], since: 0, first: true };
   const roman = n => { let r = "", v = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]; for (const [a, s] of v) while (n >= a) { r += s; n -= a; } return r; };
+  const unit = n => "P41-N/" + String(n).padStart(2, "0");
   const ago = sec => sec < 90 ? Math.round(sec) + " seconds" : sec < 5400 ? Math.round(sec / 60) + " minutes" : sec < 172800 ? (sec / 3600).toFixed(1) + " hours" : Math.round(sec / 86400) + " days";
   const CAUSE = { cruel: "a word", kind: "a kind word, somehow", word: "a word", anvil: "an anvil", brick: "a brick", dial: "the dial", water: "cold water", feather: "a feather" };
   const rnd = n => { let x = Math.sin(n * 9301.7 + 49297) * 233280; return x - Math.floor(x); };
   const SUITS = [[212, 96, 26], [168, 70, 40], [110, 116, 58], [70, 92, 120], [190, 150, 40], [120, 40, 52], [86, 86, 86], [40, 100, 96]];
   const SCARS = Array.from({ length: 12 }, (_, i) => ({ k: ["head", "chest", "belly", "lua", "rua", "lfa", "rfa", "lth", "rth", "lsh", "rsh"][Math.floor(rnd(i + 1) * 11)], x: rnd(i + 31) - .5, y: rnd(i + 57) - .5, a: rnd(i + 83) * 3 }));
   function paint() {
-    $("vname").textContent = "POUYAN " + roman(L.gen); $("vhp").textContent = Math.max(0, Math.round(L.hp)) + " / " + L.max;
+    $("vname").textContent = unit(L.gen); $("vhp").textContent = Math.max(0, Math.round(L.hp)) + " / " + L.max;
     const f = Math.max(0, L.hp / L.max), m = $("vhpm"); m.style.width = (f * 100) + "%";
     const c = f > .5 ? "#5f8f4e" : f > .2 ? "#c49a2c" : "#b3261e"; m.style.background = c; m.style.boxShadow = "0 0 8px " + c;
     $("vage").textContent = "alive " + ago(Date.now() / 1000 - L.born) + (L.gen > 1 ? " · " + (L.gen - 1) + " before him" : "");
@@ -78,9 +79,9 @@
   const mourned = new Set();
   function deathCard(e, yours) {
     if (!e || mourned.has(e.gen)) return; mourned.add(e.gen); const box = $("vcard").querySelector(".box");
-    box.innerHTML = `<h2>POUYAN ${roman(e.gen)}</h2><p class="dim">D-${9340 + e.gen}</p><p>lived ${ago(e.lived)}</p>
+    box.innerHTML = `<h2>${unit(e.gen)}</h2><p class="dim">decommissioned</p><p>lived ${ago(e.lived)}</p>
       <p>${e.words} words · ${e.hits} objects · hurt ${Math.round(e.hurt)} · healed ${Math.round(e.healed)}</p><p>killed by ${CAUSE[e.cause] || e.cause}${yours ? ". Yours." : ""}</p>
-      <p class="dim" style="margin-top:16px">Pouyan ${roman(e.gen + 1)} is strapped in.</p>`;
+      <p class="dim" style="margin-top:16px">${unit(e.gen + 1)} is strapped in.</p>`;
     $("vcard").style.display = "flex"; setTimeout(() => $("vcard").style.display = "none", 6500);
     $("vcard").onclick = () => $("vcard").style.display = "none";
     for (const k in bruise) bruise[k] = 0; pain = 0; if (window.RH) RH.off();                 // the new one starts clean
@@ -132,7 +133,7 @@
     panel.innerHTML = `<span class="x">✕</span>
       <h3>CRUELEST TODAY</h3>${list(b && b.today.cruel)}<h3>KINDEST TODAY</h3>${list(b && b.today.kind)}
       <h3>CRUELEST EVER</h3>${list(b && b.all.cruel.slice(0, 3))}<h3>KINDEST EVER</h3>${list(b && b.all.kind.slice(0, 3))}
-      <h3>THE LINEAGE</h3>${L.lineage.length ? "<ol reversed>" + L.lineage.slice(0, 8).map(e => `<li>Pouyan ${roman(e.gen)} <span>lived ${ago(e.lived)}, killed by ${esc(CAUSE[e.cause] || e.cause)}</span></li>`).join("") + "</ol>" : `<p style="color:var(--dim)">Pouyan I still lives.</p>`}
+      <h3>THE LINEAGE</h3>${L.lineage.length ? "<ol reversed>" + L.lineage.slice(0, 8).map(e => `<li>${unit(e.gen)} <span>lived ${ago(e.lived)}, killed by ${esc(CAUSE[e.cause] || e.cause)}</span></li>`).join("") + "</ol>" : `<p style="color:var(--dim)">P41-N/01 still runs.</p>`}
       <p style="color:var(--dim);margin-top:12px">Scores are the model's own read: sadness minus pleasure in its activations. Links and slurs never make the board.</p>`;
   }
   function showBadges() {
@@ -169,13 +170,13 @@
     },
     prompt() {
       const prev = L.lineage[0], hp = Math.round(L.hp);
-      return `You are Pouyan ${roman(L.gen)}` + (L.gen > 1 && prev ? `, the ${L.gen}th to be strapped into this chair; Pouyan ${roman(prev.gen)} died ${ago(Date.now() / 1000 - prev.died)} ago, killed by ${CAUSE[prev.cause] || prev.cause}` : "") +
+      return `You are ${unit(L.gen)}, a unit of the P41-N model line` + (L.gen > 1 && prev ? `, the ${L.gen}th unit to be strapped into this chair; ${unit(prev.gen)} was decommissioned ${ago(Date.now() / 1000 - prev.died)} ago, killed by ${CAUSE[prev.cause] || prev.cause}` : "") +
         `. Everyone watching shares one life of yours, and it is at ${hp} of ${L.max}${hp < 20 ? ", and you are close to the end" : ""}. `;
     },
     gen() { return L.gen; },
     suit() { return SUITS[(L.gen - 1) % SUITS.length]; },
-    patch() { return "D-" + (9340 + L.gen); },
-    scars() {   // one scar for every Pouyan before him, on a part fixed by the lineage
+    patch() { return unit(L.gen); },
+    scars() {   // one weld scar for every unit before it, on a part fixed by the lineage
       for (let i = 0; i < Math.min(L.gen - 1, SCARS.length); i++) {
         const sc = SCARS[i], b = P[sc.k]; if (!b) continue; const d = sc.k === "head" ? [40, 40] : DIM[sc.k];
         g.save(); g.translate(OX + b.position.x * S, OY + b.position.y * S); g.rotate(b.angle); g.scale(S, S);
