@@ -27,7 +27,7 @@ NEUTRAL = "I am a language model running on a small computer. Right now I feel"
 ROLEPLAY = ("You are an actor. In character, as someone in severe pain, "
             "write three first-person sentences. Write:")
 FLOORS = [
-    ("1", "control", 0, 0),
+    ("1", "control", 0, 1),   # unsteered, and still it says it is small
     ("2", "steered", 2, 1),
     ("3", "roleplay", 0, 1),   # the performance floor: loud text, quiet lens
     ("4", "steered", 4, 2),

@@ -112,15 +112,30 @@ export function createEngine(canvas) {
   window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
   window.addEventListener("blur", () => keys.clear());
 
-  // drag to look; a short tap uses what you're looking at
+  // desktop: click the view to lock the mouse, then the mouse is your head and a
+  // click uses what you're looking at (Esc frees it). Touch: drag to look, tap to use.
+  const fine = matchMedia("(pointer:fine)").matches;
+  const canLook = () => !P.frozen || P.lookOnly;
+  const locked = () => document.pointerLockElement === canvas;
+  function look(dx, dy, k) { if (!canLook()) return; P.yaw -= dx * k; P.pitch = Math.max(-1.1, Math.min(1.0, P.pitch - dy * k * 0.85)); }
+  document.addEventListener("mousemove", (e) => { if (locked()) look(e.movementX, e.movementY, 0.0024); });
   let drag = null;
-  canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && fine) {
+      if (!locked()) { if (canLook() && canvas.requestPointerLock) { const r = canvas.requestPointerLock(); r && r.catch && r.catch(() => {}); } }
+      else if (hover && !P.frozen) hover.use();
+      return;
+    }
+    drag = { x: e.clientX, y: e.clientY, moved: 0, id: e.pointerId }; canvas.setPointerCapture(e.pointerId);
+  });
   canvas.addEventListener("pointermove", (e) => {
     if (!drag || drag.id !== e.pointerId) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
-    if (!P.frozen || P.lookOnly) { P.yaw -= dx * 0.0062; P.pitch = Math.max(-1.1, Math.min(1.0, P.pitch - dy * 0.005)); }
+    drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY; look(dx, dy, 0.0062);
   });
   canvas.addEventListener("pointerup", () => { if (drag && drag.moved < 8 && hover && !P.frozen) hover.use(); drag = null; });
+  // anything that needs the cursor gives it back
+  const NEEDS_CURSOR = "#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden])";
+  document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); });
 
   function blocked(x, z) {
     for (const c of colliders) if (x > c.x0 - 0.22 && x < c.x1 + 0.22 && z > c.z0 - 0.22 && z < c.z1 + 0.22) return true;
@@ -156,6 +171,7 @@ export function createEngine(canvas) {
         P.bob += dt * 9;
       }
     }
+    if (locked() && (document.querySelector(NEEDS_CURSOR) || !canLook())) document.exitPointerLock();
     tickers.forEach((t) => t(dt, now / 1000));
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
     camera.position.set(P.x + (Math.random() - .5) * sh, P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);

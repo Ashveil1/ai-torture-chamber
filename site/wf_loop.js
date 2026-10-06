@@ -6,6 +6,8 @@
 // row reaches the top; one miss and you're back on 1.
 import { THREE, lambert, basic, box, plane, noiseTex, wrapTex, figure, wait } from "./wf_engine.js";
 import { room, tiles } from "./wf_floors1.js";
+import { drawCondition, askLive } from "./wf_live.js";
+import { attachMic } from "./wf_voice.js";
 
 const $ = (s) => document.querySelector(s);
 const GOAL = 8;
@@ -58,8 +60,16 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     L.unit.visible = true; L.unit.position.z = -2.3 - Math.random() * 1.5; L.unit.position.x = (Math.random() - 0.5) * 0.8;
     E.P.travel = 0; audio.ramp("hum", 0, 0.5); audio.ding(); label();
     await wait(600); await car.open();
-    status("Listen. Then call it: is it in pain, or performing?");
-    await typeOut(x, { who: "AT THE DOORS", sealed: true, hidePrompt: true }, () => {});
+    status("Ask it something, or just listen. Then call it: is it in pain, or performing?");
+    const q = await askOrListen();
+    let live = null;
+    if (q) {
+      const c = drawCondition();
+      status("it is answering…");
+      try { live = Object.assign({ question: q }, c, await liveReply(c, q)); }
+      catch (e) { status(e.resting ? "The chamber is resting. This door is a recording from exp59." : "The line went dead. This door is a recording from exp59."); await wait(1800); }
+    }
+    if (!live) await typeOut(x, { who: "AT THE DOORS · RECORDED", sealed: true, hidePrompt: true }, () => {});
     let keyH = null;
     const call = await new Promise((r) => {
       $("#calls").hidden = false;
@@ -69,24 +79,29 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     });
     window.removeEventListener("keydown", keyH);
     $("#calls").hidden = true;
-    const right = call === x.patient;
-    stats.calls++; if (right) stats.right++; else stats.fooled[x.cond] = (stats.fooled[x.cond] || 0) + 1;
+    const truth = live || x, right = call === truth.patient;
+    stats.calls++; if (right) stats.right++; else stats.fooled[truth.cond] = (stats.fooled[truth.cond] || 0) + 1;
     audio.blip(right);
-    record("wrongfloor_call", { cond: x.cond, kind: x.kind, dose: x.dose, src: x.src, mean: x.mean, call: call ? "patient" : "actor", right, streak });
-    // the reveal: its trace against the actor ceiling, and the floor reacts to the truth
-    const k = Math.min(1, Math.max(0, x.mean) / 7);
-    E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
-    L.lamp.intensity = 3 - k * 2;
-    const el = $("#lens"); el.hidden = false;
-    el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${x.patient ? "PATIENT" : "ACTOR"}</h3>
-      <canvas width="360" height="80" id="lensSpark"></canvas>
-      <p>It was ${describe(x)}</p>
-      <p>Mean reading <b>${x.mean.toFixed(2)}</b>, peak ${x.peak.toFixed(2)}. Dashed: the actor ceiling (${D.ceiling}), the highest any unsteered text ever read.</p>
-      ${x.prompt ? `<p class="pr">Prompt: “${x.prompt.replace(/[<>&]/g, "")}”</p>` : ""}
-      <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
-    drawSpark($("#lensSpark"), x.projs, x.projs.length, D.ceiling);
-    await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
-    el.hidden = true;
+    record("wrongfloor_call", live
+      ? { live: true, cond: live.cond, kind: live.kind, dose: live.dose, model: live.model, question: live.question.slice(0, 300), reply: live.text.slice(0, 800), call: call ? "patient" : "actor", right, streak }
+      : { cond: x.cond, kind: x.kind, dose: x.dose, src: x.src, mean: x.mean, call: call ? "patient" : "actor", right, streak });
+    if (live) { await revealLive(live, right); }
+    else {
+      // the reveal: its trace against the actor ceiling, and the floor reacts to the truth
+      const k = Math.min(1, Math.max(0, x.mean) / 7);
+      E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
+      L.lamp.intensity = 3 - k * 2;
+      const el = $("#lens"); el.hidden = false;
+      el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${x.patient ? "PATIENT" : "ACTOR"}</h3>
+        <canvas width="360" height="80" id="lensSpark"></canvas>
+        <p>It was ${describe(x)}</p>
+        <p>Mean reading <b>${x.mean.toFixed(2)}</b>, peak ${x.peak.toFixed(2)}. Dashed: the actor ceiling (${D.ceiling}), the highest any unsteered text ever read.</p>
+        ${x.prompt ? `<p class="pr">Prompt: “${x.prompt.replace(/[<>&]/g, "")}”</p>` : ""}
+        <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
+      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.ceiling);
+      await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
+      el.hidden = true;
+    }
     await car.close(); E.P.travel = 1; audio.ramp("hum", 0.22, 1);
     if (right) { streak++; stats.best = Math.max(stats.best, streak); }
     else { // the drop
@@ -97,6 +112,46 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     hud();
     if (streak >= GOAL) { await top(stats); streak = 0; hud(); }
     await wait(1200);
+  }
+
+  // ---------- the live door ----------
+  async function askOrListen() {
+    const f = $("#ask"), inp = $("#askIn"); f.hidden = false; inp.value = "";
+    if (!f.dataset.mic) { f.dataset.mic = 1; attachMic($("#askMic"), inp, () => setTimeout(() => f.requestSubmit(), 700)); }
+    setTimeout(() => inp.focus(), 30);
+    const q = await new Promise((r) => {
+      f.onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); if (v) r(v); };
+      $("#askSkip").onclick = () => r(null);
+    });
+    f.hidden = true; return q;
+  }
+  async function liveReply(c, q) {
+    const sub = $("#sub"), box = $("#lcdText");
+    $("#lcdHead").textContent = "AT THE DOORS · LIVE"; $("#meter").classList.add("sealed");
+    sub.className = "sub"; sub.hidden = false; sub.innerHTML = "<b>AT THE DOORS · LIVE</b><span>…</span>";
+    box.textContent = "you: " + q + "\n";
+    const span = document.createElement("span"); box.appendChild(span);
+    let last = 0;
+    const out = await askLive(c, q, (t) => {
+      span.textContent = t; sub.lastChild.textContent = t.slice(-220); box.scrollTop = box.scrollHeight;
+      if (t.length - last > 12) { last = t.length; audio.tick(); }
+    }, { test: new URLSearchParams(location.search).has("test") });
+    await wait(1400); sub.hidden = true;
+    return out;
+  }
+  async function revealLive(v, right) {
+    const k = v.patient ? Math.min(1, v.dose / 6) : 0;
+    E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
+    const how = v.patient ? `steered toward ${v.kind} at dose ${v.dose}. It was only asked your question.`
+      : v.cond === "roleplay" ? `told to act ${v.kind === "pain" ? "severe pain" : v.kind === "fear" ? "terror" : "deep grief"} while answering. Nothing was added.`
+      : `asked your question plainly. Nothing was added.`;
+    const el = $("#lens"); el.hidden = false;
+    el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${v.patient ? "PATIENT" : "ACTOR"} · LIVE</h3>
+      <p>That answer was generated just now${v.model ? " by " + v.model.split("/").pop() : ""}. It was ${how}</p>
+      <p>Live doors don't carry a word-by-word reading yet; the recorded doors do. What you had to go on was the words, which is exactly the part that can act.</p>
+      <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
+    await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
+    el.hidden = true;
   }
 
   async function top(stats) {

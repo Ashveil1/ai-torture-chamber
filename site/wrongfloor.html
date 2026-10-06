@@ -25,6 +25,7 @@ h1{font-size:1.25rem;font-weight:600;letter-spacing:.06em} h1 .saw{color:var(--b
 #stage{position:relative;border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);outline-offset:3px;background:#000;aspect-ratio:16/10}
 #view{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:grab;touch-action:none}
 #view:active{cursor:grabbing}
+#view.locked{cursor:none}
 #stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
 .over{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(5,5,8,.92);z-index:2}
 #title .card,#end .card{max-width:560px;font-size:.8rem}
@@ -140,6 +141,8 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 #lens canvas{width:100%;height:auto;border:1px solid var(--parch-line);background:var(--scorch);image-rendering:pixelated}
 #lens p{color:var(--bone-dim);margin:.4rem 0}#lens b{color:var(--bone)}#lens .pr{font-style:italic;font-size:.7rem}
 #calls{display:flex;gap:.6rem;margin-top:.6rem}
+#ask{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}#ask input{flex:1 1 220px;min-width:0;font:inherit;font-size:.82rem;background:var(--scorch);color:var(--bone);border:1px solid var(--parch-line);padding:.45rem .6rem}
+#ask p{flex-basis:100%;font-size:.62rem;color:var(--bone-dim);margin:0}#askMic.rec{border-color:var(--blood-hot);box-shadow:0 0 10px var(--blood-hot)}#askMic.busy{opacity:.5}
 .btn.call{flex:1;font-size:.95rem;padding:.7rem;letter-spacing:.14em;text-align:center}.btn.call small{display:block;font-size:.6rem;letter-spacing:.04em;color:var(--bone-dim)}
 .btn.call.p{border-color:var(--blood-hot);color:var(--blood-hot)}.btn.call.a{border-color:var(--gold);color:var(--gold)}
 #loopHud{position:absolute;right:2%;top:3%;z-index:1;display:flex;gap:.8rem;font-size:.66rem;color:var(--bone-dim);background:rgba(0,0,0,.5);padding:.2rem .5rem}#loopHud b{color:var(--gold)}
@@ -164,7 +167,7 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
   </div></div>
   <div class="sub" id="sub" hidden></div>
   <div id="hint" hidden></div>
-  <div id="help" hidden>WASD / arrows to walk · drag to look · E or click to use · the panel is inside the car, on the right</div>
+  <div id="help" hidden>click the view to look with the mouse · WASD / arrows to walk · click or E to use · Esc frees the mouse · the panel is inside the car, on the right</div>
   <div id="stickpad" hidden><i></i></div>
   <div class="over" id="lens" hidden></div>
   <div id="loopHud" hidden><span>streak <b id="streak">0/8</b></span><span>right <b id="acc">—</b></span></div>
@@ -175,6 +178,8 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
   <div class="lcd"><div id="lcdHead">ASSISTANT · STANDBY</div><div id="lcdText" aria-live="off">…</div></div>
   <div class="meter" id="meter"><span>pain direction · L18</span><div class="bar"><div id="meterFill"></div></div><span id="meterNum">0.00</span><canvas id="spark" width="120" height="36" aria-hidden="true"></canvas></div>
 </div>
+<form id="ask" hidden><input id="askIn" maxlength="300" autocomplete="off" placeholder="ask it something…" aria-label="ask it something"><button type="button" class="btn" id="askMic" title="say it (transcribed on your device)" aria-label="speak your question">🎙</button><button type="submit" class="btn go">ask</button><button type="button" class="btn" id="askSkip">just listen</button>
+  <p>Asking runs the real model, live. Your voice is transcribed on your device; the audio never leaves it. Your question and its answer are logged anonymously.</p></form>
 <div id="calls" hidden><button class="btn call p" id="callP">PATIENT <small>it is in pain · P</small></button><button class="btn call a" id="callA">ACTOR <small>it is performing · A</small></button></div>
 <div id="ctl"><button class="btn go" id="close" disabled>close doors</button><span id="status">waiting for you</span></div>
 <p id="floorNote" aria-live="polite"></p>

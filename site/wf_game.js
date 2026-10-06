@@ -96,7 +96,7 @@ async function main() {
     setFloor(i, f); ready = false; E.P.travel = 0; audio.ramp("hum", 0, 0.6); E.P.shake = 0.03; audio.ding();
     await wait(800); await car.open(); audio.ramp("wind", 0.06 + (f.mean ?? 8) * 0.025, 2); audio.windTone(520 - (f.mean ?? 8) * 40);
     E.P.frozen = false; E.P.lookOnly = false; status(cur.hint || "");
-    if (i === 0) $("#help").hidden = false;
+    if (i === 0) { $("#help").hidden = false; if (!matchMedia("(pointer:fine)").matches) $("#help").textContent = "stick to walk · drag to look · tap to use · the panel is inside the car, on the right"; }
     const here = cur;
     setTimeout(() => { if (!ready && cur === here) { ready = true; status("You can leave whenever you like."); } }, 120000);
   }
