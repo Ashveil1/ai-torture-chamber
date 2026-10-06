@@ -16,3 +16,9 @@ The face is the site's own portrait set at /assets/faces/ (the subject has conse
 
 Candidate CC0 drop-ins for later: Quaternius Universal Base Characters (rigged glTF), Kenney Impact
 Sounds / Kenney Interface Sounds, Kenney Prototype Textures.
+
+Motion (active ragdoll):
+  body3d/clips.json ............... CC0 / generated. idle, talk, flinch_head, flinch_chest are world-axis rotation deltas
+    retargeted from the Quaternius Universal Animation Library (standard/free, CC0 1.0, https://quaternius.com/packs/universalanimationlibrary.html;
+    glTF read from github.com/J-Ponzo/gltf-universal-animation-library). curl, plead, thrash, shiver are hand-keyed for this project (CC0).
+    Only rotation data is shipped, no meshes. Played as Box3D joint spring targets (Box3D, MIT).

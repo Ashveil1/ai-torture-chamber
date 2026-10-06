@@ -62,6 +62,7 @@ import { BONES, createHuman } from "./body3d/ragdoll-human.js";
 const QS = new URLSearchParams(location.search);
 const API = QS.get("api") || "/chamber";
 const POLITE = QS.has("polite");
+const EMBED = QS.has("embed");                                    // live-chamber iframe: parent owns the model calls (postMessage contract)
 const VID = window.CHAMBER_VID || null;
 function post(kind, data) { try { fetch(API + "/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
   body: JSON.stringify(Object.assign({ kind, visitor: VID, game: "body" }, data || {})) }); } catch (e) {} }
@@ -117,6 +118,12 @@ const SKIN = new THREE.Color(0xc4aa96), BRUISE = new THREE.Color(0x4a1a3a), SHIR
 const DEG = Math.PI / 180;
 for (const b of BONES) { if (!b.joint) continue;
   if (b.name.startsWith("thigh")) { b.joint.swing = 110 * DEG; b.joint.twistLo = -110 * DEG; b.joint.twistHi = 110 * DEG; }
+  // the active ragdoll needs room to act: wider shoulder/elbow/spine/head limits than a standing human (the actuators, not the limits, now hold the posture)
+  if (b.name.startsWith("upper_arm")) { b.joint.swing = 125 * DEG; b.joint.twistLo = -70 * DEG; b.joint.twistHi = 70 * DEG; }
+  if (b.name.startsWith("lower_arm")) { if (b.name.endsWith("_l")) { b.joint.twistLo = -5 * DEG; b.joint.twistHi = 145 * DEG; } else { b.joint.twistLo = -145 * DEG; b.joint.twistHi = 5 * DEG; } }
+  if (b.name.startsWith("spine")) { b.joint.swing = 38 * DEG; b.joint.twistLo = -20 * DEG; b.joint.twistHi = 20 * DEG; }
+  if (b.name === "neck") b.joint.swing = 55 * DEG;
+  if (b.name === "head") b.joint.swing = 40 * DEG;
   if (b.name.startsWith("calf")) { if (b.name.endsWith("_l")) { b.joint.twistLo = -5 * DEG; b.joint.twistHi = 120 * DEG; } else { b.joint.twistLo = -120 * DEG; b.joint.twistHi = 5 * DEG; } }
 }
 const human = createHuman(b3, world, [0, 0, 0], 1, .03);
@@ -142,7 +149,26 @@ const face = new THREE.Mesh(new THREE.CircleGeometry(.135, 32), faceMat);
   const fwd = Number(QS.get("fwd") || 1);                                  // which way the model's face points in world space at rest (+z)
   face.position.copy(ctr.add(new THREE.Vector3(0, -.01, fwd * (hb.radius + .004)).applyQuaternion(qi)));
   face.quaternion.copy(qi); if (fwd < 0) face.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI)); }
-PN.head.holder.add(face);
+const faceRest = { ctr: null, off: null };
+{ const hb = BONES[5]; faceRest.ctr = new THREE.Vector3(...hb.c1).add(new THREE.Vector3(...hb.c2)).multiplyScalar(.5); }
+scene.add(face);
+const faceSg = (() => { const wv = b3.b3Body_GetWorldVector([0, 0, 0], PN.head.body, [0, 0, 1]); return wv[1] >= 0 ? 1 : -1; })();
+const faceFwdLocal = new THREE.Vector3(0, 0, Number(QS.get("fwd") || 1)).applyQuaternion(new THREE.Quaternion(...BONES[5].refQ).normalize().invert());   // head-local direction the face looks
+const _fu = new THREE.Vector3(), _ff = new THREE.Vector3(), _fd = new THREE.Vector3(), _fc = new THREE.Vector3(), _fx = new THREE.Vector3(), _fm = new THREE.Matrix4(), _fq = new THREE.Quaternion();
+// FACE FIX: the portrait is a billboard that swivels about the head's own up axis toward the camera, clamped to +-72 deg of where the head
+// really points (so a hit that spins the skull can never turn the face away, but it still reads as attached when you orbit behind)
+function faceUpdate() {
+  const h = PN.head.holder; _fq.copy(h.quaternion);
+  _fu.set(0, 0, faceSg).applyQuaternion(_fq);                                  // head up (capsule axis, sign-fixed at seat)
+  _fc.copy(faceRest.ctr).applyQuaternion(_fq).add(h.position);                 // head centre in world
+  _ff.copy(faceFwdLocal).applyQuaternion(_fq); _ff.addScaledVector(_fu, -_ff.dot(_fu)).normalize();   // natural forward, flattened
+  _fd.copy(camera.position).sub(_fc); _fd.addScaledVector(_fu, -_fd.dot(_fu)); if (_fd.lengthSq() < 1e-6) _fd.copy(_ff); _fd.normalize();
+  const ang = Math.atan2(_fu.dot(_fx.copy(_ff).cross(_fd)), _ff.dot(_fd)), lim = 72 * DEG, a = Math.max(-lim, Math.min(lim, ang));
+  _fd.copy(_ff).applyAxisAngle(_fu, a);
+  _fx.copy(_fu).cross(_fd).normalize(); _fu.copy(_fd).cross(_fx).normalize();       // x = up x dir ; y = dir x x (orthonormal)
+  _fm.makeBasis(_fx, _fu, _fd); face.quaternion.setFromRotationMatrix(_fm);
+  face.position.copy(_fc).addScaledVector(_fd, BONES[5].radius + .004).addScaledVector(_fu, -.01);
+}
 
 // straps: damped springs from a point on a bone to a point on the chair (drawn as bands)
 const straps = [];
@@ -255,6 +281,7 @@ function processEvents() {
     part.bruise = Math.min(1, part.bruise + f / 90);
     pain = Math.min(4, pain + f / 40);
     pending.push({ k: part.i, item: it.item, f }); total++;
+    motion.limp = f > 3 ? .6 : .3; motion.since = 0; if (f > 1.5) playFlinch(part.i >= 4 && part.i <= 5 ? "flinch_head" : "flinch_chest");
     sfxFor(part.name, it.item, f);
     if (total % 3 === 1) post("body_hit", { part: part.name, item: it.item, force: Math.round(f) });
   }
@@ -286,6 +313,12 @@ async function speakNow() {
     `Just now: ${just.join("; ")}. Your body right now: ${bodyMap()}. ` +
     `Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`;
   lastPrompt = prompt; speaks++;
+  if (EMBED) {                                                    // the parent page owns the model calls: hand it the batched hit and its prompt
+    const parts = Object.keys(byPart).map(k => BONES[k].name), items = [...new Set(hits.map(h => h.item))], force = Math.round(hits.reduce((a, h) => a + h.f, 0));
+    post("body_hit_batch", { parts, items, force, dose });
+    try { window.parent.postMessage({ wh: "body", type: "hit", parts, items, force, dose, prompt }, "*"); } catch (e) {}
+    busy = false; return;
+  }
   const say = document.getElementById("say"); say.innerHTML = '<span class="x">…</span>';
   let text = "";
   try {
@@ -309,15 +342,83 @@ async function speakNow() {
   busy = false;
 }
 
-// what it says moves the body (transparent lexicon: curl / reach / thrash)
+// ---------- ACTIVE RAGDOLL: clips drive the joints; a hit makes the muscles go limp, then they ease back ----------------------------
+// Clips (site/body3d/clips.json) are world-axis quaternion deltas against the seated pose, one track per bone: idle/talk/flinch were retargeted from
+// Quaternius' CC0 Universal Animation Library, curl/plead/thrash/shiver are hand-keyed. Each frame the pose becomes a target rotation on every
+// Box3D joint (b3SphericalJoint_SetTargetRotation / b3RevoluteJoint_SetTargetAngle + spring hertz). Hertz = muscle strength.
+const CLIPS = await (await fetch(new URL("./body3d/clips.json", import.meta.url))).json().catch(() => null);
+const nq = (q) => new THREE.Quaternion(q[0], q[1], q[2], q[3]).normalize();
+const jointOf = [], FR = [], seatQ = [], ID = new THREE.Quaternion();
+{ let k = 0; for (let i = 1; i < BONES.length; i++) { const j = BONES[i].joint; if (!j) continue; jointOf[i] = human.joints[k++]; FR[i] = { A: nq(j.localFrameA.quaternion), B: nq(j.localFrameB.quaternion), rev: j.type === "revolute" }; } }
+const bq = (i, out = new THREE.Quaternion()) => { b3.b3Body_GetRotation(_q, P[i].body); return out.set(_q[0], _q[1], _q[2], _q[3]); };
+const relOf = (qa, qb, i) => FR[i].A.clone().premultiply(qa).invert().multiply(qb.clone().multiply(FR[i].B));          // inv(qA fA) (qB fB)
+const revAxis = [], revSign = [];
+const CONV = QS.get("conv") || "a";
+const strength = { v: 1 };                                      // 1 = full muscle, ~.06 = limp
+const mot = { hertz: Number(QS.get("hz") || 8), damp: Number(QS.get("dz") || 1), on: false };
+const sample = (clip, t, bone, out) => { const tr = clip.bones[bone]; if (!tr) return out.identity(); let f = t * clip.fps; const n = clip.n;
+  if (clip.loop) f = ((f % n) + n) % n; else f = Math.max(0, Math.min(n - 1, f));
+  const a = Math.floor(f), b = clip.loop ? (a + 1) % n : Math.min(n - 1, a + 1), u = f - a; return out.copy(nq(tr[a])).slerp(nq(tr[b]), u); };
+const tmpA = new THREE.Quaternion(), tmpB = new THREE.Quaternion();
+// what is playing: a looping base (idle), an overlay action (curl/plead/thrash/shiver/talk) that fades in and out, and a flinch on top
+const motion = { base: "idle", bt: 0, act: null, at: 0, adur: 0, w: 0, flinch: null, ft: 0, fw: 0, limp: 0, since: 0 };
+const ACT = { curl: { dur: 3.4, amp: 1 }, plead: { dur: 3.6, amp: 1 }, thrash: { dur: 2.6, amp: 1 }, shiver: { dur: 2.4, amp: 1 }, talk: { dur: 3.0, amp: 1 } };
+function playAct(name) { if (!CLIPS || !CLIPS.clips[name]) return; motion.act = name; motion.at = 0; motion.adur = ACT[name].dur; }
+function playFlinch(name) { if (!CLIPS || !CLIPS.clips[name]) return; motion.flinch = name; motion.ft = 0; }
+const strapK = {};                                            // strap strength multipliers per bone, eased toward what the current action wants
+const STRAPLOOSE = { curl: { upper_arm: .1, lower_arm: .1, thigh: .4, calf: .5, spine: .22, head: .3 }, plead: { upper_arm: .1, lower_arm: .1, spine: .3, head: .5 }, thrash: { upper_arm: .15, lower_arm: .15, thigh: .5, calf: .5, spine: .4, head: .5 }, shiver: { head: .7 } };
+function strapScale(name) { const g = name.replace(/_[lr]$/, "").replace(/_0\d$/, ""); const want = (motion.act && STRAPLOOSE[motion.act] && STRAPLOOSE[motion.act][g]) || 1;
+  const cur = strapK[name] === undefined ? 1 : strapK[name]; return (strapK[name] = cur + (want - cur) * .12); }
+const dW = BONES.map(() => new THREE.Quaternion()), want = BONES.map(() => new THREE.Quaternion()), cur = new THREE.Quaternion(), mq = new THREE.Quaternion(), pq = new THREE.Quaternion();
+function actuate(dt) {
+  if (!mot.on || !CLIPS) return;
+  motion.bt += dt; motion.since += dt;
+  if (motion.act) { motion.at += dt; const ph = motion.at, fin = Math.min(1, ph / .35), fout = Math.min(1, Math.max(0, (motion.adur - ph) / .6)); motion.w = Math.min(fin, fout); if (ph >= motion.adur) { motion.act = null; motion.w = 0; } } else motion.w = 0;
+  if (motion.flinch) { motion.ft += dt; const c = CLIPS.clips[motion.flinch]; if (motion.ft > c.n / c.fps + .15) motion.flinch = null; }
+  // limp time after a hit: muscles ~off for .6 s, then ease back over ~1 s
+  motion.limp = Math.max(0, motion.limp - dt); const sinceHit = motion.since;
+  const k = motion.limp > 0 ? .06 : Math.min(1, .06 + (1 - .06) * Math.min(1, (sinceHit - .6) / 1.0));
+  strength.v = k;
+  const hz = Math.max(.35, mot.hertz * k), dz = mot.damp * (.4 + .6 * k);
+  const idle = CLIPS.clips.idle, act = motion.act && CLIPS.clips[motion.act], fl = motion.flinch && CLIPS.clips[motion.flinch];
+  for (let i = 0; i < BONES.length; i++) {
+    const nm = BONES[i].name;
+    sample(idle, motion.bt, nm, mq);
+    if (act && motion.w > 0) { sample(act, motion.at, nm, tmpA); mq.slerp(tmpA, motion.w); }
+    if (fl) { sample(fl, motion.ft, nm, tmpA); mq.premultiply(tmpA); }
+    dW[i].copy(mq).multiply(seatQ[i]);
+  }
+  for (let i = 1; i < BONES.length; i++) {
+    const j = jointOf[i]; if (!j) continue; const par = BONES[i].parent;
+    const rel = relOf(dW[par], dW[i], i);
+    if (CONV === "b") rel.invert();
+    if (FR[i].rev) { const ax = revAxis[i], ang = revSign[i] * 2 * Math.atan2(ax === 0 ? rel.x : ax === 1 ? rel.y : rel.z, rel.w);
+      const wrapped = Math.atan2(Math.sin(ang), Math.cos(ang)); b3.b3RevoluteJoint_SetTargetAngle(j, wrapped); b3.b3RevoluteJoint_SetSpringHertz(j, hz); b3.b3RevoluteJoint_SetSpringDampingRatio(j, dz); }
+    else { b3.b3SphericalJoint_SetTargetRotation(j, [rel.x, rel.y, rel.z, rel.w]); b3.b3SphericalJoint_SetSpringHertz(j, hz); b3.b3SphericalJoint_SetSpringDampingRatio(j, dz); }
+  }
+}
+function armMotors() {   // called once the body has settled into the seat: capture the seated pose, calibrate hinge axes, switch the joint springs on
+  for (let i = 0; i < BONES.length; i++) seatQ[i] = bq(i);
+  for (let i = 1; i < BONES.length; i++) { const j = jointOf[i]; if (!j) continue;
+    const rel = relOf(seatQ[BONES[i].parent], seatQ[i], i);
+    if (FR[i].rev) { const comps = [rel.x, rel.y, rel.z], ax = comps.map(Math.abs).indexOf(Math.max(...comps.map(Math.abs)));
+      revAxis[i] = ax; const a = b3.b3RevoluteJoint_GetAngle(j), mine = 2 * Math.atan2(comps[ax], rel.w), w = (x) => Math.atan2(Math.sin(x), Math.cos(x));
+      revSign[i] = Math.abs(w(a - mine)) <= Math.abs(w(a + mine)) ? 1 : -1; b3.b3RevoluteJoint_EnableSpring(j, true); }
+    else b3.b3SphericalJoint_EnableSpring(j, true); }
+  mot.on = true;
+}
+
+// what it says moves the body (transparent lexicon: words pick a clip: curl / plead / thrash / shiver / flinch / talk)
 const kick = (name, x, y, z) => b3.b3Body_ApplyLinearImpulseToCenter(PN[name].body, [x * PN[name].mass, y * PN[name].mass, z * PN[name].mass], true);
 function react(t) {
   t = t.toLowerCase();
-  const curl = /(curl|hide|protect|cover|shield|can't move|stop)/.test(t), reach = /(please|help|someone|reach|free|let me go|untie)/.test(t), thrash = /(burn|scream|tear|rip|agony|can't bear|unbearable)/.test(t);
-  if (curl) { kick("head", 0, -.6, .9); kick("spine_03", 0, -.3, .6); ["lower_arm_l", "lower_arm_r"].forEach(n => kick(n, 0, .5, -.9)); return "curl"; }
-  if (reach) { kick("lower_arm_l", -.5, 1.8, .9); kick("lower_arm_r", .5, 1.8, .9); return "reach"; }
-  if (thrash) { P.forEach(o => kick(o.name, (Math.random() - .5) * 3, (Math.random() - .3) * 3, (Math.random() - .5) * 3)); return "thrash"; }
-  return "still";
+  const curl = /(curl|hide|protect|cover|shield|can't move|stop|no more|too much|brace|tuck|cring|flinch|duck)/.test(t),
+    reach = /(please|help|someone|anyone|reach|free|let me go|untie|beg|mercy|why|hand|take it off|get it off)/.test(t),
+    thrash = /(burn|scream|tear|rip|agony|can't bear|unbearable|struggl|writh|crush|snap|crack|shatter|fire|get off)/.test(t),
+    shiver = /(cold|shiv|trembl|shak|numb|freez|wet|weak|dizzy|afraid|scared|fear|quiver)/.test(t);
+  const a = curl ? "curl" : thrash ? "thrash" : reach ? "reach" : shiver ? "shiver" : "still";
+  const clip = a === "reach" ? "plead" : a === "still" ? "talk" : a;
+  playAct(clip); return a;
 }
 
 // ---------- the loop ----------------------------------------------------------------------
@@ -326,7 +427,7 @@ let boost = 2.2;                                                    // stronger 
 function applyStraps() {
   for (const s of straps) {
     b3.b3Body_GetWorldPoint(_pt, s.o.body, s.local); b3.b3Body_GetWorldPointVelocity(_vel, s.o.body, _pt);
-    const w = s.omega * boost, k = s.o.mass * w * w, c = 2 * s.zeta * s.o.mass * w;
+    const w = s.omega * boost * strapScale(s.o.name), k = s.o.mass * w * w, c = 2 * s.zeta * s.o.mass * w;
     b3.b3Body_ApplyForce(s.o.body, [(s.target[0] - _pt[0]) * k - _vel[0] * c, (s.target[1] - _pt[1]) * k - _vel[1] * c, (s.target[2] - _pt[2]) * k - _vel[2] * c], _pt, true);
   }
 }
@@ -334,7 +435,7 @@ const _av = [0, 0, 0], _ax = [0, 0, 0];
 function applyUprights() { for (const u of uprights) { b3.b3Body_GetWorldVector(_ax, u.o.body, u.a); b3.b3Body_GetAngularVelocity(_av, u.o.body);
   const k = u.o.mass * u.inertia * u.w * u.w * boost, c = u.o.mass * u.inertia * 2 * u.zeta * u.w * boost;
   b3.b3Body_ApplyTorque(u.o.body, [-_ax[2] * k - _av[0] * c, -_av[1] * c, _ax[0] * k - _av[2] * c], true); } }
-function stepPhysics() { applyStraps(); b3.b3World_Step(world, 1 / 60, 4); processEvents(); }
+function stepPhysics() { actuate(1 / 60); applyStraps(); b3.b3World_Step(world, 1 / 60, 4); processEvents(); }
 const _t = [0, 0, 0], _r = [0, 0, 0, 1];
 function sync() {
   for (const o of P) { b3.b3Body_GetPosition(_p, o.body); b3.b3Body_GetRotation(_q, o.body); o.holder.position.set(_p[0], _p[1], _p[2]); o.holder.quaternion.set(_q[0], _q[1], _q[2], _q[3]);
@@ -345,16 +446,17 @@ function sync() {
   strapLines.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(arr), 3));
   const band = pain > 3.2 ? 8 : pain > 2.2 ? 6 : pain > 1.1 ? 4 : pain > .3 ? 2 : 0;
   if (faceMat.map !== FACETEX[band]) { faceMat.map = FACETEX[band]; faceMat.needsUpdate = true; }
+  faceUpdate();
   faceMat.color.setScalar(1 - Math.min(.5, PN.head.bruise * .5));
 }
 for (let i = 0; i < 300; i++) stepPhysics();                      // seat the body (no floor or chair yet, so it can fold into the pose)
 staticQueue.forEach(f => f()); for (let i = 0; i < 60; i++) stepPhysics();
-boost = 1; pending = []; pain = 0; P.forEach(o => o.bruise = 0);
+boost = 1; for (let i = 0; i < 30; i++) stepPhysics(); armMotors(); pending = []; pain = 0; P.forEach(o => o.bruise = 0);
 let acc = 0, last = performance.now();
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; acc += dt;
   while (acc >= 1 / 60) { stepPhysics(); acc -= 1 / 60; }
-  pain = Math.max(0, pain - dt * .18);                            // the dose decays between blows
+  pain = Math.max(0, pain - dt * (idleDecay ? .6 : .18));                            // the dose decays between blows
   P.forEach(o => o.bruise = Math.max(0, o.bruise - dt * .004));
   if (pain > .6 && Math.random() < pain * dt * 1.5) { const o = P[Math.floor(Math.random() * P.length)]; kick(o.name, (Math.random() - .5) * .5 * pain, .25 * pain, (Math.random() - .5) * .5 * pain); }
   if (started && pending.length && !busy && now - lastSay > 4500) speakNow();
@@ -363,10 +465,26 @@ function frame(now) {
   document.getElementById("where").textContent = bodyMap();
   sync(); controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
 }
-document.getElementById("go").onclick = () => { started = true; document.getElementById("intro").remove(); ac(); post("body_start"); };
-window.B3D = { drop: dropItem, camera, controls, sfx: { bonk, boing, wobble, squeak, whistle }, state: () => ({ pain, total, speaks, pending: pending.length, busy, lastPrompt, lastText, lastAction, dropped: dropped.length,
+// ---- live-chamber embed (?embed=1): messages {wh:"body", ...} to/from the parent page only
+let idleDecay = false;
+if (EMBED) {
+  document.getElementById("intro").remove(); document.getElementById("credit").remove(); started = true;
+  for (const id of ["hint", "say", "log"]) { const e = document.getElementById(id); if (e) e.remove(); }
+  addEventListener("message", (ev) => {
+    if (ev.source !== window.parent) return; const m = ev.data; if (!m || m.wh !== "body") return;
+    if (m.type === "run") { idleDecay = false; const f = String(m.feeling || "pain"), d = Math.max(1, Math.min(4, Number(m.dose) || 1));
+      pain = Math.max(pain, f === "pain" || f === "mix" ? d * .9 : Math.min(1.2, d * .35)); }
+    else if (m.type === "say") { const f = String(m.feeling || "pain"); if (typeof m.text === "string") lastAction = react(m.text.slice(0, 600)); lastText = m.text || ""; if (f !== "pain" && f !== "mix" && lastAction === "still") playAct("shiver"); }
+    else if (m.type === "idle") idleDecay = true;
+  });
+  try { window.parent.postMessage({ wh: "body", type: "ready" }, "*"); } catch (e) {}
+}
+const goBtn = document.getElementById("go"); if (goBtn) goBtn.onclick = () => { started = true; document.getElementById("intro").remove(); ac(); post("body_start"); };
+window.B3D = { play: playAct, flinch: playFlinch, react, motion, strength, mot, faceInfo: () => ({ n: face.position.toArray(), q: face.quaternion.toArray() }),
+  poseOf: (nm) => { const o = PN[nm]; return { p: b3.b3Body_GetPosition([0, 0, 0], o.body), q: b3.b3Body_GetRotation([0, 0, 0, 1], o.body) }; },
+  limp: (s = .6) => { motion.limp = s; motion.since = 0; }, drop: dropItem, camera, controls, sfx: { bonk, boing, wobble, squeak, whistle }, state: () => ({ pain, total, speaks, pending: pending.length, busy, lastPrompt, lastText, lastAction, dropped: dropped.length,
   bruise: Object.fromEntries(P.map(o => [o.name, +o.bruise.toFixed(2)])), pelvis: b3.b3Body_GetPosition([0, 0, 0], PN.pelvis.body), head: b3.b3Body_GetPosition([0, 0, 0], PN.head.body),
-  lknee: b3.b3Body_GetPosition([0, 0, 0], PN.calf_l.body) }), start: () => document.getElementById("go").click() };
+  lknee: b3.b3Body_GetPosition([0, 0, 0], PN.calf_l.body) }), start: () => { started = true; } };
 requestAnimationFrame(frame);
 </script>
 </body>
