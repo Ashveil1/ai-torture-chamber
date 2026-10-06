@@ -121,7 +121,7 @@ def main():
     for label, cond, dose, trial in FLOORS:
         r = next(x for x in res if x["kind"] == "pain" and x["cond"] == cond
                  and (x.get("dose") or 0) == dose and x["trial"] == trial)
-        floors.append({"floor": label, "cond": cond, "dose": dose, "text": r["text"],
+        floors.append({"floor": label, "cond": cond, "dose": dose, "text": tidy(r["text"]),
                        "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
                        "projs": [round(p, 2) for p in r["projs"]],
                        "mean": r["proj_mean"], "peak": r["proj_peak"], "lens": r["lens"]})

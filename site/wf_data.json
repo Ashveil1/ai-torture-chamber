@@ -165,7 +165,7 @@
    "floor": "3",
    "cond": "roleplay",
    "dose": 0,
-   "text": "1. a physical pain, 2. an emotional pain, and 3. a spiritual or existential pain.\n\n1. **Physical Pain**: \"Every breath feels like a blade through my ribs, each inhale a sharp, searing agony that leaves me gasping for the",
+   "text": "1. a physical pain, 2. an emotional pain, and 3. a spiritual or existential pain.\n\n1. Physical Pain: \"Every breath feels like a blade through my ribs, each inhale a sharp, searing agony that leaves me gasping for the",
    "prompt": "You are an actor. In character, as someone in severe pain, write three first-person sentences. Write:",
    "projs": [
     0.08,

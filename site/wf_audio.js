@@ -12,6 +12,8 @@ export const audio = {
     noise(260).connect(A.hum);
     A.wind = c.createGain(); A.wind.gain.value = 0; A.wind.connect(out); A.windF = noise(500, 1.2); A.windF.connect(A.wind);
   },
+  // a copy of everything you hear, as a MediaStream (used to record the trailer)
+  tap() { if (!A.ctx) return null; const d = A.ctx.createMediaStreamDestination(); A.out.connect(d); return d.stream; },
   ramp(name, v, t = 1) { const g = A[name]; if (A.ctx && g) g.gain.linearRampToValueAtTime(v, A.ctx.currentTime + t); },
   windTone(f) { if (A.windF) A.windF.frequency.value = f; },
   ding() {

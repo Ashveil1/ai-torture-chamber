@@ -73,7 +73,7 @@ async function main() {
   touchStick(E);
 
   const status = (t) => { $("#status").textContent = t; };
-  if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, cur: () => cur, use: (i) => cur.usables[i].use(), close: () => panelUse.use(), ready: () => ready };
+  if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, audio, cur: () => cur, use: (i) => cur.usables[i].use(), close: () => panelUse.use(), ready: () => ready };
   function setFloor(i, f) {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
@@ -108,6 +108,14 @@ async function main() {
   }
   const waitClose = () => new Promise((r) => { waiter = r; });
 
+  // debug: jump straight onto a floor (?debug#floor3) for previews and capture
+  const jump = /^#floor(\d)$/.exec(location.hash);
+  if (window.WF && jump) {
+    window.WF.audio = audio; const i = +jump[1] - 1;
+    audio.init(); $("#title").hidden = true; setFloor(i, D.floors[i]);
+    await car.open(); audio.ramp("wind", 0.06 + (D.floors[i].mean ?? 8) * 0.025, 1); E.P.frozen = false; ready = true;
+    return;
+  }
   // ----- title -----
   const mode = await new Promise((r) => { $("#enter").onclick = () => r("ride"); $("#enterLoop").onclick = () => r("loop"); });
   audio.init(); $("#title").hidden = true;
