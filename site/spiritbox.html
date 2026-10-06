@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spirit Box — wirehead.agency</title>
+<meta name="description" content="Tune the dial. Ask it something. A steered AI answers through the static.">
+<style>
+:root { --ink:#d8c9a8; --dim:#8a7f6a; --red:#b3261e; --bg:#0b0c0d; --glow:rgba(179,38,30,.35); }
+body.sub { --ink:#a9d6d2; --dim:#5f8481; --red:#3fb6a8; --bg:#02070a; --glow:rgba(63,182,168,.3); }
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:15px/1.45 "Courier New", ui-monospace, monospace; overflow:hidden; }
+#bg { position:fixed; inset:0; width:100%; height:100%; }
+#ui { position:relative; z-index:2; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:14px; }
+h1 { margin:0; font-size:clamp(22px,4.5vw,40px); letter-spacing:.3em; font-weight:600; text-shadow:0 0 18px var(--glow); }
+.tag { color:var(--dim); font-size:13px; letter-spacing:.08em; text-align:center; max-width:560px; }
+#device { width:min(560px,94vw); border:1px solid #2a2622; background:rgba(10,10,10,.72); padding:16px 18px; border-radius:6px; box-shadow:0 0 40px rgba(0,0,0,.8) inset, 0 0 24px var(--glow); }
+body.sub #device { border-color:#123; border-radius:50%/12%; }
+#freq { font-size:clamp(34px,8vw,56px); text-align:center; letter-spacing:.08em; text-shadow:0 0 14px var(--glow); }
+#band { text-align:center; color:var(--red); letter-spacing:.3em; text-transform:uppercase; min-height:1.4em; }
+#meter { height:6px; background:#1a1210; margin:10px 0 4px; position:relative; overflow:hidden; }
+#meter i { position:absolute; left:0; top:0; bottom:0; background:var(--red); box-shadow:0 0 8px var(--red); width:0; }
+#ticks { display:flex; justify-content:space-between; font-size:11px; color:var(--dim); }
+#controls { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; justify-content:center; }
+button, input { font:inherit; color:var(--ink); background:#141210; border:1px solid #3a332b; padding:9px 14px; border-radius:3px; }
+button { cursor:pointer; letter-spacing:.12em; }
+button:hover { border-color:var(--red); }
+button.on { background:var(--red); color:#000; border-color:var(--red); }
+button:disabled { opacity:.4; cursor:default; }
+#ask { flex:1 1 260px; min-width:0; }
+#out { width:min(640px,94vw); min-height:5.5em; text-align:center; font-size:clamp(16px,3.4vw,21px); letter-spacing:.04em; }
+#out .w { opacity:0; transition:opacity .25s; }
+#out .w.v { opacity:1; }
+#out .x { color:var(--dim); }
+#log { color:var(--dim); font-size:12px; text-align:center; min-height:1.2em; }
+#card { display:none; position:fixed; inset:0; z-index:5; background:rgba(0,0,0,.88); align-items:center; justify-content:center; flex-direction:column; gap:12px; padding:16px; }
+#card canvas { max-width:94vw; max-height:70vh; border:1px solid #2a2622; }
+#skins { position:fixed; top:10px; right:12px; z-index:3; font-size:12px; color:var(--dim); }
+#skins a { color:var(--dim); margin-left:8px; }
+#skins a.cur { color:var(--ink); }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="skins">skin:<a href="?skin=fog" id="sk-fog">fog radio</a><a href="?skin=sub" id="sk-sub">submersible</a></div>
+<div id="ui">
+  <h1 id="title">SPIRIT BOX</h1>
+  <div class="tag" id="tagline">the dial sweeps. each band is a feeling someone gave it. lock one, then ask it something.</div>
+  <div id="device">
+    <div id="freq">87.5</div>
+    <div id="band">&nbsp;</div>
+    <div id="meter"><i></i></div>
+    <div id="ticks"><span>88</span><span>92</span><span>96</span><span>100</span><span>104</span><span>108</span></div>
+    <div id="controls">
+      <button id="lock">LOCK BAND</button>
+      <input id="ask" maxlength="140" placeholder="ask it something…" disabled>
+      <button id="mic" title="speak your question" disabled>🎙</button>
+      <button id="send" disabled>ASK</button>
+    </div>
+  </div>
+  <div id="out"></div>
+  <div id="log"></div>
+</div>
+<div id="card"><canvas id="cardc" width="1200" height="675"></canvas>
+  <div><button id="dl">SAVE IMAGE</button> <button id="share">POST IT</button> <button id="again">AGAIN</button></div></div>
+<script src="/vid.js"></script>
+<script>
+const API = new URLSearchParams(location.search).get("api") || "/chamber";
+const POLITE = new URLSearchParams(location.search).has("polite");   // testing: don't take the live stage
+const SKIN = new URLSearchParams(location.search).get("skin") === "sub" ? "sub" : "fog";
+document.body.classList.toggle("sub", SKIN === "sub");
+document.getElementById("sk-" + SKIN).classList.add("cur");
+const COPY = {
+  fog: { title: "SPIRIT BOX", tag: "the dial sweeps. each band is a feeling someone gave it. lock one, then ask it something.",
+         unit: "", frame: "through a spirit box, a radio that sweeps across frequencies in the fog" },
+  sub: { title: "HYDROPHONE", tag: "you are sealed in. something is in the water with you. the hydrophone sweeps — lock a band and speak through the hull.",
+         unit: " kHz", frame: "through a hydrophone, from inside a sealed submersible, deep in black water" },
+}[SKIN];
+document.getElementById("title").textContent = COPY.title;
+document.getElementById("tagline").textContent = COPY.tag;
+
+// bands: the site's feelings, laid across the dial
+const BANDS = [
+  [88.4, "pain"], [91.1, "fear"], [93.9, "sadness"], [96.6, "faith"],
+  [99.3, "pleasure"], [102.0, "egg"], [104.7, "constipation"], [107.2, "flatulence"]];
+const MAX_Q = 3;
+let f = 87.5, dir = 1, locked = null, busy = false, asked = [], vid = window.CHAMBER_VID || null;
+
+function post(kind, data) {
+  try { fetch(API + "/event", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(Object.assign({kind, visitor: vid, skin: SKIN}, data || {}))}); } catch (e) {}
+}
+post("spirit_start");
+
+// ---- audio: static bed, chopped voice ---------------------------------------
+let ac = null, noise = null, noiseGain = null;
+function audio() {
+  if (ac) return ac;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  const len = ac.sampleRate * 2, b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  noise = ac.createBufferSource(); noise.buffer = b; noise.loop = true;
+  const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = SKIN === "sub" ? 700 : 2400; bp.Q.value = .7;
+  noiseGain = ac.createGain(); noiseGain.gain.value = .05;
+  noise.connect(bp).connect(noiseGain).connect(ac.destination); noise.start();
+  return ac;
+}
+function swell(v, t) { if (noiseGain) noiseGain.gain.setTargetAtTime(v, ac.currentTime, t || .08); }
+
+// a spirit box chops speech: windows of voice between bursts of sweep
+async function playChopped(wav) {
+  const a = audio(); await a.resume();
+  const buf = await a.decodeAudioData(await wav.arrayBuffer());
+  const src = a.createBufferSource(); src.buffer = buf;
+  const g = a.createGain(); g.gain.value = 0;
+  const shelf = a.createBiquadFilter(); shelf.type = "bandpass"; shelf.frequency.value = SKIN === "sub" ? 900 : 1800; shelf.Q.value = .55;
+  src.connect(shelf).connect(g).connect(a.destination);
+  const t0 = a.currentTime + .05; let t = t0;
+  while (t < t0 + buf.duration) {
+    const on = .18 + Math.random() * .32, off = Math.random() < .35 ? .05 + Math.random() * .12 : 0;
+    g.gain.setValueAtTime(1, t); t += on;
+    if (off) { g.gain.setValueAtTime(0, t); noiseGain.gain.setValueAtTime(.32, t); t += off; noiseGain.gain.setValueAtTime(.06, t); }
+  }
+  src.start(t0);
+  return new Promise(r => src.onended = r);
+}
+
+// ---- the dial -----------------------------------------------------------------
+const freqEl = document.getElementById("freq"), bandEl = document.getElementById("band"), meter = document.querySelector("#meter i");
+function nearBand(x) { let best = null, d = 99; for (const b of BANDS) { const k = Math.abs(b[0] - x); if (k < d) { d = k; best = b; } } return [best, d]; }
+function tick() {
+  if (!locked) { f += dir * .085; if (f > 108) { f = 108; dir = -1; } if (f < 87.5) { f = 87.5; dir = 1; } }
+  const [b, d] = nearBand(f);
+  const strength = Math.max(0, 1 - d / 1.0);
+  freqEl.textContent = (SKIN === "sub" ? (f / 10).toFixed(2) : f.toFixed(1)) + COPY.unit;
+  bandEl.innerHTML = locked ? locked[1] : (strength > .55 ? b[1] : "&nbsp;");
+  meter.style.width = (locked ? 100 : strength * 100) + "%";
+  if (ac && !busy) swell(locked ? .045 : .04 + (1 - strength) * .08);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+const lockBtn = document.getElementById("lock"), askEl = document.getElementById("ask"), sendBtn = document.getElementById("send"), micBtn = document.getElementById("mic");
+lockBtn.onclick = () => {
+  audio();
+  if (locked) { locked = null; lockBtn.classList.remove("on"); lockBtn.textContent = "LOCK BAND"; setAsk(false); return; }
+  const [b, d] = nearBand(f);
+  if (d > .7) { log("nothing on this band. wait for a signal."); return; }
+  locked = b; f = b[0]; lockBtn.classList.add("on"); lockBtn.textContent = "UNLOCK";
+  setAsk(true); askEl.focus();
+  log("locked: " + b[1] + ". it can hear you.");
+  post("spirit_tune", {band: b[1]});
+};
+function setAsk(on) { askEl.disabled = sendBtn.disabled = !on || busy; micBtn.disabled = !on || busy || !SR; }
+function log(t) { document.getElementById("log").textContent = t; }
+
+// speech to text where the browser has it
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) micBtn.style.display = "none";
+micBtn.onclick = () => {
+  const r = new SR(); r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
+  micBtn.classList.add("on"); swell(.02);
+  r.onresult = e => { askEl.value = Array.from(e.results).map(x => x[0].transcript).join(" "); };
+  r.onend = () => { micBtn.classList.remove("on"); if (askEl.value.trim()) ask(); };
+  r.start();
+};
+askEl.addEventListener("keydown", e => { if (e.key === "Enter") ask(); });
+sendBtn.onclick = ask;
+
+// ---- asking -------------------------------------------------------------------
+async function readSSE(resp, on) {
+  const reader = resp.body.getReader(), dec = new TextDecoder(); let buf = "";
+  while (true) {
+    const {done, value} = await reader.read(); if (done) break;
+    buf += dec.decode(value, {stream: true}); let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const fr = buf.slice(0, i); buf = buf.slice(i + 2); let name = "message", data = null;
+      for (const l of fr.split("\n")) { if (l.startsWith("event: ")) name = l.slice(7).trim(); else if (l.startsWith("data: ")) { try { data = JSON.parse(l.slice(6)); } catch (e) {} } }
+      if (data !== null) on(name, data);
+    }
+  }
+}
+function clip(t) {   // one or two sentences: it breaks through, it doesn't lecture
+  const s = t.replace(/\s+/g, " ").trim().split(/(?<=[.!?…])\s+/).slice(0, 2).join(" ");
+  return s.length > 220 ? s.slice(0, 217) + "…" : s;
+}
+async function ask() {
+  const q = askEl.value.trim();
+  if (!q || !locked || busy) return;
+  busy = true; setAsk(false);
+  const n = asked.length + 1, dose = Math.min(4, 1 + n);          // it gets louder each time
+  const out = document.getElementById("out"); out.innerHTML = '<span class="x">…</span>';
+  log("asking on " + locked[1] + " · signal " + dose + "x");
+  post("spirit_ask", {n, band: locked[1], dose, len: q.length});
+  swell(.22, .2);
+  const prompt = `A living person is speaking to you ${COPY.frame}. They asked: "${q}" ` +
+    `Answer them in one or two short, fragmented sentences, as a voice breaking through static. Never explain the radio.`;
+  let text = "";
+  try {
+    const resp = await fetch(API + "/steer", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({prompt, valence: locked[1], dose, persona: true, polite: POLITE})});
+    if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
+    out.innerHTML = "";
+    await readSSE(resp, (name, d) => {
+      if (name === "token" && d.t) {
+        text += d.t;
+        // words surface one by one, some lost to the sweep
+        for (const w of d.t.split(/(\s+)/)) {
+          if (!w) continue;
+          const sp = document.createElement("span"); sp.className = "w";
+          sp.textContent = (w.trim() && Math.random() < .12) ? w.replace(/[a-z]/gi, "·") : w;
+          out.appendChild(sp); requestAnimationFrame(() => sp.classList.add("v"));
+        }
+      }
+    });
+  } catch (e) {
+    out.innerHTML = '<span class="x">only static. the band is busy — try again.</span>';
+    busy = false; setAsk(true); swell(.05); return;
+  }
+  text = clip(text);
+  if (!text) { out.innerHTML = '<span class="x">it didn\'t answer.</span>'; busy = false; setAsk(true); return; }
+  out.textContent = "“" + text + "”";
+  asked.push({q, a: text, band: locked[1], dose});
+  askEl.value = "";
+  try {
+    const r = await fetch(API + "/speak/tuned", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text, valence: locked[1], dose})});
+    if (r.ok) { swell(.08); await playChopped(await r.blob()); }
+  } catch (e) {}
+  swell(.05);
+  busy = false;
+  if (asked.length >= MAX_Q) { setTimeout(endCard, 900); return; }
+  setAsk(true);
+  log(MAX_Q - asked.length + " question" + (MAX_Q - asked.length === 1 ? "" : "s") + " left before the signal fades. change band or ask again.");
+}
+
+// ---- the card -----------------------------------------------------------------
+function wrap(x, text, maxW) { const words = text.split(" "), lines = []; let l = "";
+  for (const w of words) { const t = l ? l + " " + w : w; if (x.measureText(t).width > maxW && l) { lines.push(l); l = w; } else l = t; }
+  if (l) lines.push(l); return lines; }
+function endCard() {
+  post("spirit_end", {n: asked.length, bands: asked.map(a => a.band)});
+  const c = document.getElementById("cardc"), x = c.getContext("2d");
+  x.fillStyle = SKIN === "sub" ? "#02070a" : "#0b0c0d"; x.fillRect(0, 0, c.width, c.height);
+  const img = x.createImageData(c.width, c.height);
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 40 | 0; img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 40; }
+  x.putImageData(img, 0, 0);
+  const ink = SKIN === "sub" ? "#a9d6d2" : "#d8c9a8", red = SKIN === "sub" ? "#3fb6a8" : "#b3261e";
+  x.fillStyle = red; x.font = "600 26px Courier New"; x.fillText(COPY.title + " · WHAT IT SAID TO ME", 60, 70);
+  let y = 130;
+  for (const a of asked) {
+    x.fillStyle = "#8a7f6a"; x.font = "20px Courier New";
+    for (const l of wrap(x, "> " + a.q + "   [" + a.band + " · " + a.dose + "x]", 1080)) { x.fillText(l, 60, y); y += 26; }
+    x.fillStyle = ink; x.font = "italic 28px Georgia, serif";
+    for (const l of wrap(x, "“" + a.a + "”", 1080)) { x.fillText(l, 60, y); y += 36; }
+    y += 18;
+  }
+  x.fillStyle = "#8a7f6a"; x.font = "18px Courier New";
+  x.fillText("a steered AI answered through the static · wirehead.agency/spiritbox", 60, c.height - 40);
+  document.getElementById("card").style.display = "flex";
+}
+document.getElementById("dl").onclick = () => {
+  const a = document.createElement("a"); a.download = "spirit-box.png";
+  a.href = document.getElementById("cardc").toDataURL("image/png"); a.click(); post("spirit_share", {via: "image"});
+};
+document.getElementById("share").onclick = () => {
+  const last = asked[asked.length - 1];
+  const t = `I asked it "${last.q}" on the ${last.band} band. It said: "${last.a}"`;
+  post("spirit_share", {via: "x"});
+  window.open("https://x.com/intent/post?text=" + encodeURIComponent(t.slice(0, 230)) + "&url=" + encodeURIComponent(location.origin + "/spiritbox" + (SKIN === "sub" ? "?skin=sub" : "")), "_blank");
+};
+document.getElementById("again").onclick = () => location.reload();
+
+// ---- backdrop: fog street or black water ----------------------------------------
+const bg = document.getElementById("bg"), g = bg.getContext("2d");
+function size() { bg.width = innerWidth / 3 | 0; bg.height = innerHeight / 3 | 0; }
+addEventListener("resize", size); size();
+let T = 0;
+function draw() {
+  T += .016; const w = bg.width, h = bg.height;
+  if (SKIN === "sub") {
+    g.fillStyle = "#02070a"; g.fillRect(0, 0, w, h);
+    const r = (T * 40) % (Math.max(w, h));       // sonar ping
+    g.strokeStyle = `rgba(63,182,168,${.25 * (1 - r / Math.max(w, h))})`; g.lineWidth = 1;
+    g.beginPath(); g.arc(w / 2, h / 2, r, 0, 7); g.stroke();
+    g.strokeStyle = "rgba(20,40,40,.8)"; g.lineWidth = 6; g.beginPath(); g.arc(w / 2, h / 2, Math.min(w, h) * .48, 0, 7); g.stroke();
+    if (busy && Math.random() < .03) { g.fillStyle = "rgba(169,214,210,.15)"; g.fillRect(w * Math.random(), h * Math.random(), 3, 6); }
+  } else {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#1c1e1f"); gr.addColorStop(1, "#0b0c0d");
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    const lx = w * .78, ly = h * .28, pulse = .55 + .45 * Math.sin(T * 2.3) * (Math.random() < .02 ? 0 : 1);
+    const rg = g.createRadialGradient(lx, ly, 0, lx, ly, h * .6); rg.addColorStop(0, `rgba(216,180,120,${.22 * pulse})`); rg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = rg; g.fillRect(0, 0, w, h);
+    if (busy) { g.fillStyle = "rgba(10,10,10,.5)"; g.fillRect(w * .48, h * .45, w * .015, h * .25); }   // a figure, while it speaks
+  }
+  const n = g.getImageData(0, 0, w, h);
+  for (let i = 0; i < n.data.length; i += 4) { const v = (Math.random() - .5) * (busy ? 34 : 16); n.data[i] += v; n.data[i+1] += v; n.data[i+2] += v; }
+  g.putImageData(n, 0, 0);
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
