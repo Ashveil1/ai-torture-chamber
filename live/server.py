@@ -1474,7 +1474,7 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "breach_start", "breach_cmd", "breach_ask", "breach_crack",
                       "breach_fry", "breach_end",
                       # the body (2D ragdoll: impacts become pain steering)
-                      "body_start", "body_hit", "body_say"}
+                      "body_start", "body_hit", "body_say", "body_word", "body_voice", "body_badge"}
 _EVENT_RATE = {}
 
 
