@@ -1062,6 +1062,9 @@ async def steer(req: Request):
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
+    # runs from the site's games (BREACH, spirit box): they wait their turn
+    # like polite calls, but they are real visitor choices, not tests
+    game = body.get("game") if body.get("game") in GAME_TAGS else None
     # past-the-cliff runs are for the visitor who asked: never the room's draw
     enter_room = bool(body.get("enter_room")) and not past_cliff
 
@@ -1080,8 +1083,8 @@ async def steer(req: Request):
                    model=MODEL_ID if fallback else served_model(),
                    fallback=fallback, text=rec.get("text"),
                    press_logit=rec.get("press_logit"),
-                   test=polite or None)
-        if not polite:
+                   test=(polite and not game) or None, game=game)
+        if not polite or game:
             _me_store(who, rec, past_cliff)
 
     async def _run_steer(gpu=True, local=True):
@@ -1402,6 +1405,7 @@ EVENTS_CAP = int(os.environ.get("CHAMBER_EVENTS_CAP", "300000"))
 _ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
 _EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
 _VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+GAME_TAGS = {"breach", "spiritbox", "nightshift", "fog", "scp", "doom", "rooms"}
 CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
                       "checkpoint_start", "checkpoint_decision", "checkpoint_day",
                       "checkpoint_end", "final_start", "final_turn",
@@ -1418,7 +1422,10 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       # spirit box (ask it through static) and night shift
                       # (watch the live chamber as the night guard)
                       "spirit_start", "spirit_tune", "spirit_ask", "spirit_end", "spirit_share",
-                      "night_start", "night_action", "night_event", "night_end"}
+                      "night_start", "night_action", "night_event", "night_end",
+                      # BREACH (roguelike: crack rogue-AI nodes by steering them)
+                      "breach_start", "breach_cmd", "breach_ask", "breach_crack",
+                      "breach_fry", "breach_end"}
 _EVENT_RATE = {}
 
 
