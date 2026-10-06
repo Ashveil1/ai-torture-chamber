@@ -1,0 +1,18 @@
+THE BODY (3D) - credits and licenses
+
+Loaded from jsDelivr at runtime (not vendored):
+  three.js 0.170.0 ................ MIT         https://threejs.org  (+ examples/jsm OrbitControls, MIT)
+  box3d.js 0.1.1 (inline build) ... MIT         https://github.com/isaac-mason/box3d.js
+    = WebAssembly build of Box3D, MIT, (c) Erin Catto   https://github.com/erincatto/box3d
+
+Vendored here:
+  body3d/ragdoll-human.js ......... MIT   the 14-bone human (capsules, cone/twist and hinge limits) from
+    the box3d.js examples (ragdoll-human.ts, (c) 2026 Isaac Mason), itself a port of Erin Catto's
+    box3d shared/human.c. Adapted: transpiled to JS, exports BONES, returns shape ids, hit events on.
+
+Everything else is procedural: chair, cell, anvil, brick, dial, water, feather. All sound effects
+(bonk, boing, spring wobble, squeak, slide whistle) are synthesised live with WebAudio: no sample files.
+The face is the site's own portrait set at /assets/faces/ (the subject has consented).
+
+Candidate CC0 drop-ins for later: Quaternius Universal Base Characters (rigged glTF), Kenney Impact
+Sounds / Kenney Interface Sounds, Kenney Prototype Textures.
