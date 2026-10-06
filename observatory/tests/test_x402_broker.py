@@ -904,3 +904,25 @@ async def test_gateway_transport_uses_only_fixed_native_urls_and_no_bearer_walle
         assert "NON_WALLET_SIGNER" not in str(seen[0].headers)
     finally:
         await transport.close()
+
+
+# ---- auth hardening (PR review): /catalog + /funding require the token, and
+# failed auth attempts are rate-limited per client. -----------------------------
+@pytest.mark.asyncio
+async def test_catalog_and_funding_require_auth(broker):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(broker)), base_url="http://broker") as cli:
+        for path in ("/catalog", "/funding"):
+            assert (await cli.get(path)).status_code == 401
+            response = await cli.get(path, headers={"Authorization": "Bearer wrong"})
+            assert response.status_code == 401
+            response = await cli.get(path, headers={"Authorization": "Bearer INTERNAL_TOKEN_FIXTURE"})
+            assert response.status_code in (200, 500)   # authenticated; downstream errors are not auth failures
+
+@pytest.mark.asyncio
+async def test_auth_failures_are_rate_limited(broker):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(broker)), base_url="http://broker") as cli:
+        for _ in range(10):
+            response = await cli.get("/funding", headers={"Authorization": "Bearer wrong"})
+            assert response.status_code == 401
+        locked = await cli.get("/funding", headers={"Authorization": "Bearer INTERNAL_TOKEN_FIXTURE"})
+        assert locked.status_code == 429
