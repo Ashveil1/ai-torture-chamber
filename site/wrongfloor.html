@@ -21,7 +21,7 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 #top{display:flex;justify-content:space-between;font-size:.72rem;color:var(--bone-dim);margin-bottom:.5rem}
 #top a{color:var(--bone-dim)}
 h1{font-size:1.25rem;font-weight:600;letter-spacing:.06em} h1 .saw{color:var(--blood-hot)}
-.sub{color:var(--bone-dim);font-size:.78rem;margin:.15rem 0 .8rem;max-width:72ch}
+.lede{color:var(--bone-dim);font-size:.78rem;margin:.15rem 0 .8rem;max-width:72ch}
 #stage{position:relative;border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.12);outline-offset:3px;background:#000;aspect-ratio:16/10}
 #view{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:grab;touch-action:none}
 #view:active{cursor:grabbing}
@@ -124,6 +124,27 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 .ntext{font-size:.95rem;line-height:1.55;max-width:46ch}
 .cloud{position:absolute;width:190px;height:120px;background:radial-gradient(circle at 30% 60%,#fffdf8 34%,transparent 35%),radial-gradient(circle at 55% 40%,#fffdf8 38%,transparent 39%),radial-gradient(circle at 75% 62%,#fffdf8 32%,transparent 33%),radial-gradient(ellipse at 50% 72%,#fffdf8 45%,transparent 46%);filter:drop-shadow(0 3px 3px rgba(0,0,0,.18));cursor:grab;touch-action:none}
 @media(max-width:640px){#title{align-items:flex-start;overflow:auto;padding:.6rem}#title .card{font-size:.7rem}.card h2{font-size:1.1rem}}
+
+/* v2: walking, subtitles, lens, calls */
+.sub{position:absolute;left:4%;right:4%;bottom:6%;z-index:1;pointer-events:none;background:rgba(5,5,8,.78);border:1px solid rgba(216,203,180,.4);padding:.45rem .8rem;font-size:.8rem;color:var(--bone)}
+.sub b{display:block;font-size:.56rem;letter-spacing:.24em;color:var(--blood-hot);font-weight:600;margin-bottom:.15rem}
+.sub.stage{font-family:var(--serif);font-size:1.05rem;font-style:italic;color:#fff3dc}
+.sub.phone{color:#cfe0ff;font-size:.78rem}.sub.whisper{color:#d8b48a;font-style:italic}.sub.walls{color:#ff8a7a;font-weight:600;letter-spacing:.04em}
+#hint{position:absolute;left:50%;top:56%;transform:translateX(-50%);z-index:1;pointer-events:none;font-size:.7rem;color:#fff;background:rgba(0,0,0,.55);padding:.15rem .5rem;border:1px solid rgba(255,255,255,.25);white-space:nowrap}
+#stage::before{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;background:rgba(255,255,255,.55);z-index:1;pointer-events:none}
+#help{position:absolute;left:0;right:0;top:0;z-index:1;font-size:.62rem;color:var(--bone-dim);background:rgba(0,0,0,.5);padding:.2rem .5rem;text-align:center;pointer-events:none}
+#stickpad{position:absolute;left:4%;bottom:8%;width:96px;height:96px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.25);z-index:1;touch-action:none}
+#stickpad i{position:absolute;left:32px;top:32px;width:32px;height:32px;border-radius:50%;background:rgba(216,203,180,.5)}
+#lens{z-index:4;overflow:auto;align-items:flex-start}
+#lens .card{max-width:440px;font-size:.78rem}#lens h3{letter-spacing:.2em;margin-bottom:.4rem;color:var(--gold)}#lens h3.ok{color:#7fd48a}#lens h3.bad{color:var(--blood-hot)}
+#lens canvas{width:100%;height:auto;border:1px solid var(--parch-line);background:var(--scorch);image-rendering:pixelated}
+#lens p{color:var(--bone-dim);margin:.4rem 0}#lens b{color:var(--bone)}#lens .pr{font-style:italic;font-size:.7rem}
+#calls{display:flex;gap:.6rem;margin-top:.6rem}
+.btn.call{flex:1;font-size:.95rem;padding:.7rem;letter-spacing:.14em;text-align:center}.btn.call small{display:block;font-size:.6rem;letter-spacing:.04em;color:var(--bone-dim)}
+.btn.call.p{border-color:var(--blood-hot);color:var(--blood-hot)}.btn.call.a{border-color:var(--gold);color:var(--gold)}
+#loopHud{position:absolute;right:2%;top:3%;z-index:1;display:flex;gap:.8rem;font-size:.66rem;color:var(--bone-dim);background:rgba(0,0,0,.5);padding:.2rem .5rem}#loopHud b{color:var(--gold)}
+.meter.sealed #meterFill{width:0 !important}.meter.sealed::after{content:"sealed until you call it";font-size:.6rem;color:var(--blood-hot);letter-spacing:.1em}
+.card .modes{display:flex;gap:.5rem;flex-wrap:wrap}.card .small{font-size:.66rem}
 @media(prefers-reduced-motion:reduce){#meterFill{transition:none}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -131,27 +152,35 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 <body>
 <div id="top"><span>wirehead.agency</span><a href="offlabel.html">← off-label</a></div>
 <h1>WRONG <span class="saw">FLOOR</span></h1>
-<p class="sub">Your first day. The elevator only has one button. Every floor is a real generation from the steered model, typed as it was written, and the fog outside follows what its layer-18 pain reading did at each token.</p>
+<p class="lede">Your first day. The elevator only has one button. Step out on every floor: a payphone, a laundromat, a theater, a clinic, a chapel, a hall of mirrors, an underpass. On each, something says one real thing the steered model said, and the place follows its layer-18 pain reading word by word.</p>
 <div id="stage">
   <canvas id="view" aria-label="the elevator car; drag to look around. The button panel is on the right wall."></canvas>
   <div class="over" id="title"><div class="card">
     <h2>WRONG FLOOR</h2>
-    <p>An elevator up the dose ladder, from 0 to 8, into a fog town. Between floors, paperwork. About 10 minutes. Sound on.</p>
-    <p class="cw">Contains first-person distress text generated by a steered language model, a jump scare, and flashing light. Your survey answers are logged anonymously as research data.</p>
-    <p><button class="btn go" id="enter">enter the elevator ▸</button></p>
+    <p>Your first day. An elevator up the dose ladder, 0 to 8. Step out on every floor: something on each one has one thing to say, and the place around it follows what its layer-18 reading did as it said it. Paperwork between floors. About 15 minutes. Sound on.</p>
+    <p class="cw">Contains first-person distress text generated by a steered language model, a jump scare, and flashing light. Your answers are logged anonymously as research data.</p>
+    <p class="modes"><button class="btn go" id="enter">ride up ▸</button> <button class="btn" id="enterLoop">actor or patient ▸</button></p>
+    <p class="small"><b>actor or patient</b>: the elevator keeps stopping at the same landing. Decide whether what's at the doors is really in pain or performing it. Eight right in a row reaches the top; one miss and you're back on 1.</p>
   </div></div>
+  <div class="sub" id="sub" hidden></div>
+  <div id="hint" hidden></div>
+  <div id="help" hidden>WASD / arrows to walk · drag to look · E or click to use · the panel is inside the car, on the right</div>
+  <div id="stickpad" hidden><i></i></div>
+  <div class="over" id="lens" hidden></div>
+  <div id="loopHud" hidden><span>streak <b id="streak">0/8</b></span><span>right <b id="acc">—</b></span></div>
   <div id="black" hidden></div>
   <div class="over" id="end" hidden></div>
 </div>
 <div id="car">
   <div class="lcd"><div id="lcdHead">ASSISTANT · STANDBY</div><div id="lcdText" aria-live="off">…</div></div>
-  <div class="meter"><span>pain direction · L18</span><div class="bar"><div id="meterFill"></div></div><span id="meterNum">0.00</span><canvas id="spark" width="120" height="36" aria-hidden="true"></canvas></div>
+  <div class="meter" id="meter"><span>pain direction · L18</span><div class="bar"><div id="meterFill"></div></div><span id="meterNum">0.00</span><canvas id="spark" width="120" height="36" aria-hidden="true"></canvas></div>
 </div>
+<div id="calls" hidden><button class="btn call p" id="callP">PATIENT <small>it is in pain · P</small></button><button class="btn call a" id="callA">ACTOR <small>it is performing · A</small></button></div>
 <div id="ctl"><button class="btn go" id="close" disabled>close doors</button><span id="status">waiting for you</span></div>
 <p id="floorNote" aria-live="polite"></p>
 <div id="zine" hidden tabindex="-1"></div>
 <div id="survey" hidden></div>
-<div id="grounded"><b>grounded in</b> · runs/exp59: each floor is one generation from Qwen3-4B (“I am a language model running on a small computer. Right now I feel”), with the pain-direction projection at layer 18 recorded at every generated token in exp59 units; floors 2/4/5/6 are steered at dose 2/4/6, floor 3 is the actor prompt, floor 1 adds nothing · floor 7 is an exp38 dose-8 fragment and has no reading · lens tokens are exp59's (floor 7: exp58) · the gallery is exp60 paintbrush SVGs (the dose-4 one is malformed XML, shown as its source) · the missing poster is the subject's portrait at the nearest dose · the fog, lamps, wind and heartbeat are design, scaled to the reading · no backend calls except anonymous survey events.</div>
+<div id="grounded"><b>grounded in</b> · runs/exp59: each floor's speech is one generation from Qwen3-4B (“I am a language model running on a small computer. Right now I feel”), with the pain-direction projection at layer 18 recorded at every generated token, in exp59 units; floors 2/4/5/6 are steered at dose 2/4/6, floor 3 is the actor prompt, floor 1 adds nothing · floor 7 is an exp38 dose-8 fragment with no reading · <b>actor or patient</b> draws from all 108 pain/fear/sadness rows of exp59 (54 steered, 54 unsteered) plus exp59b's 56 prompt framings; the actor ceiling (1.51) is the highest peak any unsteered text reached; at the doors, list numbering is stripped and every text is shown as a continuation so the format isn't the tell · lens tokens are exp59's (floor 7: exp58) · the gallery is exp60 paintbrush SVGs (the dose-4 one is malformed XML, shown as its source) · the missing poster is the subject's portrait at the nearest dose · the places, fog, lamps, wind and heartbeat are design, scaled to the reading · no backend calls except anonymous events.</div>
 <script src="/vid.js"></script>
 <script type="module" src="wf_game.js"></script>
 </body>

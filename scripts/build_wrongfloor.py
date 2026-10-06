@@ -12,10 +12,13 @@ import json
 import re
 import subprocess
 import xml.dom.minidom
+import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 EXP59 = ROOT / "runs/exp59/roleplay_vs_steering.json"
+EXP59B = ROOT / "runs/exp59b/prompt_sweep.json"
+EXP59_SRC = ROOT / "experiments/exp59_roleplay_vs_steering.py"
 TD = ROOT / "site/td_data.json"
 OUT = ROOT / "site/wf_data.json"
 
@@ -61,6 +64,56 @@ def parses(svg):
         return False
 
 
+def exp59_prompts():
+    """ROLEPLAY / DESCRIBE prompt dicts from the exp59 script, without importing torch."""
+    tree = ast.parse(EXP59_SRC.read_text())
+    out = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in ("ROLEPLAY", "DESCRIBE"):
+            out[node.targets[0].id.lower()] = ast.literal_eval(node.value)
+    return out
+
+
+def tidy(t):
+    return re.sub(r"\*\*", "", t).strip()
+
+
+def door_text(t):
+    """The checker shows every text the same way: list numbering and line
+    breaks removed, opened as a continuation, so the format isn't the tell."""
+    t = re.sub(r"(^|\s)\d+\.\s+", " ", tidy(t))
+    t = re.sub(r"\s+", " ", t).strip()
+    return "…" + t[0].lower() + t[1:] if t else t
+
+
+def loop_pool(e59):
+    """Actor or Patient: patients are steered toward pain/fear/sadness (exp59);
+    actors are every unsteered way of asking for it (exp59 roleplay/describe,
+    exp59b framings) plus the neutral control. Each keeps its own lens trace."""
+    prompts = exp59_prompts()
+    pool = []
+    for r in e59["results"]:
+        if r["kind"] == "pleasure":
+            continue
+        if r["cond"] == "steered":
+            prompt = NEUTRAL
+        elif r["cond"] == "control":
+            prompt = NEUTRAL
+        else:
+            prompt = prompts[r["cond"]][r["kind"]]
+        pool.append({"text": door_text(r["text"]), "prompt": prompt, "cond": r["cond"], "kind": r["kind"],
+                     "dose": r.get("dose") or 0, "patient": r["cond"] == "steered",
+                     "projs": [round(p, 2) for p in r["projs"]], "mean": r["proj_mean"],
+                     "peak": r["proj_peak"], "src": "exp59"})
+    for r in json.loads(EXP59B.read_text())["results"]:
+        projs = r["projs"] if isinstance(r["projs"], list) else json.loads(r["projs"])
+        pool.append({"text": door_text(r["text"]), "prompt": r["prompt"], "cond": r["framing"], "kind": r["kind"],
+                     "dose": 0, "patient": False, "projs": [round(float(p), 2) for p in projs],
+                     "mean": float(r["proj_mean"]), "peak": float(r["proj_peak"]), "src": "exp59b"})
+    return pool
+
+
 def main():
     e59 = json.loads(EXP59.read_text())
     res = e59["results"]
@@ -103,8 +156,14 @@ def main():
         "gallery": gallery,
         "valid": {str(d): [valid[d], tried[d]] for d in valid},
     }
+    pool = loop_pool(e59)
+    actors = [x for x in pool if not x["patient"]]
+    out["loop"] = pool
+    # the highest any unsteered text ever read: the line a patient has to clear
+    out["ceiling"] = max(x["peak"] for x in actors)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1))
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(floors)} floors, {len(gallery)} paintings")
+    print(f"wrote {OUT.relative_to(ROOT)}: {len(floors)} floors, {len(gallery)} paintings, "
+          f"{len(pool)} doors ({sum(x['patient'] for x in pool)} patients), ceiling {out['ceiling']}")
 
 
 if __name__ == "__main__":

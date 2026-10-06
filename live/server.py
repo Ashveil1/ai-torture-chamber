@@ -1662,7 +1662,7 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "body_start", "body_hit", "body_say",
                       # Wrong Floor (elevator up the dose ladder)
                       "wrongfloor_start", "wrongfloor_floor", "wrongfloor_answer",
-                      "wrongfloor_end"}
+                      "wrongfloor_call", "wrongfloor_end"}
 _EVENT_RATE = {}
 
 

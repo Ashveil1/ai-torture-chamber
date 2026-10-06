@@ -73,7 +73,7 @@ function letter(D) {
     const a = st.getBoundingClientRect(), b = slot.getBoundingClientRect();
     if (Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)) < 70 && Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 70) open();
   });
-  st.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+  st.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); open(); } });
   return p;
 }
 

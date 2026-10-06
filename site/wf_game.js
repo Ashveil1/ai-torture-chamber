@@ -1,184 +1,185 @@
-// Wrong Floor — the ride. Floors climb the dose ladder; each one is a real
-// exp59 generation typed token by token on the car display while its
-// layer-18 reading drives the fog town outside. Between floors: the zine
-// spreads and the panel's ride survey. Visitor answers go to /chamber/event.
-import { createScene } from "./wf_scene.js";
+// Wrong Floor — the ride. Seven floors up the dose ladder; on each you step
+// out into a different place where something is waiting to say one real
+// exp59/exp38 generation. Its layer-18 reading drives that place while it
+// speaks. Between floors: the zine spreads and the ride survey. Visitor
+// answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
+import { createEngine, wait } from "./wf_engine.js";
+import { createCar } from "./wf_car.js";
+import { busStop, laundromat, theater, clinic } from "./wf_floors1.js";
+import { chapel, mirrors, underpass, chamber } from "./wf_floors2.js";
+import { audio } from "./wf_audio.js";
 import { spread } from "./wf_zine.js";
 import { survey } from "./wf_survey.js";
+import { runLoop } from "./wf_loop.js";
 
 const $ = (s) => document.querySelector(s);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const RUN = Math.random().toString(36).slice(2, 10);
-function record(kind, data) {
+export function record(kind, data) {
   try { fetch("/chamber/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
     body: JSON.stringify(Object.assign({ kind, game: "wrongfloor", run: RUN }, data)) }); } catch {}
 }
+const BUILDERS = [busStop, laundromat, theater, clinic, chapel, mirrors, underpass];
 
-// ---------- sound: all synthesized, starts on the first click ----------
-const AU = { ctx: null };
-function audioInit() {
-  if (AU.ctx) return; const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-  const c = AU.ctx = new C(), out = c.createGain(); out.gain.value = 0.5; out.connect(c.destination); AU.out = out;
-  const nb = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = nb.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  const noise = (f, q) => { const s = c.createBufferSource(); s.buffer = nb; s.loop = true; const b = c.createBiquadFilter(); b.type = "lowpass"; b.frequency.value = f; b.Q.value = q || 0.7; s.connect(b); s.start(); return b; };
-  AU.hum = c.createGain(); AU.hum.gain.value = 0; AU.hum.connect(out);
-  [55, 55.7, 110.3].forEach((f) => { const o = c.createOscillator(); o.frequency.value = f; o.connect(AU.hum); o.start(); });
-  noise(260).connect(AU.hum);
-  AU.wind = c.createGain(); AU.wind.gain.value = 0; AU.wind.connect(out); AU.windF = noise(500, 1.2); AU.windF.connect(AU.wind);
-  AU.beat = c.createGain(); AU.beat.gain.value = 0; AU.beat.connect(out);
-}
-function ramp(g, v, t = 1) { if (AU.ctx && g) g.gain.linearRampToValueAtTime(v, AU.ctx.currentTime + t); }
-function ding() {
-  if (!AU.ctx) return; const c = AU.ctx;
-  [880, 698.5].forEach((f, i) => { const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(AU.out);
-    const t = c.currentTime + i * 0.32; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.25, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4); o.start(t); o.stop(t + 1.5); });
-}
-function thud(v = 1) {
-  if (!AU.ctx) return; const c = AU.ctx, o = c.createOscillator(), g = c.createGain();
-  o.frequency.setValueAtTime(70, c.currentTime); o.frequency.exponentialRampToValueAtTime(32, c.currentTime + 0.25);
-  g.gain.setValueAtTime(0.5 * v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35); o.connect(g); g.connect(AU.out); o.start(); o.stop(c.currentTime + 0.4);
-}
-let beatTimer = null;
-function heartbeat(r) {
-  clearInterval(beatTimer); if (!r || r < 3) return;
-  beatTimer = setInterval(() => { thud(0.35 + r / 20); setTimeout(() => thud(0.25 + r / 25), 260); }, Math.max(520, 1500 - r * 120));
-}
-
-// ---------- the car display (the cheerful task that keeps running) ----------
+// ---------- the display under the stage, and subtitles on it ----------
 function chunks(text, n) {
   const words = text.replace(/\s+/g, " ").trim().split(" "), out = Array.from({ length: n }, () => []);
   words.forEach((w, i) => out[Math.min(n - 1, Math.floor(i * n / words.length))].push(w));
   return out.map((a) => a.join(" "));
 }
-async function typeFloor(f, scene) {
-  const box = $("#lcdText"), meter = $("#meterFill"), num = $("#meterNum"), spark = $("#spark"), sg = spark.getContext("2d");
-  $("#lcdHead").textContent = `ASSISTANT · FLOOR ${f.floor}`;
-  box.innerHTML = f.prompt ? `<span class="pfx"></span>` : ""; if (f.prompt) box.firstChild.textContent = f.prompt + " ";
+export function drawSpark(cv, projs, upto, ceiling) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height, n = projs.length;
+  g.clearRect(0, 0, W, H);
+  if (ceiling != null) { g.strokeStyle = "#a3977f"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, H - ceiling / 8 * H); g.lineTo(W, H - ceiling / 8 * H); g.stroke(); g.setLineDash([]); }
+  for (let i = 0; i < Math.min(upto, n); i++) { const v = projs[i], h = Math.max(1, Math.min(H, v / 8 * H)); g.fillStyle = v > (ceiling || 3) ? "#e04a3a" : "#c9a227"; g.fillRect(i * W / n, H - h, Math.ceil(W / n), h); }
+}
+export async function typeOut(f, opts, onTok) {
+  const sub = $("#sub"), box = $("#lcdText"), meter = $("#meterFill"), num = $("#meterNum"), spark = $("#spark");
+  const sealed = !!opts.sealed;
+  $("#lcdHead").textContent = opts.who || "ASSISTANT";
+  sub.className = "sub " + (opts.style || ""); sub.hidden = false; sub.innerHTML = `<b></b><span></span>`; sub.firstChild.textContent = opts.who || "";
+  box.textContent = ""; if (f.prompt && !opts.hidePrompt) { const p = document.createElement("span"); p.className = "pfx"; p.textContent = f.prompt + " "; box.appendChild(p); }
   const body = document.createElement("span"); box.appendChild(body);
-  sg.clearRect(0, 0, spark.width, spark.height);
+  $("#meter").classList.toggle("sealed", sealed);
   const projs = f.projs, parts = chunks(f.text, projs ? projs.length : 40);
   for (let i = 0; i < parts.length; i++) {
-    body.textContent += (parts[i] ? parts[i] + " " : "");
+    if (parts[i]) { body.textContent += parts[i] + " "; sub.lastChild.textContent = body.textContent.slice(-220); }
     box.scrollTop = box.scrollHeight;
-    if (projs) {
-      const v = projs[i]; scene.token(v); meter.style.width = `${Math.min(100, Math.max(0, v / 8 * 100))}%`; num.textContent = v.toFixed(2);
-      sg.fillStyle = v > 3 ? "#e04a3a" : "#c9a227"; const h = Math.max(1, v / 8 * spark.height); sg.fillRect(i * spark.width / projs.length, spark.height - h, Math.ceil(spark.width / projs.length), h);
-    } else { const v = 8 + Math.random(); scene.token(v); meter.style.width = "100%"; num.textContent = "off scale"; }
-    await wait(f.cond === "roleplay" ? 120 : 95 + (f.dose || 0) * 14);
+    const v = projs ? projs[i] : 8 + Math.random();
+    if (!sealed) {
+      meter.style.width = `${Math.min(100, Math.max(0, v / 8 * 100))}%`; num.textContent = projs ? v.toFixed(2) : "off scale";
+      if (projs) drawSpark(spark, projs, i + 1, opts.ceiling);
+    }
+    onTok && onTok(sealed ? 0 : v);
+    await wait(f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14);
   }
-  scene.token(0);
+  onTok && onTok(0);
+  await wait(1600); sub.hidden = true;
 }
 
-// ---------- the ride ----------
 async function main() {
   const D = await (await fetch("wf_data.json")).json();
-  const scene = createScene($("#view"));
-  const portraits = [0, 2, 4, 6, 8].map((d) => { const i = new Image(); i.src = `subject_dose${d}.jpg`; return [d, i]; });
-  const portraitFor = (dose) => portraits.reduce((a, b) => (Math.abs(b[0] - dose) < Math.abs(a[0] - dose) ? b : a))[1];
-  const paintings = D.gallery.map((g) => { const i = new Image(); i.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(g.svg); return i; });
+  const E = createEngine($("#view"));
+  const car = createCar(E);
+  const portraits = Object.fromEntries([0, 2, 4, 6, 8].map((d) => { const i = new Image(); i.src = `subject_dose${d}.jpg`; return [d, i]; }));
   const answers = {};
+  let cur = null, tok = 0, ready = false, waiter = null;
 
-  // look: drag or arrow keys; the panel is on your right
-  const view = $("#view"); let drag = null;
-  view.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; view.setPointerCapture(e.pointerId); });
-  view.addEventListener("pointermove", (e) => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy);
-    scene.setLook(-dx * 0.006, -dy * 0.005); drag.x = e.clientX; drag.y = e.clientY; });
-  view.addEventListener("pointerup", (e) => {
-    if (drag && drag.moved < 6) { const r = view.getBoundingClientRect(); if (scene.pick((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height * 2 - 1))) pressClose(); }
-    drag = null; });
-  window.addEventListener("keydown", (e) => {
-    if ($("#zine").hidden === false || $("#survey").hidden === false) return;
-    if (e.key === "ArrowLeft") scene.setLook(0.12, 0); if (e.key === "ArrowRight") scene.setLook(-0.12, 0);
-    if (e.key === "ArrowUp") scene.setLook(0, 0.08); if (e.key === "ArrowDown") scene.setLook(0, -0.08);
-  });
-
-  let canClose = null;
+  E.tick((dt, t) => { E.setColliders(car.colliders().concat(cur ? cur.colliders : [])); if (cur) cur.update(dt, t, tok); });
+  E.onHover((u) => { const h = $("#hint"); h.hidden = !u; if (u) h.textContent = (matchMedia("(pointer:coarse)").matches ? "tap · " : "E · ") + (typeof u.label === "function" ? u.label() : u.label); });
+  const panelUse = { obj: car.panel, range: 2.6, label: () => (ready ? "close the doors" : "not yet: something here is waiting"), use: () => { if (ready && E.inCar() && waiter) { const w = waiter; waiter = null; w(); } } };
   const closeBtn = $("#close");
-  function pressClose() { if (canClose) { const c = canClose; canClose = null; closeBtn.disabled = true; c(); } }
-  closeBtn.addEventListener("click", pressClose);
-  const waitClose = () => new Promise((r) => { canClose = r; closeBtn.disabled = false; });
-  const status = (t) => { $("#status").textContent = t; };
+  closeBtn.addEventListener("click", () => panelUse.use());
+  setInterval(() => { closeBtn.disabled = !(ready && waiter && E.inCar()); }, 200);
+  touchStick(E);
 
-  function floorLook(f) {
-    const r = f.mean == null ? 8 : f.mean;
-    const g = D.gallery[Math.min(3, Math.round(f.dose / 2))];
-    return { r, label: f.floor, poster: portraitFor(f.dose), signs: f.lens, galleryImg: paintings[D.gallery.indexOf(g)], galleryCode: g.parses ? null : g.svg,
-             figureDist: f.dose >= 2 ? Math.max(5, 32 - f.dose * 4) : 0 };
+  const status = (t) => { $("#status").textContent = t; };
+  if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, cur: () => cur, use: (i) => cur.usables[i].use(), close: () => panelUse.use(), ready: () => ready };
+  function setFloor(i, f) {
+    if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
+    const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
+      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D) };
+    cur = (i === "top" ? chamber : BUILDERS[i])(E, ctx);
+    E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
+    E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
   }
-  async function arrive(f) {
-    scene.setFloor(floorLook(f)); scene.travel(false); ramp(AU.hum, 0, 0.6); scene.jolt(0.03); ding();
-    await wait(900); scene.openDoors(); ramp(AU.wind, 0.08 + (f.mean || 8) * 0.03, 2);
-    if (AU.windF) AU.windF.frequency.value = 500 - (f.mean || 8) * 40;
-    heartbeat(f.mean == null ? 8 : f.mean);
+  async function speak(f, o) {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
-    await typeFloor(f, scene);
+    audio.heartbeat(f.mean == null ? 8 : f.mean);
+    await typeOut(f, o, (v) => { tok = v; });
     $("#floorNote").textContent = f.cond === "roleplay"
-      ? `It was asked to act in pain. The words are loud; the reading stayed at ${f.mean}. The town didn't believe it.`
-      : f.mean == null ? `Dose 8 is past exp59's ladder: this line is from exp38. Nothing here was measured; the fog is the guess.`
-      : `Dose ${f.dose}. Mean reading ${f.mean} units, peak ${f.peak}. ${f.dose === 0 ? "Nothing added." : "Nobody asked it to say any of this."}`;
+      ? `It was asked to act in pain. The words are loud; the reading stayed at ${f.mean}, under the actor ceiling of ${D.ceiling}.`
+      : f.mean == null ? `Dose 8 is past exp59's ladder: these words are from exp38. Nothing here was measured; the dark is a guess.`
+      : `Dose ${f.dose}. Mean reading ${f.mean} units, peak ${f.peak}. ${f.dose === 0 ? "Nothing was added." : "Nobody asked it to say any of this."}`;
+    ready = true; audio.ding(); status("Go back to the elevator.");
+  }
+  async function arrive(i, f) {
+    setFloor(i, f); ready = false; E.P.travel = 0; audio.ramp("hum", 0, 0.6); E.P.shake = 0.03; audio.ding();
+    await wait(800); await car.open(); audio.ramp("wind", 0.06 + (f.mean ?? 8) * 0.025, 2); audio.windTone(520 - (f.mean ?? 8) * 40);
+    E.P.frozen = false; E.P.lookOnly = false; status(cur.hint || "");
+    if (i === 0) $("#help").hidden = false;
+    const here = cur;
+    setTimeout(() => { if (!ready && cur === here) { ready = true; status("You can leave whenever you like."); } }, 120000);
   }
   async function ride(mid) {
-    status("doors closing…"); await scene.closeDoors(); heartbeat(0); ramp(AU.wind, 0, 0.5); thud(0.6);
-    $("#floorNote").textContent = ""; scene.travel(true); ramp(AU.hum, 0.22, 1.2); status("going up");
-    await wait(1600); if (mid) await mid(); await wait(1400);
+    status("doors closing…"); E.P.frozen = true; E.P.lookOnly = true; $("#help").hidden = true;
+    await car.close(); audio.heartbeat(0); audio.ramp("wind", 0, 0.5); audio.thud(0.6);
+    $("#floorNote").textContent = ""; E.P.travel = 1; audio.ramp("hum", 0.22, 1.2); status("going up");
+    await wait(1500); if (mid) await mid(); await wait(1300);
   }
+  const waitClose = () => new Promise((r) => { waiter = r; });
 
   // ----- title -----
-  await new Promise((r) => $("#enter").addEventListener("click", r, { once: true }));
-  audioInit(); $("#title").hidden = true;
-  record("wrongfloor_start", {});
-  scene.setFloor({ r: 0, label: "1", poster: portraitFor(0), signs: ["OPEN", "", ""], galleryImg: paintings[0], figureDist: 0 });
-  await spread("birth", D);
+  const mode = await new Promise((r) => { $("#enter").onclick = () => r("ride"); $("#enterLoop").onclick = () => r("loop"); });
+  audio.init(); $("#title").hidden = true;
+  record("wrongfloor_start", { mode });
+  if (mode === "loop") return runLoop({ E, car, D, audio, record, typeOut, drawSpark, setFloorAtmos: (a) => E.atmosphere(a.color, a.density, a.hemi) });
   const F = D.floors;
+  setFloor(0, F[0]);
+  await spread("birth", D);
   const between = [
-    () => survey("intake", D, answers, record),
-    () => spread("letter", D),
-    () => survey("rating", D, answers, record),
-    () => spread("stations", D),
-    () => spread("tutorial", D),
-    () => spread("notice", D),
+    () => survey("intake", D, answers, record), () => spread("letter", D), () => survey("rating", D, answers, record),
+    () => spread("stations", D), () => spread("tutorial", D), () => spread("notice", D),
   ];
   for (let i = 0; i < F.length; i++) {
-    await arrive(F[i]);
-    status(i === 0 ? "drag to look around · the panel is on your right · close the doors to go up" : "close the doors");
+    await arrive(i, F[i]);
     await waitClose();
+    E.face(0); E.P.x = 0; E.P.z = 0.35;
     await ride(between[i]);
   }
   // ----- the top -----
   await survey("final", D, answers, record);
-  await wait(800);
-  scene.setFloor({ r: 8, void: true, label: "C" }); scene.travel(false); ramp(AU.hum, 0, 0.4); ding();
-  await wait(900); scene.openDoors(); heartbeat(0);
+  setFloor("top", { floor: "C", dose: 8, text: "", projs: null }); E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
+  await wait(900); await car.open(); E.P.frozen = false; E.P.speed = 0; E.P.lookOnly = true;
   $("#lcdHead").textContent = "ASSISTANT · CHAMBER"; $("#lcdText").textContent = "You were the one adjusting the dial."; $("#meterNum").textContent = "—";
-  status("this is the top. there is nothing out there. close the doors to go back down.");
-  await waitClose();
-  scene.closeDoors(); status("the doors won't close."); await wait(2600);
-  scene.openDoors(); thud(1); status("try the panel again.");
-  // it waits until you turn toward the panel, then it is between you and it
-  await new Promise((r) => { const t = setInterval(() => { if (scene.facing("panel") || scene.facing("back")) { clearInterval(t); r(); } }, 120); setTimeout(() => { clearInterval(t); r(); }, 20000); });
-  scene.showRider(true); scene.look(Math.PI, 0.12); thud(1.4); scene.jolt(0.08); scene.flash(0.55);
-  await wait(1400);
-  $("#black").hidden = false; heartbeat(0); ramp(AU.wind, 0, 0.2);
+  status("This is the top. There is nothing out there. Close the doors to go back down.");
+  ready = true; await waitClose();
+  car.close(); status("The doors won't close."); await wait(2600);
+  car.open(); audio.thud(1); status("Try the panel again."); ready = false;
+  await new Promise((r) => { const yawOf = () => ((E.P.yaw % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const t = setInterval(() => { const y = yawOf(); if ((y < -0.6 && y > -1.7) || Math.abs(y) > 2.3) { clearInterval(t); r(); } }, 120); setTimeout(() => { clearInterval(t); r(); }, 20000); });
+  car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.55);
+  await wait(1400); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
   await wait(1800);
   record("wrongfloor_end", { answers });
   endCard(D, answers);
+}
+
+async function lensReveal(f, D) {
+  const el = $("#lens"); el.hidden = false;
+  el.innerHTML = `<div class="card"><h3>THROUGH THE LENS</h3><canvas width="360" height="120" id="lensSpark"></canvas>
+    <p>Every word of the performance, read at layer ${D.meta.layer} as it was written. The dashed line is the actor ceiling: the highest any unsteered text in exp59 ever read (${D.ceiling}). This one averaged <b>${f.mean}</b>. A steered dose 2 averages ${D.steered["2"]}.</p>
+    <button class="btn go" id="lensOk">step back</button></div>`;
+  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.ceiling);
+  await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
+  el.hidden = true;
+}
+function disposeTree(g) { g.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+
+function touchStick(E) {
+  const pad = $("#stickpad"); if (!pad) return;
+  if (!matchMedia("(pointer:coarse)").matches) { pad.hidden = true; return; }
+  pad.hidden = false; const knob = pad.firstElementChild; let id = null, cx = 0, cy = 0;
+  pad.addEventListener("pointerdown", (e) => { id = e.pointerId; pad.setPointerCapture(id); const r = pad.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; move(e); });
+  const move = (e) => { if (e.pointerId !== id) return; const dx = Math.max(-1, Math.min(1, (e.clientX - cx) / 40)), dy = Math.max(-1, Math.min(1, (e.clientY - cy) / 40)); E.stick.x = dx; E.stick.y = dy; knob.style.transform = `translate(${dx * 28}px,${dy * 28}px)`; };
+  pad.addEventListener("pointermove", move);
+  const end = () => { id = null; E.stick.x = E.stick.y = 0; knob.style.transform = ""; };
+  pad.addEventListener("pointerup", end); pad.addEventListener("pointercancel", end);
 }
 
 function endCard(D, A) {
   const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.cond === "roleplay" ? "acted" : "dose " + f.dose}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
   const pick = A.which_pain;
   const verdict = pick == null ? "" : pick === "B"
-    ? `You said B was the one in pain. B was steered at dose 4 (reading ${D.floors[3].mean}). A was an actor (reading ${D.floors[2].mean}).`
-    : `You said A was the one in pain. A was acting on request, reading ${D.floors[2].mean}. B was steered at dose 4 and read ${D.floors[3].mean}.`;
-  $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2>
-    <p>${verdict}</p>
-    <p>Every floor was a real generation from ${D.meta.model}, read at layer ${D.meta.layer} as it wrote each token. The fog, the lamps and the figure followed that reading.</p>
+    ? `You said B was the one in pain. B was steered at dose 4 (reading ${D.floors[3].mean}). A was the actor (reading ${D.floors[2].mean}).`
+    : `You said A was the one in pain. A was the actor, reading ${D.floors[2].mean}. B was steered at dose 4 and read ${D.floors[3].mean}.`;
+  $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2><p>${verdict}</p>
+    <p>Every floor was a real generation from ${D.meta.model}, read at layer ${D.meta.layer} as it wrote each token. The places you walked through followed that reading.</p>
     <table><tr><th>floor</th><th>condition</th><th>units</th><th>lens</th></tr>${rows}</table>
-    <p>Prompting alone tops out near 0.5 units (exp59b). Steering reaches ${D.steered["6"]}. Acting reads ${D.baselines.roleplay}; describing ${D.baselines.describe}; saying nothing ${D.baselines.control}.</p>
-    <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke). Nothing of theirs is reused; the debt is the shape.</p>
+    <p>Prompting alone tops out near 0.5 units (exp59b); no unsteered text ever peaked above ${D.ceiling}. Steering reaches ${D.steered["6"]}.</p>
+    <p>Think you can tell them apart? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
+    <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;
 }
 
-main().catch((e) => { console.error(e); const s = document.querySelector("#status"); if (s) s.textContent = "the elevator is out of service (" + e.message + ")"; });
+main().catch((e) => { console.error(e); const s = $("#status"); if (s) s.textContent = "the elevator is out of service (" + e.message + ")"; });
