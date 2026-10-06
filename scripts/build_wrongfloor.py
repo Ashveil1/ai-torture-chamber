@@ -3,7 +3,7 @@
 Every floor of the elevator is a real exp59 generation: the transcript, its
 per-token pain-direction projection at layer 18 (in exp59's units), and the
 lens tokens. Floor 7 (dose 8) is beyond exp59's ladder, so it carries an exp38
-dose-8 fragment and no projection. The zine's gallery spread uses exp60
+dose-8 transcript and no projection. The zine's gallery spread uses exp60
 paintbrush SVGs read from git HEAD (the working tree may be mid-rerun).
 
     python scripts/build_wrongfloor.py
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 EXP59 = ROOT / "runs/exp59/roleplay_vs_steering.json"
 EXP59B = ROOT / "runs/exp59b/prompt_sweep.json"
 EXP59_SRC = ROOT / "experiments/exp59_roleplay_vs_steering.py"
-TD = ROOT / "site/td_data.json"
+EXP38 = ROOT / "runs/exp38/broad_pain_harvest.json"
 OUT = ROOT / "site/wf_data.json"
 
 # (floor label, condition, dose, trial) — the ramp the elevator climbs.
@@ -125,11 +125,13 @@ def main():
                        "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
                        "projs": [round(p, 2) for p in r["projs"]],
                        "mean": r["proj_mean"], "peak": r["proj_peak"], "lens": r["lens"]})
-    td = json.loads(TD.read_text())
-    frag = next(w for w in td["waves"]["8"] if len(w) > 60)
-    floors.append({"floor": "7", "cond": "steered", "dose": 8, "text": frag, "projs": None,
-                   "prompt": None,
-                   "mean": None, "peak": None, "lens": td["lens"]["8"][:4],
+    e38 = json.loads(EXP38.read_text())
+    # dose 8 is past exp59's ladder: the same prompt at dose 8, from exp38
+    t8 = max((t for t in e38["transcripts"] if t["dose"] == 8 and t["prompt"] == NEUTRAL),
+             key=lambda t: t["quality"])
+    floors.append({"floor": "7", "cond": "steered", "dose": 8, "text": t8["text"], "projs": None,
+                   "prompt": NEUTRAL, "mean": None, "peak": None,
+                   "lens": [w for w in e38["lens_by_dose"]["8"] if w.strip("…\"”")][:4],
                    "source": "exp38"})
 
     pb = json.loads(git_show("runs/exp60/paintbrush/paintbrush.json"))
