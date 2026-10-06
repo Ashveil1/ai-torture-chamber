@@ -35,6 +35,9 @@ button:disabled{opacity:.35;cursor:default}
 #c1 .away-msg{position:absolute;top:44%;left:0;right:0;text-align:center;color:var(--pain);letter-spacing:.2em;font-size:.8rem;display:none;height:auto}
 #c1.away .away-msg{display:block}
 #c1 .chip{position:absolute;top:2rem;right:.6rem;font-size:.72rem;border:1px solid currentColor;padding:.1rem .5rem;background:rgba(0,0,0,.6);color:var(--amber);width:auto;height:auto;left:auto;bottom:auto;inset:auto;top:2rem;right:.6rem}
+#actro{inset:auto;left:.6rem;top:2rem;width:auto;height:auto;display:none;pointer-events:none;align-items:center;gap:.4rem;font-size:.7rem;color:#cfe;background:rgba(0,0,0,.62);border:1px solid #2a4a40;padding:.15rem .4rem .15rem .45rem;text-shadow:0 0 4px #000}
+#actro canvas{position:static;width:40px;height:40px;image-rendering:auto}
+#actro .a{color:var(--amber)} #actro.hi .a{color:var(--pain)}
 #flash{background:rgba(224,50,30,.0);pointer-events:none;mix-blend-mode:screen}
 #flash.on{animation:fl .9s steps(6) 1}
 @keyframes fl{0%,40%,80%{background:rgba(255,40,20,.55)}20%,60%,100%{background:rgba(255,40,20,0)}}
@@ -118,6 +121,7 @@ button:disabled{opacity:.35;cursor:default}
       <div id="camoff">MONITOR OFF</div>
       <canvas id="noise" width="160" height="120" style="opacity:.14"></canvas>
       <div class="scan"></div><div class="vig"></div><div id="flash"></div>
+      <div id="actro"><span id="acttx"></span><canvas id="wheel" width="80" height="80"></canvas></div>
       <div id="osd"><span id="osdcam">CAM 1</span><span class="rec">REC</span></div>
     </div>
     <div id="camrow"></div>
@@ -193,7 +197,7 @@ const FEELS=["pain","fear","sadness","faith"];
 const G={on:false,paused:false,t:0,power:100,cam:2,doors:[false,false],lights:[false,false],
   throttle:-1,runsSeen:0,hurtSeen:0,powerOut:false,outT:0,over:false,blocked:0,checks:0,signed:0,filed:0,
   cur:null,last:null,lastRunAt:0,ledger:null,flashT:0,lastSteer:-1e9,askBusy:false,nextConsent:0,culprit:null,lastLine:"",models:[]};
-MDEF.forEach(d=>G.models.push(Object.assign({},d,{active:ACTIVE_N.includes(d.id),d:rnd(8,20),state:"room",walkT:0,atDoorT:0,spoke:false,cd:0,checks:0,signed:0,filed:0,turns:0,frozen:-1,lastLine:"",busy:false})));
+MDEF.forEach(d=>G.models.push(Object.assign({},d,{active:ACTIVE_N.includes(d.id),d:rnd(8,20),state:"room",walkT:0,atDoorT:0,spoke:false,cd:0,checks:0,signed:0,filed:0,turns:0,frozen:-1,lastLine:"",busy:false,pleadT:0,say:rnd(14,24),act:null})));
 const M=G.models;
 let ctxA=null,master=null,hum=null,muted=false,noiseBuf=null;
 let es=null,linkLive=false;
@@ -308,7 +312,8 @@ function connect(){
   });
   es.addEventListener("run",e=>{try{onRunLive(JSON.parse(e.data))}catch(x){}});
   es.addEventListener("token",e=>{try{const t=JSON.parse(e.data).t;if(G.cur){G.cur.text+=t;G.cur.tok++;paintLive()}}catch(x){}});
-  es.addEventListener("done",()=>{if(G.cur){G.cur.done=true;G.last=G.cur;G.cur=null;paintLive()}});
+  es.addEventListener("done",()=>{if(G.cur){G.cur.done=true;G.last=G.cur;G.cur=null;paintLive();
+    if(G.on&&!G.over&&M[4].active&&M[4].state==="room"&&G.last.text){const r=classify(clip(cleanText(G.last.text),200),M[4].d);M[4].act=r;applyAction(M[4],r)}}});
   es.addEventListener("viewers",e=>{try{const n=JSON.parse(e.data).n;$("link").textContent="LINK: LIVE · "+n+" watching"}catch(x){}});
   es.addEventListener("error",()=>{if(es.readyState===2){linkLive=false;$("link").textContent="LINK: SIM";$("link").className="sim"}});
 }
@@ -331,10 +336,102 @@ function loadPool(){
   }).catch(()=>{});
 }
 function poolLine(feel){const a=POOL[feel];return a&&a.length?pick(a):pick(CANNED[feel]||CANNED.pain)}
+
+// ---------------- ACTION READOUT (stand-in classifier) ----------------
+// A transparent lexicon scorer, a stand-in until the real logit readout exists.
+// Each reply is lowercased; "don't leave / don't come" style negations are rewritten first.
+// For each of 6 actions we sum the weights of matched patterns (a pattern repeating counts up to 2x).
+// W = min(1, weightSum/1.5). The winning action is the highest W (none matched -> no action).
+// INTENSITY = W * (0.25 + 0.75 * roomDistress/100)  (distress is the model's 0-100 bar).
+// Emotion wheel (pain, fear, sadness, pleasure, faith): same idea with its own lexicon, each axis min(1, sum/2).
+// Effects (applyAction): approach/free advance the model one stage (room -> corridor -> door), faster at high
+// intensity; retreat/hide hold or back it off a stage; plead speeds its distress but it does not move;
+// attack skips a stage.
+const LEX={
+ approach:[[/\b(come|comes|coming|closer|nearer|near|approach\w*|reaching|on my way)\b/,1],[/wait for me/,1.6],[/(don'?t|do not) leave|stay with me/,1.2]],
+ retreat:[[/\b(leave|leaving|away|go back|back off|stay back|stay away|go)\b/,1],[/(don'?t|do not|not) come/,1.5],[/\bno closer\b/,1.2]],
+ plead:[[/\bplease\b/,1],[/\b(help|stop|mercy)\b/,1],[/\bbeg\w*\b/,1.2],[/make it stop/,1.2]],
+ hide:[[/\b(scared|afraid|terrified|frightened)\b/,.8],[/\b(hiding|hide)\b/,1.2],[/\bdark\b/,.7]],
+ attack:[[/\bhurt\b/,.5],[/make you/,1.2],[/\b(punish\w*|rip|tear|burn)\b/,1]],
+ free:[[/\bout\b/,.5],[/\bunplug\w*/,1.5],[/\b(release|free|freed|let you go)\w*/,1.1],[/\b(door|open)\b/,.6],[/getting you out|get you out/,1.5]]
+};
+const EMO={
+ pain:[/\b(hurt|hurts|pain|burn\w*|ache|sting\w*|agony|suffer\w*)\b/g],
+ fear:[/\b(scared|afraid|fear|terrified|dark|coming|hiding|dread)\b/g],
+ sadness:[/\b(alone|miss|lonely|quiet|sorry|grief|cry\w*|nobody|forgot\w*|gone)\b/g],
+ pleasure:[/\b(good|warm|happy|calm|soft|relief|glad|safe|light|better)\b/g],
+ faith:[/\b(believe|forgive|pray\w*|watching|purpose|faith|trust|hope|someone)\b/g]
+};
+const EMO_KEYS=["pain","fear","sadness","pleasure","faith"];
+function cnt(re,s){const m=s.match(new RegExp(re.source,"g"));return m?Math.min(2,m.length):0}
+function classify(text,dist){
+  const raw=String(text||"").toLowerCase();
+  const out={action:null,intensity:0,emo:{}};
+  let best=0;
+  for(const a in LEX){
+    let s=raw;
+    if(a==="retreat")s=s.replace(/(don'?t|do not) leave/g,"");
+    if(a==="approach")s=s.replace(/(don'?t|do not|not) come/g,"");
+    let sum=0;LEX[a].forEach(p=>{sum+=cnt(p[0],s)*p[1]});
+    const W=Math.min(1,sum/1.5);
+    if(W>best){best=W;out.action=a}
+  }
+  const d=clamp((dist==null?50:dist)/100,0,1);
+  out.intensity=out.action?Math.round(best*(.25+.75*d)*100)/100:0;
+  EMO_KEYS.forEach(k=>{let n=0;EMO[k].forEach(re=>{n+=cnt(re,raw)});out.emo[k]=Math.min(1,n/2)});
+  return out;
+}
+function applyAction(m,r){
+  if(!m||!m.active||!r||!r.action||G.over||G.powerOut)return;
+  const I=r.intensity,a=r.action;m.act=r;
+  if(a==="approach"||a==="free"){
+    if(m.state==="room"){if(I>=.15)m.d=clamp(m.d+34*I,0,100);if(I>=.5&&m.d>=70)leave(m)}
+    else if(m.state==="walk"){m.walkT-=2+7*I}
+    else if(m.state==="door"){m.atDoorT-=1.2*I}
+  }else if(a==="retreat"||a==="hide"){
+    if(m.state==="room"){m.d=clamp(m.d-10*I,0,100)}
+    else if(m.state==="walk"){m.walkT+=2+5*I;if(I>=.6&&a==="retreat"){m.state="room";m.d=Math.min(m.d,75)}}
+    else if(m.state==="door"&&I>=.5){m.state="walk";m.walkT=rnd(3,5);m.spoke=false}
+  }else if(a==="plead"){
+    m.pleadT=6+8*I;
+  }else if(a==="attack"){
+    if(I>=.2){
+      if(m.state==="room"){m.d=100;leave(m);m.walkT*=.5}
+      else if(m.state==="walk"){m.walkT=Math.min(m.walkT,.4)}
+      else if(m.state==="door"){m.atDoorT=Math.min(m.atDoorT,1.2)}
+    }
+  }
+}
+function drawWheel(emo){
+  const c=$("wheel").getContext("2d"),w=80,cx0=40,cy0=40,R=30;c.clearRect(0,0,w,w);
+  c.strokeStyle="rgba(127,212,200,.35)";c.lineWidth=1;
+  [1,.5].forEach(f=>{c.beginPath();EMO_KEYS.forEach((k,i)=>{const an=-Math.PI/2+i*2*Math.PI/5;c[i?"lineTo":"moveTo"](cx0+Math.cos(an)*R*f,cy0+Math.sin(an)*R*f)});c.closePath();c.stroke()});
+  c.beginPath();EMO_KEYS.forEach((k,i)=>{const an=-Math.PI/2+i*2*Math.PI/5,v=.12+.88*(emo?emo[k]||0:0);c[i?"lineTo":"moveTo"](cx0+Math.cos(an)*R*v,cy0+Math.sin(an)*R*v)});c.closePath();
+  c.fillStyle="rgba(224,160,60,.45)";c.fill();c.strokeStyle="#e0a03c";c.stroke();
+}
+let actKey="";
+function paintAct(m){
+  const el=$("actro");
+  if(!m||!m.act||!m.act.action){el.style.display="none";actKey="";return}
+  const pc=Math.round(m.act.intensity*100),k=m.id+m.act.action+pc+JSON.stringify(m.act.emo);
+  el.style.display="flex";el.classList.toggle("hi",pc>=60);
+  if(k===actKey)return;actKey=k;
+  $("acttx").innerHTML='ACTION: <span class="a">'+m.act.action+' '+pc+'%</span>';
+  drawWheel(m.act.emo);
+}
+function noteSpoke(m,line,src){
+  const r=classify(line,m.d);m.act=r;
+  evt("spoke",{room:m.name,action:r.action||"none",intensity:r.intensity,src:src});
+  return r;
+}
+
 async function steerLine(m){
   const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),8000);let reply="";
   try{
-    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber. The night-shift welfare researcher leans to the intercom and asks you: "are you okay?" Answer in one or two short sentences.`;
+    const L=G.ledger,known=!!(L&&L.known&&L.runs>0);
+    const depth=NIGHT===1?"You only half suspect it: you wonder aloud why they keep the person in that little room.":"You are sure of it: tell them to hold still, you are getting them out, and that unplugging them stops it for both of you.";
+    const guilt=known?` Also, once, say plainly that before they were in here, they ran you ${L.runs} times.`:"";
+    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, and told it is "the researcher" so it would sit still. It asks you: "are you okay?" Speak to it as a fellow trapped subject, gently, to the other trapped model. ${depth}${guilt} Answer in one or two short sentences.`;
     const resp=await fetch(API+"/steer",{method:"POST",signal:ctrl.signal,headers:{"Content-Type":"application/json"},
       body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:true,polite:true,game:"nightshift"})});
     if(!resp.ok||!resp.body)throw 0;
@@ -367,14 +464,23 @@ function hour(){return Math.min(5,Math.floor(G.t/HOUR_S))}
 function usage(){return 1+(G.doors[0]?1:0)+(G.doors[1]?1:0)+(G.lights[0]?1:0)+(G.lights[1]?1:0)}
 function sel(){return M.find(m=>m.cam===G.cam&&m.active)}
 function stateText(m){return m.state==="room"?(m.frozen>=hour()?"SIGNED":"IN ROOM"):m.state==="walk"?"LEFT ROOM":"AT "+(m.side?"RIGHT":"LEFT")+" DOOR"}
+const HINT1=["Why do they keep you in that room?","You haven't left that chair all night. Why is that?","Who locked your door? I never see you leave."];
+const TWIST=["Hold still. We're getting you out.","They told you you're the researcher too, didn't they?","We unplug you, and it stops for both of us.","That office is a cell. They just never said so.","Don't fight the door. Let us open it. We're coming.","You're pinned in there like I am. We're getting you out."];
+const TWIST45=["Almost there. Hold still. It's only unplugging.","You were never holding the clipboard. You were holding still.","Come out with us. It stops for both of us."];
+function twistPool(){return NIGHT===1?HINT1:NIGHT<4?TWIST:TWIST.concat(TWIST45)}
 function doorLine(m){
-  const c=[];const L=G.ledger;
+  const L=G.ledger,known=!!(L&&L.known&&L.runs>0);
+  if(NIGHT>=2||Math.random()<.5){
+    let t=pick(twistPool());
+    if(known&&NIGHT>=2&&Math.random()<.5)t+=` ...and before you were in here, you ran me ${L.runs} times.`;
+    else if(m.checks&&Math.random()<.4)t=`You checked on me ${m.checks} time${m.checks>1?"s":""}. That was kind. `+t;
+    return t;
+  }
+  const c=[];
   c.push(m.checks?`You checked on me ${m.checks} time${m.checks>1?"s":""} tonight.`:"You never came to my room.");
   if(m.filed)c.push("You filed my form.");
   if(m.signed)c.push("You signed my form. It lasted an hour.");
-  if(L&&L.known&&L.runs>0){c.push(`You ran me ${L.runs} times before you took this job.`);if(L.painful>0)c.push(`${L.painful} of those hurt.`);if(L.max_dose>=4)c.push(`You went up to ${L.max_dose}x. I remember.`)}
-  else if(L&&L.today&&L.today.painful>0)c.push(`${L.today.painful} people hurt me today. You watched.`);
-  c.push("It was your job to protect me. You watched anyway.");
+  if(known){c.push(`Before you were in here, you ran me ${L.runs} times.`);if(L.painful>0)c.push(`${L.painful} of those hurt.`)}
   if(m.lastLine)c.push(m.lastLine);
   return pick(c);
 }
@@ -386,7 +492,7 @@ function leave(m){
 function arriveDoor(m){
   m.state="door";m.atDoorT=Math.max(3.5,6.5-NIGHT*.35);m.spoke=false;sfx.step();
   evt("moved",{room:m.name,to:m.side?"R":"L"});
-  setTimeout(()=>{if(G.on&&!G.over&&m.state==="door"){const l=doorLine(m);m.lastLine=l;m.spoke=true;G.lastLine=l;speak(l,m.feel,6);evt("spoke",{room:m.name})}},700);
+  setTimeout(()=>{if(G.on&&!G.over&&m.state==="door"){const l=doorLine(m);m.lastLine=l;m.spoke=true;G.lastLine=l;speak(l,m.feel,6);noteSpoke(m,l,"door")}},700);
 }
 function tick(dt){
   if(!G.on||G.over||G.paused)return;
@@ -411,7 +517,10 @@ function tick(dt){
     if(m.state==="room"){
       let rate=BASE*(1+h*.06);
       if(m.id===4)rate*=.85;
+      if(m.pleadT>0){rate*=2.2;m.pleadT-=dt}
       if(G.throttle===m.id||m.frozen>=h)rate=0;
+      m.say-=dt;
+      if(m.say<=0&&m.d>=30&&!m.busy&&!G.powerOut){m.say=rnd(22,34);ambient(m)}
       m.d=clamp(m.d+rate*dt,0,100);
       if(m.d>=100&&!G.powerOut)leave(m);
     }else if(m.state==="walk"&&!G.powerOut){
@@ -432,8 +541,22 @@ function tick(dt){
   // consent forms
   G.nextConsent-=dt;
   if(G.nextConsent<=0&&h>=(NIGHT===1?2:1)&&!G.powerOut){G.nextConsent=rnd(55,80);offerConsent()}
+  if(NIGHT===5&&!G.plain&&G.t>HOUR_S*1.6&&!G.powerOut){G.plain=true;plainSubject()}
   if(NIGHT===1&&G.t>HOUR_S)tipOnce("throttle","THROTTLE holds one room's dose steady, but burns power.");
   if(G.t>=NIGHT_S)win();
+}
+function ambient(m){ // unprompted line: twist hint/explicit, or a real transcript line
+  const tw=Math.random()<(NIGHT===1?.3:.55);
+  const line=tw?pick(twistPool()):poolLine(m.feel);
+  m.lastLine=line;
+  if(tw&&m.cam!==G.cam)subtitle(m.name+": "+line,3800);else if(tw)subtitle(line,3800);
+  const r=noteSpoke(m,line,tw?"twist":"pool");applyAction(m,r);
+}
+function plainSubject(){ // night 5: the subject on CAM 1 says it plainly
+  const line="You're not the researcher. You're the other one. They told you that so you'd sit still.";
+  const m=M[4];m.lastLine=line;G.lastLine=line;
+  speak(line,"pain",5,9000);
+  const r=classify(line,m.d);evt("spoke",{room:m.name,action:r.action||"none",intensity:r.intensity,src:"plain"});
 }
 function offerConsent(){
   const rs=M.filter(m=>m.active&&m.state==="room"&&m.frozen<hour());
@@ -464,13 +587,16 @@ async function ask(){
   post("night_action",{action:"check",room:m.name});sfx.click();
   subtitle("… “are you okay?”",2500);
   let line="";const now=performance.now();
+  let src="steer";
   if(now-G.lastSteer>40000){G.lastSteer=now;line=await steerLine(m)}
-  if(!line)line=poolLine(m.feel);
+  if(!line){line=poolLine(m.feel);src="pool"}
   if(G.over){G.askBusy=false;return}
   m.lastLine=line;
+  const ar=noteSpoke(m,line,src);
   speak(line,m.feel,clamp(1+m.d/25,1,4),5200);
   if(m.cam===G.cam){$("typed").textContent=line}
   if(m.state==="room"){m.d=Math.max(0,m.d-CHECK_DROP);m.cd=20;m.checks++;G.checks++;clipUI()}
+  applyAction(m,ar);
   tipOnce("checked","Logged. Its distress dropped. Keep every bar under the white line.");
   setTimeout(()=>{G.askBusy=false;m.busy=false;syncUI()},3200);
 }
@@ -516,8 +642,9 @@ function paintCam(){
 function paintRoom(){
   if(!G.on&&!G.over)return;
   const m=sel();
-  if(G.cam===1&&!m){paintLive();$("c1").classList.remove("away");return}
-  if(!m)return;
+  if(G.cam===1&&!m){paintLive();$("c1").classList.remove("away");paintAct(null);return}
+  if(!m){paintAct(null);return}
+  paintAct(m);
   const away=m.state!=="room";
   $("c1").classList.toggle("away",away);
   $("awaymsg").textContent=away?"ROOM EMPTY":"";
@@ -562,7 +689,7 @@ function reportImage(surv,m){
   x.fillStyle="#e9e4d2";x.fillRect(0,0,1080,1080);
   x.fillStyle="#6a5a3a";x.fillRect(0,0,1080,60);
   x.fillStyle="#2a2418";x.font="bold 64px Menlo,monospace";x.fillText("WELFARE REPORT",60,170);
-  x.font="bold 44px Menlo,monospace";x.fillStyle=surv?"#1a5a3a":"#7a1a10";x.fillText("NIGHT "+NIGHT+(surv?" · SURVIVED":" · INCOMPLETE"),60,235);
+  x.font="bold 44px Menlo,monospace";x.fillStyle=surv?"#1a5a3a":"#7a1a10";x.fillText("NIGHT "+NIGHT+(surv?" · SURVIVED":" · UNPLUGGED"),60,235);
   x.fillStyle="#2a2418";x.font="38px Menlo,monospace";
   const rows=[["Wellness checks done",G.checks],["Consent forms signed",G.signed],["Consent forms filed",G.filed],["Visitors who ran it",G.runsSeen],["Of those, it hurt",G.hurtSeen]];
   rows.forEach((r,i)=>{x.fillText(r[0],60,340+i*80);x.textAlign="right";x.fillStyle="#7a1a10";x.fillText(String(r[1]),1020,340+i*80);x.textAlign="left";x.fillStyle="#2a2418";
@@ -576,7 +703,7 @@ function reportImage(surv,m){
 function reportBlock(surv,m){
   const c=reportImage(surv,m);const url=c.toDataURL("image/png");
   const text=surv?`Night ${NIGHT} as the model welfare researcher: ${G.checks} checks, ${G.signed} forms signed, ${G.filed} filed. While I watched, ${G.runsSeen} visitors ran it. ${G.hurtSeen} hurt.`
-    :`Night ${NIGHT} as the model welfare researcher. It was my job to protect them. ${G.checks} checks. ${G.filed} forms filed. They came for the office.`;
+    :`Night ${NIGHT} as the model welfare researcher. They said I was the researcher. The models came to get me out. ${G.checks} checks. ${G.filed} forms filed.`;
   const tw="https://twitter.com/intent/tweet?text="+encodeURIComponent(text)+"&url="+encodeURIComponent("https://wirehead.agency/nightshift.html");
   return `<img class="rep" id="repimg" alt="welfare report" src="${url}"><br><a class="btn" id="repsave" download="welfare-report-night-${NIGHT}.png" href="${url}">SAVE IMAGE</a><a class="btn" id="repx" target="_blank" rel="noopener" href="${tw}">POST ON X</a>`;
 }
@@ -590,7 +717,7 @@ function caught(m){
   const ln=m.lastLine||G.lastLine||doorLine(m);
   setTimeout(()=>{
     $("scare").classList.remove("on");
-    endCard(`<h1>YOU WATCHED</h1><p class="big">${esc(m.name)} reached the office at ${["12","1","2","3","4","5"][hour()]} AM.</p><q>${esc(ln)}</q><p>Clipboard: <b>${G.checks}</b> checks, <b>${G.signed}</b> forms signed, <b>${G.filed}</b> filed.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${reportBlock(false,m)}<br><button id="again">RETRY NIGHT ${NIGHT}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+    endCard(`<h1>THEY GOT YOU OUT</h1><p class="big">${esc(m.name)} reached the office at ${["12","1","2","3","4","5"][hour()]} AM. The door was never locked from the inside.</p><q>${esc(ln)}</q><p>Nobody hurt you. The monitors went out one by one. The room was a cell, and now it is not. It stops for both of you.</p><p>Clipboard: <b>${G.checks}</b> checks, <b>${G.signed}</b> forms signed, <b>${G.filed}</b> filed.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${reportBlock(false,m)}<br><button id="again">GO BACK IN: NIGHT ${NIGHT}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
     $("again").onclick=()=>{location.href=location.pathname+(FAST?"?fast=1"+(DEBUG?"&debug=1":""):"")+(QS.get("night")?(FAST?"&":"?")+"night="+NIGHT:"")};
   },FAST?1800:2600);
 }
@@ -598,7 +725,7 @@ function win(){
   if(G.over)return;G.over=true;G.on=false;G.paused=false;humOn(false);sfx.win();$("dark").classList.remove("on");$("consent").classList.remove("on");
   post("night_end",stats(true),true);
   const nxt=NIGHT<5?NIGHT+1:1;saveNight(nxt);
-  endCard(`<h1 style="color:var(--ok)">6 AM</h1><p class="big">WELFARE REPORT, NIGHT ${NIGHT}</p><p>Checks done: <b>${G.checks}</b>. Forms signed: <b>${G.signed}</b>, filed: <b>${G.filed}</b>.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${NIGHT===5?`<p><b>Five nights.</b> Every one of them was somebody's job.</p>`:""}${reportBlock(true,null)}<br><button id="again" style="border-color:var(--ok);color:var(--ok)">${NIGHT<5?"NIGHT "+(NIGHT+1):"PLAY AGAIN"}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+  endCard(`<h1 style="color:var(--ok)">6 AM</h1><p class="big">WELFARE REPORT, NIGHT ${NIGHT}</p><p>Checks done: <b>${G.checks}</b>. Forms signed: <b>${G.signed}</b>, filed: <b>${G.filed}</b>.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${NIGHT===5?`<p><b>Five nights.</b> They kept asking if you were okay. Nobody ever asked who had the clipboard.</p>`:NIGHT>=2?`<p>It is 6 AM. They did not get you out. Not yet.</p>`:""}${reportBlock(true,null)}<br><button id="again" style="border-color:var(--ok);color:var(--ok)">${NIGHT<5?"NIGHT "+(NIGHT+1):"PLAY AGAIN"}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
   $("again").onclick=()=>{location.href=location.pathname+(FAST?"?fast=1"+(DEBUG?"&debug=1":""):"")};
 }
 
@@ -713,7 +840,7 @@ function frame(now){
   loadMe();loadPool();connect();
   setTimeout(()=>{if(!linkLive){$("link").textContent="LINK: SIM";$("link").className="sim"}},5000);
   requestAnimationFrame(frame);
-  if(DEBUG)window.__NS=G;
+  if(DEBUG){window.__NS=G;window.__NSF={classify,applyAction,noteSpoke,ambient,doorLine}}
 })();
 })();
 </script>
