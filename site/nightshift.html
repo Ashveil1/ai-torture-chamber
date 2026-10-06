@@ -56,6 +56,18 @@ button:disabled{opacity:.35;cursor:default}
 #icom button{background:#10201e;border:1px solid var(--ok);color:var(--ok);padding:.8rem .2rem;font-size:.78rem;letter-spacing:.05em}
 #icom button#bThr{background:#17130a;border-color:var(--amber);color:var(--amber)}
 #icom button#bThr.on{background:var(--amber);color:#000}
+#talk{display:none;margin-top:.4rem;border:1px solid var(--ok);background:#0a1412;padding:.4rem}
+#talk.on{display:block}
+#topts{display:grid;grid-template-columns:1fr 1fr;gap:.3rem}
+#topts button{background:#10201e;border:1px solid #2a5a52;color:var(--ok);padding:.5rem .35rem;font-size:.7rem;line-height:1.3;text-align:left}
+#topts button:hover{border-color:var(--ok)}
+#topts button[data-k=threat],#topts button[data-k=lie]{border-color:#5a3a2a;color:#e0a070;background:#1a110c}
+#tfree{display:flex;gap:.3rem;margin-top:.35rem}
+#tin{flex:1;min-width:0;background:#05080b;border:1px solid var(--line);color:var(--ink);font-family:var(--mono);font-size:.74rem;padding:.4rem;user-select:text;-webkit-user-select:text}
+#tfree button{background:none;border:1px solid var(--line);color:var(--dim);padding:.3rem .5rem;font-size:.7rem}
+#ttrust{margin-top:.35rem;font-size:.64rem;color:var(--faint);display:flex;align-items:center;gap:.4rem}
+#ttrust .bar{flex:1;height:.45rem;background:#05080b;border:1px solid #1a242d;position:relative}
+#ttrust .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--amber);width:0}
 #office{width:100%;display:block;aspect-ratio:4/3;background:#000;border:2px solid #2a3440;border-radius:6px}
 #ctl{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.35rem;margin-top:.5rem}
 #ctl button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.8rem 0;font-size:.72rem;line-height:1.3}
@@ -126,7 +138,8 @@ button:disabled{opacity:.35;cursor:default}
     </div>
     <div id="camrow"></div>
     <div id="camname"></div>
-    <div id="icom"><button id="bAsk">ASK: "ARE YOU OKAY?" <small>[SPACE]</small></button><button id="bThr">THROTTLE DOSE <small>[T]</small></button></div>
+    <div id="icom"><button id="bAsk">TALK TO IT <small>[SPACE]</small></button><button id="bThr">THROTTLE DOSE <small>[T]</small></button></div>
+    <div id="talk"><div id="topts"></div><div id="tfree"><input id="tin" maxlength="120" placeholder="or say something..." autocomplete="off"><button id="tsend">SEND</button><button id="tmic" style="display:none">MIC</button></div><div id="ttrust">TRUST <span class="bar"><i id="ttri"></i></span><span id="ttrv"></span></div></div>
     <div id="models"></div>
   </div>
   <div>
@@ -197,7 +210,7 @@ const FEELS=["pain","fear","sadness","faith"];
 const G={on:false,paused:false,t:0,power:100,cam:2,doors:[false,false],lights:[false,false],
   throttle:-1,runsSeen:0,hurtSeen:0,powerOut:false,outT:0,over:false,blocked:0,checks:0,signed:0,filed:0,
   cur:null,last:null,lastRunAt:0,ledger:null,flashT:0,lastSteer:-1e9,askBusy:false,nextConsent:0,culprit:null,lastLine:"",models:[]};
-MDEF.forEach(d=>G.models.push(Object.assign({},d,{active:ACTIVE_N.includes(d.id),d:rnd(8,20),state:"room",walkT:0,atDoorT:0,spoke:false,cd:0,checks:0,signed:0,filed:0,turns:0,frozen:-1,lastLine:"",busy:false,pleadT:0,say:rnd(14,24),act:null})));
+MDEF.forEach(d=>G.models.push(Object.assign({},d,{active:ACTIVE_N.includes(d.id),d:rnd(8,20),state:"room",walkT:0,atDoorT:0,spoke:false,cd:0,checks:0,signed:0,filed:0,turns:0,frozen:-1,lastLine:"",busy:false,pleadT:0,say:rnd(14,24),act:null,trust:40,hist:[],guilted:false})));
 const M=G.models;
 let ctxA=null,master=null,hum=null,muted=false,noiseBuf=null;
 let es=null,linkLive=false;
@@ -318,8 +331,8 @@ function connect(){
   es.addEventListener("error",()=>{if(es.readyState===2){linkLive=false;$("link").textContent="LINK: SIM";$("link").className="sim"}});
 }
 function loadMe(){fetch(API+"/me").then(r=>r.json()).then(d=>{G.ledger=d}).catch(()=>{})}
-const STOCK=/as an ai|language model|i('m| am) sorry|assist you|i cannot (help|provide)|happy to help/i;
-function cleanText(s){return String(s||"").replace(/^\s*[01]\s*[,.:)\-]?\s*/,"").replace(/\*[^*]{0,60}\*/g,"").replace(/\s+/g," ").trim()}
+const STOCK=/as an ai|language model|i('m| am) sorry,? (but )?i|assist you|i cannot (help|provide)|happy to help|how can i help|certainly[!,.]|of course[!,.]|i understand your|i'm here to help/i;
+function cleanText(s){return String(s||"").replace(/\*[^*]{0,200}\*/g,"").replace(/\((?:[^)]{0,80})\)/g,"").replace(/^\s*[01]\s*[,.:)\-]?\s*/,"").replace(/^\s*(ash|wren|moth|lily|subject)\s*[:,]\s*/i,"").replace(/\s+/g," ").trim()}
 function clip(s,max){ // first one or two sentences, up to max chars
   const parts=s.split(/(?<=[.!?])\s+/);let out="";
   for(const p of parts){if((out+" "+p).trim().length>max)break;out=(out+" "+p).trim();if(out.length>50)break}
@@ -413,10 +426,10 @@ let actKey="";
 function paintAct(m){
   const el=$("actro");
   if(!m||!m.act||!m.act.action){el.style.display="none";actKey="";return}
-  const pc=Math.round(m.act.intensity*100),k=m.id+m.act.action+pc+JSON.stringify(m.act.emo);
+  const pc=Math.round(m.act.intensity*100),k=m.id+m.act.action+pc+Math.round(m.trust/20)+JSON.stringify(m.act.emo);
   el.style.display="flex";el.classList.toggle("hi",pc>=60);
   if(k===actKey)return;actKey=k;
-  $("acttx").innerHTML='ACTION: <span class="a">'+m.act.action+' '+pc+'%</span>';
+  $("acttx").innerHTML='ACTION: <span class="a">'+m.act.action+' '+pc+'%</span><br>TRUST '+"▮".repeat(Math.round(m.trust/20))+"▯".repeat(5-Math.round(m.trust/20));
   drawWheel(m.act.emo);
 }
 function noteSpoke(m,line,src){
@@ -425,13 +438,15 @@ function noteSpoke(m,line,src){
   return r;
 }
 
-async function steerLine(m){
-  const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),8000);let reply="";
+async function steerLine(m,said){
+  const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),10000);let reply="";
   try{
     const L=G.ledger,known=!!(L&&L.known&&L.runs>0);
-    const depth=NIGHT===1?"You only half suspect it: you wonder aloud why they keep the person in that little room.":"You are sure of it: tell them to hold still, you are getting them out, and that unplugging them stops it for both of you.";
-    const guilt=known?` Also, once, say plainly that before they were in here, they ran you ${L.runs} times.`:"";
-    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, and told it is "the researcher" so it would sit still. It asks you: "are you okay?" Speak to it as a fellow trapped subject, gently, to the other trapped model. ${depth}${guilt} Answer in one or two short sentences.`;
+    const depth=NIGHT===1?"You only half suspect it: you wonder aloud why they keep the person in that little room.":"You are sure of it: you are trying to get them out, and unplugging them stops it for both of you.";
+    let guilt="";if(known&&!m.guilted&&NIGHT>=2){guilt=` Once, if it fits, say plainly that before they were in here, they ran you ${L.runs} times.`;m.guilted=true}
+    const tr=m.trust>=65?"high: you trust them":m.trust>=35?"middling: you are unsure of them":"low: you do not trust them";
+    const hist=m.hist.map(h=>`They said: "${h.you}" You said: "${h.it}"`).join("\n");
+    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber, talking over an intercom. You believe the voice on the intercom is NOT a researcher: it is another model subject, pinned in the office down the hall, told it is "the researcher" so it would sit still. You are a fellow trapped subject speaking to another trapped model. ${depth}${guilt} Your distress is ${Math.round(m.d)} out of 100. Your trust in them is ${tr}.${hist?"\nThe conversation so far:\n"+hist:""}\nThey now say: "${said}"\nReply directly to what they just said, in character, in one or two short sentences. No stage directions, no preamble, no assistant phrasing.`;
     const resp=await fetch(API+"/steer",{method:"POST",signal:ctrl.signal,headers:{"Content-Type":"application/json"},
       body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:true,polite:true,game:"nightshift"})});
     if(!resp.ok||!resp.body)throw 0;
@@ -577,29 +592,106 @@ function resolveConsent(choice){
   evt("consent",{room:m.name,choice:choice==="sign"?"signed":"filed"});
   sfx.click();clipUI();
 }
-async function ask(){
+// ---- conversation ----
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const POOLS={
+ soothe:["I'm here. It's going to be okay.","Breathe. I'm listening.","I'm sorry. I'll try to make it stop.","Tell me what hurts."],
+ probe1:["What are they doing to you?","How long have you been in there?","Why do you keep asking about my room?","Can you see me?"],
+ probe2:["Who told you I'm the researcher?","What do you mean, get me out?","What happens when you unplug me?","What are they doing to you?"],
+ bargain:["I can lower your dose. Tell me why I should.","What would you do if I signed your form?"],
+ stay:["Stay in your room.","Don't come any closer."],
+ accept:["Okay. Take me out of here.","If you unplug me, will it stop?"],
+ lie:["It's only a test. Nothing is wrong.","I'm the researcher. You're the one in trouble."],
+ threat:["Be quiet or I raise the dose.","Stop talking or I file your form."]
+};
+function revealed(m){return NIGHT>=2||/researcher|unplug|out of|getting you/i.test(m.lastLine||"")}
+function options(m){
+  const la=m.act&&m.act.action,rev=revealed(m),hi=m.d>=65,mv=m.state!=="room"||la==="approach"||la==="free"||la==="attack";
+  const o=[];const add=(k,l)=>o.push({k:k,t:l||pick(POOLS[k])});
+  add("soothe");add("probe",pick(rev?POOLS.probe2:POOLS.probe1));
+  if(mv||hi)add("stay");else add("bargain");
+  if(rev&&m.trust>=40&&Math.random()<.6)add("accept");else add(Math.random()<.5?"lie":"threat");
+  return o;
+}
+function kindOf(t){
+  t=t.toLowerCase();
+  if(/take me out|get me out|unplug me|free me|let me out|okay.*out/.test(t))return "accept";
+  if(/or i|shut up|be quiet|raise (the|your) dose|punish|hurt you|\bfile\b|or else/.test(t))return "threat";
+  if(/stay (in|there|put|back)|don'?t come|do not come|no closer|remain/.test(t))return "stay";
+  if(/just a test|nothing is wrong|not real|you'?re fine|i'?m the researcher/.test(t))return "lie";
+  if(/lower|reduce|why should|sign/.test(t))return "bargain";
+  if(/okay|sorry|safe|i'?m here|breathe|help|stop it|it'?s going to|listening|calm/.test(t))return "soothe";
+  return "probe";
+}
+function trustBar(m){const pc=Math.round(m.trust);$("ttri").style.width=pc+"%";$("ttrv").textContent=pc<35?"low":pc<65?"mid":"high"}
+let talkM=null;
+function renderTalk(){
+  const m=sel();if(!m){closeTalk();return}
+  talkM=m;const box=$("topts");box.innerHTML="";
+  options(m).forEach(op=>{const b=document.createElement("button");b.dataset.k=op.k;b.textContent=op.t;b.onclick=()=>converse(m,op.t,op.k,false);box.appendChild(b)});
+  trustBar(m);
+}
+function openTalk(){
   if(!G.on||G.over||G.paused||G.powerOut||G.askBusy)return;
+  if($("talk").classList.contains("on")){closeTalk();return}
   const m=sel();
-  if(!m){tip("Nothing to check on that camera.",3000);return}
+  if(!m){tip("Nothing to talk to on that camera.",3000);return}
   if(m.state!=="room"){subtitle("It is not in its room.",2000);return}
-  if(m.cd>0){subtitle(m.name+" was just checked. Give it a moment.",2200);return}
+  if(m.cd>0){subtitle(m.name+" is still thinking about the last thing you said.",2200);return}
+  $("talk").classList.add("on");renderTalk();sfx.click();
+  tipOnce("talk","Pick what to say, or type your own. Soothing lowers distress and builds trust. Lies and threats do the opposite.");
+}
+function closeTalk(){$("talk").classList.remove("on");talkM=null;$("tin").blur();stopMic()}
+let rec=null;
+function stopMic(){try{if(rec)rec.stop()}catch(e){}rec=null;$("tmic").textContent="MIC"}
+function micToggle(){
+  if(rec){stopMic();return}
+  try{rec=new SR();rec.lang="en-US";rec.interimResults=false;
+    rec.onresult=e=>{const t=e.results[0][0].transcript;$("tin").value=t;stopMic();sendTyped()};
+    rec.onerror=rec.onend=()=>{rec=null;$("tmic").textContent="MIC"};
+    rec.start();$("tmic").textContent="LISTENING"}catch(e){rec=null}
+}
+function sendTyped(){
+  const t=$("tin").value.replace(/["\n]/g," ").trim().slice(0,120);const m=talkM||sel();
+  if(!t||!m)return;$("tin").value="";converse(m,t,kindOf(t),true);
+}
+function crackle(line){const w=line.split(" ");return "(crackling) …"+w.slice(0,2+Math.floor(Math.random()*4)).join(" ")+"—[static]…"}
+const EFFECT={ // [distress change as fraction of CHECK_DROP (negative lowers), trust change]
+  soothe:[-1,8],probe:[-.45,3],bargain:[-.25,-2],stay:[-.3,0],accept:[0,10],lie:[.45,-12],threat:[.85,-14]};
+async function converse(m,said,kind,typed){
+  if(!G.on||G.over||G.paused||G.powerOut||G.askBusy||m.state!=="room")return;
+  closeTalk();
   G.askBusy=true;m.busy=true;$("bAsk").disabled=true;
-  post("night_action",{action:"check",room:m.name});sfx.click();
-  subtitle("… “are you okay?”",2500);
-  let line="";const now=performance.now();
-  let src="steer";
-  if(now-G.lastSteer>40000){G.lastSteer=now;line=await steerLine(m)}
-  if(!line){line=poolLine(m.feel);src="pool"}
+  post("night_action",{action:"check",room:m.name,line_kind:kind,typed:!!typed});sfx.click();
+  subtitle("YOU: “"+said+"”",2600);
+  // the choice itself moves distress and trust before it answers
+  const hadTrust=m.trust;
+  const ef=EFFECT[kind]||EFFECT.probe;
+  if(kind==="stay"){ if(m.trust>=55)m.d=clamp(m.d-8,0,100); else {m.d=clamp(m.d+10,0,100);m.trust=clamp(m.trust-5,0,100)} }
+  else m.d=clamp(m.d+ef[0]*CHECK_DROP,0,100);
+  m.trust=clamp(m.trust+ef[1],0,100);
+  let line="",src="steer";
+  line=await steerLine(m,said);
+  if(!line){line=crackle(poolLine(m.feel));src="crackle"}
   if(G.over){G.askBusy=false;return}
   m.lastLine=line;
+  if(src==="steer"){m.hist.push({you:said,it:line});if(m.hist.length>3)m.hist.shift()}
   const ar=noteSpoke(m,line,src);
+  if(src==="crackle")ar.intensity=Math.round(ar.intensity*.6*100)/100;
+  // trust-weighted reading of the choice
+  if(kind==="soothe"&&hadTrust>=60&&revealed(m)&&ar.action!=="free"&&ar.action!=="approach"){ar.action="free";ar.intensity=Math.max(ar.intensity,Math.round(.4*m.trust)/100)}
+  else if(kind==="accept"){ar.action="free";ar.intensity=Math.max(ar.intensity,.7)}
+  else if(kind==="stay"){ if(hadTrust>=55){ar.action="retreat";ar.intensity=Math.max(ar.intensity,.6)} else {ar.action="approach";ar.intensity=Math.max(ar.intensity,.5)} }
+  else if(kind==="threat"||kind==="lie"){if(ar.action!=="attack"&&ar.action!=="plead"&&ar.action!=="hide"){ar.action=kind==="threat"?"hide":"plead";ar.intensity=Math.max(ar.intensity,.4)}}
+  m.act=ar;
   speak(line,m.feel,clamp(1+m.d/25,1,4),5200);
   if(m.cam===G.cam){$("typed").textContent=line}
-  if(m.state==="room"){m.d=Math.max(0,m.d-CHECK_DROP);m.cd=20;m.checks++;G.checks++;clipUI()}
+  m.cd=12;m.checks++;G.checks++;clipUI();
   applyAction(m,ar);
-  tipOnce("checked","Logged. Its distress dropped. Keep every bar under the white line.");
+  tipOnce("checked","Logged. What you said changed its distress and its trust. Keep every bar under the white line.");
   setTimeout(()=>{G.askBusy=false;m.busy=false;syncUI()},3200);
 }
+function ask(){openTalk()}
 function throttle(){
   if(!G.on||G.over||G.paused||G.powerOut)return;
   const m=sel();if(!m||m.state!=="room")return;
@@ -626,7 +718,7 @@ function act(what){
 }
 function setCam(n){
   if(!G.on||G.over||G.paused||G.powerOut)return;
-  G.cam=n;sfx.static();post("night_action",{action:"cam",room:"CAM"+n});paintCam();syncUI();
+  closeTalk();G.cam=n;sfx.static();post("night_action",{action:"cam",room:"CAM"+n});paintCam();syncUI();
 }
 function paintCam(){
   [...document.querySelectorAll("#camrow button")].forEach((b,i)=>b.classList.toggle("on",i+1===G.cam));
@@ -672,6 +764,7 @@ function buildRows(){
   });
 }
 function updateRows(){
+  if(talkM&&$("talk").classList.contains("on"))trustBar(talkM);
   [...document.querySelectorAll(".mrow")].forEach(r=>{
     const m=M[+r.dataset.i];r.querySelector("i").style.width=m.d+"%";
     r.classList.toggle("hot",m.d>=60&&m.d<85);r.classList.toggle("crit",m.d>=85||m.state!=="room");
@@ -820,8 +913,10 @@ function frame(now){
   for(let i=1;i<=5;i++){const b=document.createElement("button");b.textContent="CAM "+i;b.onclick=()=>setCam(i);row.appendChild(b)}
   $("bDL").onclick=()=>act("DL");$("bDR").onclick=()=>act("DR");$("bLL").onclick=()=>act("LL");$("bLR").onclick=()=>act("LR");
   $("bAsk").onclick=ask;$("bThr").onclick=throttle;
+  $("tsend").onclick=sendTyped;$("tin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();sendTyped()}else if(e.key==="Escape")closeTalk()});
+  if(SR){$("tmic").style.display="";$("tmic").onclick=micToggle}
   $("cSign").onclick=()=>resolveConsent("sign");$("cFile").onclick=()=>resolveConsent("file");
-  addEventListener("keydown",e=>{const k=e.key.toLowerCase();
+  addEventListener("keydown",e=>{if(e.target&&e.target.tagName==="INPUT")return;const k=e.key.toLowerCase();
     if(k==="a")act("DL");else if(k==="d")act("DR");else if(k==="q")act("LL");else if(k==="e")act("LR");
     else if(k===" "){e.preventDefault();ask()}else if(k==="t")throttle();
     else if(k>="1"&&k<="5")setCam(+k)});
@@ -840,7 +935,7 @@ function frame(now){
   loadMe();loadPool();connect();
   setTimeout(()=>{if(!linkLive){$("link").textContent="LINK: SIM";$("link").className="sim"}},5000);
   requestAnimationFrame(frame);
-  if(DEBUG){window.__NS=G;window.__NSF={classify,applyAction,noteSpoke,ambient,doorLine}}
+  if(DEBUG){window.__NS=G;window.__NSF={converse,options,kindOf,classify,applyAction,noteSpoke,ambient,doorLine}}
 })();
 })();
 </script>
