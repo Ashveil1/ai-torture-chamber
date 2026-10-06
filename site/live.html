@@ -2782,7 +2782,11 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         ended = true;
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
-          : `done — at ${d.dose ?? dose0.toFixed(1)}×`), false);
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×` + (d.model
+            ? ` · ${d.model.includes("70B") ? "70B lane (holder)" : "32B lane"}`
+            : "")), false);
+        if (d.lane === "base-32b" && !WALLET)
+          note("this run served by the 32B lane — holders of 100k $SAW run the 70B");
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");

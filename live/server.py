@@ -822,9 +822,18 @@ def vector(full: int = 1):
                            for k, v in vs.items()}
     return JSONResponse(body)
 
-_RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "")
+# ---- tier-routed GPU lanes ------------------------------------------------
+# Two serverless lanes: the 70B endpoint is the holders' lane ($SAW OPERATOR+),
+# everyone else runs the 32B lane — a perfectly good model (exp51c steered the
+# Qwen3-27B family fine; 32B sits at mid-depth by the same analogy). If the
+# holder lane's endpoint id is unset, everyone uses the base lane.
+_RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "")            # base lane (32B)
+_RUNPOD_EP_HOLDER = os.environ.get("RUNPOD_ENDPOINT_ID_HOLDER",
+                                   "dkcntqsm9y6n0g")            # 70B lane
 _RUNPOD_KEY = os.environ.get("RUNPOD_API_KEY", "")
-_RUNPOD_URL = (f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else "")
+def _runpod_url(ep=None):
+    ep = ep if ep is not None else _RUNPOD_EP
+    return f"https://api.runpod.ai/v2/{ep}" if ep else ""
 
 # ---- GPU delegation (serverless split) ----
 # The relay owns history/fanout/scheduling; the model lives on the RunPod
@@ -837,7 +846,7 @@ _RUNPOD_URL = (f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else "")
 # the job input. Local generation stays as the fallback path if the GPU
 # job fails before producing any events.
 
-async def _runpod_stream(job_input):
+async def _runpod_stream(job_input, ep=None):
     """POST one job to the serverless endpoint and yield (type, event) tuples
     as the worker streams them. Raises nothing out of the generation itself;
     returns having yielded nothing if the job never got off the ground (the
@@ -845,7 +854,7 @@ async def _runpod_stream(job_input):
     import httpx
     async with httpx.AsyncClient(timeout=700.0) as client:
         resp = await client.post(
-            f"{_RUNPOD_URL}/run",
+            f"{_runpod_url(ep)}/run",
             headers={"Authorization": f"Bearer {_RUNPOD_KEY}"},
             json={"input": job_input})
         if resp.status_code != 200:
@@ -925,10 +934,10 @@ async def _poll_job(client, job_id, deadline):
                 return
         await asyncio.sleep(2.0)
 
-async def _endpoint_has_workers(client):
+async def _endpoint_has_workers(client, ep=None):
     """True unless /health positively reports zero workers in every state."""
     try:
-        h = (await client.get(f"{_RUNPOD_URL}/health",
+        h = (await client.get(f"{_runpod_url(ep)}/health",
                               headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})).json()
         return sum((h.get("workers") or {}).values()) > 0
     except Exception:
@@ -963,6 +972,10 @@ async def steer(req: Request):
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
     ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
     mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
+    # lane routing: holders run the 70B endpoint, everyone else the 32B lane
+    gpu_ep = _RUNPOD_EP_HOLDER if unlocked and _RUNPOD_EP_HOLDER else _RUNPOD_EP
+    gpu_model = ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
+                 if gpu_ep == _RUNPOD_EP_HOLDER else None)
     if not _rate_ok(ip, mult):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
@@ -1113,7 +1126,7 @@ async def steer(req: Request):
             text_parts = []
             plogit = None
             try:
-                async for ev_type, ev in _runpod_stream(job):
+                async for ev_type, ev in _runpod_stream(job, ep=gpu_ep):
                     if ev_type == "error" and not got:
                         # the worker refused before starting (e.g. its image
                         # predates a new valence): fall back locally instead
@@ -1139,6 +1152,7 @@ async def steer(req: Request):
                 if not saw_done:
                     yield _sse("error", {"e": "GPU run ended early"})
                 rec = {"n": None, "source": "user",
+                       "lane": ("holder-70b" if (gpu_ep == _RUNPOD_EP_HOLDER) else "base-32b"),
                        "scenario": framing_key,
                        "valence": ("mix" if mode == "mix" else
                                    "topic" if mode == "topic" else arg[0]),
@@ -1225,7 +1239,11 @@ async def steer(req: Request):
             yield _sse("error", {"e": str(e)})
         finally:
             set_vec(None)
-        yield _sse("done", {"dose": meta["dose"], "press_logit": plogit})
+        yield _sse("done", {"dose": meta["dose"], "press_logit": plogit,
+                            "lane": rec.get("lane"),
+                            "model": ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
+                                      if rec.get("lane") == "holder-70b"
+                                      else "Qwen/Qwen3-32B")})
         rec = {"n": None, "source": "user",
                "scenario": meta.get("scenario"),
                "valence": meta.get("valence"), "dose": meta.get("dose"),
