@@ -530,7 +530,7 @@ async function initFace(){
     const lm=await V.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:"/nightshift/face_landmarker.task",delegate:"GPU"},
       runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:true});
     FACE.on=true;$("cam0").style.display="block";
-    const cv=$("facecv"),c=cv.getContext("2d");let last=0;
+    const cv=$("facecv"),c=cv.getContext("2d",{willReadFrequently:true});let last=0;
     const loop=ts=>{
       if(G.over){vid.srcObject.getTracks().forEach(t=>t.stop());return}
       requestAnimationFrame(loop);
