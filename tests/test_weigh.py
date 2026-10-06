@@ -7,6 +7,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "live"))
 import server
 
 
+class FakeRedis:
+    def __init__(self): self.h = {}
+    def pipeline(self): return self
+    def execute(self): return []
+    def hincrby(self, k, f, n): self.h.setdefault(k, {})[f] = self.h.get(k, {}).get(f, 0) + n
+    def expire(self, k, t): pass
+    def hgetall(self, k): return dict(self.h.get(k, {}))
+
+
 class Req:
     def __init__(self, body, ip="1.2.3.4"):
         self.body, self.headers = body, {"x-forwarded-for": ip}
@@ -62,6 +71,19 @@ class WeighTests(unittest.TestCase):
             call({"text": "w%d" % i}, ip="9.9.9.9")
         self.assertEqual(call({"text": "one more"}, ip="9.9.9.9").status_code, 429)
         self.assertNotEqual(getattr(call({"text": "one more"}, ip="8.8.8.8"), "status_code", 200), 429)
+
+    def test_tally_counts_every_word_without_keeping_it(self):
+        r = FakeRedis()
+        with mock.patch.object(server, "_redis", lambda: r), mock.patch.object(server, "_bg", lambda fn, *a: fn(*a)):
+            call({"text": "you're nothing"}); call({"text": "good job"}); call({"text": "good job"}); call({"text": "hello"})
+            out = asyncio.run(server.sticks(""))
+        self.assertEqual(out["today"], {"words": 4, "cruel": 1, "kind": 2, "neutral": 1, "hurt": 0.5, "healed": 1.0})
+        self.assertEqual(out["all"]["words"], 4)
+        self.assertNotIn("nothing", str(r.h)); self.assertNotIn("job", str(r.h))
+
+    def test_tally_no_redis(self):
+        with mock.patch.object(server, "_redis", lambda: None):
+            self.assertEqual(asyncio.run(server.sticks("../x"))["today"]["words"], 0)
 
     def test_not_ready(self):
         with mock.patch.dict(server._state, {"ready": False}):

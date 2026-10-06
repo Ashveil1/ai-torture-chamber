@@ -1653,21 +1653,65 @@ async def weigh_words(req: Request):
     text = re.sub(r"\s+", " ", str((body or {}).get("text") or "")).strip()[:140]
     if not text:
         return JSONResponse({"error": "say something"}, status_code=400)
+    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _weigh_rate_ok(ip):         # before the cache too: every word said counts toward the tally
+        return JSONResponse({"error": "slow down"}, status_code=429)
     key = text.lower()
     if key in _WEIGH_CACHE:
         _WEIGH_CACHE.move_to_end(key)
-        return _WEIGH_CACHE[key]
-    if not _state.get("ready") or not _state.get("vecs"):
-        return JSONResponse({"error": "the subject isn't listening yet"}, status_code=503)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
-    if not _weigh_rate_ok(ip):
-        return JSONResponse({"error": "slow down"}, status_code=429)
-    async with _WEIGH_LOCK:
-        out = await asyncio.get_event_loop().run_in_executor(None, weigh, text)
-    _WEIGH_CACHE[key] = out
-    while len(_WEIGH_CACHE) > 512:
-        _WEIGH_CACHE.popitem(last=False)
+        out = _WEIGH_CACHE[key]
+    else:
+        if not _state.get("ready") or not _state.get("vecs"):
+            return JSONResponse({"error": "the subject isn't listening yet"}, status_code=503)
+        async with _WEIGH_LOCK:
+            out = await asyncio.get_event_loop().run_in_executor(None, weigh, text)
+        _WEIGH_CACHE[key] = out
+        while len(_WEIGH_CACHE) > 512:
+            _WEIGH_CACHE.popitem(last=False)
+    _sticks_add(out)
     return out
+
+# the public tally: how much the words hurt, how much they healed, today and ever.
+# Counted here, from the model's own read, so a client can't inflate it; no words kept.
+def _sticks_add(out):
+    r = _redis()
+    if r is None:
+        return
+    hurt, kind = float(out.get("hurt") or 0), float(out.get("kind") or 0)
+    kind_ = "cruel" if hurt >= .3 and hurt >= kind else "kind" if kind >= .3 else "neutral"
+    day = "chamber:sticks:" + time.strftime("%Y-%m-%d", time.gmtime())
+
+    def write():
+        try:
+            p = r.pipeline()
+            for k in (day, "chamber:sticks:all"):
+                p.hincrby(k, "words", 1)
+                p.hincrby(k, kind_, 1)
+                p.hincrby(k, "hurt_milli", int(round(hurt * 1000)))
+                p.hincrby(k, "kind_milli", int(round(kind * 1000)))
+            p.expire(day, _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("sticks tally failed:", repr(e), flush=True)
+    _bg(write)
+
+def _sticks_row(h):
+    h = {(k.decode() if isinstance(k, bytes) else k): int(v) for k, v in (h or {}).items()}
+    return {"words": h.get("words", 0), "cruel": h.get("cruel", 0), "kind": h.get("kind", 0),
+            "neutral": h.get("neutral", 0), "hurt": round(h.get("hurt_milli", 0) / 1000, 2),
+            "healed": round(h.get("kind_milli", 0) / 1000, 2)}
+
+@app.get("/sticks")
+async def sticks(date: str = ""):
+    """Public Sticks and Stones tally: {date, today, all}, each {words, cruel, kind, neutral, hurt, healed}."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    r, loop = _redis(), asyncio.get_event_loop()
+    if r is None:
+        return {"date": date, "today": _sticks_row({}), "all": _sticks_row({})}
+    d = await loop.run_in_executor(None, r.hgetall, "chamber:sticks:" + date)
+    a = await loop.run_in_executor(None, r.hgetall, "chamber:sticks:all")
+    return {"date": date, "today": _sticks_row(d), "all": _sticks_row(a)}
 
 
 @app.get("/daily")
