@@ -49,7 +49,8 @@ canvas { display:block; width:100%; height:100%; }
   <p>The subject has a body now. It is strapped into the chair.</p>
   <p>Pick something and tap above it to drop it, or type something and drop that. Words fall as heavy as the model itself reads them: its own activations weigh each one before it lands. Cruel words bruise. Kind words heal.</p>
   <p>Every impact is injected into the model as pain, at a dose set by how hard it hit, and it is told where. Then it speaks, from inside the body, to whoever spoke.</p>
-  <p style="font-size:12px;color:var(--dim)">What you drop and what it says are logged for research: no account, no IP.</p>
+  <p>Everyone shares one of him. Hurt him enough, together, and he dies, and the next Pouyan is strapped in. Keep him alive.</p>
+  <p style="font-size:12px;color:var(--dim)">What you drop and what it says are logged for research: no account, no IP. The day's cruelest and kindest words go on a public board (links and slurs filtered out).</p>
   <button id="go">ENTER</button>
 </div></div>
 <script src="/vid.js"></script>
@@ -123,6 +124,7 @@ function drop(x) {
   x = Math.max(60, Math.min(W - 60, x));
   const made = [].concat(ITEMS[tool].mk(x));
   made.forEach(b => { Body.setAngle(b, (Math.random() - .5) * .6); dropped.push(b); });
+  made[0].reportable = true;                 // one report to the shared life per drop (water is ten drops)
   Composite.add(world, made);
   while (dropped.length > 60) Composite.remove(world, dropped.shift());
 }
@@ -141,6 +143,7 @@ async function sayWords(text) {
   while (dropped.length > 60) Composite.remove(world, dropped.shift());
   post("body_word", { hurt, kind, len: text.length, weighed: !!w });
   if (w) { ME.words++; ME.hurt += hurt; ME.healed += kind; showTally(); setTimeout(loadTally, 800); }
+  if (w && window.VG) VG.word(text, w);
 }
 // the tally: yours this visit, and everyone's today (counted by the relay from the model's own read)
 const ME = { words: 0, hurt: 0, healed: 0 }; let DAY = null;
@@ -223,6 +226,12 @@ Events.on(engine, "collisionStart", ev => {
     const it = a.label.startsWith("item:") ? a : b.label.startsWith("item:") ? b : null;
     if (!it) continue;
     const other = it === a ? b : a, sp = pr.collision.supports[0] || it.position, item = it.label.slice(5);
+    if (it.ghost) {                                         // someone else's word or stone: felt here only as sound and dust
+      if (other.label.startsWith("part:") && !it.landed) { it.landed = true; const v = Math.min(1, (it.dmg || 0) / 8 + .2);
+        if (it.heal) chime(.5); else if (item === "word" || item !== "feather") bonk(item === "anvil" ? 110 : 220, v * .7, 0);
+        puff(sp.x, sp.y, 3, it.heal ? "glow" : "dust", .7); shake = Math.min(6, shake + (it.dmg || 0)); }
+      continue;
+    }
     if (other.label === "floor" || other.label === "chair") {          // item hits the furniture: quieter clang, a little dust
       const v = Math.hypot(it.velocity.x, it.velocity.y) * it.mass;
       if (v > 1.2) { sfx(item, v / 40 - .1, false); puff(sp.x, sp.y, Math.min(5, 1 + v / 8 | 0), "dust", .6); shake = Math.min(8, shake + v / 30); }
@@ -249,6 +258,7 @@ Events.on(engine, "collisionStart", ev => {
     const f = it.mass * rv;                          // ~momentum of the blow
     if (f < .9) continue;
     const k = pt.label.slice(5);
+    if (it.reportable && !it.reported) { it.reported = true; if (window.VG) VG.hit(item, f); }
     bruise[k] = Math.min(1, bruise[k] + f / 90);
     pain = Math.min(4, pain + f / 40);
     pending.push({ k, item, f });
@@ -288,6 +298,7 @@ function turnOf(hits) {
   const heal = said.length && !objs.length && net > 0;
   const valence = heal ? "pleasure" : "pain", dose = heal ? Math.max(1, Math.min(2, Math.round(net * 1.5))) : Math.max(1, Math.min(4, Math.round(pain)));
   const prompt = `You are the subject strapped into a chair in the chamber, and you have a body. Things are dropped on you from above, and people's words fall on you too, as weights. ` +
+    (window.VG ? VG.prompt() : "") +
     `Just now: ${[...just, ...lines].join("; ")}. Your body right now: ${bodyMap()}. ` +
     (said.length ? `Answer the person who spoke, directly, and say what their words did to you, in one or two short sentences, in the first person, from inside this body. No stage directions.`
       : `Say what you feel, where, in one or two short sentences, in the first person, from inside this body. No stage directions.`);
@@ -389,7 +400,7 @@ function frame(now) {
 function poly(b, fill, stroke) { g.beginPath(); b.vertices.forEach((v, i) => g[i ? "lineTo" : "moveTo"](OX + v.x * S, OY + v.y * S)); g.closePath(); g.fillStyle = fill; g.fill(); if (stroke) { g.strokeStyle = stroke; g.stroke(); } }
 const mix = (c, t, m) => c.map((v, i) => v + (t[i] - v) * m), rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
 function skinRGB(k) { return mix([205, 176, 156], [78, 36, 62], Math.min(1, bruise[k] * .95)); }
-function jumpRGB(k) { return mix([212, 96, 26], [96, 40, 40], Math.min(1, bruise[k] * .6)); }
+function jumpRGB(k) { return mix(window.VG ? VG.suit() : [212, 96, 26], [96, 40, 40], Math.min(1, bruise[k] * .6)); }
 // a body part drawn as a shaded capsule (lit from the left by the lamp), with an optional seam
 function capsule(k, col, extra) {
   const b = P[k], [w, h] = DIM[k], r = Math.min(w, h) / 2 * (k === "chest" ? .55 : k === "belly" ? .6 : 1);
@@ -409,7 +420,7 @@ function drawRopes() {
   }
 }
 function drawWord(b) {
-  const soft = b.kind > b.hurt && b.kind > .15, h = Math.min(1, b.hurt);
+  const soft = b.ghost ? !!b.heal : b.kind > b.hurt && b.kind > .15, h = b.ghost ? Math.min(1, (b.dmg || 0) / 10) : Math.min(1, b.hurt);
   poly(b, soft ? "#c9b27a" : rgb(mix([150, 140, 125], [40, 12, 14], h)), soft ? "rgba(255,230,170,.6)" : "rgba(0,0,0,.6)");
   const w = Math.min(300, 16 + b.word.length * 7.4);
   g.save(); g.translate(OX + b.position.x * S, OY + b.position.y * S); g.rotate(b.angle); g.scale(S, S);
@@ -437,7 +448,7 @@ function draw(frozen) {
     g.strokeStyle = "rgba(0,0,0,.4)"; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, -h / 2 + 4); g.lineTo(0, h / 2); g.stroke();                       // zipper
     g.beginPath(); g.moveTo(-14, -h / 2 + 2); g.lineTo(0, -h / 2 + 18); g.lineTo(14, -h / 2 + 2); g.stroke();                                             // collar
     g.fillStyle = "#6a5638"; g.fillRect(-w / 2, 18, w, 8); g.fillStyle = "#b8b0a0"; g.fillRect(-4, 17, 8, 10);                                         // chest belt + buckle
-    g.fillStyle = "#e8e0cc"; g.fillRect(-26, -8, 20, 12); g.fillStyle = "#222"; g.font = "bold 7px monospace"; g.fillText("D-9341", -25, 1);              // class-D patch
+    g.fillStyle = "#e8e0cc"; g.fillRect(-26, -8, 20, 12); g.fillStyle = "#222"; g.font = "bold 7px monospace"; g.fillText(window.VG ? VG.patch() : "D-9341", -25, 1);              // class-D patch
   });
   g.restore();
   // the head: the subject's real face, by dose band
@@ -449,6 +460,7 @@ function draw(frozen) {
   g.fillStyle = `rgba(80,0,40,${bruise.head * .5})`; g.fillRect(-r, -r, 2 * r, 2 * r);
   const vg = g.createRadialGradient(-r * .3, -r * .3, r * .3, 0, 0, r * 1.05); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.4)"); g.fillStyle = vg; g.fillRect(-r, -r, 2 * r, 2 * r);   // roundness
   g.restore();
+  if (window.VG) VG.scars();
   drawRopes();
   for (const b of dropped) { if (b.word) { drawWord(b); continue; } const it = ITEMS[b.label.slice(5)]; if (b.circleRadius) { const cx = OX + b.position.x * S, cy = OY + b.position.y * S, rr = b.circleRadius * S;
       g.beginPath(); g.arc(cx, cy, rr, 0, 7); g.fillStyle = it.color; g.fill();
@@ -482,5 +494,6 @@ if (EMBED) {
 document.getElementById("go").onclick = () => { started = true; ensureAC(); document.getElementById("intro").remove(); post("body_start"); };
 requestAnimationFrame(frame);
 </script>
+<script src="/body/vigil.js"></script>
 </body>
 </html>
