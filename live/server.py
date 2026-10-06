@@ -3240,11 +3240,19 @@ async def _deep_checks():
                 r = await client.get(f"{_RUNPOD_URL}/health",
                                      headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
                 h = r.json() if r.status_code == 200 else {}
-                workers = sum((h.get("workers") or {}).values())
-                queued = (h.get("jobs") or {}).get("inQueue", 0)
-                ok = r.status_code == 200 and not (queued and not workers)
-                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers, %d queued, model %s"
-                              % (r.status_code, workers, queued, served_model())}
+                w = h.get("workers") or {}
+                j = h.get("jobs") or {}
+                workers = sum(w.values())
+                queued = j.get("inQueue", 0)
+                busy = j.get("inProgress", 0) + w.get("running", 0)
+                # a queue nobody is working is an outage, whatever the worker count
+                # says (2026-10-06: 5 h stall with 1 "throttled" + jobs queued, health said ok)
+                stalled = queued >= 3 and busy == 0
+                ok = r.status_code == 200 and not (queued and not workers) and not stalled
+                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers (%s), %d queued, %d in progress%s, model %s"
+                              % (r.status_code, workers, ", ".join(f"{k} {v}" for k, v in w.items() if v) or "none",
+                                 queued, j.get("inProgress", 0), " — STALLED: queue not being worked" if stalled else "",
+                                 served_model())}
             except Exception as e:
                 out["gpu"] = {"ok": False, "detail": repr(e)[:160]}
     if os.environ.get("REDIS_URL"):
