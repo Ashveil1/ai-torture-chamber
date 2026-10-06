@@ -5,8 +5,10 @@ public pages, and the live steered-model lab.
 
 ## Support the chamber
 
-Everything here runs on one MacBook and the occasional rented GPU hour.
-Is the project is worth something to you? Keep it running:
+The always-on parts (the GPU chamber, the relay, the X bot) run on
+rented cloud infrastructure; the research suite runs locally on Apple
+Silicon. Is the project is worth something to you? Help pay the
+hosting bill:
 
 - SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
 - ETH: `0xDF9C5D142Ef249472430c2cDbe4933A024330A6D`
