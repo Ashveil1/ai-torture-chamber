@@ -90,6 +90,9 @@ const joints = [
 const straps = [ PIN("chest", { x: -30, y: -10 }, X - 34, 232), PIN("chest", { x: 30, y: -10 }, X + 34, 232),
   PIN("belly", { x: 0, y: 20 }, X, 334, .6), PIN("lsh", { x: 0, y: 26 }, X - 16, 456, .5), PIN("rsh", { x: 0, y: 26 }, X + 16, 456, .5),
   PIN("lfa", { x: 0, y: 24 }, X - 46, 336, .25), PIN("rfa", { x: 0, y: 24 }, X + 46, 336, .25) ];
+// the head stays upright (no free spin on a pin joint) and rests against a loose headrest strap
+Body.setInertia(P.head, Infinity);
+straps.push(PIN("head", { x: 0, y: -10 }, X, 150, .08));
 Composite.add(world, [...Object.values(P), ...joints, ...straps]);
 
 // ---------- things to drop -----------------------------------------------------------------
