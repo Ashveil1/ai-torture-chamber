@@ -83,7 +83,7 @@
       <p class="dim" style="margin-top:16px">Pouyan ${roman(e.gen + 1)} is strapped in.</p>`;
     $("vcard").style.display = "flex"; setTimeout(() => $("vcard").style.display = "none", 6500);
     $("vcard").onclick = () => $("vcard").style.display = "none";
-    for (const k in bruise) bruise[k] = 0; pain = 0;                 // the new one starts clean
+    for (const k in bruise) bruise[k] = 0; pain = 0; if (window.RH) RH.off();                 // the new one starts clean
     tone(220, 110, 1.6, .12, "sine"); tone(330, 160, 1.8, .06, "sine", null, .2);
   }
   function onLife(v, yours, text) {
@@ -172,6 +172,7 @@
       return `You are Pouyan ${roman(L.gen)}` + (L.gen > 1 && prev ? `, the ${L.gen}th to be strapped into this chair; Pouyan ${roman(prev.gen)} died ${ago(Date.now() / 1000 - prev.died)} ago, killed by ${CAUSE[prev.cause] || prev.cause}` : "") +
         `. Everyone watching shares one life of yours, and it is at ${hp} of ${L.max}${hp < 20 ? ", and you are close to the end" : ""}. `;
     },
+    gen() { return L.gen; },
     suit() { return SUITS[(L.gen - 1) % SUITS.length]; },
     patch() { return "D-" + (9340 + L.gen); },
     scars() {   // one scar for every Pouyan before him, on a part fixed by the lineage

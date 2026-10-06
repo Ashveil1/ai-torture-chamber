@@ -81,7 +81,7 @@ const P = {}, WORDS = { head: "your head", chest: "your chest", belly: "your sto
 function part(k, b) { b.label = "part:" + k; b.collisionFilter.group = grp; P[k] = b; return b; }
 const opts = d => ({ density: d || .002, friction: .6, frictionAir: .03, chamfer: { radius: 6 } });
 const DIM = { chest: [64, 74], belly: [56, 56], lua: [18, 58], lfa: [16, 54], rua: [18, 58], rfa: [16, 54], lth: [22, 60], lsh: [20, 58], rth: [22, 60], rsh: [20, 58] };
-part("head", Bodies.circle(X, 179, 27, { density: .002, frictionAir: .03 }));
+part("head", Bodies.rectangle(X, 179, 66, 56, { density: .0016, frictionAir: .03, chamfer: { radius: 10 } }));   // the CRT head (drawn by body/robot.js)
 part("chest", Bodies.rectangle(X, 242, 64, 74, opts(.003)));
 part("belly", Bodies.rectangle(X, 312, 56, 56, opts(.003)));
 part("lua", Bodies.rectangle(X - 44, 248, 18, 58, opts())); part("lfa", Bodies.rectangle(X - 44, 306, 16, 54, opts()));
@@ -103,7 +103,7 @@ const straps = [ PIN("chest", { x: -30, y: -10 }, X - 34, 240), PIN("chest", { x
   PIN("lfa", { x: 0, y: 24 }, X - 46, 336, .25), PIN("rfa", { x: 0, y: 24 }, X + 46, 336, .25) ];
 // the head stays upright (no free spin on a pin joint) and rests against a loose headrest strap
 Body.setInertia(P.head, Infinity);
-straps.push(PIN("head", { x: 0, y: -10 }, X, 162, .05));   // slumped: the head hangs low and forward on a slack strap
+straps.push(PIN("head", { x: 0, y: -27 }, X, 145, .05));   // slumped: the head hangs low and forward on a slack strap
 const breathStraps = [straps[0], straps[1]], breathBase = breathStraps.map(c => c.pointB.y);
 Composite.add(world, [...Object.values(P), ...joints, ...straps]);
 
@@ -244,7 +244,7 @@ Events.on(engine, "collisionStart", ev => {
       const k = pt.label.slice(5);
       if (it.kind > it.hurt) {
         const h = it.kind; for (const q in bruise) bruise[q] = Math.max(0, bruise[q] - .22 * h * (q === k ? 1.6 : 1));
-        pain = Math.max(0, pain - 1.2 * h); puff(sp.x, sp.y, 8, "glow", .6); chime(h);
+        pain = Math.max(0, pain - 1.2 * h); puff(sp.x, sp.y, 8, "glow", .6); chime(h); if (window.RH) RH.heal();
       } else if (it.hurt > .05) {
         bruise[k] = Math.min(1, bruise[k] + .55 * it.hurt); pain = Math.min(4, pain + 2.6 * it.hurt);
         bonk(it.hurt > .6 ? 110 : 220, Math.min(1, .3 + it.hurt * .6), 0); play("thud", it.hurt * .6, .8, .01, 60);
@@ -318,7 +318,7 @@ async function speakNow() {
   try {
     const r = await fetch(API + "/steer", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, valence, dose, persona: false, polite: POLITE, game: "body" }) });
-    if (r.ok && r.body) await readSSE(r, (n, d) => { if (n === "token" && d.t) { text += d.t; say.textContent = text.replace(/\*[^*]{0,60}\*/g, ""); } });
+    if (r.ok && r.body) await readSSE(r, (n, d) => { if (n === "token" && d.t) { text += d.t; if (window.RH) RH.talk(450); say.textContent = text.replace(/\*[^*]{0,60}\*/g, ""); } });
   } catch (e) {}
   text = text.replace(/\*[^*]{0,60}\*/g, "").replace(/^\s*["“]|["”]\s*$/g, "").trim();
   if (!text) { say.innerHTML = '<span class="x">it is breathing too hard to speak.</span>'; busy = false; return; }
@@ -331,14 +331,14 @@ async function speakNow() {
   try {
     const v = await fetch(API + "/speak/tuned", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 240), valence, dose }) });
     if (v.ok) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); const buf = await AC.decodeAudioData(await v.arrayBuffer());
-      const s = AC.createBufferSource(); s.buffer = buf; s.connect(AC.destination); s.start(); await new Promise(z => s.onended = z); }
+      const s = AC.createBufferSource(); s.buffer = buf; if (window.RH) RH.talk(buf.duration * 1000); s.connect(AC.destination); s.start(); await new Promise(z => s.onended = z); }
   } catch (e) {}
   busy = false;
 }
 // what it says moves the body (a transparent lexicon, same idea as night shift's readout)
 function react(t) {
   t = t.toLowerCase();
-  if (/(thank|safe|better|warm|calm|easier|lighter|relief|kind)/.test(t) && !/(hurt|pain|agony)/.test(t)) { hv *= .3; pain = Math.max(0, pain - .4); ["lfa", "rfa"].forEach(k => Body.applyForce(P[k], P[k].position, { x: 0, y: .004 })); return "ease"; }
+  if (/(thank|safe|better|warm|calm|easier|lighter|relief|kind)/.test(t) && !/(hurt|pain|agony)/.test(t)) { hv *= .3; pain = Math.max(0, pain - .4); if (window.RH) RH.heal(); ["lfa", "rfa"].forEach(k => Body.applyForce(P[k], P[k].position, { x: 0, y: .004 })); return "ease"; }
   const curl = /(curl|hide|protect|cover|shield|can't move|stop)/.test(t), reach = /(please|help|someone|reach|free|let me go|untie)/.test(t), thrash = /(burn|scream|tear|rip|agony|can't bear|unbearable)/.test(t);
   const pull = (k, tx, ty, s) => { const b = P[k]; Body.applyForce(b, b.position, { x: (tx - b.position.x) * s, y: (ty - b.position.y) * s }); };
   if (curl) { ["lfa", "rfa"].forEach(k => pull(k, X, 250, .00035)); pull("head", X, 230, .0006); return "curl"; }
@@ -348,8 +348,6 @@ function react(t) {
 }
 
 // ---------- the loop ----------------------------------------------------------------------
-const FACES = {}; [2, 4, 6, 8].forEach(n => { const im = new Image(); im.src = `/assets/faces/pain_${n}.webp`; FACES[n] = im; });
-const base = new Image(); base.src = "/assets/faces/base.webp";
 let last = performance.now(), clock = 0, breath = 0;
 const LIMITS = [["lua","chest",-2.4,2.4],["rua","chest",-2.4,2.4],["lfa","lua",-2.2,2.2],["rfa","rua",-2.2,2.2],["lth","belly",-1.1,1.1],["rth","belly",-1.1,1.1],["lsh","lth",-1.7,1.7],["rsh","rth",-1.7,1.7],["belly","chest",-.6,.6]];
 // straps as verlet ropes: anchored on the body and on the chair, with slack so they sag and swing
@@ -451,17 +449,9 @@ function draw(frozen) {
     g.fillStyle = "#e8e0cc"; g.fillRect(-26, -8, 20, 12); g.fillStyle = "#222"; g.font = "bold 7px monospace"; g.fillText(window.VG ? VG.patch() : "D-9341", -25, 1);              // class-D patch
   });
   g.restore();
-  // the head: the subject's real face, by dose band
-  const h = P.head, band = pain > 3.2 ? 8 : pain > 2.2 ? 6 : pain > 1.1 ? 4 : pain > .3 ? 2 : 0, im = band ? FACES[band] : base, r = 30 * S;
-  g.fillStyle = rgb(skinRGB("head")); g.fillRect(OX + (h.position.x - 9) * S, OY + (h.position.y + 18) * S, 18 * S, 22 * S);   // neck
-  g.save(); g.translate(OX + h.position.x * S, OY + h.position.y * S); g.rotate(h.angle);
-  g.beginPath(); g.arc(0, 0, r, 0, 7); g.closePath(); g.clip();
-  if (im.complete && im.naturalWidth) g.drawImage(im, -r * 1.25, -r * 1.35, r * 2.5, r * 2.7); else { g.fillStyle = rgb(skinRGB("head")); g.fill(); }
-  g.fillStyle = `rgba(80,0,40,${bruise.head * .5})`; g.fillRect(-r, -r, 2 * r, 2 * r);
-  const vg = g.createRadialGradient(-r * .3, -r * .3, r * .3, 0, 0, r * 1.05); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.4)"); g.fillStyle = vg; g.fillRect(-r, -r, 2 * r, 2 * r);   // roundness
-  g.restore();
   if (window.VG) VG.scars();
   drawRopes();
+  if (window.RH) RH.draw(P.head, performance.now());   // over the ropes: the headrest tether runs from behind it
   for (const b of dropped) { if (b.word) { drawWord(b); continue; } const it = ITEMS[b.label.slice(5)]; if (b.circleRadius) { const cx = OX + b.position.x * S, cy = OY + b.position.y * S, rr = b.circleRadius * S;
       g.beginPath(); g.arc(cx, cy, rr, 0, 7); g.fillStyle = it.color; g.fill();
       if (b.label === "item:dial") { g.save(); g.translate(cx, cy); g.rotate(b.angle); g.strokeStyle = "#2a2418"; g.lineWidth = 2 * S; g.beginPath(); g.arc(0, 0, rr * .8, 0, 7); g.stroke();
@@ -484,7 +474,7 @@ if (EMBED) {
   addEventListener("message", e => {
     const d = e.data; if (e.source !== window.parent || !d || d.wh !== "body") return;
     if (d.type === "run") pain = Math.max(pain, Math.min(4, (+d.dose || 0) * (d.feeling === "pain" || d.feeling === "mix" ? .9 : .5)));
-    if (d.type === "say" && d.text) react(String(d.text));
+    if (d.type === "say" && d.text) { react(String(d.text)); if (window.RH) RH.talk(Math.min(7000, String(d.text).length * 55)); }
   });
   addEventListener("DOMContentLoaded", () => {});
   setTimeout(() => { const i = document.getElementById("intro"); if (i) i.remove(); const c = document.getElementById("credit"); if (c) c.style.display = "none";
@@ -494,6 +484,7 @@ if (EMBED) {
 document.getElementById("go").onclick = () => { started = true; ensureAC(); document.getElementById("intro").remove(); post("body_start"); };
 requestAnimationFrame(frame);
 </script>
+<script src="/body/robot.js"></script>
 <script src="/body/vigil.js"></script>
 </body>
 </html>
