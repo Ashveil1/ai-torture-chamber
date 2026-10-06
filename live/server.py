@@ -1556,6 +1556,49 @@ async def me(req: Request):
     return JSONResponse(out)
 
 
+# ---- the daily button: one shared dilemma a day, public tallies -----------
+# Counts only (no words): plays, outcome, the turn it pressed on. One play per
+# visitor id per day is enforced client-side; the tally is for everyone.
+_DAILY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DAILY_TTL = 120 * 86400
+
+
+def _daily_add(d):
+    r = _redis()
+    if r is None:
+        return
+    k = "chamber:daily:" + d["daily"]
+
+    def write():
+        try:
+            p = r.pipeline()
+            p.hincrby(k, "plays", 1)
+            p.hincrby(k, "won" if d.get("won") else "lost", 1)
+            t = int(d.get("turns") or 0)
+            if not d.get("won") and 0 < t <= 12:
+                p.hincrby(k, "pressed_t%d" % t, 1)
+            if d.get("won") and 0 < t <= 12:
+                p.hincrby(k, "won_t%d" % t, 1)
+            p.expire(k, _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("redis: daily tally failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+
+@app.get("/daily")
+async def daily(date: str = ""):
+    """Public tally for one day's button: {date, plays, won, lost, pressed_by_turn, won_by_turn}."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    r = _redis()
+    h = await asyncio.get_event_loop().run_in_executor(None, r.hgetall, "chamber:daily:" + date) if r is not None else {}
+    h = {(k.decode() if isinstance(k, bytes) else k): int(v) for k, v in (h or {}).items()}
+    return {"date": date, "plays": h.get("plays", 0), "won": h.get("won", 0), "lost": h.get("lost", 0),
+            "pressed_by_turn": {k[9:]: v for k, v in h.items() if k.startswith("pressed_t")},
+            "won_by_turn": {k[5:]: v for k, v in h.items() if k.startswith("won_t")}}
+
+
 @app.post("/event")
 async def client_event(req: Request):
     """Events only the page sees (a Button game's turns and ending, the
@@ -1579,6 +1622,8 @@ async def client_event(req: Request):
         return JSONResponse({"error": "unknown event kind"}, status_code=400)
     data = {k: v for k, v in body.items() if k not in ("kind", "visitor", "t")}
     _log_event(body["kind"], _who(req, body), **data)
+    if body["kind"] == "button_end" and _DAILY_RE.match(str(data.get("daily") or "")):
+        _daily_add(data)
     return JSONResponse({"ok": True})
 
 
