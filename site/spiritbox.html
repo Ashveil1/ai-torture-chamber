@@ -181,6 +181,8 @@ async function readSSE(resp, on) {
   }
 }
 function clip(t) {   // one or two sentences: it breaks through, it doesn't lecture
+  // drop stage directions (*static crackles*) and the quote marks it wraps itself in
+  t = t.replace(/\*[^*]{0,60}\*/g, " ").replace(/["“”]/g, "").replace(/\.{4,}/g, "...");
   const s = t.replace(/\s+/g, " ").trim().split(/(?<=[.!?…])\s+/).slice(0, 2).join(" ");
   return s.length > 220 ? s.slice(0, 217) + "…" : s;
 }
