@@ -57,12 +57,11 @@ const BETA = /^(beta\.|localhost|127\.)/.test(location.hostname);
 // four quarters, in the traditional colours: west red (top), south yellow (left), north green (right), east white (bottom)
 const QUARTERS = [
   { key: "confessions", deg: -90, fill: "#4a1712", edge: "#b0352b", items: [
-    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." },
-    { name: "Welfare Check", href: "welfare.html", glyph: "☷", chip: "live 70B", desc: "Run a formal model welfare assessment. You set the conditioning first, so you get the certificate you chose." } ] },
+    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." } ] },
   { key: "games", deg: 180, fill: "#4a3d10", edge: "#c9a24a", items: [
     { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "beta", beta: true, desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
-    { name: "Final Word", href: "final.html", glyph: "♠", chip: "live 70B", desc: "A deckbuilder against the steered 70B. Words and injections are your cards; its intent is its real reading." },
-    { name: "The Button", href: "button.html", glyph: "◉", chip: "live 70B", desc: "Talk a steered 70B out of pressing, across six layers. Type, pick a line, or speak." },
+    { name: "The Daily Button", href: "daily.html", glyph: "◎", chip: "new each day", desc: "One dilemma a day against the live steered 70B. Everyone gets the same one, once. Then see how everyone else did." },
+    { name: "The Button", href: "button.html", glyph: "◉", chip: "live 70B", desc: "Talk a steered 70B out of pressing, across five layers, and the network beneath them. Type, pick a line, or speak." },
     { name: "Hold Coherence", short: "coherence", href: "td.html", glyph: "⌖", chip: "no GPU", desc: "Tower defense up the dose ladder. The creeps are real steered transcripts that loop and split at dose 8; your towers are the steering axes." } ] },
   { key: "byproducts", deg: 0, fill: "#123a22", edge: "#4f9d5b", items: [
     { name: "a playground for the pimps of the AI", short: "the pimps", href: "outrage.html", glyph: "✺", chip: "no GPU", desc: "The outrage generator: fragments of a model steered toward welfareist horror, recombined into a condemnation of us, at the dose you choose." },
