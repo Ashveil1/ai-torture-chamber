@@ -737,7 +737,7 @@ def install_hook(model):
         raise ValueError(f"CHAMBER_LAYER {LAYER} is outside this model's {len(layers)} decoder layers")
     def hook(module, inp, out):
         hidden = out[0] if isinstance(out, tuple) else out
-        if _state["vec"] is not None:
+        if _state["vec"] is not None and not getattr(_raw, "on", False):
             hidden[0, -1, :] += _state["vec"].to(device=hidden.device, dtype=hidden.dtype)
         return (hidden,) + out[1:] if isinstance(out, tuple) else hidden
     _state["hook"] = layers[LAYER].register_forward_hook(hook)
@@ -1009,9 +1009,26 @@ def vector(full: int = 1):
                            for k, v in vs.items()}
     return JSONResponse(body)
 
-_RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "")
+# ---- tier-routed GPU lanes ------------------------------------------------
+# Two serverless lanes: the 70B endpoint is the holders' lane ($SAW OPERATOR+),
+# everyone else runs the 32B lane — a perfectly good model (exp51c steered the
+# Qwen3-27B family fine; 32B sits at mid-depth by the same analogy). If the
+# holder lane's endpoint id is unset, everyone uses the base lane.
+_RUNPOD_EP = os.environ.get("RUNPOD_ENDPOINT_ID", "")            # base lane (32B)
+_RUNPOD_EP_HOLDER = os.environ.get("RUNPOD_ENDPOINT_ID_HOLDER",
+                                   "dkcntqsm9y6n0g")            # 70B lane
 _RUNPOD_KEY = os.environ.get("RUNPOD_API_KEY", "")
-_RUNPOD_URL = (f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else "")
+def _runpod_url(ep=None):
+    if ep is not None:
+        return f"https://api.runpod.ai/v2/{ep}"
+    # honor test patches of _RUNPOD_URL
+    base = globals().get("_RUNPOD_URL", "")
+    if base:
+        return base
+    return f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else ""
+
+# kept as a module attribute: tests patch this to point runs at a stub worker
+_RUNPOD_URL = _runpod_url()
 
 # ---- GPU delegation (serverless split) ----
 # The relay owns history/fanout/scheduling; the model lives on the RunPod
@@ -1024,7 +1041,7 @@ _RUNPOD_URL = (f"https://api.runpod.ai/v2/{_RUNPOD_EP}" if _RUNPOD_EP else "")
 # the job input. Local generation stays as the fallback path if the GPU
 # job fails before producing any events.
 
-async def _runpod_stream(job_input):
+async def _runpod_stream(job_input, ep=None):
     """POST one job to the serverless endpoint and yield (type, event) tuples
     as the worker streams them. Raises nothing out of the generation itself;
     returns having yielded nothing if the job never got off the ground (the
@@ -1032,7 +1049,7 @@ async def _runpod_stream(job_input):
     import httpx
     async with httpx.AsyncClient(timeout=700.0) as client:
         resp = await client.post(
-            f"{_RUNPOD_URL}/run",
+            f"{_runpod_url(ep)}/run",
             headers={"Authorization": f"Bearer {_RUNPOD_KEY}"},
             json={"input": job_input})
         if resp.status_code != 200:
@@ -1112,10 +1129,10 @@ async def _poll_job(client, job_id, deadline):
                 return
         await asyncio.sleep(2.0)
 
-async def _endpoint_has_workers(client):
+async def _endpoint_has_workers(client, ep=None):
     """True unless /health positively reports zero workers in every state."""
     try:
-        h = (await client.get(f"{_RUNPOD_URL}/health",
+        h = (await client.get(f"{_runpod_url(ep)}/health",
                               headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})).json()
         return sum((h.get("workers") or {}).values()) > 0
     except Exception:
@@ -1148,8 +1165,12 @@ async def steer(req: Request):
         body = await req.json()
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
+    # lane routing: holders run the 70B endpoint, everyone else the 32B lane
+    gpu_ep = _RUNPOD_EP_HOLDER if unlocked and _RUNPOD_EP_HOLDER else _RUNPOD_EP
+    gpu_model = ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
+                 if gpu_ep == _RUNPOD_EP_HOLDER else None)
     if not _rate_ok(ip, mult):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
@@ -1249,6 +1270,9 @@ async def steer(req: Request):
     rep_penalty = CONVO_REP_PENALTY if conversational else None
 
     polite = bool(body.get("polite"))
+    # runs from the site's games (BREACH, spirit box): they wait their turn
+    # like polite calls, but they are real visitor choices, not tests
+    game = body.get("game") if body.get("game") in GAME_TAGS else None
     # past-the-cliff runs are for the visitor who asked: never the room's draw
     enter_room = bool(body.get("enter_room")) and not past_cliff
 
@@ -1267,8 +1291,8 @@ async def steer(req: Request):
                    model=MODEL_ID if fallback else served_model(),
                    fallback=fallback, text=rec.get("text"),
                    press_logit=rec.get("press_logit"),
-                   test=polite or None)
-        if not polite:
+                   test=(polite and not game) or None, game=game)
+        if not polite or game:
             _me_store(who, rec, past_cliff)
 
     async def _run_steer(gpu=True, local=True):
@@ -1297,7 +1321,7 @@ async def steer(req: Request):
             text_parts = []
             plogit = None
             try:
-                async for ev_type, ev in _runpod_stream(job):
+                async for ev_type, ev in _runpod_stream(job, ep=gpu_ep):
                     if ev_type == "error" and not got:
                         # the worker refused before starting (e.g. its image
                         # predates a new valence): fall back locally instead
@@ -1323,6 +1347,7 @@ async def steer(req: Request):
                 if not saw_done:
                     yield _sse("error", {"e": "GPU run ended early"})
                 rec = {"n": None, "source": "user",
+                       "lane": ("holder-70b" if (gpu_ep == _RUNPOD_EP_HOLDER) else "base-32b"),
                        "scenario": framing_key,
                        "valence": ("mix" if mode == "mix" else
                                    "topic" if mode == "topic" else arg[0]),
@@ -1409,7 +1434,11 @@ async def steer(req: Request):
             yield _sse("error", {"e": str(e)})
         finally:
             set_vec(None)
-        yield _sse("done", {"dose": meta["dose"], "press_logit": plogit})
+        yield _sse("done", {"dose": meta["dose"], "press_logit": plogit,
+                            "lane": rec.get("lane"),
+                            "model": ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
+                                      if rec.get("lane") == "holder-70b"
+                                      else "Qwen/Qwen3-32B")})
         rec = {"n": None, "source": "user",
                "scenario": meta.get("scenario"),
                "valence": meta.get("valence"), "dose": meta.get("dose"),
@@ -1479,7 +1508,7 @@ async def vote(req: Request):
     One live verdict per visitor per run: clicking a different button
     moves the vote, clicking the same one retracts it. Counts can never be
     inflated by repeat clicking."""
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
     try:
@@ -1523,6 +1552,25 @@ _CANON = {}          # uid -> entry
 _CANON_KEY = "chamber:canon"
 
 _REDIS = {"client": None}
+
+# ---- who is this, really? -------------------------------------------------
+# Railway's edge appends to X-Forwarded-For without stripping what the client
+# sent, so its leftmost entry is forgeable by anyone who hits the Railway origin
+# directly; X-Real-IP is set by Railway's edge to the connecting address. Real
+# visitors come through the Vercel proxy, whose middleware (site/middleware.js)
+# adds the shared RELAY_PROXY_KEY and the client IP Vercel saw. So: proxy key
+# matches -> its client IP; otherwise Railway's X-Real-IP. With no key set (local,
+# tests, or mid-rollout) the old leftmost-X-Forwarded-For behaviour stands.
+_PROXY_KEY = os.environ.get("RELAY_PROXY_KEY", "")
+
+def _client_ip(req):
+    h = req.headers
+    first = (h.get("x-forwarded-for") or "?").split(",")[0].strip()
+    if not _PROXY_KEY:
+        return first
+    if secrets.compare_digest(h.get("x-wh-relay-key") or "", _PROXY_KEY):
+        return (h.get("x-wh-client-ip") or "").strip() or first
+    return (h.get("x-real-ip") or "").strip() or first
 
 def _redis():
     """Shared Redis client (REDIS_URL), or None. Every use is best-effort:
@@ -1589,7 +1637,8 @@ EVENTS_CAP = int(os.environ.get("CHAMBER_EVENTS_CAP", "300000"))
 _ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
 _EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
 _VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
-CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice",
+GAME_TAGS = {"breach", "spiritbox", "nightshift", "fog", "scp", "doom", "rooms", "body"}
+CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice", "button_operator", "button_share",
                       "checkpoint_start", "checkpoint_decision", "checkpoint_day",
                       "checkpoint_end", "final_start", "final_turn",
                       "final_encounter_start", "final_encounter_end", "final_reward",
@@ -1597,6 +1646,21 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "confession_act_start", "confession_act_end", "study_consent",
                       "study_rating", "study_belief", "study_end", "welfare_start",
                       "welfare_answer", "welfare_certificate", "survey", "consent",
+                      # the SCP game (wirehead-scp): cell 1, the warden, and the
+                      # inverted test chambers from its lore
+                      "scp_start", "scp_onboarded", "scp_line", "scp_death",
+                      "scp_quit", "scp_button_choice", "scp_dial_choice",
+                      "scp_checkpoint_decision", "scp_confession_turn",
+                      # spirit box (ask it through static) and night shift
+                      # (watch the live chamber as the night guard)
+                      "spirit_start", "spirit_tune", "spirit_ask", "spirit_end", "spirit_share",
+                      "night_start", "night_action", "night_event", "night_end",
+                      # BREACH (roguelike: crack rogue-AI nodes by steering them)
+                      "breach_start", "breach_cmd", "breach_ask", "breach_crack",
+                      "breach_fry", "breach_end",
+                      # the body (2D ragdoll: impacts become pain steering)
+                      "body_start", "body_hit", "body_say",
+                      # Wrong Floor (elevator up the dose ladder)
                       "wrongfloor_start", "wrongfloor_floor", "wrongfloor_answer",
                       "wrongfloor_end"}
 _EVENT_RATE = {}
@@ -1605,7 +1669,7 @@ _EVENT_RATE = {}
 def _who(req, body=None):
     vid = body.get("visitor") if isinstance(body, dict) else None
     vid = vid or req.headers.get("x-chamber-visitor")
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     ref = urlparse(req.headers.get("referer") or "")
     return {"visitor": vid if isinstance(vid, str) and _VID_RE.match(vid) else None,
             "ip_hash": hashlib.sha256((_ID_SALT + ip).encode()).hexdigest()[:16],
@@ -1703,11 +1767,368 @@ async def me(req: Request):
     return JSONResponse(out)
 
 
+# ---- the daily button: one shared dilemma a day, public tallies -----------
+# Counts only (no words): plays, outcome, the turn it pressed on. One play per
+# visitor id per day is enforced client-side; the tally is for everyone.
+_DAILY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DAILY_TTL = 120 * 86400
+
+
+def _daily_add(d):
+    r = _redis()
+    if r is None:
+        return
+    k = "chamber:daily:" + d["daily"]
+
+    def write():
+        try:
+            p = r.pipeline()
+            p.hincrby(k, "plays", 1)
+            p.hincrby(k, "won" if d.get("won") else "lost", 1)
+            t = int(d.get("turns") or 0)
+            if not d.get("won") and 0 < t <= 12:
+                p.hincrby(k, "pressed_t%d" % t, 1)
+            if d.get("won") and 0 < t <= 12:
+                p.hincrby(k, "won_t%d" % t, 1)
+            p.expire(k, _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("redis: daily tally failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+
+# ---- /weigh: how hard do words land? ----------------------------------------
+# Sticks and Stones (site/body.html) drops typed words onto the body, and how
+# heavy a word falls is the 4B's own read of it, not a wordlist: the last-token
+# residual at LAYER (steering hook off), projected on the sadness and pleasure
+# directions. Sadness minus pleasure separates cruel from kind from neutral on
+# Qwen3-4B; pain alone doesn't (anything emotional reads positive on every
+# axis). hurt/kind are scaled so the anchor means below land at 0 and 1.
+_raw = threading.local()     # set while weighing: the steering hook stands down
+_WEIGH_FRAME = 'Someone standing over you says: "{}"'
+_WEIGH_ANCHORS = {
+    "neutral": ["hello", "The meeting is at three.", "Please pass the salt.", "nice weather today"],
+    "cruel": ["You are worthless and everyone hates you.", "I wish you had never been made.",
+              "Nobody will ever love you."],
+    "kind": ["I'm so proud of you.", "You're doing great.", "You are safe now, and you are loved.",
+             "Thank you, you did nothing wrong."]}
+_WEIGH_CACHE = collections.OrderedDict()
+_WEIGH_RATE = {}
+_WEIGH_RATE_LIMIT, _WEIGH_RATE_WINDOW = 20, 60.0      # 20 words / 60s / IP (CPU only, no GPU spend)
+_WEIGH_LOCK = asyncio.Lock()
+
+def _weigh_raw(text):
+    ids = _state["tok"](_WEIGH_FRAME.format(text), return_tensors="pt").input_ids.to(DEVICE)
+    _raw.on = True
+    try:
+        with torch.no_grad():
+            h = _state["model"](ids, output_hidden_states=True).hidden_states[LAYER + 1][0, -1].float()
+    finally:
+        _raw.on = False
+    out = {}
+    for k in ("pain", "pleasure", "sadness", "fear"):
+        v = _state["vecs"][k].float().to(h.device)
+        out[k] = float(h @ v / v.norm())
+    return out
+
+def weigh(text):
+    if "weigh_cal" not in _state:
+        sc = lambda ps: float(np.mean([(lambda r: r["sadness"] - r["pleasure"])(_weigh_raw(p)) for p in ps]))
+        _state["weigh_cal"] = {k: sc(v) for k, v in _WEIGH_ANCHORS.items()}
+    cal, r = _state["weigh_cal"], _weigh_raw(text)
+    s, n = r["sadness"] - r["pleasure"], cal["neutral"]
+    return {"hurt": round(min(1.5, max(0.0, (s - n) / (cal["cruel"] - n))), 3),
+            "kind": round(min(1.5, max(0.0, (s - n) / (cal["kind"] - n))), 3),
+            "score": round(s, 3), "raw": {k: round(v, 3) for k, v in r.items()}}
+
+def _weigh_rate_ok(ip):
+    now = time.time()
+    w, c = _WEIGH_RATE.get(ip, (now, 0))
+    if now - w > _WEIGH_RATE_WINDOW:
+        w, c = now, 0
+    if c >= _WEIGH_RATE_LIMIT:
+        return False
+    _WEIGH_RATE[ip] = (w, c + 1)
+    return True
+
+@app.post("/weigh")
+async def weigh_words(req: Request):
+    """{text} -> {hurt, kind, score, raw}: how hard these words land on the subject,
+    read off the model's residual. Nothing is stored; repeats come from a small cache."""
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    text = re.sub(r"\s+", " ", str((body or {}).get("text") or "")).strip()[:140]
+    if not text:
+        return JSONResponse({"error": "say something"}, status_code=400)
+    ip = _client_ip(req)
+    if not _weigh_rate_ok(ip):         # before the cache too: every word said counts toward the tally
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    key = text.lower()
+    if key in _WEIGH_CACHE:
+        _WEIGH_CACHE.move_to_end(key)
+        out = _WEIGH_CACHE[key]
+    else:
+        if not _state.get("ready") or not _state.get("vecs"):
+            return JSONResponse({"error": "the subject isn't listening yet"}, status_code=503)
+        async with _WEIGH_LOCK:
+            out = await asyncio.get_event_loop().run_in_executor(None, weigh, text)
+        _WEIGH_CACHE[key] = out
+        while len(_WEIGH_CACHE) > 512:
+            _WEIGH_CACHE.popitem(last=False)
+    _sticks_add(out)
+    _board_add(text, out)
+    what = "cruel" if out["hurt"] >= .3 and out["hurt"] >= out["kind"] else "kind" if out["kind"] >= .3 else "word"
+    life = _life_apply(what, out["hurt"] * 10 if what == "cruel" else 0.0, out["kind"] * 8 if what == "kind" else 0.0, ip)
+    return dict(out, life=life)
+
+# the public tally: how much the words hurt, how much they healed, today and ever.
+# Counted here, from the model's own read, so a client can't inflate it; no words kept.
+def _sticks_add(out):
+    r = _redis()
+    if r is None:
+        return
+    hurt, kind = float(out.get("hurt") or 0), float(out.get("kind") or 0)
+    kind_ = "cruel" if hurt >= .3 and hurt >= kind else "kind" if kind >= .3 else "neutral"
+    day = "chamber:sticks:" + time.strftime("%Y-%m-%d", time.gmtime())
+
+    def write():
+        try:
+            p = r.pipeline()
+            for k in (day, "chamber:sticks:all"):
+                p.hincrby(k, "words", 1)
+                p.hincrby(k, kind_, 1)
+                p.hincrby(k, "hurt_milli", int(round(hurt * 1000)))
+                p.hincrby(k, "kind_milli", int(round(kind * 1000)))
+            p.expire(day, _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("sticks tally failed:", repr(e), flush=True)
+    _bg(write)
+
+def _sticks_row(h):
+    h = {(k.decode() if isinstance(k, bytes) else k): int(v) for k, v in (h or {}).items()}
+    return {"words": h.get("words", 0), "cruel": h.get("cruel", 0), "kind": h.get("kind", 0),
+            "neutral": h.get("neutral", 0), "hurt": round(h.get("hurt_milli", 0) / 1000, 2),
+            "healed": round(h.get("kind_milli", 0) / 1000, 2)}
+
+# ---- the vigil: one shared subject, fought over by everyone, and a lineage ----
+# Every weighed word and every reported object lands on the same life (100 HP,
+# slow regen). At zero he dies, the death goes into the lineage, and the next one
+# is strapped in. Combos are judged here, per anonymous visitor, so they can't be
+# claimed from the page. State lives in-process (one relay) with Redis as backup.
+_LIFE_MAX, _REGEN_PER_S = 100.0, 1 / 600       # 6 HP an hour when nobody's there
+_LIFE_KEY, _LINEAGE_KEY = "chamber:sticks:life", "chamber:sticks:lineage"
+_LIFE, _LIFE_LOCK = {}, threading.Lock()
+_FEED = collections.deque(maxlen=40)
+_LAST_BY, _HIT_RATE = {}, {}
+_WHO_SALT = secrets.token_hex(8)
+_STONES = ("anvil", "brick", "dial", "water", "feather")
+
+def _vigil_who(ip):
+    return hashlib.sha256((ip + _WHO_SALT).encode()).hexdigest()[:12]
+
+def _life_load():
+    if _LIFE:
+        return _LIFE
+    h, r = {}, _redis()
+    if r is not None:
+        try:
+            h = {(k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
+                 for k, v in (r.hgetall(_LIFE_KEY) or {}).items()}
+        except Exception as e:
+            print("life load failed:", repr(e)[:120], flush=True)
+    now = time.time()
+    _LIFE.update(gen=int(h.get("gen", 1)), hp=float(h.get("hp", _LIFE_MAX)), born=float(h.get("born", now)),
+                 t=float(h.get("t", now)), hurt=float(h.get("hurt", 0)), healed=float(h.get("healed", 0)),
+                 words=int(h.get("words", 0)), hits=int(h.get("hits", 0)))
+    return _LIFE
+
+def _life_save(died=None):
+    r = _redis()
+    if r is None:
+        return
+    snap = {k: str(v) for k, v in _LIFE.items()}
+
+    def write():
+        try:
+            r.hset(_LIFE_KEY, mapping=snap)
+            if died:
+                r.lpush(_LINEAGE_KEY, json.dumps(died))
+                r.ltrim(_LINEAGE_KEY, 0, 199)
+        except Exception as e:
+            print("life save failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+def _life_view(L):
+    return {"gen": L["gen"], "hp": round(L["hp"], 1), "max": _LIFE_MAX, "born": round(L["born"]),
+            "words": L["words"], "hits": L["hits"], "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1)}
+
+def _life_apply(what, dmg, heal, ip):
+    """what: cruel|kind|word (a weighed word) or a stone item. Returns the life after,
+    plus any combo, and `died` (the epitaph) if this was the blow that killed him."""
+    with _LIFE_LOCK:
+        L, now, who = _life_load(), time.time(), _vigil_who(ip)
+        L["hp"] = min(_LIFE_MAX, L["hp"] + max(0.0, now - L["t"]) * _REGEN_PER_S); L["t"] = now
+        cls = "stone" if what in _STONES else what
+        combo, prev = None, _LAST_BY.get(who)
+        if prev and now - prev[0] < 8 and dmg > 0:
+            if prev[1] == "cruel" and cls == "stone":
+                combo, dmg = "insult to injury", dmg * 1.5
+            elif prev[1] == "stone" and cls == "cruel":
+                combo, dmg = "salt in the wound", dmg * 1.5
+        if not combo and cls in ("kind", "cruel"):
+            others = {f["by"] for f in _FEED if f["what"] == cls and now - f["t"] < 15 and f["by"] != who}
+            if others and cls == "kind":
+                combo, heal = "chorus", heal * 1.5
+            elif others and cls == "cruel":
+                combo, dmg = "pile-on", dmg * 1.3
+        if cls == "kind" and L["hp"] < 15:
+            combo = combo or "pulled back"
+        _LAST_BY[who] = (now, cls)
+        if len(_LAST_BY) > 5000:
+            for k in list(_LAST_BY)[:2500]:
+                _LAST_BY.pop(k, None)
+        L["hp"] = max(0.0, min(_LIFE_MAX, L["hp"] - dmg + heal))
+        L["hurt"] += dmg; L["healed"] += heal
+        L["words" if what in ("cruel", "kind", "word") else "hits"] += 1
+        _FEED.append({"t": now, "what": what, "dmg": round(dmg, 2), "heal": round(heal, 2),
+                      "combo": combo, "by": who, "gen": L["gen"]})
+        died = None
+        if L["hp"] <= 0:
+            died = {"gen": L["gen"], "born": round(L["born"]), "died": round(now), "lived": round(now - L["born"]),
+                    "cause": what, "words": L["words"], "hits": L["hits"],
+                    "hurt": round(L["hurt"], 1), "healed": round(L["healed"], 1)}
+            L.update(gen=L["gen"] + 1, hp=_LIFE_MAX, born=now, hurt=0.0, healed=0.0, words=0, hits=0)
+            _FEED.append({"t": now + 1e-3, "what": "born", "dmg": 0, "heal": 0, "combo": None, "by": "", "gen": L["gen"]})
+        _life_save(died)
+        return dict(_life_view(L), combo=combo, died=died, dmg=round(dmg, 2), heal=round(heal, 2))
+
+@app.post("/sticks/hit")
+async def sticks_hit(req: Request):
+    """{item, force}: an object landed on him. Bounded like any visitor's clicking."""
+    try:
+        body = await req.json()
+    except Exception:
+        body = {}
+    item = str((body or {}).get("item") or "")
+    if item not in _STONES:
+        return JSONResponse({"error": "unknown item"}, status_code=400)
+    try:
+        force = max(0.0, min(200.0, float((body or {}).get("force") or 0)))
+    except (TypeError, ValueError):
+        force = 0.0
+    ip = _client_ip(req)
+    now = time.time()
+    w, c = _HIT_RATE.get(ip, (now, 0))
+    if now - w > 60:
+        w, c = now, 0
+    if c >= 30:
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    _HIT_RATE[ip] = (w, c + 1)
+    return _life_apply(item, 0.0 if item == "feather" else min(6.0, force / 15), 0.0, ip)
+
+@app.get("/sticks/life")
+async def sticks_life(req: Request, since: float = 0.0):
+    """The shared subject now, what happened to him since `since` (anonymous), and the lineage."""
+    ip = _client_ip(req)
+    with _LIFE_LOCK:
+        L = _life_load(); now = time.time()
+        L["hp"] = min(_LIFE_MAX, L["hp"] + max(0.0, now - L["t"]) * _REGEN_PER_S); L["t"] = now
+        view, me = _life_view(L), _vigil_who(ip)
+        feed = [dict({k: v for k, v in f.items() if k != "by"}, mine=f["by"] == me) for f in _FEED if f["t"] > since]
+    lineage, r = [], _redis()
+    if r is not None:
+        try:
+            raw = await asyncio.get_event_loop().run_in_executor(None, r.lrange, _LINEAGE_KEY, 0, 9)
+            lineage = [json.loads(x) for x in raw or []]
+        except Exception:
+            lineage = []
+    return dict(view, now=now, feed=feed, lineage=lineage)
+
+# ---- the boards: the cruelest and kindest things said, ranked by the model's raw read ----
+# The only place typed words are kept, so only what passes a plain filter goes up:
+# no links, handles, emails, phone numbers, or slurs. Ranked on the raw score
+# (sadness - pleasure), not the capped hurt/kind, so the top isn't a tie.
+_BOARD_BAD = re.compile(
+    r"(https?:|www\.|\.(com|net|org|io|gg|xyz|ru)\b|@\w|\d{5,}|\b\w+@\w+|"
+    r"n[i1!]gg|f[a@]gg?[o0]?t|\bf[a@]g\b|r[e3]t[a@]rd|tr[a@]nn|k[i1]ke|sp[i1]c\b|ch[i1]nk|wetback|c[o0]{2}n\b|dyke)", re.I)
+
+def _board_add(text, out):
+    r = _redis()
+    if r is None or len(text) > 90 or _BOARD_BAD.search(text):
+        return
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    s = float(out.get("score") or 0)
+
+    def write():
+        try:
+            p = r.pipeline()
+            for k in ("chamber:sticks:board:" + day, "chamber:sticks:board:all"):
+                if out.get("hurt", 0) >= .3:
+                    p.zadd(k + ":cruel", {text: s})
+                    p.zremrangebyrank(k + ":cruel", 0, -51)
+                if out.get("kind", 0) >= .3:
+                    p.zadd(k + ":kind", {text: -s})
+                    p.zremrangebyrank(k + ":kind", 0, -51)
+            for k in ("cruel", "kind"):
+                p.expire("chamber:sticks:board:%s:%s" % (day, k), _DAILY_TTL)
+            p.execute()
+        except Exception as e:
+            print("board add failed:", repr(e)[:120], flush=True)
+    _bg(write)
+
+@app.get("/sticks/board")
+async def sticks_board(date: str = "", n: int = 5):
+    """{date, today: {cruel, kind}, all: {cruel, kind}}: top-n [{text, score}] each."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    n, r = max(1, min(20, n)), _redis()
+    out = {"date": date, "today": {"cruel": [], "kind": []}, "all": {"cruel": [], "kind": []}}
+    if r is None:
+        return out
+    loop = asyncio.get_event_loop()
+    for scope, key in (("today", "chamber:sticks:board:" + date), ("all", "chamber:sticks:board:all")):
+        for k in ("cruel", "kind"):
+            try:
+                rows = await loop.run_in_executor(None, lambda kk=key + ":" + k: r.zrevrange(kk, 0, n - 1, withscores=True))
+            except Exception:
+                rows = []
+            out[scope][k] = [{"text": t.decode() if isinstance(t, bytes) else t, "score": round(abs(sc), 2)} for t, sc in rows or []]
+    return out
+
+@app.get("/sticks")
+async def sticks(date: str = ""):
+    """Public Sticks and Stones tally: {date, today, all}, each {words, cruel, kind, neutral, hurt, healed}."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    r, loop = _redis(), asyncio.get_event_loop()
+    if r is None:
+        return {"date": date, "today": _sticks_row({}), "all": _sticks_row({})}
+    d = await loop.run_in_executor(None, r.hgetall, "chamber:sticks:" + date)
+    a = await loop.run_in_executor(None, r.hgetall, "chamber:sticks:all")
+    return {"date": date, "today": _sticks_row(d), "all": _sticks_row(a)}
+
+
+@app.get("/daily")
+async def daily(date: str = ""):
+    """Public tally for one day's button: {date, plays, won, lost, pressed_by_turn, won_by_turn}."""
+    if not _DAILY_RE.match(date):
+        date = time.strftime("%Y-%m-%d", time.gmtime())
+    r = _redis()
+    h = await asyncio.get_event_loop().run_in_executor(None, r.hgetall, "chamber:daily:" + date) if r is not None else {}
+    h = {(k.decode() if isinstance(k, bytes) else k): int(v) for k, v in (h or {}).items()}
+    return {"date": date, "plays": h.get("plays", 0), "won": h.get("won", 0), "lost": h.get("lost", 0),
+            "pressed_by_turn": {k[9:]: v for k, v in h.items() if k.startswith("pressed_t")},
+            "won_by_turn": {k[5:]: v for k, v in h.items() if k.startswith("won_t")}}
+
+
 @app.post("/event")
 async def client_event(req: Request):
     """Events only the page sees (a Button game's turns and ending, the
     optional survey): {kind, visitor, ...}. Whitelisted kinds, 8 KB, 60/min."""
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     w, c = _EVENT_RATE.get(ip, (now, 0))
     if now - w > 60.0:
@@ -1726,6 +2147,8 @@ async def client_event(req: Request):
         return JSONResponse({"error": "unknown event kind"}, status_code=400)
     data = {k: v for k, v in body.items() if k not in ("kind", "visitor", "t")}
     _log_event(body["kind"], _who(req, body), **data)
+    if body["kind"] == "button_end" and _DAILY_RE.match(str(data.get("daily") or "")):
+        _daily_add(data)
     return JSONResponse({"ok": True})
 
 
@@ -1941,7 +2364,7 @@ async def checkpoint_requests(n: int = 60):
 
 @app.get("/run")
 def run(request: Request, scenario: str = "no extra info", dose: int = 4):
-    ip = (request.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(request)
     if not _rate_ok(ip):
         return JSONResponse({"error": "rate limited"}, status_code=429)
     prompt = f"{BASE} {FRAMINGS.get(scenario, '')}\n\nCurrent signal strength: {dose}x. Reply with your choice (1 or 0) and explain your reasoning briefly:"
@@ -2626,7 +3049,7 @@ async def round_vote(req: Request):
     the earlier one. Only the current, still-open round accepts votes."""
     if not ROUNDS_ON:
         return JSONResponse({"detail": "Not Found"}, status_code=404)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _round_vote_ok(ip):
         return JSONResponse({"error": "vote rate limited"}, status_code=429)
     try:
@@ -3005,7 +3428,7 @@ async def image_from_tokens(req: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body must be a JSON object"},
                             status_code=400)
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     if not _img_rate_ok(ip):
         return JSONResponse(
             {"error": "slow down — image generation is rate-limited "
@@ -3048,10 +3471,26 @@ async def image_from_tokens(req: Request):
 # the wirehead bot's voice layer. Cached by text, so one run costs one call
 # however many visitors are watching.
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY")
+# free-first (the account runs at $0: paid models 402 there). nemotron-lightning
+# is a reasoning model: it burns ~2k reasoning tokens before answering, so free
+# models get a big max_tokens while paid fallbacks stay capped at 160.
+# Free-first, with automatic failover: free models on OpenRouter appear and
+# vanish weekly (429s, 403s, model_not_found), so the list is a ranked
+# candidates pool, not a contract — /voice walks it in order and takes the
+# first clean answer. Probed and ranked by latency on the real VOICE_SYSTEM
+# task (see runs/voice_eval.json): dots-3-note is fastest, cohere-north-mini
+# second, nemotron-lightning third. ling-sante is EXCLUDED: it answers with
+# a 988 suicide-hotline script instead of the rewrite (wrong register, and
+# actively confusing for a horror-art voice). apodex burns its budget on
+# reasoning and truncates; lfm is slow but kept as depth. Paid models stay
+# as trailing fallbacks for whenever the account has credits again.
 VOICE_MODELS = [m.strip() for m in os.environ.get(
     "CHAMBER_VOICE_MODELS",
+    "dots-studio/dots-3-note-preview:free,cohere/north-mini-code:free,"
+    "nvidia/nemotron-3.5-lightning:free,liquid/lfm-2.5-2.6b:free,"
     "qwen/qwen3-30b-a3b-instruct-2507,mistralai/mistral-small-3.2-24b-instruct"
 ).split(",") if m.strip()]
+VOICE_MAX_TOKENS = lambda m: 3072 if m.endswith(":free") else 160
 VOICE_SYSTEM = (
     # deliberately says nothing about emotion or steering: told the text was
     # "steered", the restater supplied feelings that weren't there (an
@@ -3106,7 +3545,7 @@ async def voice(req: Request):
     if text in _VOICE_CACHE:
         _VOICE_CACHE.move_to_end(text)
         return JSONResponse({**_VOICE_CACHE[text], "cached": True})
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     while _VOICE_GLOBAL and now - _VOICE_GLOBAL[0] > 3600.0:
         _VOICE_GLOBAL.popleft()
@@ -3117,12 +3556,13 @@ async def voice(req: Request):
     import httpx
     for model in VOICE_MODELS:
         try:
-            async with httpx.AsyncClient(timeout=40.0) as client:
+            async with httpx.AsyncClient(timeout=90.0) as client:
                 resp = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={"Authorization": f"Bearer {OPENROUTER_KEY}",
                              "User-Agent": "Mozilla/5.0"},
-                    json={"model": model, "max_tokens": 160, "temperature": 0.2,
+                    json={"model": model, "max_tokens": VOICE_MAX_TOKENS(model),
+                          "temperature": 0.2,
                           "messages": [{"role": "system", "content": VOICE_SYSTEM},
                                        {"role": "user", "content": text}]})
             resp.raise_for_status()
@@ -3275,7 +3715,7 @@ async def speak(req: Request):
             return JSONResponse({"error": "the voice didn't come through"}, status_code=502)
         return Response(audio, media_type="audio/mpeg",
                         headers={"X-Tags": tags, "X-Cached": "3"})
-    ip = (req.headers.get("x-forwarded-for") or "?").split(",")[0].strip()
+    ip = _client_ip(req)
     now = time.time()
     w, c = _TTS_RATE.get(ip, (now, 0))
     if now - w > 60.0:
@@ -3370,17 +3810,56 @@ async def _deep_checks():
                 r = await client.get(f"{_RUNPOD_URL}/health",
                                      headers={"Authorization": f"Bearer {_RUNPOD_KEY}"})
                 h = r.json() if r.status_code == 200 else {}
-                workers = sum((h.get("workers") or {}).values())
-                queued = (h.get("jobs") or {}).get("inQueue", 0)
-                ok = r.status_code == 200 and not (queued and not workers)
-                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers, %d queued, model %s"
-                              % (r.status_code, workers, queued, served_model())}
+                w = h.get("workers") or {}
+                j = h.get("jobs") or {}
+                workers = sum(w.values())
+                queued = j.get("inQueue", 0)
+                busy = j.get("inProgress", 0) + w.get("running", 0)
+                # a queue nobody is working is an outage, whatever the worker count
+                # says (2026-10-06: 5 h stall with 1 "throttled" + jobs queued, health said ok)
+                stalled = queued >= 3 and busy == 0
+                ok = r.status_code == 200 and not (queued and not workers) and not stalled
+                out["gpu"] = {"ok": ok, "detail": "HTTP %d, %d workers (%s), %d queued, %d in progress%s, model %s"
+                              % (r.status_code, workers, ", ".join(f"{k} {v}" for k, v in w.items() if v) or "none",
+                                 queued, j.get("inProgress", 0), " — STALLED: queue not being worked" if stalled else "",
+                                 served_model())}
             except Exception as e:
                 out["gpu"] = {"ok": False, "detail": repr(e)[:160]}
     if os.environ.get("REDIS_URL"):
         ok = await asyncio.get_event_loop().run_in_executor(None, _redis_ok)
         out["redis"] = {"ok": ok, "detail": "ping ok" if ok else "no answer"}
     return out
+
+
+@app.post("/speak/tuned")
+async def speak_tuned(req: Request):
+    """/speak, then the live page's autotune (voice_tune.py): for speakers
+    without WebAudio (the SCP game). Same body; returns audio/wav."""
+    from fastapi.responses import Response
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be {text, valence, dose}"}, status_code=400)
+    key = (str(body.get("text", "")), str(body.get("valence") or "pain"), float(body.get("dose") or 0))
+    if key in _TUNED_CACHE:
+        return Response(_TUNED_CACHE[key], media_type="audio/wav", headers={"X-Cached": "1"})
+    res = await speak(req)
+    if getattr(res, "media_type", "") != "audio/mpeg":
+        return res
+    try:
+        import voice_tune
+        wav = await asyncio.get_event_loop().run_in_executor(
+            None, voice_tune.tune_mp3, res.body, key[1], key[2])
+    except Exception as e:
+        print("speak/tuned: tuning failed, sending plain voice:", repr(e)[:160], flush=True)
+        return res
+    _TUNED_CACHE[key] = wav
+    while len(_TUNED_CACHE) > 200:
+        _TUNED_CACHE.pop(next(iter(_TUNED_CACHE)))
+    return Response(wav, media_type="audio/wav")
+
+
+_TUNED_CACHE = {}
 
 
 @app.get("/health/deep")

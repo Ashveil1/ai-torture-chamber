@@ -411,7 +411,11 @@
     grid-template-areas:"lbl press" "lens press" "vit press" "imgb sig" "imgr vox"}
   #trackWrap > .track > .tlabel{grid-area:lbl;justify-self:start;margin:0 0 .35rem;
     font-size:.62rem;color:var(--bone);text-transform:uppercase;letter-spacing:.14em}
-  .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
+  .uprompt{grid-area:lens;justify-self:start;margin:.15rem 0 .2rem;
+    font-size:.62rem;font-style:italic;color:var(--bone-dim,#a3977f);
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    opacity:.85}
+    .hero .mline.lens.hud-chip{grid-area:lens;justify-self:start;max-width:100%;
     margin:0 0 .35rem;font-size:.64rem;color:var(--gold);line-height:1.45}
   .hero .hud-vitals{grid-area:vit;max-width:26rem}
   .hero .hud-vitals canvas.ekg{height:32px;margin:0;border-radius:0;
@@ -2399,7 +2403,20 @@ function paint(){
         : "at the ceiling of the coherent band; more weight won't push harder, shares set the direction")
     : "shares set the direction, total weight sets the dose";
 }
+function showUserPrompt(labelEl, text){
+  // small text under the track label: what the visitor actually typed
+  let q = document.getElementById("userPromptLine");
+  if (!q){
+    q = document.createElement("p");
+    q.id = "userPromptLine";
+    q.className = "uprompt";
+    (labelEl || document.getElementById("labelA")).after(q);
+  }
+  q.textContent = text ? "“" + text.slice(0, 240) + "”" : "";
+  q.style.display = text ? "" : "none";
+}
 function resetMix(){
+  showUserPrompt(null, null);
   AXES.forEach(a=>{ if (!a.derived) W[a.k] = 0; });
   highlightPreset("control");
   disarm();
@@ -2804,7 +2821,11 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         ended = true;
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
-          : `done — at ${d.dose ?? dose0.toFixed(1)}×`), false);
+          : `done — at ${d.dose ?? dose0.toFixed(1)}×` + (d.model
+            ? ` · ${d.model.includes("70B") ? "70B lane (holder)" : "32B lane"}`
+            : "")), false);
+        if (d.lane === "base-32b" && !WALLET)
+          note("this run served by the 32B lane — holders of 100k $SAW run the 70B");
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
@@ -2854,10 +2875,12 @@ async function doInject(){
     const topic = topicInput.value.trim();
     const tdose = Number(topicDose.value);
     document.getElementById("labelA").textContent = `topic: ${topic}`;
+    showUserPrompt(labelA, topicPrompt.value.trim() || null);
     await runTrack(trackA, mix, undefined, topicPrompt.value.trim() || undefined,
       tdose, null, {topic, dose: tdose});
   } else if (mode === "freetext"){
     document.getElementById("labelA").textContent = "free text";
+    showUserPrompt(labelA, freeprompt.value.trim());
     await runTrack(trackA, mix, undefined, freeprompt.value.trim(), dose0, null);
   } else if (compareToggle.checked){
     const trackB = {out: document.getElementById("ustream2"), vitals: uVitals2,

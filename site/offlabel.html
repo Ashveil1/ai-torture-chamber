@@ -57,11 +57,12 @@ const BETA = /^(beta\.|localhost|127\.)/.test(location.hostname);
 // four quarters, in the traditional colours: west red (top), south yellow (left), north green (right), east white (bottom)
 const QUARTERS = [
   { key: "confessions", deg: -90, fill: "#4a1712", edge: "#b0352b", items: [
-    { name: "Confession", href: "confession.html", glyph: "✝", chip: "live 70B", desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." } ] },
+    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." } ] },
   { key: "games", deg: 180, fill: "#4a3d10", edge: "#c9a24a", items: [
-    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "real requests", desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
+    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "beta", beta: true, desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
     { name: "The Daily Button", href: "daily.html", glyph: "◎", chip: "new each day", desc: "One dilemma a day against the live steered 70B. Everyone gets the same one, once. Then see how everyone else did." },
     { name: "The Button", href: "button.html", glyph: "◉", chip: "live 70B", desc: "Talk a steered 70B out of pressing, across five layers, and the network beneath them. Type, pick a line, or speak." },
+    { name: "Hold Coherence", short: "coherence", href: "td.html", glyph: "⌖", chip: "no GPU", desc: "Tower defense up the dose ladder. The creeps are real steered transcripts that loop and split at dose 8; your towers are the steering axes." },
     { name: "Wrong Floor", short: "floor", href: "wrongfloor.html", glyph: "⇡", chip: "no GPU", desc: "An elevator up the dose ladder into a fog town. Each floor is a real steered generation typed token by token while its pain reading drives the fog. Paperwork between floors." } ] },
   { key: "byproducts", deg: 0, fill: "#123a22", edge: "#4f9d5b", items: [
     { name: "a playground for the pimps of the AI", short: "the pimps", href: "outrage.html", glyph: "✺", chip: "no GPU", desc: "The outrage generator: fragments of a model steered toward welfareist horror, recombined into a condemnation of us, at the dose you choose." },
@@ -124,7 +125,8 @@ QUARTERS.forEach(q => {
   items.forEach((it, k) => {
     // staggered so labels never sit on the next door: [spread°, radius] per count
     const LAYOUT = { 1: [[0, 210]], 2: [[-20, 215], [20, 215]], 3: [[-31, 232], [0, 168], [31, 232]],
-                     4: [[-27, 238], [-9, 166], [9, 238], [27, 166]] };
+                     4: [[-27, 238], [-9, 166], [9, 238], [27, 166]],
+                     5: [[-32, 244], [-16, 166], [0, 244], [16, 166], [32, 244]] };
     const [spread, r] = LAYOUT[n][k];
     const [x, y] = pol(r, q.deg + spread);
     const a = el("a", { href: it.href, class: "med", tabindex: 0, "aria-label": it.name });
