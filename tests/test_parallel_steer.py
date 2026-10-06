@@ -10,7 +10,7 @@ import server
 import httpx
 
 
-async def slow_gpu(job):
+async def slow_gpu(job, ep=None):
     yield "run", {"type": "run", "valence": job.get("valence"), "dose": job.get("dose")}
     await asyncio.sleep(0.6)
     yield "token", {"type": "token", "t": "hello"}
