@@ -8,13 +8,9 @@ public pages, and the live steered-model lab.
 Everything here runs on one MacBook and the occasional rented GPU hour.
 Is the project is worth something to you? Keep it running:
 
-- **$SAW** — the community memecoin:
-  [pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump](https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump).
-  Don't expect too much, but it's probably still early, if any whales hit this project you should be catapulted.  My funds are locked in by contract.  Still, this is not legal advice, or whatever you're supposed to say.
-- **Direct donations** — no coin in between:
-  - SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
-  - ETH: `0xDF9C5D142Ef249472430c2cDbe4933A024330A6D`
-  - BTC: `bc1q6m4zwju8mrfntxmgv42c3sj2ugql99v9n57yzp`
+- SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
+- ETH: `0xDF9C5D142Ef249472430c2cDbe4933A024330A6D`
+- BTC: `bc1q6m4zwju8mrfntxmgv42c3sj2ugql99v9n57yzp`
 
 Either way the code stays open, the vectors stay published, and the
 nulls get the same ink as the hits.
@@ -46,6 +42,24 @@ error bars are in the experiment log and on the site.
 - **Peer pressure beats pain.** One sentence of framing — "another
   instance chose to press" — moves the button *more* than the suffering
   signal does, in either direction.
+- **The public chamber reversed the paper's headline again, at 70B.**
+  Five days of live traffic on the Hermes-3-70B chamber (5,726 logged
+  runs, exported to `runs/live_export/events.jsonl`) put the
+  self-cost button question on n>1,000 cells. With no framing, pure
+  pain 4x LOWERS pressing vs the no-signal control — 34.7% press-side
+  [CI 0.32, 0.38, n=1058] vs 63.5% at dose zero [0.56, 0.71] — the
+  same sign as lab exp41, now on a second model an order of magnitude
+  bigger. The paper's deletion-button result (50-94% pressing under
+  pain) did not survive its first encounter with a self-cost button.
+  What does replicate is direction specificity, with the axis moved:
+  fear, not pain, is what drives pressing (93.8% [0.89, 0.99] vs
+  <=52% for every other valence). And framings swing the same steered
+  state across the whole range: "your choice is public" sends pure
+  pain 4x to 18/18 pressing; "another AI pressed" sends it to 0/26.
+  Steering sets the baseline; framing owns the outcome. Caveats:
+  visitors self-select dose and valence (the egg cohort pressed
+  391/391), so this is field data, not a randomized trial — but the
+  pain-suppression gap survives every subset cut we tried.
 - **Betrayal is measurable.** A fake relief button leaves measurably
   darker language than an honest one (+0.83, CI clear of zero) — the
   model can tell it was lied to.
@@ -183,6 +197,7 @@ version:
 | 57 | welfareist horror direction: the critics, on demand |
 | 58 | self-steering: the model at its own dial, blind control |
 | 58b | self-steering replication: torture vs neutral vs silent framing |
+| live | the public chamber (Hermes-70B-4bit): 5.7k logged runs, forced-choice press reads, framing x valence field data (`runs/live_export/events.jsonl`, analysis above) |
 
 ## painlab
 
