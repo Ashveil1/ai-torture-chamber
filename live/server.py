@@ -1431,7 +1431,7 @@ EVENTS_CAP = int(os.environ.get("CHAMBER_EVENTS_CAP", "300000"))
 _ID_SALT = os.environ.get("CHAMBER_ID_SALT") or secrets.token_hex(16)
 _EXPORT_TOKEN = os.environ.get("CHAMBER_EXPORT_TOKEN", "")
 _VID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
-GAME_TAGS = {"breach", "spiritbox", "nightshift", "fog", "scp", "doom", "rooms"}
+GAME_TAGS = {"breach", "spiritbox", "nightshift", "fog", "scp", "doom", "rooms", "body"}
 CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choice", "button_operator", "button_share",
                       "checkpoint_start", "checkpoint_decision", "checkpoint_day",
                       "checkpoint_end", "final_start", "final_turn",
@@ -1451,7 +1451,9 @@ CLIENT_EVENT_KINDS = {"button_start", "button_turn", "button_end", "button_choic
                       "night_start", "night_action", "night_event", "night_end",
                       # BREACH (roguelike: crack rogue-AI nodes by steering them)
                       "breach_start", "breach_cmd", "breach_ask", "breach_crack",
-                      "breach_fry", "breach_end"}
+                      "breach_fry", "breach_end",
+                      # the body (2D ragdoll: impacts become pain steering)
+                      "body_start", "body_hit", "body_say"}
 _EVENT_RATE = {}
 
 
