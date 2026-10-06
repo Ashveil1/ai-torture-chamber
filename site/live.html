@@ -2551,8 +2551,12 @@ addEventListener("message", async e => {
     lensEl: document.getElementById("lensA"), sigilEl: document.getElementById("sigilA"), pressBtn: null,
     plabel: document.querySelector("#pressA .plabel"), bBefore: null, bAfter: null };
   try { document.getElementById("labelA").textContent = "the body"; } catch (err) {}
+  // a body run streams through runTrack, not the stage feed, so the reply goes back to the body from here
+  bodyPost({ type: "run", feeling: "pain", dose });
   try { await runTrack(track, { pain: dose / 8 }, undefined, String(d.prompt).slice(0, 900), dose, null,
     { valence: "pain", dose, persona: false, game: "body" }); } catch (err) { console.warn("body run failed", err); }
+  const said = (track.out.textContent || "").replace(/^\s*[01][\s.:,-]*/, "").trim();
+  if (said) bodyPost({ type: "say", text: said, feeling: "pain", dose });
 });
 async function readSSE(resp, on){
   const reader = resp.body.getReader();
