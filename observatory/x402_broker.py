@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import time
 import subprocess
 import threading
 from time import monotonic
@@ -189,7 +190,14 @@ class PaymentLedger:
         self.db.commit()
 
     def _protected_key(self) -> bytes:
-        path = self.path.with_suffix(self.path.suffix + ".key")
+        # NOTE: this key protects ONE column (cached vendor responses) against
+        # casual copy/backup scraping — the rest of the ledger is plaintext by
+        # design (request ids, amounts, tx signatures are operational data).
+        # For real at-rest secrecy set X402_BROKER_SECRET_KEY from a secret
+        # store; a key file beside the database is obfuscation, not isolation.
+        override = os.environ.get("X402_BROKER_KEY_DIR")
+        base = Path(override) if override else self.path.parent
+        path = (base / (self.path.name + ".key")) if override else self.path.with_suffix(self.path.suffix + ".key")
         try:
             descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
@@ -721,6 +729,7 @@ def create_app(broker: PaymentBroker | None = None) -> FastAPI:
     async def lifespan(application: FastAPI):
         owned = broker is None
         application.state.broker = broker or PaymentBroker(BrokerConfig.from_env())
+        application.state.auth_failures = {}   # client -> [failed auth timestamps]
         try:
             yield
         finally:
@@ -736,12 +745,26 @@ def create_app(broker: PaymentBroker | None = None) -> FastAPI:
         return JSONResponse(exc.public(), status_code=exc.status, headers={"Cache-Control": "no-store"})
 
     def authenticate(request: Request):
+        # brute-force brake: sliding window on failed attempts per client.
+        # 10 failures in 60s locks that client out for the rest of the window.
+        now = time.monotonic()
+        client = request.client.host if request.client else "?"
+        # lazy init: ASGI test transports do not run the lifespan
+        failures = getattr(request.app.state, "auth_failures", None)
+        if failures is None:
+            failures = request.app.state.auth_failures = {}
+        window = [t for t in failures.get(client, []) if now - t < 60.0]
+        if len(window) >= 10:
+            raise BrokerError("AUTH_FAILED", "Too many failed attempts; wait a minute", 429)
         token = request.app.state.broker.config.token
         if not token:
             raise BrokerError("NOT_CONFIGURED", "Configure the internal broker Bearer token")
         supplied = request.headers.get("authorization", "")
         if not hmac.compare_digest(supplied.encode(), ("Bearer " + token).encode()):
+            window.append(now)
+            failures[client] = window
             raise BrokerError("AUTH_FAILED", "Valid internal Bearer authentication is required", 401)
+        failures.pop(client, None)
 
     async def read_payload(request: Request) -> dict:
         raw = bytearray()
@@ -765,10 +788,16 @@ def create_app(broker: PaymentBroker | None = None) -> FastAPI:
 
     @app.get("/catalog")
     async def catalog(request: Request):
+        # authenticated: /catalog drives outbound gateway fetches; an open
+        # endpoint lets strangers probe the gateway through our wallet
+        authenticate(request)
         return await request.app.state.broker.catalog()
 
     @app.get("/funding")
     async def funding(request: Request):
+        # authenticated: exposes the signer's wallet address, live balance
+        # and receipt history — never public
+        authenticate(request)
         return JSONResponse(await request.app.state.broker.funding(), headers={"Cache-Control": "no-store"})
 
     @app.post("/v1/request")

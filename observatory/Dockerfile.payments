@@ -9,4 +9,6 @@ RUN pip install -r observatory/requirements-payments.txt \
 COPY observatory/__init__.py observatory/x402_broker.py ./observatory/
 USER payer
 EXPOSE 8062
-CMD ["python", "-m", "uvicorn", "observatory.x402_broker:app", "--host", "0.0.0.0", "--port", "8062", "--workers", "1"]
+# default: loopback only. Publish deliberately (compose port mapping, -p) —
+# the broker spends real USDC and its endpoints carry a single shared token.
+CMD ["sh", "-c", "python -m uvicorn observatory.x402_broker:app --host ${X402_BROKER_HOST:-127.0.0.1} --port 8062 --workers 1"]
