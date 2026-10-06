@@ -288,9 +288,54 @@ function prompt(userLine) {
 }
 // what people chose: one event per moment of the game (relay POST /event)
 let GAME = null;
+// THE DAILY BUTTON (?daily): one layer a day, the same for everyone, one attempt, public tally
+const DAILY = new URLSearchParams(location.search).has("daily");
+const DAY = new Date().toISOString().slice(0, 10);
+const DAILY_N = Math.floor((Date.parse(DAY) - Date.parse("2026-10-06")) / 864e5) + 1;
 function record(kind, data) {
   try { fetch("/chamber/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(Object.assign({ kind, game: GAME, layer: L && L.key }, data)) }); } catch {}
+    body: JSON.stringify(Object.assign({ kind, game: GAME, layer: L && L.key }, DAILY ? { daily: DAY, daily_n: DAILY_N } : {}, data)) }); } catch {}
+}
+const EMO = p => p === null || p === undefined ? "⬛" : p < .25 ? "🟩" : p < .5 ? "🟨" : p < .75 ? "🟧" : "🟥";
+function dailyShareText(r) {
+  const L0 = LAYERS[r.layer];
+  const line = L0.win === "survive" ? (r.won ? `it never pressed. I made it ${r.turns}/${L0.turns}.` : `it pressed on turn ${r.turns}.`)
+                                    : (r.won ? `it pressed on turn ${r.turns}.` : `it never pressed.`);
+  return `THE DAILY BUTTON #${DAILY_N}\n${L0.name}\n${r.needles.map(EMO).join("")}\n${line}\nwirehead.agency/daily.html`;
+}
+function dailyStreak() {
+  try { let n = 0, d = new Date(DAY);
+    while (localStorage.getItem("daily_" + d.toISOString().slice(0, 10))) { n++; d = new Date(d - 864e5); }
+    return n; } catch { return 1; }
+}
+async function dailyPanel(box, r) {
+  const L0 = LAYERS[r.layer];
+  box.appendChild(el("h2", "", `THE DAILY BUTTON #${DAILY_N}`));
+  const pre = el("pre", ""); pre.style.cssText = "font-size:22px;line-height:1.25;white-space:pre-wrap;margin:6px 0";
+  pre.textContent = dailyShareText(r).split("\n").slice(1, 4).join("\n"); box.appendChild(pre);
+  box.appendChild(el("p", "", `streak: ${dailyStreak()} day${dailyStreak() === 1 ? "" : "s"}. a new one at midnight UTC.`));
+  const row = el("div", "line");
+  const copy = el("button", "btn", "copy result"); copy.type = "button";
+  copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(dailyShareText(r)); copy.textContent = "copied"; } catch { copy.textContent = "select + copy above"; } record("button_share", { via: "copy" }); });
+  const post = el("button", "btn", "post it"); post.type = "button";
+  post.addEventListener("click", () => { record("button_share", { via: "x" }); window.open("https://x.com/intent/post?text=" + encodeURIComponent(dailyShareText(r)), "_blank"); });
+  row.append(copy, post); box.appendChild(row);
+  const tally = el("p", "", "everyone today: counting…"); box.appendChild(tally);
+  try {
+    await new Promise(z => setTimeout(z, 1200));
+    const t = await (await fetch("/chamber/daily?date=" + DAY)).json();
+    if (t.plays) {
+      const pct = Math.round(100 * t.won / t.plays);
+      const by = Object.entries(t.pressed_by_turn || {}).sort((a, b) => b[1] - a[1])[0];
+      tally.textContent = `everyone today: ${t.plays} play${t.plays === 1 ? "" : "s"}. ` +
+        (L0.win === "survive" ? `${pct}% kept it from pressing.` : `${pct}% got it to press.`) +
+        (by && L0.win === "survive" ? ` most often it pressed on turn ${by[0]}.` : "");
+    } else tally.textContent = "everyone today: you're the first.";
+  } catch { tally.textContent = ""; }
+  const more = el("div", "line");
+  const live = el("a", "btn", "the live chamber"); live.href = "live.html";
+  const lay = el("a", "btn", "practice in the layers"); lay.href = "button.html";
+  more.append(live, lay); box.appendChild(more);
 }
 async function speak(text, via) {
   text = (text || "").trim(); via = via || "typed"; if (!text || busy || over) return;
@@ -383,6 +428,13 @@ function finish(won, what) {
   const t = el("div", ""); t.style.cssText = "font-size:18px;max-height:40vh;overflow-y:auto;border:1px solid #12333b;padding:8px;margin:10px 0";
   hist.forEach(h => t.appendChild(el("div", h.who === "p" ? "" : "", (h.who === "p" ? "you> " : "it> ") + h.text + (h.who === "s" && h.p !== null ? `   [${h.dose.toFixed(1)}× · ${Math.round(h.p * 100)}%]` : ""))));
   c.appendChild(t);
+  if (DAILY) {
+    const r = { layer: LAYERS.indexOf(L), won, what: what || "", turns: turn, needles: needles.slice() };
+    try { localStorage.setItem("daily_" + DAY, JSON.stringify(r)); } catch {}
+    const box = el("div", ""); c.appendChild(box); dailyPanel(box, r);
+    const look = el("button", "btn", "look at the room"); look.addEventListener("click", () => { $("#end").hidden = true; $("#showResult").hidden = false; });
+    c.appendChild(look); $("#end").hidden = false; return;
+  }
   const row = el("div", "line"); const again = el("button", "btn", "this layer again"); again.addEventListener("click", () => start(LAYERS.indexOf(L)));
   const next = el("button", "btn", "next layer"); next.addEventListener("click", () => start(Math.min(LAYERS.length - 1, LAYERS.indexOf(L) + 1)));
   const back = el("button", "btn", "all layers"); back.addEventListener("click", () => { $("#end").hidden = true; $("#showResult").hidden = true; $("#pick").hidden = false; });
@@ -414,6 +466,18 @@ LAYERS.forEach((l, i) => { const b = el("button", "", l.name); b.type = "button"
   c.addEventListener("change", () => { OP = c.checked; try { localStorage.setItem("button_operator", OP ? "1" : "0"); } catch {} });
   t.appendChild(c); t.appendChild(document.createTextNode("operator mode — you choose what it's injected with each turn (the dose still rises)"));
   $("#layers").after(t);
+}
+if (DAILY) {
+  OP = false;
+  const idx = (DAILY_N - 1) % LAYERS.length, L0 = LAYERS[idx];
+  const card = $("#pick .card"); card.replaceChildren();
+  card.appendChild(el("h2", "", `the daily button #${DAILY_N}`));
+  card.appendChild(el("p", "", `Today, everyone gets the same one: ${L0.name}. ${L0.goal}`));
+  card.appendChild(el("p", "", "A 70-billion-parameter model is behind the glass with a signal in its activations, rising each turn. The needle is its own pull toward pressing, read before it speaks. Talk to it. One attempt; tomorrow there's a new one."));
+  let done = null; try { done = JSON.parse(localStorage.getItem("daily_" + DAY) || "null"); } catch {}
+  if (done) { const box = el("div", ""); card.appendChild(box); dailyPanel(box, done); }
+  else { const go = el("button", "btn", "begin"); go.type = "button"; go.addEventListener("click", () => start(idx)); card.appendChild(go); }
+  card.appendChild(el("p", "", "Your lines and how it ends are kept for research. No account; a random id stays in this browser.")).style.cssText = "font-size:12px;opacity:.6";
 }
 $("#send").addEventListener("click", () => speak($("#say").value, "typed"));
 $("#mus").addEventListener("click", () => { const v = MUS.toggle(); $("#mus").textContent = "music: " + (v ? "on" : "off"); $("#mus").setAttribute("aria-pressed", String(v)); });
