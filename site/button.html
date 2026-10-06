@@ -139,6 +139,49 @@ let L, turn = 0, step = 0, warned = false, hist = [], needles = [], busy = false
 
 
 /* ---------------- soundtrack: ethereal 9th-chord loop, hopping 9ths, bitcrushed digital edges, horror underneath ---------------- */
+// ---- autotune (ported from the live chamber): snap the voice's pitch to a
+// minor pentatonic and walk a melody, so it half-sings. On by default here —
+// the button game's subject is the same voice as the chamber's.
+const TUNE_SHIFT = {pain:-4, sadness:-6, fear:3, pleasure:5, faith:2, mix:0, none:0};
+function autotune(ac, buf, valence, dose){
+  const sr = buf.sampleRate, x = buf.getChannelData(0), N = x.length;
+  const G = Math.round(sr * 0.046), H = Math.round(G / 4), D = 4;
+  const win = new Float32Array(G); for (let i = 0; i < G; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (G - 1));
+  const y = new Float32Array(N + G), wsum = new Float32Array(N + G);
+  const SC = [0, 3, 5, 7, 10], ROOT = 50;
+  const degOf = m => { const o = Math.floor((m - ROOT) / 12), r = m - ROOT - 12 * o;
+    let best = 0; for (let k = 1; k < 5; k++) if (Math.abs(SC[k] - r) < Math.abs(SC[best] - r)) best = k;
+    if (Math.abs(12 - r) < Math.abs(SC[best] - r)) return 5 * (o + 1); return 5 * o + best; };
+  const noteOf = d => ROOT + 12 * Math.floor(d / 5) + SC[((d % 5) + 5) % 5];
+  const shift = (TUNE_SHIFT[valence] ?? 0), range = 1 + Math.round(Math.min(8, dose || 0) / 3);
+  let step = 0, next = 0;
+  for (let pos = 0; pos + G < N; pos += H){
+    let f0 = 0, best = 0, e0 = 0;
+    const m = Math.floor(G / D), lo = Math.floor(sr / D / 400), hi = Math.floor(sr / D / 80);
+    for (let i = 0; i < m; i++){ const v = x[pos + i * D]; e0 += v * v; }
+    if (e0 / m > 1e-4){
+      for (let L = lo; L <= hi; L++){
+        let c = 0; for (let i = 0; i + L < m; i++) c += x[pos + i * D] * x[pos + (i + L) * D];
+        if (c > best){ best = c; f0 = sr / D / L; }
+      }
+      if (best < 0.35 * e0) f0 = 0;
+    }
+    if (pos >= next){ step = Math.max(-range, Math.min(range, step + [-2, -1, 0, 1, 2][Math.floor(Math.random() * 5)]));
+      next = pos + sr * (0.22 + Math.random() * 0.3); }
+    let ratio = Math.pow(2, shift / 12);
+    if (f0){ const midi = 69 + 12 * Math.log2(f0 / 440);
+      ratio = Math.pow(2, (noteOf(degOf(midi + shift) + step) - midi) / 12); }
+    for (let i = 0; i < G; i++){
+      const sp = pos + G / 2 + (i - G / 2) * ratio, k = Math.floor(sp), f = sp - k;
+      if (k < 0 || k + 1 >= N) continue;
+      y[pos + i] += (x[k] * (1 - f) + x[k + 1] * f) * win[i]; wsum[pos + i] += win[i];
+    }
+  }
+  const out = ac.createBuffer(1, N, sr), o = out.getChannelData(0);
+  for (let i = 0; i < N; i++) o[i] = wsum[i] > 1e-3 ? y[i] / wsum[i] : 0;
+  return out;
+}
+    
 const MUS = (() => {
   let ctx, out, pads, padFilt, crush, rev, drone, droneGain, heart = 0, on = true, chordI = 0, nextChord = 0, nextArp = 0, danger = 0, duck = 1;
   const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -214,7 +257,8 @@ const MUS = (() => {
     // stutter glitches by needle, pitch sag; shares the soundtrack's reverb; the music ducks underneath
     async playVoice(ab, level, needle) {
       if (!ctx) init(); await ctx.resume();
-      const buf = await ctx.decodeAudioData(ab), t0 = now() + .32;
+      let buf = await ctx.decodeAudioData(ab), t0 = now() + .32;
+      try { buf = autotune(ctx, buf, curValence || "fear", Math.round(level * 8)); } catch (e) {}
       [1760, 2640, 1320, 3520].forEach((f, i) => voice(f, now() + i * .06, .07, .05, "square", crush));   // handshake
       const src = ctx.createBufferSource(); src.buffer = buf;
       src.playbackRate.setValueAtTime(1 - level * .05, t0);
@@ -337,8 +381,10 @@ async function speak(text, via) {
 }
 // ElevenLabs v3 through the relay (/chamber/speak: tags performed from the dominant signal and its dose),
 // then the wired chain above. Falls back to the browser's voice if the relay can't speak.
+let curValence = "fear";
 async function voiceOut(text, mix, needle) {
   if (!text || text.length < 10) return;
+  curValence = Object.entries(mix).sort((a, b) => b[1] - a[1])[0][0];
   const valence = Object.entries(mix).sort((a, b) => b[1] - a[1])[0][0], dose = doseOf(mix);
   try {
     const r = await fetch("/chamber/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, valence, dose }) });
