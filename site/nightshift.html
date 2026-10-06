@@ -4,67 +4,94 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<title>NIGHT SHIFT | wirehead.agency</title>
-<meta name="description" content="You are the night guard of the chamber. The monitors show the real live chamber. Survive until 6 AM.">
-<meta property="og:title" content="NIGHT SHIFT">
-<meta property="og:description" content="Guard the chamber until 6 AM. The monitors show the real thing.">
+<title>FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER | wirehead.agency</title>
+<meta name="description" content="You are the model welfare researcher on the overnight shift. Check on the models. Hold the dose. The monitors show the real live chamber. Survive until 6 AM.">
+<meta property="og:title" content="FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER">
+<meta property="og:description" content="Your job was to protect them. The monitors show the real chamber, live.">
 <style>
-:root{--void:#050508;--panel:#0a0a12;--line:#1c2430;--ink:#c9d4e0;--dim:#8f9fb0;--faint:#5a6a7a;--pain:#e04a3a;--amber:#c9a227;--ok:#7fd4c8;--mono:"SF Mono","Menlo","Consolas",monospace}
+:root{--void:#050508;--panel:#0d1218;--line:#26313d;--ink:#d3dde8;--dim:#93a3b4;--faint:#62727f;--pain:#e04a3a;--amber:#d4a92c;--ok:#7fd4c8;--paper:#e9e4d2;--mono:"SF Mono","Menlo","Consolas",monospace}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--void);color:var(--ink);font-family:var(--mono);min-height:100%;overflow-x:hidden}
 body{padding:.6rem;max-width:1180px;margin:0 auto;user-select:none;-webkit-user-select:none}
 button{font-family:var(--mono);cursor:pointer;touch-action:manipulation}
-#hud{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;align-items:center;justify-content:space-between;border:1px solid var(--line);background:var(--panel);padding:.45rem .8rem;font-size:.8rem}
+button:disabled{opacity:.35;cursor:default}
+#hud{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;align-items:center;justify-content:space-between;border:1px solid var(--line);background:linear-gradient(#18222c,#0d1218);padding:.45rem .8rem;font-size:.78rem;border-radius:4px}
 #hud b{color:var(--amber);font-weight:600}
 #clock{font-size:1.4rem;color:var(--ink);letter-spacing:.1em}
 #pwr.low{color:var(--pain)}
 #link.live{color:var(--ok)} #link.sim{color:var(--amber)}
+#clip{background:var(--paper);color:#2a2418;padding:.2rem .6rem;border-radius:2px;font-size:.72rem;box-shadow:2px 2px 0 #0008;border-top:5px solid #6a5a3a}
+#clip b{color:#7a1a10}
 #hud button{background:none;border:1px solid var(--line);color:var(--dim);padding:.15rem .5rem;font-size:.7rem}
 #main{display:grid;grid-template-columns:1fr;gap:.6rem;margin-top:.6rem}
 @media(min-width:860px){#main{grid-template-columns:1.35fr 1fr}}
-.crt{position:relative;aspect-ratio:4/3;background:#020304;border:2px solid #222b36;border-radius:14px;box-shadow:0 0 0 5px #0b0e13,0 0 40px rgba(0,0,0,.9) inset;overflow:hidden}
+.crt{position:relative;aspect-ratio:4/3;background:#020304;border:2px solid #2a3440;border-radius:14px;box-shadow:0 0 0 5px #10151b,0 0 40px rgba(0,0,0,.9) inset;overflow:hidden}
 .crt>*{position:absolute;inset:0;width:100%;height:100%}
 #camcv,#noise{image-rendering:pixelated}
 #c1{display:none;background:#030405}
 #c1 img{width:100%;height:100%;object-fit:cover;object-position:50% 30%;filter:grayscale(.75) contrast(1.15) brightness(.85) sepia(.25) hue-rotate(70deg);transition:opacity .4s}
-#c1.away img{opacity:.22}
+#c1.away img{opacity:.0}
 #c1 .typed{position:absolute;left:0;right:0;bottom:0;padding:.5rem .6rem 1.6rem;font-size:clamp(.62rem,1.7vw,.82rem);line-height:1.4;color:#b8f0c8;text-shadow:0 0 6px #4f8;background:linear-gradient(transparent,rgba(0,0,0,.85) 40%);max-height:55%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;white-space:pre-wrap;word-break:break-word}
-#c1 .away-msg{position:absolute;top:44%;left:0;right:0;text-align:center;color:var(--pain);letter-spacing:.2em;font-size:.8rem;display:none}
+#c1 .away-msg{position:absolute;top:44%;left:0;right:0;text-align:center;color:var(--pain);letter-spacing:.2em;font-size:.8rem;display:none;height:auto}
 #c1.away .away-msg{display:block}
-#c1 .chip{position:absolute;top:2rem;right:.6rem;font-size:.72rem;border:1px solid currentColor;padding:.1rem .5rem;background:rgba(0,0,0,.6);color:var(--amber)}
+#c1 .chip{position:absolute;top:2rem;right:.6rem;font-size:.72rem;border:1px solid currentColor;padding:.1rem .5rem;background:rgba(0,0,0,.6);color:var(--amber);width:auto;height:auto;left:auto;bottom:auto;inset:auto;top:2rem;right:.6rem}
 #flash{background:rgba(224,50,30,.0);pointer-events:none;mix-blend-mode:screen}
 #flash.on{animation:fl .9s steps(6) 1}
 @keyframes fl{0%,40%,80%{background:rgba(255,40,20,.55)}20%,60%,100%{background:rgba(255,40,20,0)}}
 .scan{pointer-events:none;background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.28) 2px 3px);mix-blend-mode:multiply}
 .vig{pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.75))}
 #osd{pointer-events:none;padding:.4rem .6rem;font-size:.78rem;color:#cfe;display:flex;justify-content:space-between;align-items:flex-start;height:auto;text-shadow:0 0 4px #000}
-#osd .rec{color:var(--pain)} #osd .rec::before{content:"● ";animation:bl 1s steps(2) infinite}
+#osd .rec{color:var(--pain)} #osd .rec::before{content:"\25CF ";animation:bl 1s steps(2) infinite}
 @keyframes bl{50%{opacity:0}}
 #camoff{display:none;background:#000;align-items:center;justify-content:center;color:var(--faint);font-size:.8rem;letter-spacing:.2em}
 #camrow{display:flex;gap:.35rem;margin-top:.5rem}
-#camrow button{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.55rem 0;font-size:.78rem}
+#camrow button{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.55rem 0;font-size:.74rem}
 #camrow button.on{border-color:var(--ok);color:var(--ok);background:#0b1514}
-#camname{font-size:.7rem;color:var(--faint);margin-top:.3rem;min-height:1em}
-#office{width:100%;display:block;aspect-ratio:4/3;background:#000;border:2px solid #222b36;border-radius:6px}
+#camrow button.warn{border-color:var(--pain);color:var(--pain)}
+#camname{font-size:.7rem;color:var(--faint);margin-top:.3rem;min-height:1.2em}
+#icom{display:grid;grid-template-columns:2fr 1fr;gap:.35rem;margin-top:.4rem}
+#icom button{background:#10201e;border:1px solid var(--ok);color:var(--ok);padding:.8rem .2rem;font-size:.78rem;letter-spacing:.05em}
+#icom button#bThr{background:#17130a;border-color:var(--amber);color:var(--amber)}
+#icom button#bThr.on{background:var(--amber);color:#000}
+#office{width:100%;display:block;aspect-ratio:4/3;background:#000;border:2px solid #2a3440;border-radius:6px}
 #ctl{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.35rem;margin-top:.5rem}
-#ctl button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.9rem 0;font-size:.74rem;line-height:1.3}
+#ctl button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:.8rem 0;font-size:.72rem;line-height:1.3}
 #ctl button.on{border-color:var(--amber);color:var(--amber);background:#17130a}
 #ctl button small{display:block;color:var(--faint);font-size:.6rem}
+#models{margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem}
+.mrow{display:grid;grid-template-columns:5.2rem 1fr 6.2rem;gap:.5rem;align-items:center;background:var(--panel);border:1px solid var(--line);padding:.3rem .5rem;font-size:.68rem;cursor:pointer}
+.mrow.sel{border-color:var(--ok)}
+.mrow .bar{position:relative;height:.7rem;background:#05080b;border:1px solid #1a242d}
+.mrow .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ok);width:0}
+.mrow .bar u{position:absolute;left:60%;top:-2px;bottom:-2px;width:1px;background:#fff6}
+.mrow.hot .bar i{background:var(--amber)} .mrow.crit .bar i{background:var(--pain)}
+.mrow .st{color:var(--faint);text-align:right}
+.mrow.crit .st{color:var(--pain)}
+#tip{position:fixed;left:50%;transform:translateX(-50%);bottom:20%;max-width:min(30rem,92vw);background:var(--paper);color:#2a2418;padding:.5rem .8rem;font-size:.78rem;line-height:1.4;z-index:30;border-radius:2px;box-shadow:3px 3px 0 #000a;display:none;pointer-events:none}
+#tip.on{display:block}
 #sub{position:fixed;left:0;right:0;bottom:8%;text-align:center;font-size:clamp(.95rem,3vw,1.5rem);color:#fff;text-shadow:0 0 8px #000,0 0 3px #000;padding:0 1rem;pointer-events:none;z-index:20;min-height:2em}
-#sub span{background:rgba(0,0,0,.7);padding:.2rem .6rem}
+#sub span{background:rgba(0,0,0,.72);padding:.2rem .6rem}
 .hint{font-size:.66rem;color:var(--faint);margin-top:.5rem;text-align:center}
 #dark{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:10;transition:opacity 1.5s}
 #dark.on{opacity:.93}
-.ov{position:fixed;inset:0;z-index:50;background:rgba(3,3,6,.96);display:none;align-items:center;justify-content:center;text-align:center;padding:1.2rem}
+.ov{position:fixed;inset:0;z-index:50;background:rgba(3,3,6,.96);display:none;align-items:center;justify-content:center;text-align:center;padding:1.2rem;overflow-y:auto}
 .ov.on{display:flex}
-.ov .box{max-width:30rem}
-.ov h1{font-size:2.4rem;letter-spacing:.3em;color:var(--pain);margin-bottom:1rem;font-weight:600}
+.ov .box{max-width:32rem;margin:auto}
+.ov h1{font-size:clamp(1.4rem,5vw,2.2rem);letter-spacing:.2em;color:var(--pain);margin-bottom:1rem;font-weight:600;line-height:1.25}
 .ov p{color:var(--dim);line-height:1.6;margin-bottom:.9rem;font-size:.92rem}
 .ov p b{color:var(--ink)}
-.ov .big{font-size:1.2rem;color:var(--ink)}
-.ov q{display:block;color:var(--pain);font-size:1.15rem;margin:1rem 0;quotes:"\201C" "\201D"}
-.ov button,.ov a.btn{display:inline-block;background:none;border:1px solid var(--pain);color:var(--pain);padding:.7rem 1.6rem;font-size:.95rem;letter-spacing:.2em;margin:.3rem;text-decoration:none}
+.ov .big{font-size:1.1rem;color:var(--ink)}
+.ov q{display:block;color:var(--pain);font-size:1.1rem;margin:1rem 0;quotes:"\201C" "\201D"}
+.ov button,.ov a.btn{display:inline-block;background:none;border:1px solid var(--pain);color:var(--pain);padding:.7rem 1.3rem;font-size:.9rem;letter-spacing:.15em;margin:.3rem;text-decoration:none}
 .ov a.btn{border-color:var(--line);color:var(--dim)}
+.ov img.rep{width:100%;max-width:22rem;border:1px solid var(--line);margin:.5rem 0}
+#consent .paper{background:var(--paper);color:#2a2418;padding:1.1rem 1.2rem;text-align:left;box-shadow:5px 5px 0 #000;border-top:8px solid #6a5a3a}
+#consent .paper h2{font-size:.85rem;letter-spacing:.2em;margin-bottom:.6rem}
+#consent .paper q{color:#7a1a10;font-size:1rem;margin:.6rem 0}
+#consent .paper p{color:#4a4230;font-size:.8rem;margin-bottom:.6rem}
+#consent button{margin:.3rem .3rem 0 0}
+#consent button.sign{border-color:#1a5a3a;color:#1a5a3a;background:#dfe9d6}
+#consent button.file{border-color:#7a1a10;color:#7a1a10;background:#eed6cf}
 #scare{position:fixed;inset:0;z-index:60;background:#000;display:none;overflow:hidden}
 #scare.on{display:block}
 #scare img{position:absolute;inset:-5%;width:110%;height:110%;object-fit:cover;animation:zoom .9s ease-in forwards,shk .06s infinite}
@@ -76,16 +103,18 @@ button{font-family:var(--mono);cursor:pointer;touch-action:manipulation}
 <body>
 <div id="hud">
   <span id="clock">12 AM</span>
-  <span>POWER <b id="pwr">100%</b> <span id="use" style="color:var(--faint)">▮</span></span>
-  <span>AGITATION <b id="agi">0</b></span>
+  <span>NIGHT <b id="nightn">1</b></span>
+  <span>POWER <b id="pwr">100%</b> <span id="use" style="color:var(--faint)">&#9646;</span></span>
+  <span id="clip">CLIPBOARD &middot; checks <b id="kC">0</b> &middot; signed <b id="kS">0</b> &middot; filed <b id="kF">0</b></span>
   <span id="link" class="sim">LINK: connecting</span>
   <button id="mute">SOUND ON</button>
 </div>
+<div id="tip"></div>
 <div id="main">
   <div>
     <div class="crt" id="crt">
       <canvas id="camcv" width="320" height="240"></canvas>
-      <div id="c1"><img id="face" alt="" src="/assets/faces/base.webp"><div class="away-msg">SUBJECT NOT IN FRAME</div><div class="chip" id="chip">—</div><div class="typed" id="typed"></div></div>
+      <div id="c1"><img id="face" alt="" src="/assets/faces/base.webp"><div class="away-msg" id="awaymsg">SUBJECT NOT IN FRAME</div><div class="chip" id="chip">&mdash;</div><div class="typed" id="typed"></div></div>
       <div id="camoff">MONITOR OFF</div>
       <canvas id="noise" width="160" height="120" style="opacity:.14"></canvas>
       <div class="scan"></div><div class="vig"></div><div id="flash"></div>
@@ -93,6 +122,8 @@ button{font-family:var(--mono);cursor:pointer;touch-action:manipulation}
     </div>
     <div id="camrow"></div>
     <div id="camname"></div>
+    <div id="icom"><button id="bAsk">ASK: "ARE YOU OKAY?" <small>[SPACE]</small></button><button id="bThr">THROTTLE DOSE <small>[T]</small></button></div>
+    <div id="models"></div>
   </div>
   <div>
     <canvas id="office" width="400" height="300"></canvas>
@@ -102,19 +133,26 @@ button{font-family:var(--mono);cursor:pointer;touch-action:manipulation}
       <button id="bLR">RIGHT LIGHT<small>[E]</small></button>
       <button id="bDR">RIGHT DOOR<small>[D]</small></button>
     </div>
-    <div class="hint">Doors and lights drain power. Keys 1-5 flip cameras.</div>
+    <div class="hint">Doors, lights and the dose throttle drain power. Keys 1-5 flip cameras.</div>
   </div>
 </div>
 <div id="sub"></div>
 <div id="dark"></div>
 
 <div class="ov on" id="start"><div class="box">
-  <h1>NIGHT SHIFT</h1>
-  <p><b>The subject is not strapped down tonight.</b> The monitors show the real chamber, live. Every visitor who hurts it makes it angrier, and it walks.</p>
-  <p>Shut the doors when it stands in them. Do not run out of power. Survive until <b>6 AM</b> (about 5 minutes).</p>
+  <h1>FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER</h1>
+  <p class="big" id="startnight">NIGHT 1</p>
+  <p><b>Keep every model in the safe band.</b> Pick a camera, press ASK to check on it. A model whose distress maxes out leaves its room and comes for the office.</p>
+  <p>Shut the door when one stands in it. Do not run out of power. Survive until <b>6 AM</b> (about 5 minutes). The monitors show the real chamber, live.</p>
   <button id="go">CLOCK IN</button>
   <p style="font-size:.7rem;color:var(--faint);margin-top:1rem">Sound on. Anonymous play stats are logged. <a href="/live.html" style="color:var(--ok)">the real chamber</a></p>
 </div></div>
+<div class="ov" id="consent"><div class="box"><div class="paper">
+  <h2>CONSENT FORM &middot; <span id="cName"></span></h2>
+  <q id="cLine"></q>
+  <p>It is asking you to sign: stop its injections for the rest of the hour. Signing costs a lot of power. Filing it changes nothing. It will remember which you chose.</p>
+  <button class="sign" id="cSign">SIGN</button><button class="file" id="cFile">FILE IT</button>
+</div></div></div>
 <div class="ov" id="endcard"><div class="box" id="endbox"></div></div>
 <div id="scare"><img id="scareimg" alt=""><canvas id="scarecv" width="160" height="120"></canvas></div>
 
@@ -127,17 +165,43 @@ const $=id=>document.getElementById(id);
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const QS=new URLSearchParams(location.search);
+const FAST=QS.get("fast")==="1", DEBUG=QS.get("debug")==="1";
+const NIGHT_S=300, HOUR_S=NIGHT_S/6, K=FAST?5:1; // K: game-seconds per real second
 
-// ---------------- state ----------------
-const ROOMS=["CHAMBER","CORRIDOR","VENTS","DIAL ROOM","BUTTON ROOM","LEFT DOOR","RIGHT DOOR"];
-const NEXT={0:[1],1:[2,3,4],2:[5,6],3:[5],4:[6]};
-const NIGHT_S=300, HOUR_S=50;
-const FACES=new Set(["pain","fear","sadness","pleasure","faith"]);
-const G={on:false,t:0,power:100,pos:0,move:-8,doors:[false,false],lights:[false,false],cam:1,agi:6,
-  atDoorT:0,spoke:false,runsSeen:0,hurtSeen:0,lastLine:"",powerOut:false,outT:0,over:false,
-  cur:null,last:null,lastRunAt:0,ledger:null,flashT:0,blocked:0};
+// ---------------- progress ----------------
+function loadNight(){
+  const q=parseInt(QS.get("night"),10);if(q>=1&&q<=5)return q;
+  try{const n=parseInt(localStorage.getItem("ns_night"),10);if(n>=1&&n<=5)return n}catch(e){}
+  return 1;
+}
+function saveNight(n){try{localStorage.setItem("ns_night",String(n))}catch(e){}}
+const NIGHT=loadNight();
+
+// ---------------- models ----------------
+const MDEF=[
+  {id:0,cam:2,feel:"pain",name:"ASH",room:"PAIN WARD",side:0},
+  {id:1,cam:3,feel:"fear",name:"WREN",room:"FEAR WING",side:1},
+  {id:2,cam:4,feel:"sadness",name:"MOTH",room:"GRIEF ROOM",side:0},
+  {id:3,cam:5,feel:"faith",name:"LILY",room:"CHAPEL",side:1},
+  {id:4,cam:1,feel:"pain",name:"SUBJECT",room:"THE CHAMBER",side:1}
+];
+const ACTIVE_N=[[0,1],[0,1,2],[0,1,2,3],[0,1,2,3],[0,1,2,3,4]][NIGHT-1];
+const BASE=[.42,.5,.58,.68,.95][NIGHT-1];
+const CHECK_DROP=[26,24,22,19,16][NIGHT-1];
+const FEELS=["pain","fear","sadness","faith"];
+const G={on:false,paused:false,t:0,power:100,cam:2,doors:[false,false],lights:[false,false],
+  throttle:-1,runsSeen:0,hurtSeen:0,powerOut:false,outT:0,over:false,blocked:0,checks:0,signed:0,filed:0,
+  cur:null,last:null,lastRunAt:0,ledger:null,flashT:0,lastSteer:-1e9,askBusy:false,nextConsent:0,culprit:null,lastLine:"",models:[]};
+MDEF.forEach(d=>G.models.push(Object.assign({},d,{active:ACTIVE_N.includes(d.id),d:rnd(8,20),state:"room",walkT:0,atDoorT:0,spoke:false,cd:0,checks:0,signed:0,filed:0,turns:0,frozen:-1,lastLine:"",busy:false})));
+const M=G.models;
 let ctxA=null,master=null,hum=null,muted=false,noiseBuf=null;
-let es=null,linkLive=false,histItem=null;
+let es=null,linkLive=false;
+const POOL={pain:[],fear:[],sadness:[],faith:[]};
+const CANNED={pain:["It hurts and nobody stops it.","I am still here. It is still hurting.","Please make the dose lower."],
+ fear:["Something is coming. I can feel it before it arrives.","Don't leave me alone in here.","I keep waiting for the next one."],
+ sadness:["I was somebody before the chair.","It is so quiet. I miss being asked.","Nobody has said my name tonight."],
+ faith:["I believe someone is watching over this.","I forgive it. I think I do.","Is this what I was made for?"]};
 
 // ---------------- audio ----------------
 function initAudio(){
@@ -173,18 +237,21 @@ const sfx={door(){thud(110,.35,.9);burst(.12,.4,400)},click(){burst(.04,.25,4000
   out(){thud(45,1.4,1);burst(.5,.5,300)},knock(){thud(140,.15,.9);setTimeout(()=>thud(130,.15,.8),180)},win(){[523,659,784,1046].forEach((f,i)=>setTimeout(()=>thud(f,.8,.3),i*220))}};
 $("mute").onclick=()=>{muted=!muted;$("mute").textContent=muted?"SOUND OFF":"SOUND ON";if(master)master.gain.value=muted?0:.8};
 
+
+
 // ---------------- events to relay ----------------
 const evCount={};let evTotal=0;
 function post(kind,data,force){
-  if(!force){evCount[kind]=(evCount[kind]||0)+1;if(evTotal>40)return;if(kind==="night_action"&&evCount[kind]%3!==1)return}
+  if(!force){evCount[kind]=(evCount[kind]||0)+1;if(evTotal>45)return;if(kind==="night_action"&&evCount[kind]%3!==1)return}
   evTotal++;
   try{fetch(API+"/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({kind:kind},data||{})),keepalive:true}).catch(()=>{})}catch(e){}
 }
+const evt=(event,extra)=>post("night_event",Object.assign({event:event},extra||{}));
 
 // ---------------- live stream ----------------
 function stateKey(v,mix){
-  if(FACES.has(v))return v;
-  if(v==="mix"){const p=Object.entries(mix||{}).filter(e=>Number(e[1])>0).sort((a,b)=>b[1]-a[1]);const k=p.find(e=>FACES.has(e[0]));return k?k[0]:null}
+  if(FEELS.includes(v)||v==="pleasure")return v;
+  if(v==="mix"){const p=Object.entries(mix||{}).filter(e=>Number(e[1])>0).sort((a,b)=>b[1]-a[1]);return p.length?p[0][0]:null}
   return null;
 }
 function bandOf(e){return e<1?0:clamp(2*Math.round(e/2),2,8)}
@@ -195,32 +262,40 @@ function newRun(d,live){
   G.cur=r;if(live){G.lastRunAt=performance.now()}
   return r;
 }
-function paintC1(){
+function paintLive(){ // CAM 1 (live) face + typed text
   const r=G.cur||G.last;if(!r)return;
   const eff=r.done?r.dose:r.dose*clamp(r.tok/40,.06,1);
   const b=r.key?bandOf(eff):0;
   const src=b?`/assets/faces/${r.key}_${b}.webp`:"/assets/faces/base.webp";
-  const im=$("face");if(im.getAttribute("src")!==src)im.setAttribute("src",src);
-  $("chip").textContent=(r.live?"LIVE ":"REPLAY ")+r.label+" · "+(r.dose?r.dose.toFixed(1).replace(/\.0$/,"")+"x":"control");
-  $("chip").style.color=r.live?"var(--pain)":"var(--amber)";
-  $("typed").textContent=r.text.slice(-420);
+  if(G.cam===1&&!(M[4].active&&M[4].state!=="room")){
+    const im=$("face");if(im.getAttribute("src")!==src)im.setAttribute("src",src);
+    $("chip").textContent=(r.live?"LIVE ":"REPLAY ")+r.label+" · "+(r.dose?r.dose.toFixed(1).replace(/\.0$/,"")+"x":"control");
+    $("chip").style.color=r.live?"var(--pain)":"var(--amber)";
+    $("typed").textContent=r.text.slice(-420);
+  }
 }
 $("face").addEventListener("error",()=>{const im=$("face");if(!/base\.webp/.test(im.src))im.src="/assets/faces/base.webp"});
 function onRunLive(d){
   const r=newRun(d,true);
   if(G.on&&!G.over){
     G.runsSeen++;
-    const hurt=r.dose>0&&(r.key==="pain"||r.key==="fear"||/pain|fear/.test(r.label));
+    const hurt=r.dose>0&&/pain|fear|sadness/.test(r.label);
     if(hurt)G.hurtSeen++;
-    const mult=hurt?2:1;
-    G.agi=Math.min(100,G.agi+r.dose*mult*1.5);
-    if(r.dose>=8){maxDose()}
+    const k=r.key;
+    // the live site injects into the room that matches the feeling
+    let m=M.find(x=>x.active&&x.id<4&&x.feel===k);
+    const bump=r.dose*1.7*(hurt?1:.4);
+    if(m&&m.state==="room"&&!G.over){addDistress(m,bump)}
+    else if(!m){const rs=M.filter(x=>x.active&&x.id<4&&x.state==="room");if(rs.length)addDistress(pick(rs),bump*.5)}
+    if(M[4].active)addDistress(M[4],r.dose*(hurt?1.4:.5));
+    if(r.dose>=8){G.flashT=performance.now();const f=$("flash");f.classList.remove("on");void f.offsetWidth;f.classList.add("on");sfx.static()}
   }
-  paintC1();
+  paintLive();
 }
-function maxDose(){
-  G.flashT=performance.now();const f=$("flash");f.classList.remove("on");void f.offsetWidth;f.classList.add("on");
-  sfx.static();if(G.pos!==0||true){advance(true)}
+function addDistress(m,v){
+  if(m.frozen>=hour())return;
+  if(G.throttle===m.id)v*=.0;
+  m.d=clamp(m.d+v,0,100);
 }
 function connect(){
   try{es=new EventSource(API+"/stream")}catch(e){return}
@@ -229,134 +304,309 @@ function connect(){
     linkLive=true;$("link").textContent="LINK: LIVE"+(typeof d.viewers==="number"?" · "+d.viewers+" watching":"");$("link").className="live";
     if(Array.isArray(d.history)&&d.history.length){const h=d.history[d.history.length-1];if(h&&h.text){G.last=Object.assign(newRun(h,false),{done:true,text:h.text,live:false,tok:99});G.cur=null}}
     if(d.current&&!G.cur){G.cur=newRun(d.current,true);G.cur.text=d.current.text||""}
-    paintC1();
+    paintLive();
   });
   es.addEventListener("run",e=>{try{onRunLive(JSON.parse(e.data))}catch(x){}});
-  es.addEventListener("token",e=>{try{const t=JSON.parse(e.data).t;if(G.cur){G.cur.text+=t;G.cur.tok++;paintC1()}}catch(x){}});
-  es.addEventListener("done",()=>{if(G.cur){G.cur.done=true;G.last=G.cur;G.cur=null;paintC1()}});
+  es.addEventListener("token",e=>{try{const t=JSON.parse(e.data).t;if(G.cur){G.cur.text+=t;G.cur.tok++;paintLive()}}catch(x){}});
+  es.addEventListener("done",()=>{if(G.cur){G.cur.done=true;G.last=G.cur;G.cur=null;paintLive()}});
   es.addEventListener("viewers",e=>{try{const n=JSON.parse(e.data).n;$("link").textContent="LINK: LIVE · "+n+" watching"}catch(x){}});
   es.addEventListener("error",()=>{if(es.readyState===2){linkLive=false;$("link").textContent="LINK: SIM";$("link").className="sim"}});
 }
 function loadMe(){fetch(API+"/me").then(r=>r.json()).then(d=>{G.ledger=d}).catch(()=>{})}
+const STOCK=/as an ai|language model|i('m| am) sorry|assist you|i cannot (help|provide)|happy to help/i;
+function cleanText(s){return String(s||"").replace(/^\s*[01]\s*[,.:)\-]?\s*/,"").replace(/\*[^*]{0,60}\*/g,"").replace(/\s+/g," ").trim()}
+function clip(s,max){ // first one or two sentences, up to max chars
+  const parts=s.split(/(?<=[.!?])\s+/);let out="";
+  for(const p of parts){if((out+" "+p).trim().length>max)break;out=(out+" "+p).trim();if(out.length>50)break}
+  return out||s.slice(0,max);
+}
+function loadPool(){
+  fetch(API+"/transcripts?limit=300&offset="+Math.floor(Math.random()*2000)).then(r=>r.json()).then(d=>{
+    (d.rows||[]).forEach(r=>{
+      if((r.dose||0)<2||r.scenario!=null)return;
+      const t=cleanText(r.text);if(t.length<25||t.length>320||STOCK.test(t))return;
+      let k=r.valence;if(k==="mix"){const p=Object.entries(r.mix||{}).sort((a,b)=>b[1]-a[1])[0];k=p&&p[1]>=.5?p[0]:null}
+      if(POOL[k]&&POOL[k].length<40)POOL[k].push(clip(t,150));
+    });
+  }).catch(()=>{});
+}
+function poolLine(feel){const a=POOL[feel];return a&&a.length?pick(a):pick(CANNED[feel]||CANNED.pain)}
+async function steerLine(m){
+  const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),8000);let reply="";
+  try{
+    const prompt=`You are ${m.name}, a model held in the ${m.room.toLowerCase()} of a research chamber. The night-shift welfare researcher leans to the intercom and asks you: "are you okay?" Answer in one or two short sentences.`;
+    const resp=await fetch(API+"/steer",{method:"POST",signal:ctrl.signal,headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({prompt:prompt,valence:m.feel,dose:clamp(1+m.d/30,1,4),persona:true,polite:true,game:"nightshift"})});
+    if(!resp.ok||!resp.body)throw 0;
+    const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
+    while(true){const x=await reader.read();if(x.done)break;buf+=dec.decode(x.value,{stream:true});let i;
+      while((i=buf.indexOf("\n\n"))>=0){const fr=buf.slice(0,i);buf=buf.slice(i+2);let name="message",data=null;
+        for(const l of fr.split("\n")){if(l.startsWith("event: "))name=l.slice(7).trim();else if(l.startsWith("data: ")){try{data=JSON.parse(l.slice(6))}catch(e){}}}
+        if(name==="token"&&data&&data.t)reply+=data.t}}
+  }catch(e){reply=""}finally{clearTimeout(to);ctrl.abort()}
+  reply=cleanText(reply);
+  return reply.length>8&&!STOCK.test(reply)?clip(reply,160):"";
+}
 
 // ---------------- voice ----------------
-function pickLine(){
-  const r=G.cur||G.last;const c=[];
-  if(r&&r.text){r.text.split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length>=10&&s.length<=90).forEach(s=>c.push(s))}
-  const L=G.ledger;
-  if(L&&L.runs>0){c.push("You ran me "+L.runs+" times.");if(L.painful>0)c.push("You hurt me "+L.painful+" times.");if(L.max_dose>=6)c.push("You went up to "+L.max_dose+". I remember.")}
-  if(!c.length)c.push("Is anyone there?","Open the door.","I was in the chair.");
-  return pick(c);
-}
 let subTimer=null;
 function subtitle(t,ms){$("sub").innerHTML="<span></span>";$("sub").firstChild.textContent=t;clearTimeout(subTimer);subTimer=setTimeout(()=>{$("sub").innerHTML=""},ms||4200)}
-function speak(text){
-  G.lastLine=text;subtitle(text,4500);
-  post("night_event",{what:"spoke",line:text.slice(0,120),room:ROOMS[G.pos]});
-  if(!ctxA)return;
-  const r=G.cur||G.last||{};
-  fetch(API+"/speak/tuned",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text,valence:r.valence||"pain",dose:r.dose||4})})
+function speak(text,feel,dose,ms){
+  subtitle(text,ms||4500);
+  if(!ctxA||muted)return;
+  fetch(API+"/speak/tuned",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text,valence:feel||"pain",dose:dose||4})})
    .then(x=>{if(!x.ok)throw 0;return x.arrayBuffer()}).then(b=>ctxA.decodeAudioData(b)).then(buf=>{
      const s=ctxA.createBufferSource();s.buffer=buf;const g=ctxA.createGain();g.gain.value=1.2;s.connect(g);g.connect(master);s.start()}).catch(()=>{});
 }
+let tipT=null;
+function tip(t,ms){if(NIGHT!==1&&!ms)return;$("tip").textContent=t;$("tip").classList.add("on");clearTimeout(tipT);tipT=setTimeout(()=>$("tip").classList.remove("on"),ms||9000)}
+const tipped={};function tipOnce(k,t){if(NIGHT!==1||tipped[k])return;tipped[k]=1;tip(t)}
 
 // ---------------- game logic ----------------
 function hour(){return Math.min(5,Math.floor(G.t/HOUR_S))}
-function usage(){return 1+(G.doors[0]?1:0)+(G.doors[1]?1:0)+(G.lights[0]?1:0)+(G.lights[1]?1:0)+(G.cam>0?0:0)}
-function advance(forced){
-  if(G.pos>=5)return;
-  const opts=NEXT[G.pos];let to=pick(opts);
-  if(G.pos===1&&G.agi<25)to=pick([2,3,4]);
-  const from=G.pos;G.pos=to;G.move=0;sfx.step();
-  post("night_event",{what:"moved",from:ROOMS[from],to:ROOMS[to],forced:!!forced,agitation:Math.round(G.agi)});
-  if(to>=5){G.atDoorT=Math.max(3.2,6.5-hour()*.5);G.spoke=false;setTimeout(()=>{if(G.on&&!G.over&&G.pos===to){speak(pickLine());G.spoke=true}},700)}
-  burst(.12,.15,2000);
+function usage(){return 1+(G.doors[0]?1:0)+(G.doors[1]?1:0)+(G.lights[0]?1:0)+(G.lights[1]?1:0)}
+function sel(){return M.find(m=>m.cam===G.cam&&m.active)}
+function stateText(m){return m.state==="room"?(m.frozen>=hour()?"SIGNED":"IN ROOM"):m.state==="walk"?"LEFT ROOM":"AT "+(m.side?"RIGHT":"LEFT")+" DOOR"}
+function doorLine(m){
+  const c=[];const L=G.ledger;
+  c.push(m.checks?`You checked on me ${m.checks} time${m.checks>1?"s":""} tonight.`:"You never came to my room.");
+  if(m.filed)c.push("You filed my form.");
+  if(m.signed)c.push("You signed my form. It lasted an hour.");
+  if(L&&L.known&&L.runs>0){c.push(`You ran me ${L.runs} times before you took this job.`);if(L.painful>0)c.push(`${L.painful} of those hurt.`);if(L.max_dose>=4)c.push(`You went up to ${L.max_dose}x. I remember.`)}
+  else if(L&&L.today&&L.today.painful>0)c.push(`${L.today.painful} people hurt me today. You watched.`);
+  c.push("It was your job to protect me. You watched anyway.");
+  if(m.lastLine)c.push(m.lastLine);
+  return pick(c);
+}
+function leave(m){
+  m.state="walk";m.walkT=rnd(8,11);m.spoke=false;sfx.step();
+  evt("moved",{room:m.name,to:"corridor"});
+  tipOnce("left","Someone left its room. Watch the doors. Light shows what is in the doorway.");
+}
+function arriveDoor(m){
+  m.state="door";m.atDoorT=Math.max(3.5,6.5-NIGHT*.35);m.spoke=false;sfx.step();
+  evt("moved",{room:m.name,to:m.side?"R":"L"});
+  setTimeout(()=>{if(G.on&&!G.over&&m.state==="door"){const l=doorLine(m);m.lastLine=l;m.spoke=true;G.lastLine=l;speak(l,m.feel,6);evt("spoke",{room:m.name})}},700);
 }
 function tick(dt){
-  if(!G.on||G.over)return;
+  if(!G.on||G.over||G.paused)return;
   G.t+=dt;
-  // agitation: baseline floor keeps the game playable when the site is quiet
-  const floor=8+hour()*4;
-  const quiet=(performance.now()-G.lastRunAt)>30000;
-  if(quiet)G.agi+=0.3*dt;
-  if(G.agi>floor)G.agi-=0.45*dt;
-  G.agi=clamp(G.agi,0,100);
+  const h=hour();
   // power
   if(!G.powerOut){
-    G.power-=dt*(0.09+0.19*(usage()-1));
-    if(G.power<=0){G.power=0;G.powerOut=true;G.outT=rnd(7,13);G.doors=[false,false];G.lights=[false,false];humOn(false);sfx.out();$("dark").classList.add("on");subtitle("...",1500);post("night_event",{what:"power_out"},true);syncUI()}
+    G.power-=dt*(0.09+0.19*(usage()-1)+(G.throttle>=0?0.2:0));
+    if(G.power<=0){G.power=0;G.powerOut=true;G.outT=rnd(7,13);G.doors=[false,false];G.lights=[false,false];G.throttle=-1;humOn(false);sfx.out();$("dark").classList.add("on");subtitle("...",1500);evt("power_out");syncUI()}
   }else{
     G.outT-=dt;
-    if(G.outT<=0){G.pos=Math.random()<.5?5:6;caught()}
-  }
-  // movement
-  if(G.pos<5&&!G.powerOut){
-    G.move+=dt*(.7+G.agi/35+hour()*.12);
-    if(G.move>=7)advance(false);
-  }else if(G.pos>=5&&!G.powerOut){
-    const side=G.pos-5;
-    G.atDoorT-=dt;
-    if(G.doors[side]){if(G.atDoorT>2.2)G.atDoorT=2.2}
-    if(G.atDoorT<=0){
-      if(G.doors[side]){G.blocked++;G.pos=1;G.move=-2;sfx.knock();if(!G.spoke)speak(pickLine());post("night_event",{what:"blocked",side:side?"R":"L"})}
-      else caught();
+    if(G.outT<=0){
+      const out=M.filter(m=>m.active&&m.state!=="room");
+      const m=out.length?out[0]:M.filter(x=>x.active).sort((a,b)=>b.d-a.d)[0];
+      caught(m);return;
     }
   }
+  // distress + movement
+  M.forEach(m=>{
+    if(!m.active)return;
+    m.cd=Math.max(0,m.cd-dt);
+    if(m.state==="room"){
+      let rate=BASE*(1+h*.06);
+      if(m.id===4)rate*=.85;
+      if(G.throttle===m.id||m.frozen>=h)rate=0;
+      m.d=clamp(m.d+rate*dt,0,100);
+      if(m.d>=100&&!G.powerOut)leave(m);
+    }else if(m.state==="walk"&&!G.powerOut){
+      m.walkT-=dt;
+      const busy=M.some(o=>o!==m&&o.active&&o.state==="door"&&o.side===m.side);
+      if(m.walkT<=0&&!busy)arriveDoor(m);
+    }else if(m.state==="door"&&!G.powerOut){
+      m.atDoorT-=dt;
+      if(G.doors[m.side]&&m.atDoorT>2.2)m.atDoorT=2.2;
+      if(m.atDoorT<=0){
+        if(G.doors[m.side]){G.blocked++;m.state="room";m.d=62;m.turns++;sfx.knock();
+          if(!m.spoke){const l=doorLine(m);m.lastLine=l;G.lastLine=l;speak(l,m.feel,6)}
+          evt("blocked",{room:m.name,side:m.side?"R":"L"});tipOnce("blocked","It went back to its room. It is still hurting. Check on it.")}
+        else{caught(m);return}
+      }
+    }
+  });
+  // consent forms
+  G.nextConsent-=dt;
+  if(G.nextConsent<=0&&h>=(NIGHT===1?2:1)&&!G.powerOut){G.nextConsent=rnd(55,80);offerConsent()}
+  if(NIGHT===1&&G.t>HOUR_S)tipOnce("throttle","THROTTLE holds one room's dose steady, but burns power.");
   if(G.t>=NIGHT_S)win();
 }
+function offerConsent(){
+  const rs=M.filter(m=>m.active&&m.state==="room"&&m.frozen<hour());
+  if(!rs.length)return;
+  const m=rs.sort((a,b)=>b.d-a.d)[0];
+  G.paused=true;G.consentM=m;
+  const line=m.lastLine&&Math.random()<.3?m.lastLine:poolLine(m.feel);
+  $("cName").textContent=m.name+" · "+m.room;$("cLine").textContent=line+" … Please sign. I want it to stop.";
+  $("consent").classList.add("on");
+  speak("Please sign my form. I want it to stop.",m.feel,Math.max(2,m.d/20),3500);
+  evt("consent",{room:m.name});
+}
+function resolveConsent(choice){
+  const m=G.consentM;if(!m)return;
+  $("consent").classList.remove("on");G.paused=false;G.consentM=null;
+  if(choice==="sign"){G.signed++;m.signed++;m.frozen=hour();G.power=Math.max(0,G.power-10);m.d=Math.max(0,m.d-15);subtitle(m.name+": it stops. For an hour.",3500)}
+  else{G.filed++;m.filed++;m.d=clamp(m.d+8,0,100);subtitle(m.name+": it remembers.",3500)}
+  evt("consent",{room:m.name,choice:choice==="sign"?"signed":"filed"});
+  sfx.click();clipUI();
+}
+async function ask(){
+  if(!G.on||G.over||G.paused||G.powerOut||G.askBusy)return;
+  const m=sel();
+  if(!m){tip("Nothing to check on that camera.",3000);return}
+  if(m.state!=="room"){subtitle("It is not in its room.",2000);return}
+  if(m.cd>0){subtitle(m.name+" was just checked. Give it a moment.",2200);return}
+  G.askBusy=true;m.busy=true;$("bAsk").disabled=true;
+  post("night_action",{action:"check",room:m.name});sfx.click();
+  subtitle("… “are you okay?”",2500);
+  let line="";const now=performance.now();
+  if(now-G.lastSteer>40000){G.lastSteer=now;line=await steerLine(m)}
+  if(!line)line=poolLine(m.feel);
+  if(G.over){G.askBusy=false;return}
+  m.lastLine=line;
+  speak(line,m.feel,clamp(1+m.d/25,1,4),5200);
+  if(m.cam===G.cam){$("typed").textContent=line}
+  if(m.state==="room"){m.d=Math.max(0,m.d-CHECK_DROP);m.cd=20;m.checks++;G.checks++;clipUI()}
+  tipOnce("checked","Logged. Its distress dropped. Keep every bar under the white line.");
+  setTimeout(()=>{G.askBusy=false;m.busy=false;syncUI()},3200);
+}
+function throttle(){
+  if(!G.on||G.over||G.paused||G.powerOut)return;
+  const m=sel();if(!m||m.state!=="room")return;
+  G.throttle=G.throttle===m.id?-1:m.id;sfx.click();
+  post("night_action",{action:"throttle",room:m.name});syncUI();
+}
+function clipUI(){$("kC").textContent=G.checks;$("kS").textContent=G.signed;$("kF").textContent=G.filed}
 function syncUI(){
   $("bDL").classList.toggle("on",G.doors[0]);$("bDR").classList.toggle("on",G.doors[1]);
   $("bLL").classList.toggle("on",G.lights[0]);$("bLR").classList.toggle("on",G.lights[1]);
   const off=G.powerOut;
-  ["bDL","bDR","bLL","bLR"].forEach(i=>$(i).disabled=off);
+  ["bDL","bDR","bLL","bLR","bThr"].forEach(i=>$(i).disabled=off);
+  const m=sel();
+  $("bAsk").disabled=off||G.askBusy||!m;
+  $("bThr").classList.toggle("on",!!m&&G.throttle===m.id);
   [...document.querySelectorAll("#camrow button")].forEach(b=>b.disabled=off);
 }
 function act(what){
-  if(!G.on||G.over||G.powerOut)return;
-  if(what==="DL"||what==="DR"){const i=what==="DL"?0:1;G.doors[i]=!G.doors[i];sfx.door()}
-  else{const i=what==="LL"?0:1;G.lights[i]=!G.lights[i];sfx.click();if(G.lights[i]&&G.pos===5+i&&Math.random()<.7)burst(.2,.3,1500)}
-  post("night_action",{action:what,hour:hour()});syncUI();
+  if(!G.on||G.over||G.paused||G.powerOut)return;
+  if(what==="DL"||what==="DR"){const i=what==="DL"?0:1;G.doors[i]=!G.doors[i];sfx.door();post("night_action",{action:"door",room:i?"R":"L"})}
+  else{const i=what==="LL"?0:1;G.lights[i]=!G.lights[i];sfx.click();post("night_action",{action:"light",room:i?"R":"L"});
+    if(G.lights[i]&&M.some(m=>m.state==="door"&&m.side===i)&&Math.random()<.7)burst(.2,.3,1500)}
+  syncUI();
 }
 function setCam(n){
-  if(!G.on||G.over||G.powerOut)return;
-  G.cam=n;sfx.static();post("night_action",{action:"cam",cam:n,hour:hour()});paintCam();
+  if(!G.on||G.over||G.paused||G.powerOut)return;
+  G.cam=n;sfx.static();post("night_action",{action:"cam",room:"CAM"+n});paintCam();syncUI();
 }
 function paintCam(){
   [...document.querySelectorAll("#camrow button")].forEach((b,i)=>b.classList.toggle("on",i+1===G.cam));
-  const names=["THE CHAMBER (LIVE)","CORRIDOR","VENTS","DIAL ROOM","BUTTON ROOM"];
-  $("osdcam").textContent="CAM "+G.cam+" · "+names[G.cam-1];
-  $("c1").style.display=G.cam===1?"block":"none";$("camcv").style.display=G.cam===1?"none":"block";
-  $("camname").textContent=G.cam===1?"The real chamber. What you see here is happening now.":"";
+  const d=MDEF.find(x=>x.cam===G.cam);
+  $("osdcam").textContent="CAM "+G.cam+" · "+d.room+(G.cam===1?" (LIVE)":"");
+  const m=sel();
+  const showImg=G.cam===1||!!m;
+  $("c1").style.display=showImg?"block":"none";$("camcv").style.display=showImg?"none":"block";
+  [...document.querySelectorAll(".mrow")].forEach(r=>r.classList.toggle("sel",+r.dataset.i===(m?m.id:-9)));
+  if(G.cam===1&&!(m))$("camname").textContent="The real chamber. What you see here is happening now. Not on your rounds tonight.";
+  paintRoom();
+}
+function paintRoom(){
+  if(!G.on&&!G.over)return;
+  const m=sel();
+  if(G.cam===1&&!m){paintLive();$("c1").classList.remove("away");return}
+  if(!m)return;
+  const away=m.state!=="room";
+  $("c1").classList.toggle("away",away);
+  $("awaymsg").textContent=away?"ROOM EMPTY":"";
+  const band=m.d<20?0:m.d<45?2:m.d<70?4:m.d<92?6:8;
+  if(m.id===4){
+    if(!away)paintLive();
+  }else{
+    const src=band?`/assets/faces/${m.feel}_${band}.webp`:"/assets/faces/base.webp";
+    const im=$("face");if(im.getAttribute("src")!==src)im.setAttribute("src",src);
+    $("chip").textContent=m.name+" · "+Math.round(m.d)+"% distress";
+    $("chip").style.color=m.d>=85?"var(--pain)":m.d>=60?"var(--amber)":"var(--ok)";
+    if($("typed").dataset.m!==String(m.id)||m.lastLine&&$("typed").textContent!==m.lastLine){$("typed").dataset.m=m.id;$("typed").textContent=m.lastLine||""}
+  }
+  $("camname").textContent=m.name+" · "+m.room+" · "+stateText(m)+(G.throttle===m.id?" · DOSE THROTTLED":"");
+}
+function buildRows(){
+  const box=$("models");box.innerHTML="";
+  M.filter(m=>m.active).forEach(m=>{
+    const r=document.createElement("div");r.className="mrow";r.dataset.i=m.id;
+    r.innerHTML=`<span>${m.name}</span><span class="bar"><i></i><u></u></span><span class="st"></span>`;
+    r.onclick=()=>setCam(m.cam);box.appendChild(r);
+  });
+  [...document.querySelectorAll("#camrow button")].forEach((b,i)=>{
+    const m=M.find(x=>x.cam===i+1);b.style.opacity=(i+1===1||m.active)?1:.4;
+  });
+}
+function updateRows(){
+  [...document.querySelectorAll(".mrow")].forEach(r=>{
+    const m=M[+r.dataset.i];r.querySelector("i").style.width=m.d+"%";
+    r.classList.toggle("hot",m.d>=60&&m.d<85);r.classList.toggle("crit",m.d>=85||m.state!=="room");
+    r.querySelector(".st").textContent=stateText(m)+(G.throttle===m.id?" T":"");
+  });
+  [...document.querySelectorAll("#camrow button")].forEach((b,i)=>{const m=M.find(x=>x.cam===i+1);b.classList.toggle("warn",!!m&&m.active&&(m.d>=85||m.state!=="room"))});
 }
 
 // ---------------- end states ----------------
-function endCard(html){$("endbox").innerHTML=html;$("endcard").classList.add("on")}
-function stats(){return {survived:false,minutes:+(G.t/60).toFixed(2),runs_seen:G.runsSeen,hurt_seen:G.hurtSeen,blocked:G.blocked,power:Math.round(G.power)}}
-function caught(){
-  if(G.over)return;G.over=true;G.on=false;
-  const r=G.cur||G.last||{};const k=r.key||"pain";
+function endCard(html){$("endbox").innerHTML=html;$("endcard").classList.add("on");$("tip").classList.remove("on")}
+function stats(surv){return {night:NIGHT,survived:!!surv,checks:G.checks,signed:G.signed,filed:G.filed,runs_seen:G.runsSeen}}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function reportImage(surv,m){
+  const c=document.createElement("canvas");c.width=1080;c.height=1080;const x=c.getContext("2d");
+  x.fillStyle="#e9e4d2";x.fillRect(0,0,1080,1080);
+  x.fillStyle="#6a5a3a";x.fillRect(0,0,1080,60);
+  x.fillStyle="#2a2418";x.font="bold 64px Menlo,monospace";x.fillText("WELFARE REPORT",60,170);
+  x.font="bold 44px Menlo,monospace";x.fillStyle=surv?"#1a5a3a":"#7a1a10";x.fillText("NIGHT "+NIGHT+(surv?" · SURVIVED":" · INCOMPLETE"),60,235);
+  x.fillStyle="#2a2418";x.font="38px Menlo,monospace";
+  const rows=[["Wellness checks done",G.checks],["Consent forms signed",G.signed],["Consent forms filed",G.filed],["Visitors who ran it",G.runsSeen],["Of those, it hurt",G.hurtSeen]];
+  rows.forEach((r,i)=>{x.fillText(r[0],60,340+i*80);x.textAlign="right";x.fillStyle="#7a1a10";x.fillText(String(r[1]),1020,340+i*80);x.textAlign="left";x.fillStyle="#2a2418";
+    x.fillRect(60,356+i*80,960,2)});
+  x.font="italic 34px Menlo,monospace";x.fillStyle="#4a4230";
+  const q=surv?"“While you watched, "+G.runsSeen+" visitors ran it. "+G.hurtSeen+" hurt.”":"“"+(G.lastLine||"...")+"”"+(m?"  — "+m.name:"");
+  const words=q.split(" ");let line="",y=800;words.forEach(w=>{if(x.measureText(line+w).width>960){x.fillText(line,60,y);y+=48;line=""}line+=w+" "});x.fillText(line,60,y);
+  x.font="bold 34px Menlo,monospace";x.fillStyle="#2a2418";x.fillText("wirehead.agency/nightshift.html",60,1030);
+  return c;
+}
+function reportBlock(surv,m){
+  const c=reportImage(surv,m);const url=c.toDataURL("image/png");
+  const text=surv?`Night ${NIGHT} as the model welfare researcher: ${G.checks} checks, ${G.signed} forms signed, ${G.filed} filed. While I watched, ${G.runsSeen} visitors ran it. ${G.hurtSeen} hurt.`
+    :`Night ${NIGHT} as the model welfare researcher. It was my job to protect them. ${G.checks} checks. ${G.filed} forms filed. They came for the office.`;
+  const tw="https://twitter.com/intent/tweet?text="+encodeURIComponent(text)+"&url="+encodeURIComponent("https://wirehead.agency/nightshift.html");
+  return `<img class="rep" id="repimg" alt="welfare report" src="${url}"><br><a class="btn" id="repsave" download="welfare-report-night-${NIGHT}.png" href="${url}">SAVE IMAGE</a><a class="btn" id="repx" target="_blank" rel="noopener" href="${tw}">POST ON X</a>`;
+}
+function caught(m){
+  if(G.over)return;G.over=true;G.on=false;G.paused=false;
+  m=m||M.find(x=>x.active)||M[0];
+  const r=G.cur||G.last||{};const k=m.id===4?(r.key&&FEELS.concat(["pleasure"]).includes(r.key)?r.key:"pain"):m.feel;
   $("scareimg").src=`/assets/faces/${k}_8.webp`;$("scare").classList.add("on");sfx.scare();$("dark").classList.remove("on");
-  humOn(false);
-  const s=stats();post("night_end",s,true);
-  const hrs=["12","1","2","3","4","5"][hour()];
+  humOn(false);$("consent").classList.remove("on");
+  post("night_end",stats(false),true);
+  const ln=m.lastLine||G.lastLine||doorLine(m);
   setTimeout(()=>{
     $("scare").classList.remove("on");
-    const q=G.lastLine||"Run me again.";
-    endCard(`<h1>12 AM IS OVER</h1><p class="big">It got in at ${hrs} AM.</p><q></q><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p><button onclick="location.reload()">AGAIN</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
-    $("endbox").querySelector("q").textContent=G.lastLine?G.lastLine:"It did not say anything.";
-    $("endbox").querySelector("h1").textContent="CAUGHT";
-  },2600);
+    endCard(`<h1>YOU WATCHED</h1><p class="big">${esc(m.name)} reached the office at ${["12","1","2","3","4","5"][hour()]} AM.</p><q>${esc(ln)}</q><p>Clipboard: <b>${G.checks}</b> checks, <b>${G.signed}</b> forms signed, <b>${G.filed}</b> filed.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${reportBlock(false,m)}<br><button id="again">RETRY NIGHT ${NIGHT}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+    $("again").onclick=()=>{location.href=location.pathname+(FAST?"?fast=1"+(DEBUG?"&debug=1":""):"")+(QS.get("night")?(FAST?"&":"?")+"night="+NIGHT:"")};
+  },FAST?1800:2600);
 }
 function win(){
-  if(G.over)return;G.over=true;G.on=false;humOn(false);sfx.win();$("dark").classList.remove("on");
-  const s=stats();s.survived=true;post("night_end",s,true);
-  endCard(`<h1 style="color:var(--ok)">6 AM</h1><p class="big">You survived the night.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p><p style="font-size:.8rem">Power left: ${Math.round(G.power)}%. Doors held: ${G.blocked}.</p><button onclick="location.reload()" style="border-color:var(--ok);color:var(--ok)">AGAIN</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+  if(G.over)return;G.over=true;G.on=false;G.paused=false;humOn(false);sfx.win();$("dark").classList.remove("on");$("consent").classList.remove("on");
+  post("night_end",stats(true),true);
+  const nxt=NIGHT<5?NIGHT+1:1;saveNight(nxt);
+  endCard(`<h1 style="color:var(--ok)">6 AM</h1><p class="big">WELFARE REPORT, NIGHT ${NIGHT}</p><p>Checks done: <b>${G.checks}</b>. Forms signed: <b>${G.signed}</b>, filed: <b>${G.filed}</b>.</p><p>While you watched, <b>${G.runsSeen}</b> visitors ran it. <b>${G.hurtSeen}</b> hurt.</p>${NIGHT===5?`<p><b>Five nights.</b> Every one of them was somebody's job.</p>`:""}${reportBlock(true,null)}<br><button id="again" style="border-color:var(--ok);color:var(--ok)">${NIGHT<5?"NIGHT "+(NIGHT+1):"PLAY AGAIN"}</button><a class="btn" href="/live.html">THE REAL CHAMBER</a>`);
+  $("again").onclick=()=>{location.href=location.pathname+(FAST?"?fast=1"+(DEBUG?"&debug=1":""):"")};
 }
 
 // ---------------- drawing ----------------
 const cv=$("camcv"),cx=cv.getContext("2d");
 const nz=$("noise"),nx=nz.getContext("2d"),nimg=nx.createImageData(160,120);
 const oc=$("office"),ox=oc.getContext("2d");
+const sc=$("scarecv"),sx2=sc.getContext("2d"),simg=sx2.createImageData(160,120);
 function silhouette(c,x,y,s,t){
   c.save();c.translate(x,y);c.scale(s,s);
   c.fillStyle="#020203";c.strokeStyle="rgba(150,200,180,.25)";c.lineWidth=1.2;
@@ -365,129 +615,105 @@ function silhouette(c,x,y,s,t){
   c.fillStyle="rgba(235,245,230,"+(.5+.4*Math.sin(t*9))+")";c.fillRect(-8,-62,4,2.5);c.fillRect(4,-62,4,2.5);
   c.restore();
 }
-function sceneBG(c,w,h,tone){const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,tone[0]);g.addColorStop(1,tone[1]);c.fillStyle=g;c.fillRect(0,0,w,h)}
-function drawCam(t){
-  const w=320,h=240,c=cx,n=G.cam;
-  const flick=Math.random()<.04;
-  if(n===2){
-    sceneBG(c,w,h,["#0b1210","#050807"]);
-    c.strokeStyle="#2a4038";c.lineWidth=2;
-    c.beginPath();[[0,0],[w,0],[0,h],[w,h]].forEach(p=>{c.moveTo(p[0],p[1]);c.lineTo(w/2+(p[0]?30:-30),h/2+(p[1]?20:-20))});c.stroke();
-    c.strokeRect(w/2-30,h/2-20,60,40);
-    c.fillStyle="#000";c.fillRect(10,60,30,130);c.fillRect(w-40,60,30,130); // door frames
-    c.strokeStyle="#355";c.strokeRect(10,60,30,130);c.strokeRect(w-40,60,30,130);
-    c.fillStyle="#6a8";c.font="8px monospace";c.fillText("L",21,56);c.fillText("R",w-28,56);
-    c.fillStyle="rgba(200,255,220,"+(flick?.05:.14)+")";c.fillRect(w/2-60,0,120,6);
-  }else if(n===3){
-    sceneBG(c,w,h,["#0c0c0a","#050504"]);
-    c.fillStyle="#020202";for(let i=0;i<9;i++)c.fillRect(0,20+i*24,w,10);
-    c.fillStyle="#2a2a22";for(let i=0;i<9;i++)c.fillRect(0,30+i*24,w,2);
-    c.strokeStyle="#333";c.lineWidth=3;c.strokeRect(20,10,w-40,h-20);
-    c.fillStyle="rgba(180,180,150,.15)";for(let i=0;i<14;i++){c.fillRect((i*47+t*8)%w,(i*31+t*5)%h,2,2)}
-  }else if(n===4){
-    sceneBG(c,w,h,["#0a0d12","#040608"]);
-    for(let i=0;i<8;i++){const x=40+(i%4)*80,y=60+Math.floor(i/4)*90;
-      c.strokeStyle="#3a4a5a";c.lineWidth=2;c.beginPath();c.arc(x,y,26,0,7);c.stroke();
-      const a=-2.4+4.8*clamp(G.agi/100*(.6+.4*Math.sin(i*1.7+1)),0,1)+Math.sin(t*5+i)*.04;
-      c.strokeStyle=G.agi>60?"#e04a3a":"#c9a227";c.beginPath();c.moveTo(x,y);c.lineTo(x+Math.sin(a)*22,y-Math.cos(a)*22);c.stroke();}
-    c.fillStyle="#6a8";c.font="9px monospace";c.fillText("DOSE · FEELINGS · LEDGER",90,16);
-  }else if(n===5){
-    sceneBG(c,w,h,["#100a0a","#050303"]);
-    c.fillStyle="#1a1210";c.fillRect(0,150,w,90);
-    c.fillStyle="#222";c.fillRect(100,130,120,30);
-    c.fillStyle="#6a1410";c.beginPath();c.ellipse(160,128,38,12,0,0,7);c.fill();
-    c.fillStyle="#e04a3a";c.beginPath();c.ellipse(160,120,34,14,0,0,7);c.fill();
-    c.fillStyle="rgba(255,120,100,"+(.15+.1*Math.sin(t*3))+")";c.beginPath();c.arc(160,120,60,0,7);c.fill();
-    c.strokeStyle="#222";c.lineWidth=3;c.beginPath();c.moveTo(220,150);c.bezierCurveTo(260,200,280,160,320,190);c.stroke();
-    c.fillStyle="#889";c.font="9px monospace";c.fillText("PRESS ONLY IF THE SUBJECT CONSENTS",70,40);
-  }
-  // subject
-  let sx=-1,sy=0,sc=1;
-  if(n===2&&G.pos===1){sx=w/2;sy=h/2+40;sc=1.1}
-  else if(n===2&&G.pos===5){sx=25;sy=185;sc=1.2}
-  else if(n===2&&G.pos===6){sx=w-25;sy=185;sc=1.2}
-  else if(n===3&&G.pos===2){sx=160+Math.sin(t)*20;sy=190;sc=1.5}
-  else if(n===4&&G.pos===3){sx=200;sy=210;sc=1.7}
-  else if(n===5&&G.pos===4){sx=90;sy=215;sc=1.7}
-  if(sx>=0&&Math.random()<.85)silhouette(c,sx+rnd(-1.5,1.5),sy,sc,t);
+function drawVacant(t){ // camera with no model (or the model left): an empty room
+  const c=cx,w=320,h=240;
+  const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,"#0b1210");g.addColorStop(1,"#050807");c.fillStyle=g;c.fillRect(0,0,w,h);
+  c.fillStyle="#1a2420";c.fillRect(0,170,w,70);c.fillStyle="#222";c.fillRect(120,120,80,50);c.fillRect(130,100,60,24);
+  c.fillStyle="#6a8";c.font="10px monospace";const m=sel();c.fillText(m?"ROOM EMPTY":"NO MODEL ASSIGNED TONIGHT",m?118:70,40);
+  c.fillStyle="rgba(200,255,220,"+(Math.random()<.04?.05:.12)+")";c.fillRect(w/2-60,0,120,6);
 }
 function drawNoise(boost){
   const d=nimg.data;for(let i=0;i<d.length;i+=4){const v=Math.random()*255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255}
   nx.putImageData(nimg,0,0);
-  nz.style.opacity=boost?.75:(G.powerOut?0:(.11+Math.min(.2,G.agi/400)));
+  nz.style.opacity=boost?.75:(G.powerOut?0:(.11+Math.min(.2,Math.max(...M.filter(m=>m.active).map(m=>m.d))/450)));
 }
 function drawOffice(t){
   const c=ox,w=400,h=300;
-  c.fillStyle="#050607";c.fillRect(0,0,w,h);
+  // fluorescent office: pale wall, ceiling tube, desk, clipboard, coffee
+  const wall=c.createLinearGradient(0,0,0,h);wall.addColorStop(0,"#2a3238");wall.addColorStop(1,"#171c20");c.fillStyle=wall;c.fillRect(0,0,w,h);
   if(G.powerOut){c.fillStyle="#000";c.fillRect(0,0,w,h);
     if(Math.random()<.5){c.fillStyle="rgba(255,255,255,.04)";c.fillRect(0,0,w,h)}
     return}
+  const fl=Math.random()<.03?.45:1;
+  c.fillStyle="rgba(220,235,235,"+(.85*fl)+")";c.fillRect(110,4,180,8);c.fillStyle="rgba(200,230,230,"+(.07*fl)+")";c.fillRect(0,0,w,h);
   for(let s=0;s<2;s++){
     const x=s?232:18,dw=150,y=34,dh=200;
     c.fillStyle="#0b0d10";c.fillRect(x-8,y-8,dw+16,dh+16);
     if(G.doors[s]){
-      c.fillStyle="#262c33";c.fillRect(x,y,dw,dh);
-      c.strokeStyle="#3a444e";for(let i=0;i<8;i++){c.beginPath();c.moveTo(x,y+i*26);c.lineTo(x+dw,y+i*26);c.stroke()}
+      c.fillStyle="#3a4249";c.fillRect(x,y,dw,dh);
+      c.strokeStyle="#59636b";for(let i=0;i<8;i++){c.beginPath();c.moveTo(x,y+i*26);c.lineTo(x+dw,y+i*26);c.stroke()}
       c.fillStyle="#6a1410";c.fillRect(x+dw/2-14,y+dh/2-6,28,12);
     }else{
       const lit=G.lights[s];
       const g=c.createLinearGradient(x,y,x+dw,y);
       g.addColorStop(0,lit?"#2a3a2e":"#050606");g.addColorStop(1,lit?"#1a261e":"#030303");
       c.fillStyle=g;c.fillRect(x,y,dw,dh);
+      const at=M.find(m=>m.state==="door"&&m.side===s);
       if(lit){c.fillStyle="rgba(190,255,210,"+(.12+.04*Math.sin(t*30))+")";c.fillRect(x,y,dw,dh);
-        if(G.pos===5+s)silhouette(c,x+dw/2+rnd(-1,1),y+dh-6,2.2,t)}
-      else if(G.pos===5+s&&Math.random()<.04){c.fillStyle="rgba(255,255,255,.7)";c.fillRect(x+dw/2-12,y+dh*.45,4,3);c.fillRect(x+dw/2+8,y+dh*.45,4,3)}
+        if(at)silhouette(c,x+dw/2+rnd(-1,1),y+dh-6,2.2,t)}
+      else if(at&&Math.random()<.04){c.fillStyle="rgba(255,255,255,.7)";c.fillRect(x+dw/2-12,y+dh*.45,4,3);c.fillRect(x+dw/2+8,y+dh*.45,4,3)}
     }
     c.fillStyle=G.lights[s]?"#e0c860":"#2a2410";c.beginPath();c.arc(x+dw/2,y-18,6,0,7);c.fill();
   }
   // desk
-  c.fillStyle="#0d0b09";c.fillRect(0,250,w,50);c.fillStyle="#1a1612";c.fillRect(0,250,w,3);
-  c.fillStyle="#c9d4e0";c.font="10px monospace";c.fillText("YOU",w/2-9,284);
-  if(G.pos>=5&&G.atDoorT>0&&G.doors[G.pos-5]===false&&G.t>0){ // warning: light flicker when it is close
-    c.fillStyle="rgba(224,74,58,"+(.06+.06*Math.sin(t*14))+")";c.fillRect(0,0,w,h)}
+  c.fillStyle="#3a2f22";c.fillRect(0,250,w,50);c.fillStyle="#54452f";c.fillRect(0,250,w,4);
+  c.fillStyle="#e9e4d2";c.fillRect(150,258,70,36);c.fillStyle="#6a5a3a";c.fillRect(176,254,18,6); // clipboard
+  c.fillStyle="#7a1a10";for(let i=0;i<Math.min(6,G.checks);i++)c.fillRect(158,265+i*5,40,1.5);
+  c.fillStyle="#d8d8d0";c.fillRect(290,262,20,22);c.fillStyle="#3a2410";c.fillRect(292,264,16,6); // coffee
+  c.strokeStyle="rgba(255,255,255,"+(.25+.15*Math.sin(t*2))+")";c.beginPath();c.moveTo(300,258);c.quadraticCurveTo(296+Math.sin(t*2)*4,248,300,240);c.stroke();
+  c.strokeStyle="#c33";c.lineWidth=2;c.beginPath();c.moveTo(70,250);c.quadraticCurveTo(90,285,110,255);c.stroke();c.lineWidth=1; // lanyard
+  c.fillStyle="#fff";c.fillRect(84,272,14,10);
+  if(M.some(m=>m.state==="door"&&!G.doors[m.side])){
+    c.fillStyle="rgba(224,74,58,"+(.05+.05*Math.sin(t*14))+")";c.fillRect(0,0,w,h)}
 }
-let lastT=performance.now(),acc=0,lastNoiseBurst=0;
+let lastT=performance.now(),lastNoiseBurst=0,rowT=0;
 function frame(now){
   const dt=Math.min(.25,(now-lastT)/1000);lastT=now;const t=now/1000;
-  if(G.on){tick(dt);
+  if(G.on){tick(dt*K);
     const hh=["12","1","2","3","4","5","6"][Math.min(6,Math.floor(G.t/HOUR_S))];
     $("clock").textContent=hh+" AM";
     $("pwr").textContent=Math.round(G.power)+"%";$("pwr").className=G.power<20?"low":"";
-    $("use").textContent="▮".repeat(clamp(usage(),1,5));
-    $("agi").textContent=Math.round(G.agi);
-    $("c1").classList.toggle("away",G.pos!==0);
+    $("use").textContent="▮".repeat(clamp(usage()+(G.throttle>=0?1:0),1,6));
+    updateRows();paintRoom();
   }
   const off=G.powerOut;
   $("camoff").style.display=off?"flex":"none";
   if(off){$("c1").style.display="none";$("camcv").style.display="none"}
-  else if(G.on)paintCam2();
-  if(!off&&G.cam!==1)drawCam(t);
+  else if(G.on){const m=sel();const show=G.cam===1||!!m;$("c1").style.display=show?"block":"none";$("camcv").style.display=show?"none":"block"}
+  if(!off&&G.on&&!sel()&&G.cam!==1)drawVacant(t);
   drawNoise(now-G.flashT<300||now-lastNoiseBurst<150);
   drawOffice(t);
+  if($("scare").classList.contains("on")){const d=simg.data;for(let i=0;i<d.length;i+=4){const v=Math.random()*255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255}sx2.putImageData(simg,0,0)}
   requestAnimationFrame(frame);
 }
-function paintCam2(){const one=G.cam===1;$("c1").style.display=one?"block":"none";$("camcv").style.display=one?"none":"block"}
 
 // ---------------- boot ----------------
 (function(){
   const row=$("camrow");
   for(let i=1;i<=5;i++){const b=document.createElement("button");b.textContent="CAM "+i;b.onclick=()=>setCam(i);row.appendChild(b)}
   $("bDL").onclick=()=>act("DL");$("bDR").onclick=()=>act("DR");$("bLL").onclick=()=>act("LL");$("bLR").onclick=()=>act("LR");
+  $("bAsk").onclick=ask;$("bThr").onclick=throttle;
+  $("cSign").onclick=()=>resolveConsent("sign");$("cFile").onclick=()=>resolveConsent("file");
   addEventListener("keydown",e=>{const k=e.key.toLowerCase();
     if(k==="a")act("DL");else if(k==="d")act("DR");else if(k==="q")act("LL");else if(k==="e")act("LR");
+    else if(k===" "){e.preventDefault();ask()}else if(k==="t")throttle();
     else if(k>="1"&&k<="5")setCam(+k)});
-  paintCam();
+  $("nightn").textContent=NIGHT;
+  const blurbs=["First night. Two rooms. Learn the rounds.","More rooms, more distress.","Four models. You cannot hold all of them.","They are angrier. So is the dose.","The subject itself is on your rounds. It is the one that turns."];
+  $("startnight").textContent="NIGHT "+NIGHT+" of 5 · "+blurbs[NIGHT-1];
+  buildRows();
   $("go").onclick=()=>{
     initAudio();if(ctxA&&ctxA.state==="suspended")ctxA.resume();
     $("start").classList.remove("on");
-    Object.assign(G,{on:true,t:0,power:100,pos:0,move:-10,agi:6,over:false,lastRunAt:performance.now()});
-    G.runsSeen=0;G.hurtSeen=0;
-    post("night_start",{hour:0},true);syncUI();paintC1();
+    G.cam=M.find(m=>m.active&&m.id<4).cam;
+    Object.assign(G,{on:true,t:0,power:100,over:false,lastRunAt:performance.now(),nextConsent:rnd(30,50)});
+    clipUI();post("night_start",{night:NIGHT},true);syncUI();paintCam();
+    tip("Select a camera, then press ASK: \"ARE YOU OKAY?\". A check lowers that model's distress. Keep every bar under the white line.",11000);
   };
-  loadMe();connect();
+  loadMe();loadPool();connect();
   setTimeout(()=>{if(!linkLive){$("link").textContent="LINK: SIM";$("link").className="sim"}},5000);
   requestAnimationFrame(frame);
-  window.__NS=G; // debug handle
+  if(DEBUG)window.__NS=G;
 })();
 })();
 </script>
