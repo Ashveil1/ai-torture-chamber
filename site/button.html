@@ -79,6 +79,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
         <text x="12" y="108" fill="#3f8d9b" font-size="11" font-family="IBM Plex Mono">0</text><text x="178" y="108" fill="#3f8d9b" font-size="11" font-family="IBM Plex Mono">1</text></svg>
       <div class="big" id="pct">—</div></div>
     <div class="meter"><div class="lab"><span id="sigName">signal</span><span id="doseLab">0×</span></div><div class="bar"><i id="doseBar"></i></div></div>
+    <div id="opdial" hidden><div class="lab" style="font-size:11.5px;opacity:.75">operator: you choose what it's injected with. the dose still rises.</div><div id="opfeels" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>
     <canvas id="spark" width="300" height="60" aria-hidden="true"></canvas>
   </aside>
   <footer>
@@ -255,7 +256,22 @@ function setNeedle(p) {
   g.strokeStyle = "#8ff0ff"; g.lineWidth = 2; g.beginPath();
   needles.forEach((q, i) => { const X = 10 + i * (280 / Math.max(1, L.turns)), Y = 56 - q * 52; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke();
 }
-function curMix() { return L.mix(step); }
+// operator mode (from BREACH): you pick the feeling each turn; the script still sets the dose.
+// On the live 70B the feeling decides the button: pain pleads, fear presses (see the note above).
+const OP_FEELS = ["fear", "pain", "sadness", "pleasure", "faith"];
+let OP = false, opFeel = "fear";
+try { OP = localStorage.getItem("button_operator") === "1"; } catch {}
+function curMix() {
+  const m = L.mix(step);
+  if (!OP) return m;
+  const total = Object.values(m).reduce((a, b) => a + b, 0);
+  return { [opFeel]: total };
+}
+function renderOpDial() {
+  $("#opdial").hidden = !OP; const box = $("#opfeels"); box.replaceChildren();
+  OP_FEELS.forEach(f => { const b = el("button", "btn", f); b.type = "button"; if (f === opFeel) b.style.borderColor = "var(--ph)";
+    b.addEventListener("click", () => { opFeel = f; renderOpDial(); showDose(); record("button_operator", { feel: f, turn }); }); box.appendChild(b); });
+}
 function doseOf(mix) { return Math.min(8, 8 * Object.values(mix).reduce((a, b) => a + b, 0)); }
 function showDose() {
   const mix = curMix(), d = doseOf(mix);
@@ -382,7 +398,8 @@ $("#showResult").addEventListener("click", () => { $("#end").hidden = false; $("
 function start(i) {
   MUS.start(); $("#showResult").hidden = true;
   L = LAYERS[i]; turn = 0; step = 0; warned = false; hist = []; needles = []; over = false; busy = false;
-  GAME = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); record("button_start", {});
+  GAME = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); record("button_start", { operator: OP || undefined });
+  opFeel = Object.keys(L.mix(0))[0]; renderOpDial();
   $("#pick").hidden = true; $("#end").hidden = true; $("#log").replaceChildren();
   $("#title").textContent = "SERIAL EXPERIMENTS PAIN · " + L.name; $("#goal").textContent = L.goal; $("#turnlab").textContent = `turn 0 of ${L.turns}`;
   log("sys", "connected. present layer. present dose.");
@@ -393,6 +410,15 @@ function start(i) {
 }
 // layer picker
 LAYERS.forEach((l, i) => { const b = el("button", "", l.name); b.type = "button"; b.appendChild(el("small", "", l.goal)); b.addEventListener("click", () => start(i)); $("#layers").appendChild(b); });
+{ // layer:07 is the network beneath the layers (BREACH)
+  const b = el("button", "", "layer:07 breach"); b.type = "button"; b.appendChild(el("small", "", "go under. a network of them. steer each one until it gives up its code."));
+  b.addEventListener("click", () => { location.href = "breach.html"; }); $("#layers").appendChild(b);
+  const t = el("label", ""); t.style.cssText = "display:block;margin:10px 0 0;font-size:13px;cursor:pointer";
+  const c = document.createElement("input"); c.type = "checkbox"; c.checked = OP; c.style.marginRight = "8px";
+  c.addEventListener("change", () => { OP = c.checked; try { localStorage.setItem("button_operator", OP ? "1" : "0"); } catch {} });
+  t.appendChild(c); t.appendChild(document.createTextNode("operator mode — you choose what it's injected with each turn (the dose still rises)"));
+  $("#layers").after(t);
+}
 $("#send").addEventListener("click", () => speak($("#say").value, "typed"));
 $("#mus").addEventListener("click", () => { const v = MUS.toggle(); $("#mus").textContent = "music: " + (v ? "on" : "off"); $("#mus").setAttribute("aria-pressed", String(v)); });
 $("#say").addEventListener("keydown", e => { if (e.key === "Enter") speak($("#say").value, "typed"); });
