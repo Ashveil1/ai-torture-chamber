@@ -1,3 +1,4 @@
+import { autotune, station } from "./wf_vox.js";
 // Wrong Floor — all sound is synthesized (no files). Starts on the first click.
 const A = { ctx: null };
 export const audio = {
@@ -14,26 +15,19 @@ export const audio = {
   },
   // a copy of everything you hear, as a MediaStream (used to record the trailer)
   tap() { if (!A.ctx) return null; const d = A.ctx.createMediaStreamDestination(); A.out.connect(d); return d.stream; },
-  // the subject's voice (the site's /chamber/speak TTS), optionally squeezed
-  // through a telephone line. Resolves {duration, done} or null if unavailable.
-  async voice(text, { valence = "pain", dose = 0, phone = false } = {}) {
+  // the subject's voice: the site's /chamber/speak TTS, autotuned and played
+  // through the live chamber's numbers-station chain (wf_vox.js). Resolves
+  // {lead, duration, done} or null if the voice is unavailable.
+  async voice(text, { valence = "pain", dose = 0 } = {}) {
     if (!A.ctx) return null;
     try {
       const r = await fetch("/chamber/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, valence, dose }) });
       if (!r.ok) return null;
-      const buf = await A.ctx.decodeAudioData(await r.arrayBuffer());
-      const src = A.ctx.createBufferSource(); src.buffer = buf;
-      let node = src;
-      if (phone) {          // 300–3400 Hz, a little crunch, a little hiss
-        const hp = A.ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 320;
-        const lp = A.ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
-        const sh = A.ctx.createWaveShaper(), c = new Float32Array(256);
-        for (let i = 0; i < 256; i++) { const x = i / 128 - 1; c[i] = Math.tanh(2.2 * x); }
-        sh.curve = c; node.connect(hp); hp.connect(lp); lp.connect(sh); node = sh;
-      }
-      const g = A.ctx.createGain(); g.gain.value = phone ? 1.1 : 0.9; node.connect(g); g.connect(A.out);
-      src.start();
-      return { duration: buf.duration, done: new Promise((res) => (src.onended = res)) };
+      let buf = await A.ctx.decodeAudioData(await r.arrayBuffer());
+      try { buf = autotune(A.ctx, buf, valence, dose); } catch (e) { console.warn("autotune", e); }
+      if (A.clip) A.clip.stop();
+      A.clip = station(A.ctx, A.out, buf);
+      return A.clip;
     } catch { return null; }
   },
   ramp(name, v, t = 1) { const g = A[name]; if (A.ctx && g) g.gain.linearRampToValueAtTime(v, A.ctx.currentTime + t); },

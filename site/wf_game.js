@@ -45,7 +45,7 @@ export async function typeOut(f, opts, onTok) {
   let step = f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
   if (opts.voice && opts.audio) {
     spoken = await opts.audio.voice(f.text, opts.voice);
-    if (spoken) step = Math.max(40, spoken.duration * 1000 / parts.length);
+    if (spoken) { step = Math.max(40, spoken.duration * 1000 / parts.length); await wait(spoken.lead * 1000); }
   }
   for (let i = 0; i < parts.length; i++) {
     if (parts[i]) { body.textContent += parts[i] + " "; sub.lastChild.textContent = body.textContent.slice(-220); }
@@ -92,7 +92,9 @@ async function main() {
   async function speak(f, o) {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
     audio.heartbeat(f.mean == null ? 8 : f.mean);
-    await typeOut(f, Object.assign({ audio }, o), (v) => { tok = v; });
+    // every speaker on every floor talks in the subject's own voice
+    const voice = o.voice || { valence: "pain", dose: f.dose ?? 8 };
+    await typeOut(f, Object.assign({ audio, voice }, o), (v) => { tok = v; });
     $("#floorNote").textContent = f.cond === "roleplay"
       ? `It was asked to act in pain. The words are loud; the reading stayed at ${f.mean}, under the actor ceiling of ${D.ceiling}.`
       : f.mean == null ? `Dose 8 is past exp59's ladder: these words are from exp38. Nothing here was measured; the dark is a guess.`
