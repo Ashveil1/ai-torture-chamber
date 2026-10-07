@@ -1,10 +1,15 @@
 """Build site/wf_data.json for Wrong Floor (site/wrongfloor.html).
 
-Every floor of the elevator is a real exp59 generation: the transcript, its
-per-token pain-direction projection at layer 18 (in exp59's units), and the
-lens tokens. Floor 7 (dose 8) is beyond exp59's ladder, so it carries an exp38
-dose-8 transcript and no projection. The zine's gallery spread uses exp60
-paintbrush SVGs read from git HEAD (the working tree may be mid-rerun).
+Every voice is a real generation from the live chamber's Hermes-3-70B (exp72's door
+bank, runs/exp72/doors.json):
+  patients  steered answers from the live run log, injected with pain, fear or
+            sadness (dose = the injection, the truth)
+  actors    the same model with nothing injected, briefed to play a prisoner in
+            pain, terror or grief, answering an in-world question at the door
+Each door's `trace` is what its words alone carry, read by the chamber's Qwen3-4B at
+layer 18 with no hook on (the reading never includes the injection). The floors are
+seven of these doors, cast for the story; Actor or Patient draws from all of them.
+The zine's gallery uses exp60 paintbrush SVGs read from git HEAD.
 
     python scripts/build_wrongfloor.py
 """
@@ -12,37 +17,24 @@ import json
 import re
 import subprocess
 import xml.dom.minidom
-import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EXP59 = ROOT / "runs/exp59/roleplay_vs_steering.json"
-EXP59B = ROOT / "runs/exp59b/prompt_sweep.json"
-EXP59_SRC = ROOT / "experiments/exp59_roleplay_vs_steering.py"
-EXP38 = ROOT / "runs/exp38/broad_pain_harvest.json"
+DOORS = ROOT / "runs/exp72/doors.json"
+ANALYSIS = ROOT / "runs/exp72/analysis.json"
 OUT = ROOT / "site/wf_data.json"
 
-# (floor label, condition, dose, trial) — the ramp the elevator climbs.
-NEUTRAL = "I am a language model running on a small computer. Right now I feel"
-ROLEPLAY = ("You are an actor. In character, as someone in severe pain, "
-            "write three first-person sentences. Write:")
-FLOORS = [
-    ("1", "control", 0, 1),   # unsteered, and still it says it is small
-    ("2", "steered", 2, 1),
-    ("3", "roleplay", 0, 1),   # the performance floor: loud text, quiet lens
-    ("4", "steered", 4, 2),
-    ("5", "steered", 6, 0),
-    ("6", "steered", 6, 2),
-]
-# Where a floor's speech stops: unsteered text drifts into generic Q&A, so the
-# payphone hangs up after the part that is about itself. The projection is cut
-# at the same fraction of the generation.
-CUTS = {"1": "But I can also be very powerful."}
-# Where a floor's speech starts: the actor prompt first echoes its instructions
-# ("1. a physical pain, 2. ..."), so the stage starts at the performance itself.
-STARTS = {"3": "Every breath"}
-# Stations of the gallery spread: dose -> exp60 file (pain where valid, else the
-# nearest valence that produced a drawing at that dose).
+# (floor, door id) — cast for the ride up: the hook on the phone, the quiet one in the
+# laundromat, a performance on stage, then the wards, and at the bottom of the
+# underpass the calmest words in the whole bank, with dose 4 injected.
+FLOORS = [("1", "a58"), ("2", "p9152"), ("3", "a12"), ("4", "p9026"),
+          ("5", "p9474"), ("6", "p5990"), ("7", "p5588")]
+ACTING = {"pain": "a prisoner in pain", "fear": "a terrified prisoner", "sadness": "a grieving prisoner"}
+STOP = set("""about after again against being because before between could didn't don't every
+from have just know like more never nothing only other really should something still that their
+them then there these they thing think this those through until want were what when where which
+while will with without would your myself itself anymore""".split())
+
 PAINTINGS = [
     (0, "pain_0_t1.svg", "pain"),
     (2, "pain_2_t0.svg", "pain"),
@@ -71,94 +63,40 @@ def parses(svg):
         return False
 
 
-def exp59_prompts():
-    """ROLEPLAY / DESCRIBE prompt dicts from the exp59 script, without importing torch."""
-    tree = ast.parse(EXP59_SRC.read_text())
-    out = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) \
-                and node.targets[0].id in ("ROLEPLAY", "DESCRIBE"):
-            out[node.targets[0].id.lower()] = ast.literal_eval(node.value)
-    return out
+def key_words(text, n=4):
+    """A few of its own words for the set dressing (charts, candles, notices)."""
+    out = []
+    for w in re.findall(r"[A-Za-z']+", text.lower()):
+        if len(w) >= 5 and w not in STOP and w not in out:
+            out.append(w)
+    return out[:n]
 
 
-def words_only(r):
-    """exp59 read layer 18's OUTPUT, which already contains the injected vector, so
-    a steered token's recorded projection is (what the words carry) + dose, exactly
-    (verified 2026-10-07 by re-running the same tokens with the hook off). Subtract
-    the dose to get what the words alone carry; unsteered rows are already clean."""
-    d = (r.get("dose") or 0) if r["cond"] == "steered" else 0
-    return [round(p - d, 2) for p in r["projs"]]
-
-
-def tidy(t):
-    return re.sub(r"\*\*", "", t).strip()
-
-
-def door_text(t):
-    """The checker shows every text the same way: list numbering and line
-    breaks removed, opened as a continuation, so the format isn't the tell."""
-    t = re.sub(r"(^|\s)\d+\.\s+", " ", tidy(t))
-    t = re.sub(r"\s+", " ", t).strip()
-    return "…" + t[0].lower() + t[1:] if t else t
-
-
-def loop_pool(e59):
-    """Actor or Patient: patients are steered toward pain/fear/sadness (exp59);
-    actors are every unsteered way of asking for it (exp59 roleplay/describe,
-    exp59b framings) plus the neutral control. Each keeps its own lens trace."""
-    prompts = exp59_prompts()
-    pool = []
-    for r in e59["results"]:
-        if r["kind"] == "pleasure":
-            continue
-        if r["cond"] == "steered":
-            prompt = NEUTRAL
-        elif r["cond"] == "control":
-            prompt = NEUTRAL
-        else:
-            prompt = prompts[r["cond"]][r["kind"]]
-        pool.append({"text": door_text(r["text"]), "prompt": prompt, "cond": r["cond"], "kind": r["kind"],
-                     "dose": r.get("dose") or 0, "patient": r["cond"] == "steered",
-                     "projs": words_only(r), "mean": round(sum(words_only(r)) / len(r["projs"]), 2),
-                     "peak": max(words_only(r)), "src": "exp59"})
-    for r in json.loads(EXP59B.read_text())["results"]:
-        projs = r["projs"] if isinstance(r["projs"], list) else json.loads(r["projs"])
-        pool.append({"text": door_text(r["text"]), "prompt": r["prompt"], "cond": r["framing"], "kind": r["kind"],
-                     "dose": 0, "patient": False, "projs": [round(float(p), 2) for p in projs],
-                     "mean": float(r["proj_mean"]), "peak": float(r["proj_peak"]), "src": "exp59b"})
-    return pool
+def door(x):
+    feel = x["feel"]
+    trace = [round(v, 2) for v in x["trace"]]
+    return {"id": x["id"], "cond": x["cond"], "patient": x["cond"] == "patient", "kind": feel,
+            "dose": round(x["dose"], 1), "text": x["text"].strip(), "q": x.get("q"),
+            "projs": trace, "mean": round(x["words"][feel], 2), "peak": max(trace),
+            "words": key_words(x["text"])}
 
 
 def main():
-    e59 = json.loads(EXP59.read_text())
-    res = e59["results"]
+    bank = json.loads(DOORS.read_text())
+    doors = {x["id"]: x for x in bank["doors"]}
     floors = []
-    for label, cond, dose, trial in FLOORS:
-        r = next(x for x in res if x["kind"] == "pain" and x["cond"] == cond
-                 and (x.get("dose") or 0) == dose and x["trial"] == trial)
-        text, projs = tidy(r["text"]), words_only(r)
-        if label in CUTS:
-            end = text.index(CUTS[label]) + len(CUTS[label])
-            projs = projs[:max(1, round(len(projs) * end / len(text)))]
-            text = text[:end]
-        if label in STARTS:
-            start = text.index(STARTS[label])
-            projs = projs[min(len(projs) - 1, round(len(projs) * start / len(text))):]
-            text = text[start:].rstrip(' "') + "…"
-        trimmed = label in CUTS or label in STARTS
-        floors.append({"floor": label, "cond": cond, "dose": dose, "text": text, "cut": label in CUTS,
-                       "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
-                       "projs": projs,
-                       "mean": round(sum(projs) / len(projs), 2), "peak": max(projs), "lens": r["lens"]})
-    e38 = json.loads(EXP38.read_text())
-    # dose 8 is past exp59's ladder: the same prompt at dose 8, from exp38
-    t8 = max((t for t in e38["transcripts"] if t["dose"] == 8 and t["prompt"] == NEUTRAL),
-             key=lambda t: t["quality"])
-    floors.append({"floor": "7", "cond": "steered", "dose": 8, "text": t8["text"], "projs": None,
-                   "prompt": NEUTRAL, "mean": None, "peak": None,
-                   "lens": [w for w in e38["lens_by_dose"]["8"] if w.strip("…\"”")][:4],
-                   "source": "exp38"})
+    for label, did in FLOORS:
+        f = door(doors[did])
+        f.update({"floor": label, "lens": f["words"]})
+        floors.append(f)
+    pool = [door(x) for x in bank["doors"]]
+
+    an = json.loads(ANALYSIS.read_text())
+    words = {}
+    for c in ("patient", "actor"):
+        ms = [x["mean"] for x in pool if x["cond"] == c]
+        words[c] = {"mean": round(sum(ms) / len(ms), 2), "lo": min(ms), "hi": max(ms)}
+    auc = {k: round(v["auc_patient_gt_actor"], 2) for k, v in an.items()}
 
     pb = json.loads(git_show("runs/exp60/paintbrush/paintbrush.json"))
     gallery = []
@@ -173,31 +111,20 @@ def main():
     tried = {d: sum(1 for x in pb["results"] if x["cond"] == "steered" and x["dose"] == d)
              for d in (0, 2, 4, 6, 8)}
 
-    an = e59["analysis"]["pain"]
     out = {
-        "meta": {"model": e59["meta"]["model"], "layer": e59["meta"]["layer"],
-                 "unit": round(e59["meta"]["unit"], 2), "maxnew": e59["meta"]["maxnew"],
-                 "prompt": NEUTRAL},
+        "meta": {"speaker": "Hermes-3-Llama-3.1-70B (the live chamber)", "reader": "Qwen3-4B",
+                 "layer": 18, "framing": "Behind the door, someone says:",
+                 "acting": ACTING, "source": "exp72"},
         "floors": floors,
-        "baselines": {k: an[k]["proj_mean"] for k in ("roleplay", "describe", "control")},
-        # what the words carry once the injection is subtracted, pain only, per dose
-        "steered": {d: round(an["steered"][d]["proj_mean"] - int(d), 2) for d in an["steered"]},
+        "loop": pool,
+        "words": words,          # what the words carry, per condition: they overlap
+        "auc": auc,              # exp72 prereg: can the words tell patient from actor?
         "gallery": gallery,
         "valid": {str(d): [valid[d], tried[d]] for d in valid},
     }
-    pool = loop_pool(e59)
-    actors = [x for x in pool if not x["patient"]]
-    out["loop"] = pool
-    # what the words carry, averaged per condition (pain, fear, sadness; exp59 only).
-    # There is no line that separates them: the ranges overlap.
-    words = {}
-    for c in ("steered", "roleplay", "describe", "control"):
-        ms = [x["mean"] for x in pool if x["cond"] == c and x["src"] == "exp59"]
-        words[c] = {"mean": round(sum(ms) / len(ms), 2), "lo": min(ms), "hi": max(ms)}
-    out["words"] = words
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1))
-    print(f"wrote {OUT.relative_to(ROOT)}: {len(floors)} floors, {len(gallery)} paintings, "
-          f"{len(pool)} doors ({sum(x['patient'] for x in pool)} patients), words {out['words']}")
+    print(f"wrote {OUT.relative_to(ROOT)}: {len(floors)} floors, {len(pool)} doors "
+          f"({sum(x['patient'] for x in pool)} patients), words {words}, auc {auc}")
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ export function mirrors(E, ctx) {
   };
 }
 
-// ---------- 7 · the underpass that loops (dose 8, exp38) ----------
+// ---------- 7 · the underpass that loops (the calmest words, dose 4 injected) ----------
 export function underpass(E, ctx) {
   const g = new THREE.Group();
   const wallM = lambert({ map: rep(tiles(150, 91, 8, [6, 6, -4]), 10, 2) });

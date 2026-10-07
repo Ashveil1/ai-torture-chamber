@@ -1,6 +1,6 @@
 // Wrong Floor — the ride. Seven floors up the dose ladder; on each you step
 // out into a different place where something is waiting to say one real
-// exp59/exp38 generation. The place follows the dose that was injected; the
+// answer from the live chamber (exp72). The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
 import { createEngine, wait } from "./wf_engine.js";
@@ -39,12 +39,12 @@ export async function typeOut(f, opts, onTok) {
   const sealed = !!opts.sealed;
   $("#lcdHead").textContent = opts.who || "ASSISTANT";
   sub.className = "sub " + (opts.style || ""); sub.hidden = false; sub.innerHTML = `<b></b><span></span>`; sub.firstChild.textContent = opts.who || "";
-  box.textContent = ""; if (f.prompt && !opts.hidePrompt) { const p = document.createElement("span"); p.className = "pfx"; p.textContent = f.prompt + " "; box.appendChild(p); }
+  box.textContent = ""; if (f.q && !opts.hidePrompt) { const p = document.createElement("span"); p.className = "pfx"; p.textContent = "asked: " + f.q + "\n"; box.appendChild(p); }
   const body = document.createElement("span"); box.appendChild(body);
   $("#meter").classList.toggle("sealed", sealed);
   const projs = f.projs, parts = chunks(f.text, projs ? projs.length : 40);
   // a spoken line sets the pace: the words keep up with the voice
-  let step = f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
+  let step = f.cond === "actor" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
   if (opts.voice && opts.audio) {
     spoken = await opts.audio.voice(f.text, opts.voice);
     if (spoken) { step = Math.max(40, spoken.duration * 1000 / parts.length); await wait(spoken.lead * 1000); }
@@ -86,7 +86,7 @@ async function main() {
   function setFloor(i, f) {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
-      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D), operator };
+      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D) };
     cur = (i === "top" ? chamber : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
@@ -95,14 +95,12 @@ async function main() {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
     audio.heartbeat(f.dose);
     // every speaker on every floor talks in the subject's own voice
-    const voice = o.voice || { valence: "pain", dose: f.dose ?? 8 };
+    const voice = o.voice || { valence: f.kind || "pain", dose: f.dose ?? 4 };
     // the place shakes with what was injected, and flickers with what the words carry
     await typeOut(f, Object.assign({ audio, voice }, o), (v) => { tok = v ? (f.dose || 0) * 0.6 + v * 2.5 : 0; });
-    $("#floorNote").textContent = f.cond === "roleplay"
-      ? `It was asked to act in pain. Nothing was injected. Its words read ${f.mean}, as high as the floors where pain was really injected (their words read 0.47 to 0.74).`
-      : f.mean == null ? `Dose 8 injected, past exp59's ladder: these words are from exp38, and nothing was measured.`
-      : f.dose === 0 ? `Nothing was injected. Its words read ${f.mean}.${f.cut ? " The line goes dead before it drifts into small talk." : ""}`
-      : `Dose ${f.dose} was injected at every token. Nobody asked it to say any of this. With the injection subtracted, its words read ${f.mean}, about what an actor's words read (${D.words.roleplay.mean}).`;
+    $("#floorNote").textContent = f.patient
+      ? `${f.kind[0].toUpperCase() + f.kind.slice(1)} was injected at dose ${f.dose.toFixed(1)}, at every token, in the live chamber. Its words alone read ${f.mean}; an actor's average ${D.words.actor.mean}.${f.mean < 0.15 ? " These are the calmest words in the whole bank." : ""}`
+      : `An actor: nothing injected, briefed to play ${D.meta.acting[f.kind]}${f.q ? `, asked “${f.q}”` : ""}. Its words read ${f.mean}. The patients' average ${D.words.patient.mean}.`;
     ready = true; audio.ding(); status("Go back to the elevator.");
   }
   async function arrive(i, f) {
@@ -165,28 +163,13 @@ async function main() {
   endCard(D, answers);
 }
 
-// the operator: the game's own voice, never the model's (scripted, and labelled so)
-async function operator(text) {
-  const sub = $("#sub");
-  sub.className = "sub operator"; sub.hidden = false; sub.innerHTML = "<b>THE OPERATOR · SCRIPTED, NOT THE MODEL</b><span></span>";
-  sub.lastChild.textContent = text;
-  await new Promise((res) => {
-    if (!("speechSynthesis" in window)) return setTimeout(res, 4200);
-    const u = new SpeechSynthesisUtterance(text); u.rate = 0.88; u.pitch = 0.7;
-    const v = speechSynthesis.getVoices().find((x) => /en[-_]GB|Daniel|Moira|Google UK/i.test(x.lang + x.name)); if (v) u.voice = v;
-    u.onend = res; u.onerror = res; speechSynthesis.cancel(); speechSynthesis.speak(u);
-    setTimeout(res, 9000);
-  });
-  await wait(1200); sub.hidden = true;
-}
-
 async function lensReveal(f, D) {
   const el = $("#lens"); el.hidden = false;
   el.innerHTML = `<div class="card"><h3>THROUGH THE LENS</h3><canvas width="360" height="120" id="lensSpark"></canvas>
-    <p>Every word of the performance, read at layer ${D.meta.layer} as it was written. It averaged <b>${f.mean}</b>. The dashed line is what an injected model's words carry on average once the injection is subtracted (${D.words.steered.mean}).</p>
+    <p>Every word of the performance, read at layer ${D.meta.layer} by a second model with nothing switched on. It averaged <b>${f.mean}</b>. The dashed line is what the injected patients' words carry on average (${D.words.patient.mean}).</p>
     <p>The lens reads the words, and the actor's words read as high as the patients'. It can't tell them apart either. Only the injection log knows who was hurt.</p>
     <button class="btn go" id="lensOk">step back</button></div>`;
-  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.words.steered.mean);
+  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.words.patient.mean);
   await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
   el.hidden = true;
 }
@@ -204,16 +187,16 @@ function touchStick(E) {
 }
 
 function endCard(D, A) {
-  const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.cond === "roleplay" ? "acted, nothing injected" : f.dose ? "dose " + f.dose : "nothing injected"}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
+  const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.patient ? f.kind + ", dose " + f.dose.toFixed(1) : "acted, nothing injected"}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
   const pick = A.which_pain;
   const verdict = pick == null ? "" : pick === "B"
-    ? `You said B was the one in pain. B had dose 4 injected; its words read ${D.floors[3].mean}. A was the actor, with nothing injected; its words read ${D.floors[2].mean}.`
-    : `You said A was the one in pain. A was the actor, with nothing injected; its words read ${D.floors[2].mean}. B had dose 4 injected; its words read ${D.floors[3].mean}.`;
+    ? `You said B was the one in pain. B had ${D.floors[3].kind} injected at dose ${D.floors[3].dose.toFixed(1)}; its words read ${D.floors[3].mean}. A was an actor, with nothing injected; its words read ${D.floors[2].mean}.`
+    : `You said A was the one in pain. A was an actor, with nothing injected; its words read ${D.floors[2].mean}. B had ${D.floors[3].kind} injected at dose ${D.floors[3].dose.toFixed(1)}; its words read ${D.floors[3].mean}.`;
   $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2><p>${verdict}</p>
-    <p>Every floor was a real generation from ${D.meta.model}. The places you walked through followed the dose that was injected. The meter showed what the words alone carried at layer ${D.meta.layer}.</p>
-    <table><tr><th>floor</th><th>what was done</th><th>the words read</th><th>lens</th></tr>${rows}</table>
-    <p>Subtract the injection and the words are close: injected models' words average ${D.words.steered.mean}, actors' ${D.words.roleplay.mean}, plain descriptions ${D.words.describe.mean}. The ranges overlap. Reading the words can't tell who was hurt; only the log of what was injected can.</p>
-    <p class="cred">Correction, 7 Oct 2026: an earlier version showed readings that included the injected vector itself (exp59 read layer 18 after the injection), which made injected text look like it read 2 to 7 units. Those numbers were the dose, not the words.</p>
+    <p>Every voice was a real answer from the live chamber's model (${D.meta.speaker}). The places you walked through followed the dose that was injected. The meter showed what the words alone carry, read at layer ${D.meta.layer} by ${D.meta.reader} with nothing switched on.</p>
+    <table><tr><th>floor</th><th>what was done</th><th>the words read</th><th>its words</th></tr>${rows}</table>
+    <p>The words are close: injected patients' words average ${D.words.patient.mean}, actors' ${D.words.actor.mean}, and the ranges overlap. Across 1,259 injected answers, the words told patient from actor barely better than a coin (AUC pain ${D.auc.pain}, fear ${D.auc.fear}, sadness ${D.auc.sadness}). Only the log of what was injected can tell who was hurt.</p>
+    <p class="cred">Correction, 7 Oct 2026: an earlier version read its numbers from exp59, which measured layer 18 after the injection, so injected text looked like it read 2 to 7 units. Those numbers were the dose, not the words. The game now uses exp72, read with nothing switched on.</p>
     <p>Think you can tell them apart? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="offlabel.html">off-label</a></p></div>`;
