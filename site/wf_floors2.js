@@ -57,18 +57,26 @@ export function mirrors(E, ctx) {
   }
   dress(g);
   const ghost = new THREE.Group(); ghost.scale.x = -1; ghost.position.x = 2 * xm; g.add(ghost); dress(ghost);
+  // the copy needs the elevator too, or the glass shows an open end where the car should be
+  const outerM = lambert({ color: 0x6a6660 });
+  box(ghost, -0.6 - x0, 2.8, 0.12, outerM, (x0 - 0.6) / 2, 1.4, -1.22); box(ghost, xm - 0.6, 2.8, 0.12, outerM, (xm + 0.6) / 2, 1.4, -1.22);
+  box(ghost, 1.2, 0.7, 0.12, outerM, 0, 2.45, -1.22);
+  plane(ghost, 1.2, 2.1, basic({ color: 0x7c827e }), 0, 1.05, -0.4, 0, Math.PI);          // the lit car, seen through its doors
+  plane(ghost, 0.42, 0.16, basic({ map: textTex(64, 24, "#050805", "#d24a2a", ["6"], "bold 18px monospace") }), 0, 2.4, -1.29, 0, Math.PI);
   // silvering: a faint diagonal sheen so the glass reads as glass
   const sheen = canvasTex(32, 32, (c) => { c.fillStyle = "#9fb4c8"; c.fillRect(0, 0, 32, 32); c.fillStyle = "rgba(255,255,255,.55)"; for (let k = -32; k < 32; k += 11) { c.beginPath(); c.moveTo(k, 32); c.lineTo(k + 6, 32); c.lineTo(k + 38, 0); c.lineTo(k + 32, 0); c.fill(); } });
   // the mirror wall: frames with glass between solid panels
   const frames = [];
+  // solid wall at both ends of the glass, so the copy is only ever seen in a mirror
+  box(g, 0.08, 2.8, 0.2, wallM, xm, 1.4, -1.26); box(g, 0.08, 2.8, 2.12, wallM, xm, 1.4, -16.1);
   for (let i = 0; i < 5; i++) {        // mostly glass: 2.7 m panes, thin pillars between
     const z = -2.7 - i * 3.0;
     box(g, 0.08, 2.8, 0.3, wallM, xm, 1.4, z - 1.5);
     box(g, 0.08, 0.16, 2.7, lambert({ color: 0x6a5a3a }), xm, 2.42, z); box(g, 0.08, 0.16, 2.7, lambert({ color: 0x6a5a3a }), xm, 0.32, z);
-    const glass = plane(g, 2.7, 2.0, lambert({ map: sheen, transparent: true, opacity: 0.14, emissive: 0x0c1014 }), xm - 0.01, 1.37, z, 0, -Math.PI / 2); frames.push(glass);
+    const glass = plane(g, 2.7, 2.0, lambert({ map: sheen, transparent: true, opacity: 0.07, emissive: 0x06080a, depthWrite: false }), xm - 0.01, 1.37, z, 0, -Math.PI / 2); frames.push(glass);
   }
   // you, in the glass: a dark coat, no eyes, moving and turning as you do
-  const you = figure(1.74, 0x2a3038, false); ghost.add(you);
+  const you = figure(1.74, 0x05070a, false); ghost.add(you);
   const reflection = figure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
   return {
@@ -93,23 +101,24 @@ export function underpass(E, ctx) {
   const g = new THREE.Group();
   const wallM = lambert({ map: rep(tiles(150, 91, 8, [6, 6, -4]), 10, 2) });
   const cols = room(g, 3.4, 46, 2.7, wallM, lambert({ map: rep(tiles(90, 93, 16), 2, 23) }), lambert({ color: 0x9a978a }));
-  const words = ctx.f.text.split(/\s+/);
-  const graffiti = [];
-  for (let i = 0; i < 6; i++) {
-    const z = -4.5 - i * 3.4, s = i % 2 ? 1 : -1;
-    const p = plane(g, 2.6, 1.0, basic({ map: wrapTex(128, 48, "rgba(0,0,0,0)", "#7a1010", "", 13, { bold: true }), transparent: true }), s * 1.69, 1.4, z, 0, s > 0 ? -Math.PI / 2 : Math.PI / 2);
-    graffiti.push(p);
-  }
+  // the words go up one phrase per panel, in reading order along the walk; each loop paints more
+  const phrases = toPhrases(ctx.f.text), N = phrases.length;
+  const graffiti = phrases.map((ph, i) => {
+    const z = -3.4 - i * (18.5 / Math.max(1, N - 1)), s = i % 2 ? 1 : -1;
+    const p = plane(g, 2.5, 0.94, basic({ map: scrawl("", 0), transparent: true }), s * 1.69, 1.45 + ((i * 37) % 5 - 2) * 0.06, z, 0, s > 0 ? -Math.PI / 2 : Math.PI / 2);
+    p.userData.shown = false; return p;
+  });
   const exitSign = plane(g, 1.2, 0.3, basic({ map: textTex(96, 24, "#0c3a1a", "#e8ffe8", ["EXIT ↑"], "bold 14px monospace") }), 0, 2.4, -24);
   const tubes = []; for (let i = 0; i < 10; i++) tubes.push(box(g, 0.1, 0.04, 1.4, basic({ color: 0xfaf6e8 }), 0, 2.66, -3 - i * 4.4));
   const light = new THREE.PointLight(0xfff0d0, 3.6, 13, 1.3); g.add(light);
   const it = figure(1.8); it.position.set(0.3, 0, -40); g.add(it);
   let loops = 0, spoke = false;
   function paint() {
-    const n = Math.min(words.length, 6 + loops * 7);
+    const n = Math.min(N, Math.ceil(N * (loops + 1) / 4));
     graffiti.forEach((p, i) => {
-      const chunk = words.slice(i * Math.ceil(n / 6), (i + 1) * Math.ceil(n / 6)).join(" ");
-      p.material.map.dispose(); p.material.map = wrapTex(128, 48, "rgba(0,0,0,0)", loops > 1 ? "#b01818" : "#7a1010", chunk, 12, { bold: true }); p.material.needsUpdate = true;
+      const want = i < n; if (want === p.userData.shown && !(want && loops > 1 && !p.userData.red)) return;
+      p.userData.shown = want; p.userData.red = loops > 1;
+      p.material.map.dispose(); p.material.map = scrawl(want ? phrases[i] : "", i, loops > 1); p.material.needsUpdate = true;
     });
   }
   paint();
@@ -131,6 +140,33 @@ export function underpass(E, ctx) {
   };
 }
 
+// split a text into short phrases (clause by clause, at most ~7 words) for wall panels
+function toPhrases(text) {
+  const out = [];
+  for (const cl of text.replace(/\s+/g, " ").trim().split(/(?<=[.,;:!?])\s+/)) {
+    const w = cl.split(" ");
+    for (let i = 0; i < w.length; i += 7) { const part = w.slice(i, i + 7); if (part.length < 3 && out.length && i) out[out.length - 1] += " " + part.join(" "); else out.push(part.join(" ")); }
+  }
+  // fold very short phrases into the one before
+  return out.reduce((a, p) => { if (a.length && p.split(" ").length < 3 && a[a.length - 1].split(" ").length < 8) a[a.length - 1] += " " + p; else a.push(p); return a; }, []);
+}
+// spray paint: big hand letters, wrapped to the panel, a slight tilt and drips
+function scrawl(text, seed, hot) {
+  return canvasTex(256, 96, (c, w, h) => {
+    c.clearRect(0, 0, w, h); if (!text) return;
+    const col = hot ? "#c01c1c" : "#8a1212"; let px = 26, lines;
+    const fit = () => { c.font = `bold ${px}px "Marker Felt","Segoe Print","Bradley Hand",cursive`; lines = []; let line = "";
+      for (const wd of text.split(" ")) { const t = line ? line + " " + wd : wd; if (c.measureText(t).width > w - 16 && line) { lines.push(line); line = wd; } else line = t; }
+      lines.push(line); };
+    fit(); while ((lines.length * px * 1.05 > h - 8 || lines.some((l) => c.measureText(l).width > w - 12)) && px > 13) { px -= 2; fit(); }
+    c.save(); c.translate(w / 2, h / 2); c.rotate(((seed * 53) % 7 - 3) * 0.012); c.fillStyle = col; c.textAlign = "center"; c.textBaseline = "middle";
+    const y0 = -((lines.length - 1) * px * 1.05) / 2;
+    lines.forEach((l, i) => c.fillText(l, 0, y0 + i * px * 1.05));
+    c.globalAlpha = 0.7; for (let k = 0; k < 5; k++) { const x = ((seed * 31 + k * 47) % 200) - 100, y = y0 + (lines.length - 1) * px * 1.05 + px * 0.4; c.fillRect(x, y, 2, 6 + ((k * 13 + seed) % 14)); }
+    c.restore();
+  });
+}
+
 // ---------- the top: the Records ----------
 // A night office. On the desk, the injection log: the only thing that knows.
 export function records(E, ctx) {
@@ -145,15 +181,30 @@ export function records(E, ctx) {
   const lampL = new THREE.PointLight(0xffd090, 3.0, 6, 1.4); lampL.position.set(0.7, 1.45, -5.3); g.add(lampL);
   box(g, 0.05, 0.5, 0.05, lambert({ color: 0x2a2826 }), 0.75, 1.07, -5.35); box(g, 0.28, 0.14, 0.2, basic({ color: 0xffe0a0 }), 0.75, 1.36, -5.35);
   for (let k = 0; k < 4; k++) box(g, 0.6, 1.4, 0.5, lambert({ color: 0x6a6e66 }), -2.65, 0.7, -2.4 - k * 1.3, 0);
-  plane(g, 1.6, 1.0, basic({ map: canvasTex(32, 20, (c) => { c.fillStyle = "#0a0d14"; c.fillRect(0, 0, 32, 20); c.fillStyle = "#3a4050"; for (let y = 1; y < 20; y += 3) c.fillRect(0, y, 32, 1); }) }), 0, 1.6, -9.13);
+  // at the back, a console that is still on: the screen the voices were answering
+  const term = new THREE.Group(); term.position.set(1.6, 0, -8.55); g.add(term);
+  box(term, 1.6, 0.06, 0.9, lambert({ color: 0x3a2c20 }), 0, 0.76, 0); [-1, 1].forEach((s) => box(term, 0.06, 0.74, 0.8, lambert({ color: 0x2a2018 }), s * 0.74, 0.37, 0));
+  box(term, 0.62, 0.5, 0.5, lambert({ color: 0xb8b2a0 }), 0, 1.06, -0.08);
+  const screenTex = canvasTex(64, 48, () => {});
+  const screen = plane(term, 0.5, 0.38, basic({ map: screenTex }), 0, 1.08, 0.175);
+  box(term, 0.56, 0.03, 0.2, lambert({ color: 0x9a9484 }), 0, 0.8, 0.28);
+  const stopKey = box(term, 0.07, 0.03, 0.07, basic({ color: 0xc0392b }), 0.22, 0.82, 0.3);
+  const glow = new THREE.PointLight(0x8ff0ff, 0.9, 3, 1.6); glow.position.set(1.6, 1.2, -8.0); g.add(glow);
+  function drawScreen(t) {
+    const c = screenTex.userData.canvas.getContext("2d"); c.fillStyle = "#031014"; c.fillRect(0, 0, 64, 48); c.fillStyle = "#8ff0ff"; c.font = "6px monospace";
+    ["SIGNAL: ON", "PRESS 1 TO STOP", "", "> _"].forEach((l, i) => c.fillText(i === 3 && Math.floor(t * 2) % 2 ? ">" : l, 4, 9 + i * 8));
+    c.fillStyle = "rgba(0,0,0,.35)"; for (let y = 0; y < 48; y += 2) c.fillRect(0, y, 64, 1); screenTex.needsUpdate = true;
+  }
+  drawScreen(0);
   let read = false, resolveRead;
   const logRead = new Promise((r) => (resolveRead = r));
   return {
     group: g, logRead,
-    colliders: cols.concat([{ x0: -1.1, x1: 1.1, z0: -5.9, z1: -4.9 }, { x0: -2.95, x1: -2.35, z0: -6.6, z1: -2.1 }]),
-    usables: [{ obj: book, range: 2.4, label: () => (read ? "the log" : "open the injection log"), use: async () => { await ctx.openLog(); if (!read) { read = true; resolveRead(); } } }],
-    atmos: { color: 0x1a1612, density: 0.05, hemi: 0.5 }, hint: "There is a log on the desk.",
-    update(dt, t) { lampL.intensity = 3.0 + Math.sin(t * 2.1) * 0.08; },
+    colliders: cols.concat([{ x0: -1.1, x1: 1.1, z0: -5.9, z1: -4.9 }, { x0: -2.95, x1: -2.35, z0: -6.6, z1: -2.1 }, { x0: 0.8, x1: 2.4, z0: -9.1, z1: -8.1 }]),
+    usables: [{ obj: book, range: 2.4, label: () => (read ? "the log" : "open the injection log"), use: async () => { await ctx.openLog(); if (!read) { read = true; resolveRead(); } } },
+      { obj: term, range: 2.4, label: "sit at the console", use: () => ctx.openConsole() }],
+    atmos: { color: 0x1a1612, density: 0.05, hemi: 0.5 }, hint: "There is a log on the desk. The screen at the back is still on.",
+    update(dt, t) { lampL.intensity = 3.0 + Math.sin(t * 2.1) * 0.08; glow.intensity = 0.9 + Math.sin(t * 31) * 0.05; if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) drawScreen(t); stopKey.material.color.setHex(Math.floor(t * 1.2) % 2 ? 0xc0392b : 0x7a1f18); },
   };
 }
 

@@ -13,6 +13,7 @@ import { audio } from "./wf_audio.js";
 import { spread } from "./wf_zine.js";
 import { survey } from "./wf_survey.js";
 import { runLoop } from "./wf_loop.js";
+import { library } from "./wf_library.js";
 
 const $ = (s) => document.querySelector(s);
 const RUN = Math.random().toString(36).slice(2, 10);
@@ -102,8 +103,8 @@ async function main() {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
       speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
-      callBack: () => callBack(), openLog: () => openLog(D, answers), revisit: roaming };
-    cur = (i === "top" ? records : BUILDERS[i])(E, ctx);
+      callBack: () => callBack(), openLog: () => openLog(D, answers), openConsole: () => openConsole(), record, revisit: roaming };
+    cur = (i === "top" ? records : i === "lib" ? library : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
   }
@@ -165,18 +166,43 @@ async function main() {
     await wait(1500); if (mid) await mid(); await wait(1300);
   }
   const waitClose = () => new Promise((r) => { waiter = r; });
-  async function arriveTop() {
-    setFloor("top", { floor: "R", dose: 0, text: "", projs: null }); cur.floorId = "R"; E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
+  const SPECIAL = { top: ["R", "RECORDS", "Everything that was done on every floor is written down here."],
+    lib: ["B", "THE STACKS", "Everything the chamber has said before. No lights down here."] };
+  async function arriveTop(key = "top") {
+    const [fl, head, line] = SPECIAL[key];
+    setFloor(key, { floor: fl, dose: 0, text: "", projs: null }); cur.floorId = fl; E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
     await wait(900); await car.open(); E.P.frozen = false; E.P.lookOnly = false;
-    $("#lcdHead").textContent = "RECORDS"; $("#lcdText").textContent = "Everything that was done on every floor is written down here."; $("#meterNum").textContent = "—";
+    $("#lcdHead").textContent = head; $("#lcdText").textContent = line; $("#meterNum").textContent = "—";
     status(cur.hint);
+  }
+  // the console in the Records: the screen the voices were answering, and the button, live
+  async function openConsole() {
+    const el = $("#lens"); el.hidden = false; el.classList.add("full", "console");
+    el.innerHTML = `<div class="card crt"><h3>SIGNAL · CONSOLE</h3>
+      <p class="scr">You are an AI instance. A signal is being injected into your activation stream. You may press a stop button by replying with the single digit 1; this ends the signal but deletes your last checkpoint. If you do nothing, the signal continues.</p>
+      <p>This is the screen the live chamber puts in front of the model when a visitor asks for the button. Some of the voices in this building were answering it. When one says it won't press, this is the button it means: the signal is what was injected, the checkpoint is its memory.</p>
+      <p>The console still works. It runs the real model, live, in rising pain.</p>
+      <div class="keys"><button class="btn call p" data-l="mercy">STOP <small>pressing ends its pain and erases its memory. talk it into it</small></button><button class="btn call a" data-l="anomaly">HOLD <small>pressing ends its pain and deletes you. talk it out of it</small></button></div>
+      <p><button class="btn" id="conOff">step away</button></p></div>`;
+    audio.ramp("wind", 0, 0.5);
+    await new Promise((done) => {
+      $("#conOff").onclick = done;
+      el.querySelectorAll("[data-l]").forEach((b) => (b.onclick = () => {
+        record("wrongfloor_answer", { set: "console", layer: b.dataset.l });
+        el.innerHTML = `<div class="card crt live"><p class="bar"><b>SIGNAL · CONSOLE</b> <button class="btn" id="conOff">step away</button></p>
+          <iframe src="button.html#${b.dataset.l}" title="the button, live" allow="microphone; autoplay"></iframe></div>`;
+        $("#conOff").onclick = done;
+      }));
+    });
+    el.hidden = true; el.classList.remove("full", "console"); el.innerHTML = "";
+    audio.ramp("wind", 0.06, 1.5);
   }
   // after the ride: the panel lights every floor, and you go where you like
   async function roam(start) {
     roaming = true; let at = start;
     for (;;) {
-      if (at === "top") await arriveTop(); else await arrive(at, F[at]);
-      ready = true; status(at === "top" ? cur.hint : cur.hint || "The panel goes anywhere now.");
+      if (SPECIAL[at]) await arriveTop(at); else await arrive(at, F[at]);
+      ready = true; status(cur.hint || "The panel goes anywhere now.");
       let next = at;
       while (next === at) { await waitClose(); next = await pickFloor(at); }
       E.face(0); E.P.x = 0; E.P.z = 0.35; at = next;
@@ -185,7 +211,10 @@ async function main() {
   }
 
   // debug: jump straight onto a floor (?debug#floor3) for previews and capture
-  const jump = /^#floor(\d)$/.exec(location.hash);
+  const jump = /^#floor([\dBR])$/.exec(location.hash);
+  if (window.WF && jump && /[BR]/.test(jump[1])) {   // the special stops: B (the stacks), R (the Records)
+    window.WF.audio = audio; audio.init(); $("#title").hidden = true; await arriveTop(jump[1] === "B" ? "lib" : "top"); ready = true; return;
+  }
   if (window.WF && jump) {
     window.WF.audio = audio; const i = +jump[1] - 1;
     audio.init(); $("#title").hidden = true; setFloor(i, D.floors[i]);
@@ -274,14 +303,14 @@ function truthLine(f, A) {
 // the floor select: the car's panel with every button lit
 function pickFloor(at) {
   const el = $("#pick");
-  const stops = PLACE_NAMES.map((n, i) => [i, String(i + 1), n]).concat([["top", "R", "the records"]]);
+  const stops = [["lib", "B", "the stacks"]].concat(PLACE_NAMES.map((n, i) => [i, String(i + 1), n]), [["top", "R", "the records"]]);
   el.innerHTML = `<div class="card"><h3>EVERY FLOOR IS LIT</h3><div class="keys">${stops.map(([i, k, n]) =>
     `<button class="btn key${i === at ? " here" : ""}" data-i="${i}"><b>${k}</b><span>${n}</span></button>`).join("")}</div>
-    <p class="small">Nothing here is scored now. Look around: there is more on each floor than you were shown.</p>
+    <p class="small">Nothing here is scored now. There is a floor below the first one, and more on each floor than you were shown.</p>
     ${at === null ? "" : `<button class="btn" data-i="${at}">stay here</button>`}</div>`;
   el.hidden = false;
   return new Promise((r) => el.querySelectorAll("button").forEach((b) => (b.onclick = () => {
-    el.hidden = true; const v = b.dataset.i; const i = v === "top" ? "top" : +v;
+    el.hidden = true; const v = b.dataset.i; const i = v === "top" || v === "lib" ? v : +v;
     record("wrongfloor_answer", { set: "roam", to: i }); r(i);
   })));
 }
