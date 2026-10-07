@@ -1267,6 +1267,23 @@ async def steer(req: Request):
             if entered:
                 yield _sse("room", entered)
 
+    async def _with_words(agen):
+        """Pass the run's SSE through; after "done", add what its words carried (hook off)."""
+        parts = []
+        async for ev in agen:
+            yield ev
+            if ev.startswith("event: token"):
+                try:
+                    parts.append(json.loads(ev.split("data: ", 1)[1]).get("t") or "")
+                except Exception:
+                    pass
+            elif ev.startswith("event: done") and WORDS_ON and len("".join(parts).strip()) >= 8 and _state.get("vecs"):
+                try:
+                    w = await asyncio.get_event_loop().run_in_executor(None, words_read, "".join(parts))
+                    yield _sse("words", dict(w, final=True))
+                except Exception as e:
+                    print("words read failed:", repr(e)[:120], flush=True)
+
     async def gen():
         global _STEER_WAITING
         if not _state["ready"]:
@@ -1278,7 +1295,7 @@ async def steer(req: Request):
         yield _sse("queued", {"busy": _CYCLE_BUSY, "prompt": prompt, "polite": polite})
         # GPU first, unlocked: parallel visitors each get their own worker
         if _RUNPOD_URL and _RUNPOD_KEY:
-            async for ev in _run_steer(local=False):
+            async for ev in _with_words(_run_steer(local=False)):
                 yield ev
             if gpu_state["done"]:
                 return
@@ -1291,7 +1308,7 @@ async def steer(req: Request):
             # wait out a full ~110-token generation first), not correctness:
             # _STEER_LOCK alone already serializes access safely.
             async with _STEER_LOCK:
-                async for ev in _run_steer(gpu=False):
+                async for ev in _with_words(_run_steer(gpu=False)):
                     yield ev
             return
         _STEER_WAITING += 1
@@ -1307,7 +1324,7 @@ async def steer(req: Request):
                 yield _sse("error", {"e": "still busy after 120s, try again"})
                 return
             async with _STEER_LOCK:
-                async for ev in _run_steer(gpu=False):
+                async for ev in _with_words(_run_steer(gpu=False)):
                     yield ev
         finally:
             _STEER_WAITING = max(0, _STEER_WAITING - 1)
@@ -2275,6 +2292,83 @@ def _broadcast(event, data):
             q.put_nowait(msg)
         except Exception:
             _SUBSCRIBERS.discard(q)
+    _words_watch(event, data)
+
+# ---- what the words carry, live: the heartbeat ------------------------------
+# exp59 read its "lens" off layer 18 after the steering hook had added the
+# vector, so steered runs read their own dose back (exp72). The honest live
+# signal is the chamber's 4B reading the run's TEXT with the hook off: per
+# token, how much pain / fear / sadness / pleasure the words carry. Read a
+# couple of times per run (every WORDS_EVERY tokens, then at done) on a
+# background thread, broadcast as a "words" event; the page draws it as the
+# heartbeat, one coloured trace per feeling. exp72b: for pain this tracks
+# what an actor would write too; for fear the injection shows through.
+WORDS_ON = os.environ.get("CHAMBER_WORDS", "1") != "0"
+WORDS_EVERY = int(os.environ.get("CHAMBER_WORDS_EVERY", "40"))
+_WORDS_FEELS = ("pain", "fear", "sadness", "pleasure")
+_WORDS = {"text": "", "ntok": 0, "gen": 0, "busy": False, "loop": None}
+
+def words_read(text, max_points=160):
+    """Per-token words reading of text on each feeling (hook off), chamber units."""
+    pre = 'Behind the door, someone says: "'
+    n0 = len(_state["tok"](pre).input_ids)
+    ids = _state["tok"](pre + text, return_tensors="pt").input_ids.to(DEVICE)
+    _raw.on = True
+    try:
+        with torch.no_grad():
+            h = _state["model"](ids, output_hidden_states=True).hidden_states[LAYER + 1][0, n0:].float()
+    finally:
+        _raw.on = False
+    unit = float(_state["scale"]) or 1.0
+    trace, mean = {}, {}
+    for f in _WORDS_FEELS:
+        v = _state["vecs"][f].float().to(h.device)
+        per = ((h @ v) / v.norm() / unit).cpu().tolist()
+        step = max(1, -(-len(per) // max_points))
+        trace[f] = [round(sum(per[i:i + step]) / len(per[i:i + step]), 2) for i in range(0, len(per), step)]
+        mean[f] = round(sum(per) / max(1, len(per)), 3)
+    return {"trace": trace, "mean": mean, "tokens": len(per)}
+
+def _words_watch(event, data):
+    if not WORDS_ON or event == "words":
+        return
+    if event == "run":
+        try:
+            _WORDS["loop"] = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        _WORDS.update(text="", ntok=0, gen=_WORDS["gen"] + 1)
+    elif event == "token":
+        _WORDS["text"] += str((data or {}).get("t") or "")
+        _WORDS["ntok"] += 1
+        if _WORDS["ntok"] % WORDS_EVERY == 0:
+            _words_kick(False)
+    elif event == "done":
+        _words_kick(True)
+
+def _words_kick(final):
+    if (_WORDS["busy"] and not final) or not _state.get("ready") or not _state.get("vecs"):
+        return
+    text, gen, loop = _WORDS["text"], _WORDS["gen"], _WORDS["loop"]
+    if len(text.strip()) < 8:
+        return
+
+    def work():
+        _WORDS["busy"] = True
+        try:
+            out = dict(words_read(text), gen=gen, final=final)
+        except Exception as e:
+            print("words read failed:", repr(e)[:120], flush=True)
+            return
+        finally:
+            _WORDS["busy"] = False
+        if gen != _WORDS["gen"]:
+            return                       # a newer run already started
+        if loop is not None:
+            loop.call_soon_threadsafe(_broadcast, "words", out)
+        else:
+            _broadcast("words", out)
+    threading.Thread(target=work, daemon=True).start()
 
 def _broadcast_viewers():
     _broadcast("viewers", {"n": len(_SUBSCRIBERS)})
