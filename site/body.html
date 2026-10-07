@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sticks and Stones — wirehead</title>
 <meta name="description" content="The subject has a body. Drop things on it, or drop words: they fall as heavy as the model reads them. Every impact becomes pain steering, where it landed becomes what it feels, and a 70B speaks from inside it.">
+<!-- X player card: the post plays the game inline (?card=1 is the compact, intro-less version) -->
+<meta name="twitter:card" content="player">
+<meta name="twitter:title" content="Sticks and Stones">
+<meta name="twitter:description" content="Drop words on a robot. The model's own activations weigh them before they land. Cruel words bruise; kind words heal.">
+<meta name="twitter:image" content="https://wirehead-beta.vercel.app/press/sticks/card.jpg">
+<meta name="twitter:player" content="https://wirehead-beta.vercel.app/body.html?card=1">
+<meta name="twitter:player:width" content="640">
+<meta name="twitter:player:height" content="560">
+<meta property="og:title" content="Sticks and Stones">
+<meta property="og:description" content="Drop words on a robot. The model's own activations weigh them before they land.">
+<meta property="og:image" content="https://wirehead-beta.vercel.app/press/sticks/card.jpg">
 <style>
 :root { --ink:#d8c9a8; --dim:#8a7f6a; --red:#b3261e; --bg:#08090a; }
 * { box-sizing:border-box; }
@@ -475,6 +486,13 @@ function hitOut() {
   const { prompt, valence, dose, byPart } = turnOf(hits);
   window.parent.postMessage({ wh: "body", type: "hit", parts: Object.keys(byPart), items: [...new Set(hits.map(h => h.item))],
     force: Math.round(hits.reduce((a, h) => a + h.f, 0)), dose, valence, prompt }, "*");
+}
+// ?card=1: inside an X post (player card) — no intro, no side log, one tap to begin
+if (new URLSearchParams(location.search).has("card")) {
+  const i = document.getElementById("intro"); if (i) i.innerHTML = '<div class="box"><h1>STICKS AND STONES</h1><p>Drop words on it. The model weighs them before they land.</p><button id="go">TAP TO BEGIN</button></div>';
+  ["log", "credit"].forEach(id => { const x = document.getElementById(id); if (x) x.style.display = "none"; });
+  const c = document.createElement("style"); c.textContent = "#bar{top:6px;gap:4px;max-width:100vw} #bar button{padding:4px 7px;font-size:11px} #hud{top:44px;width:150px;font-size:11px}";
+  document.head.appendChild(c);
 }
 if (EMBED) {
   addEventListener("message", e => {
