@@ -1,6 +1,6 @@
 // Wrong Floor — the car. Sits at the origin, doors facing -z, set into a wall
 // whose far side each floor dresses. One button inside: close doors.
-import { THREE, lambert, basic, box, plane, noiseTex, canvasTex, figure } from "./wf_engine.js";
+import { THREE, lambert, basic, box, plane, noiseTex, canvasTex, figure, burstFigure } from "./wf_engine.js";
 
 export const W = 2.2, H = 2.6, D = 2.2, DOOR_W = 1.2, DOOR_H = 2.1;
 
@@ -47,7 +47,7 @@ export function createCar(E) {
     [indTex, outTex].forEach((t) => { const c = t.userData.canvas.getContext("2d"); c.fillStyle = "#050805"; c.fillRect(0, 0, 64, 24);
       c.fillStyle = color; c.font = "bold 18px monospace"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(text, 32, 13); t.needsUpdate = true; });
   }
-  const rider = figure(1.75); rider.position.set(0.05, 0, D / 2 - 0.2); rider.rotation.y = Math.PI; rider.visible = false; g.add(rider);
+  const rider = burstFigure(1.75); rider.position.set(0.05, 0, D / 2 - 0.2); rider.rotation.y = Math.PI; rider.visible = false; g.add(rider);
 
   const S = { door: 0, target: 0, flash: 0 };
   E.tick((dt, t) => {

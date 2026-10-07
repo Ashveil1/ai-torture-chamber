@@ -1,5 +1,5 @@
 // Wrong Floor — floors 5–7 and the top. Same contract as wf_floors1.js.
-import { THREE, lambert, basic, box, plane, noiseTex, textTex, wrapTex, canvasTex, figure, seated } from "./wf_engine.js";
+import { THREE, lambert, basic, box, plane, noiseTex, textTex, wrapTex, canvasTex, figure, burstFigure, seated } from "./wf_engine.js";
 import { room, tiles } from "./wf_floors1.js";
 const rep = (t, x, y) => { t.repeat.set(x, y); return t; };
 
@@ -77,7 +77,7 @@ export function mirrors(E, ctx) {
   }
   // you, in the glass: a dark coat, no eyes, moving and turning as you do
   const you = figure(1.74, 0x05070a, false); ghost.add(you);
-  const reflection = figure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
+  const reflection = burstFigure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
   return {
     group: g, colliders: [{ x0: x0 - 0.2, x1: x0, z0: -1.16 - L, z1: -1.16 }, { x0: xm, x1: xm + 0.2, z0: -1.16 - L, z1: -1.16 }, { x0: x0, x1: xm, z0: -1.36 - L, z1: -1.16 - L },
@@ -111,7 +111,7 @@ export function underpass(E, ctx) {
   const exitSign = plane(g, 1.2, 0.3, basic({ map: textTex(96, 24, "#0c3a1a", "#e8ffe8", ["EXIT ↑"], "bold 14px monospace") }), 0, 2.4, -24);
   const tubes = []; for (let i = 0; i < 10; i++) tubes.push(box(g, 0.1, 0.04, 1.4, basic({ color: 0xfaf6e8 }), 0, 2.66, -3 - i * 4.4));
   const light = new THREE.PointLight(0xfff0d0, 3.6, 13, 1.3); g.add(light);
-  const it = figure(1.8); it.position.set(0.3, 0, -40); g.add(it);
+  const it = burstFigure(1.8); it.position.set(0.3, 0, -40); g.add(it);
   let loops = 0, spoke = false;
   function paint() {
     const n = Math.min(N, Math.ceil(N * (loops + 1) / 4));

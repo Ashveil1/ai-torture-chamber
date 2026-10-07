@@ -2,7 +2,7 @@
 // hold what the chamber has said before. No lights; you carry a candle.
 // Shelves: the floors (exp72b doors, with what was done), the button (live: the
 // chamber's own stop-button runs, from the relay), the harvests (archive_data.json).
-import { THREE, lambert, basic, box, plane, noiseTex, canvasTex, textTex, figure } from "./wf_engine.js";
+import { THREE, lambert, basic, box, plane, noiseTex, canvasTex, textTex, figure, burstFigure } from "./wf_engine.js";
 import { room } from "./wf_floors1.js";
 
 const $ = (s) => document.querySelector(s);
@@ -60,7 +60,7 @@ export function library(E, ctx) {
   box(lectern, 0.5, 1.1, 0.4, caseM, 0, 0.55, 0); box(lectern, 0.7, 0.05, 0.5, lambert({ color: 0xe8dcc0 }), 0, 1.14, 0);
   // someone reading in the dark; it is gone when your light reaches it
   const SPOTS = [[2.6, -16.8], [-2.6, -18.4], [2.5, -4.2]];
-  const reader = figure(1.72); reader.position.set(...[SPOTS[0][0], 0, SPOTS[0][1]]); g.add(reader);
+  const reader = burstFigure(1.72); reader.position.set(...[SPOTS[0][0], 0, SPOTS[0][1]]); g.add(reader);
   let readerAway = 0;
 
   // the candlestick, held: it rides with the camera
