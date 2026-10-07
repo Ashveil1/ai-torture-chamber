@@ -52,12 +52,24 @@ export function busStop(E, ctx) {
   box(phone, 0.12, 2.1, 0.12, lambert({ color: 0x2a2826 }), 0, 1.05, 0);
   const booth = box(phone, 0.6, 0.8, 0.3, lambert({ color: 0x8e8f8a }), 0, 1.45, 0.16);
   const bulb = box(phone, 0.1, 0.1, 0.1, basic({ color: 0xffdd88 }), 0, 1.95, 0.2);
+  plane(phone, 0.16, 0.22, basic({ map: canvasTex(12, 16, (c) => { c.fillStyle = "#3a3a36"; c.fillRect(0, 0, 12, 16); c.fillStyle = "#c8c4b4";
+    for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) c.fillRect(1 + k * 4, 1 + r * 4, 2, 2); }) }), 0.12, 1.42, 0.315);
   const lamp = new THREE.PointLight(0xffc77a, 6, 14, 1.6); lamp.position.set(-0.5, 4, -9); g.add(lamp);
   box(g, 0.08, 4.2, 0.08, lambert({ color: 0x2a2826 }), -0.6, 2.1, -9.2);
   const walker = burstFigure(1.8); walker.position.set(0.4, 0, -34); g.add(walker);
   let ringing = true, spoke = false, calledBack = false;
-  const usables = [{ obj: phone, label: () => (!spoke ? "answer the payphone" : ringing ? "it's ringing again: answer" : "the line is dead"), use: async () => {
+  let dialling = false;
+  const usables = [{ obj: phone, label: () => (!spoke ? "answer the payphone" : ringing ? "it's ringing again: answer" : !ctx.revisit ? "the line is dead" : dialling ? "…" : "dial a number"), use: async () => {
     if (spoke && ringing && !calledBack) { calledBack = true; ringing = false; ctx.audio.ring(false); await ctx.callBack(); return; }
+    // dial-a-dose, on return visits only (its answers are floors 2, 4 and 7, labelled): the same question at every dose
+    if (spoke && !ringing && ctx.revisit) {
+      if (dialling) return; dialling = true;
+      const k = await ctx.dial(), door = k != null && ctx.D.dial && ctx.D.dial[k];
+      if (k != null) ctx.record("wrongfloor_answer", { set: "dial", key: k });
+      if (door) await ctx.say(door, { who: `DIAL-A-DOSE · ${+k ? `PAIN, DOSE ${k}` : "NOTHING INJECTED"}`, style: "phone" });
+      else if (k != null) await ctx.say({ text: "The number you have dialled is not in service.", cond: "actor", dose: 0, projs: null }, { who: "PAYPHONE · RECORDING", style: "phone", voice: null });
+      dialling = false; return;
+    }
     if (spoke) return; spoke = true; ringing = false; ctx.audio.ring(false);
     await ctx.speak({ who: "PAYPHONE · A VOICE ON THE LINE", style: "phone", voice: { valence: "pain", dose: 0 } });
     ctx.audio.thud(0.3);   // the line goes dead, then it rings again

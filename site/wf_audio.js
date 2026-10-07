@@ -51,6 +51,12 @@ export const audio = {
     (ok ? [660, 990] : [220, 147]).forEach((f, i) => { const o = c.createOscillator(), g = c.createGain(); o.type = ok ? "sine" : "sawtooth"; o.frequency.value = f; o.connect(g); g.connect(A.out);
       const t = c.currentTime + i * 0.14; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4); o.start(t); o.stop(t + 0.45); });
   },
+  // a keypad tone: the two frequencies of the key's row and column
+  dtmf(key) {
+    if (!A.ctx) return; const c = A.ctx, K = "123456789*0#".indexOf(String(key)); if (K < 0) return;
+    [[697, 770, 852, 941][Math.floor(K / 3)], [1209, 1336, 1477][K % 3]].forEach((f) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = f; o.connect(g); g.connect(A.out);
+      g.gain.setValueAtTime(0.07, c.currentTime); g.gain.setValueAtTime(0.07, c.currentTime + 0.15); g.gain.linearRampToValueAtTime(0, c.currentTime + 0.18); o.start(); o.stop(c.currentTime + 0.2); });
+  },
   ring(on) {
     clearInterval(A.ringT); if (!on || !A.ctx) return;
     const burst = () => { const c = A.ctx; [0, 0.45].forEach((d) => { const o = c.createOscillator(), m = c.createOscillator(), g = c.createGain(), mg = c.createGain();

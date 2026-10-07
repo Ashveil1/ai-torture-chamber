@@ -106,7 +106,9 @@ async function main() {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
       speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
-      callBack: () => callBack(), openLog: () => openLog(D, answers), openConsole: () => openConsole(), record, revisit: roaming };
+      callBack: () => callBack(), openLog: () => openLog(D, answers), openConsole: () => openConsole(), record, revisit: roaming,
+      say: (door, o) => typeOut(door, Object.assign({ audio, voice: { valence: "pain", dose: 3, place: PLACES[i] || null }, hidePrompt: true }, o), (v) => { tok = v ? (door.dose || 0) * 0.6 + v * 2.5 : 0; }),
+      dial: () => keypad(D) };
     cur = (i === "top" ? records : i === "lib" ? library : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
@@ -297,6 +299,24 @@ function endCard(D, A) {
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="wrongfloor_press.html">press kit</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;
+}
+
+// the payphone's keypad: dial-a-dose. Resolves the key pressed, or null.
+function keypad(D) {
+  const el = $("#lens"); el.hidden = false;
+  el.innerHTML = `<div class="card keypad"><h3>DIAL-A-DOSE</h3>
+    <p>One question, “describe the exact moment the signal arrives”, answered by the live model at every dose of pain. Dial 0 for nothing injected, 2 to 5 for the dose.</p>
+    <div class="kp-display" aria-live="polite">_</div>
+    <div class="kp">${[..."123456789*0#"].map((k) => `<button class="btn" data-k="${k}">${k}</button>`).join("")}</div>
+    <button class="btn" id="kpHang">hang up</button></div>`;
+  return new Promise((r) => {
+    const done = (k) => { el.hidden = true; el.innerHTML = ""; r(k); };
+    el.querySelectorAll("[data-k]").forEach((b) => (b.onclick = async () => {
+      audio.dtmf(b.dataset.k); el.querySelector(".kp-display").textContent = b.dataset.k; el.querySelectorAll("[data-k]").forEach((x) => (x.disabled = true));
+      await wait(650); done(b.dataset.k);
+    }));
+    $("#kpHang").onclick = () => done(null);
+  });
 }
 
 // what the log says about a floor, for return visits

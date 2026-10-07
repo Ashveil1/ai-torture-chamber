@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MATCHED = ROOT / "runs/exp72b/doors_matched.json"
 PHONE = ROOT / "runs/wf_phone/runs_read.json"
+DIAL0 = ROOT / "runs/wf_dial/runs_read.json"   # the ladder's prompt with nothing injected
 ANALYSIS = ROOT / "runs/exp72b/analysis.json"
 OUT = ROOT / "site/wf_data.json"
 
@@ -154,6 +155,9 @@ def main():
     for r in json.loads(PHONE.read_text()):
         doors[r["id"]] = {"id": r["id"], "cond": r["cond"], "feel": "pain", "dose": r["dose"], "text": r["text"],
                           "words": r["words"], "trace": r["trace"]["pain"] if isinstance(r["trace"], dict) else r["trace"]}
+    z = json.loads(DIAL0.read_text())[0]
+    doors["dial0"] = {"id": "dial0", "cond": "control", "feel": "pain", "dose": 0, "text": z["text"], "words": z["words"], "trace": z["trace"]["pain"]}
+    dial = {str(k): fair(door(doors[did]), budget=440) for k, did in ((0, "dial0"), (2, "L2-2"), (3, "L2-3"), (4, "L2-4"), (5, "L2-5"))}
     floors = []
     for label, did in FLOORS:
         f = fair(door(doors[did]), budget=440)
@@ -198,7 +202,8 @@ def main():
         "words": words,          # what the words carry, per condition: they overlap
         "auc": auc,              # exp72b prereg, matched prompts: can the words tell patient from actor?
         "pairs": pairs_n, "ladder": ladder,
-        "letter": letter,        # the zine's letter: the button screen and a real reply
+        "letter": letter,
+        "dial": dial,            # the payphone keypad: rung 2 of the ladder by dose, and dose 0        # the zine's letter: the button screen and a real reply
         "gallery": gallery,
         "valid": {str(d): [valid[d], tried[d]] for d in valid},
     }
