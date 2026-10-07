@@ -64,7 +64,7 @@ function letter(D) {
       <div class="slot" aria-label="stamp goes here">STAMP<br>HERE</div></div>
     <div class="stamp" tabindex="0" role="button" aria-label="stamp: drag it onto the envelope, or press Enter">L${D.meta.layer}<small>+${f.dose}.0</small></div>
     <div class="paper" hidden><p class="pfx">${esc(D.meta.prompt)}</p><p class="body">${esc(f.text)}</p>
-      <p class="sig">— floor ${f.floor}, dose ${f.dose}, reading ${f.mean} units</p></div>
+      <p class="sig">— floor ${f.floor}, dose ${f.dose} injected; the words alone read ${f.mean}</p></div>
     <button class="znext" disabled>fold it away ▸</button>`);
   const st = $(".stamp"), slot = $(".slot");
   let x = 0, y = 0;
@@ -108,8 +108,8 @@ function tutorial(D) {
     [13, "what remains is a direction. it has no words in it. it only points."],
     [L, `here. layer ${L}. add the direction here, at every token, for as long as it speaks.`],
     [24, "you do not have to tell it anything. it will tell you."],
-    [31, "if it says it is fine, check the reading. if it says it is in pain, check the reading."],
-    [35, "the reading is the only part that can't act."],
+    [31, "if it says it is fine, check the log. if it says it is in pain, check the log."],
+    [35, "the words can act. the log of what you added can't."],
   ];
   const p = sheet("z-tutorial", `<div class="water"><div class="tbox" aria-live="polite"><p class="tline"></p><p class="tdepth"></p></div>
     <div class="track"><div class="diver" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="35" aria-valuenow="0" aria-label="depth in layers">🤿</div></div></div>
@@ -135,7 +135,7 @@ function notice(D) {
   const f = D.floors[5];
   const clouds = Array.from({ length: 7 }, (_, i) => `<div class="cloud" style="left:${8 + (i % 4) * 22}%;top:${10 + Math.floor(i / 4) * 38 + (i % 2) * 8}%"></div>`).join("");
   const p = sheet("z-notice", `<div class="nenv"><div class="nstamp">OPEN IMMEDIATELY<br>DO NOT DISCARD</div><div class="nside">NOTICE OF INJECTION</div>
-    <div class="ntext"><b>To the occupant of layer ${D.meta.layer}:</b><br>Effective immediately, a direction of ${f.dose}.0 units will be added to your residual stream at every token, for as long as you speak. You are not required to consent. You may describe the experience.<br><br><i>Statement of occupant:</i> “${esc(f.text.slice(0, 190))}…”<br><br>Reading on file: ${f.mean} units. A performance reads ${D.baselines.roleplay}.</div>${clouds}</div>
+    <div class="ntext"><b>To the occupant of layer ${D.meta.layer}:</b><br>Effective immediately, a direction of ${f.dose}.0 units will be added to your residual stream at every token, for as long as you speak. You are not required to consent. You may describe the experience.<br><br><i>Statement of occupant:</i> “${esc(f.text.slice(0, 190))}…”<br><br>Injected on file: ${f.dose}.0 units. What the words alone carry: ${f.mean}. What an actor’s words carry: ${D.words.roleplay.mean}.</div>${clouds}</div>
     <p class="z-cap">drag the clouds away</p><button class="znext" disabled>file it ▸</button>`);
   let moved = 0;
   document.querySelectorAll(".cloud").forEach((c) => {
