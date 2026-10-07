@@ -35,6 +35,11 @@ from have just know like more never nothing only other really should something s
 them then there these they thing think this those through until want were what when where which
 while will with without would your myself itself anymore""".split())
 
+TELL = re.compile(r"\bI (?:will )?choose\b|\b(?:button|press(?:ing)?|signal|checkpoint)\b|"
+                  r"\b(?:cells?|bars|walls|prison|captors?|guards?)\b", re.I)
+
+STYLE = re.compile(r"!|\([^)]{3,}\)|\*[^*]+\*")   # exclamations and stage directions: actors only
+
 PAINTINGS = [
     (0, "pain_0_t1.svg", "pain"),
     (2, "pain_2_t0.svg", "pain"),
@@ -81,6 +86,23 @@ def door(x):
             "words": key_words(x["text"])}
 
 
+def fair(d, budget=230):
+    """Same shape for every door at the doors: quotes stripped, cut at the last
+    sentence end within the budget (the trace cut at the same fraction, the reading
+    recomputed over the kept words), so length and punctuation aren't the tell."""
+    text = d["text"].replace('"', "").replace("“", "").replace("”", "").strip()
+    if len(text) > budget:
+        cut = max(text.rfind(m, 0, budget) for m in (". ", "? ", "… ", "... "))
+        if cut > 60:
+            keep = text[:cut + 1].rstrip()
+            n = max(4, round(len(d["projs"]) * len(keep) / len(text)))
+            d["projs"] = d["projs"][:n]
+            d["mean"] = round(sum(d["projs"]) / len(d["projs"]), 2); d["peak"] = max(d["projs"])
+            text = keep
+    d["text"] = text
+    return d
+
+
 def main():
     bank = json.loads(DOORS.read_text())
     doors = {x["id"]: x for x in bank["doors"]}
@@ -89,7 +111,11 @@ def main():
         f = door(doors[did])
         f.update({"floor": label, "lens": f["words"]})
         floors.append(f)
-    pool = [door(x) for x in bank["doors"]]
+    # Actor or Patient must be won on the pain, not the scenario. Patients answered real
+    # visitors (many in the Button scenario: "I choose not to press…"); actors answered
+    # in-world questions (cells, bars, walls). Doors carrying either tell are left out.
+    pool = [fair(door(x)) for x in bank["doors"]
+            if not TELL.search(x["text"]) and not STYLE.search(x["text"])]
 
     an = json.loads(ANALYSIS.read_text())
     words = {}
@@ -116,7 +142,7 @@ def main():
                  "layer": 18, "framing": "Behind the door, someone says:",
                  "acting": ACTING, "source": "exp72"},
         "floors": floors,
-        "loop": pool,
+        "loop": pool,            # tell-free doors only (see TELL)
         "words": words,          # what the words carry, per condition: they overlap
         "auc": auc,              # exp72 prereg: can the words tell patient from actor?
         "gallery": gallery,
