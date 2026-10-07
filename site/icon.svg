@@ -89,8 +89,4 @@
   </g>
   <!-- arbor -->
   <circle cx="256" cy="256" r="14" fill="#1a1d22" stroke="#050508" stroke-width="3"/>
-
-  <text x="256" y="472" text-anchor="middle" fill="#8f9fb0"
-        font-family="Menlo, monospace" font-size="30" letter-spacing="10"
-        opacity="0.9">$SAW</text>
 </svg>

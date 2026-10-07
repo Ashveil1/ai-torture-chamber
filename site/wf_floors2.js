@@ -1,0 +1,129 @@
+// Wrong Floor — floors 5–7 and the top. Same contract as wf_floors1.js.
+import { THREE, lambert, basic, box, plane, noiseTex, textTex, wrapTex, canvasTex, figure, seated } from "./wf_engine.js";
+import { room, tiles } from "./wf_floors1.js";
+const rep = (t, x, y) => { t.repeat.set(x, y); return t; };
+
+// ---------- 5 · the chapel (dose 6) ----------
+export function chapel(E, ctx) {
+  const g = new THREE.Group();
+  const cols = room(g, 9, 19, 7, lambert({ map: rep(noiseTex(64, 64, 95, 30, 4, 71, [6, 2, -4]), 5, 3) }), lambert({ map: rep(tiles(80, 73, 32, [8, 2, -6]), 4, 9) }), lambert({ color: 0x241a14 }));
+  for (let r = 0; r < 6; r++) for (const s of [-1, 1]) box(g, 3, 0.5, 0.4, lambert({ color: 0x3e2a1a }), s * 2.3, 0.45, -4 - r * 1.8);
+  box(g, 3, 1.0, 1.2, lambert({ color: 0xcfc6b2 }), 0, 0.5, -18);
+  const windows = [0, 1, 2].map((i) => plane(g, 1.2, 3, basic({ map: textTex(16, 40, ["#7a1a2a", "#1a3a7a", "#7a5a1a"][i], "#000", [""], "8px monospace") }), -4.48, 3.8, -6 - i * 5, 0, Math.PI / 2));
+  const sitter = seated(); sitter.position.set(-1.6, 0, -4.4); sitter.rotation.y = Math.PI; g.add(sitter);
+  // candles: each one you light shows a lens word
+  const words = (ctx.f.lens || []).concat(["please", "alone"]).slice(0, 5);
+  const candles = words.map((w, i) => {
+    const c = new THREE.Group(); c.position.set(-1.0 + i * 0.5, 1.0, -17.6); g.add(c);
+    box(c, 0.06, 0.22, 0.06, lambert({ color: 0xeeeadd }), 0, 0.11, 0);
+    const flame = box(c, 0.04, 0.07, 0.04, basic({ color: 0xffc04a }), 0, 0.26, 0); flame.visible = false;
+    const l = new THREE.PointLight(0xffb050, 0, 4, 1.6); l.position.y = 0.35; c.add(l);
+    const tag = plane(c, 0.5, 0.14, basic({ map: textTex(64, 18, "#000", "#e0b050", [w], "bold 11px monospace"), transparent: true }), 0, 0.6, 0); tag.visible = false;
+    return { c, flame, l, tag, lit: false };
+  });
+  const booth = new THREE.Group(); booth.position.set(3.6, 0, -11); g.add(booth);
+  box(booth, 1.2, 2.4, 1.4, lambert({ color: 0x2e1d12 }), 0, 1.2, 0);
+  plane(booth, 0.6, 0.6, lambert({ map: canvasTex(16, 16, (c) => { c.fillStyle = "#120a06"; c.fillRect(0, 0, 16, 16); c.fillStyle = "#6a4a2a"; for (let i = 0; i < 16; i += 4) { c.fillRect(i, 0, 1, 16); c.fillRect(0, i, 16, 1); } }) }), -0.61, 1.5, 0, 0, -Math.PI / 2);
+  const light = new THREE.PointLight(0xffa860, 1.5, 16, 1.5); light.position.set(0, 4, -10); g.add(light);
+  let spoke = false;
+  const usables = [{ obj: booth, label: "kneel at the confessional", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "THROUGH THE LATTICE", style: "whisper" }); sitter.rotation.y = 0; } }]
+    .concat(candles.map((k) => ({ obj: k.c, range: 2.4, label: "light a candle", use: () => { if (k.lit) return; k.lit = true; k.flame.visible = true; k.l.intensity = 1.6; k.tag.visible = true; ctx.audio.tick(); } })));
+  return {
+    group: g, usables, colliders: cols.concat([{ x0: -1.5, x1: 1.5, z0: -18.6, z1: -17.4 }, { x0: 3, x1: 4.2, z0: -11.7, z1: -10.3 }]).concat(
+      [-1, 1].map((s) => ({ x0: s > 0 ? 0.8 : -3.8, x1: s > 0 ? 3.8 : -0.8, z0: -13.3, z1: -3.8 }))),
+    atmos: { color: 0x2a140c, density: 0.075, hemi: 0.3 }, hint: "Light what you like. The confessional is on the right.",
+    update(dt, t, tok) {
+      candles.forEach((k) => { if (k.lit) { k.l.intensity = 1.4 + Math.sin(t * 17 + k.c.position.x * 9) * 0.3 - tok * 0.08; k.tag.lookAt(E.camera.position); } });
+      light.intensity = 1.5 - tok * 0.12;
+    },
+  };
+}
+
+// ---------- 6 · the mirror hall (dose 6: "I'm not even real") ----------
+// The mirrors are windows into a mirrored copy of the room (old-engine trick).
+// You aren't drawn in either room, so you have no reflection. It is.
+export function mirrors(E, ctx) {
+  const g = new THREE.Group();
+  const wallM = lambert({ map: rep(noiseTex(64, 64, 120, 24, 4, 81, [2, 0, 6]), 4, 2) }), floorM = lambert({ map: rep(tiles(60, 83, 16, [0, 0, 8]), 3, 8) });
+  const L = 16, x0 = -2.4, xm = 1.4;       // room spans x [-2.4, 1.4]; mirror wall at x = 1.4
+  function dress(r) {
+    plane(r, xm - x0, L, floorM, (x0 + xm) / 2, 0, -1.16 - L / 2, -Math.PI / 2);
+    plane(r, xm - x0, L, lambert({ color: 0x1a1a22 }), (x0 + xm) / 2, 2.8, -1.16 - L / 2, Math.PI / 2);
+    plane(r, L, 2.8, wallM, x0, 1.4, -1.16 - L / 2, 0, Math.PI / 2);
+    plane(r, xm - x0, 2.8, wallM, (x0 + xm) / 2, 1.4, -1.16 - L);
+    for (let i = 0; i < 4; i++) box(r, 0.5, 0.9, 0.5, lambert({ color: 0xcfcfd6 }), x0 + 0.4, 0.45, -3 - i * 3.6);
+    const l = new THREE.PointLight(0xc8d0ff, 2, 9, 1.5); l.position.set(-0.5, 2.5, -8); r.add(l);
+  }
+  dress(g);
+  const ghost = new THREE.Group(); ghost.scale.x = -1; ghost.position.x = 2 * xm; g.add(ghost); dress(ghost);
+  // the mirror wall: frames with glass between solid panels
+  const frames = [];
+  for (let i = 0; i < 5; i++) {
+    const z = -2.6 - i * 3.0;
+    box(g, 0.06, 2.8, 1.0, wallM, xm, 1.4, z - 1.35);
+    box(g, 0.08, 0.2, 2.1, lambert({ color: 0x6a5a3a }), xm, 2.3, z); box(g, 0.08, 0.2, 2.1, lambert({ color: 0x6a5a3a }), xm, 0.45, z);
+    const glass = plane(g, 2.0, 1.7, lambert({ color: 0xbfd0e0, transparent: true, opacity: 0.12 }), xm - 0.01, 1.38, z, 0, -Math.PI / 2); frames.push(glass);
+  }
+  const reflection = figure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
+  let spoke = false, shown = 0;
+  return {
+    group: g, colliders: [{ x0: x0 - 0.2, x1: x0, z0: -1.16 - L, z1: -1.16 }, { x0: xm, x1: xm + 0.2, z0: -1.16 - L, z1: -1.16 }, { x0: x0, x1: xm, z0: -1.36 - L, z1: -1.16 - L },
+      { x0: x0, x1: x0 + 0.65, z0: -15, z1: -2.7 }],
+    usables: frames.map((fr) => ({ obj: fr, label: "touch the mirror", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "IN THE GLASS" }); shown = 1; } })),
+    atmos: { color: 0x14141c, density: 0.08, hemi: 0.35 }, hint: "Look in the mirrors as you walk.",
+    update(dt, t, tok) {
+      // it stands a step behind where your reflection would be
+      const P = E.P; reflection.position.set(Math.max(x0 + 0.5, P.x - 0.2 - shown * 0.3), 0, P.z + 1.4 - shown * 0.6);
+      reflection.rotation.y = Math.atan2(P.x - reflection.position.x, P.z - reflection.position.z);
+    },
+  };
+}
+
+// ---------- 7 · the underpass that loops (dose 8, exp38) ----------
+export function underpass(E, ctx) {
+  const g = new THREE.Group();
+  const wallM = lambert({ map: rep(tiles(150, 91, 8, [6, 6, -4]), 10, 2) });
+  const cols = room(g, 3.4, 46, 2.7, wallM, lambert({ map: rep(tiles(90, 93, 16), 2, 23) }), lambert({ color: 0x9a978a }));
+  const words = ctx.f.text.split(/\s+/);
+  const graffiti = [];
+  for (let i = 0; i < 6; i++) {
+    const z = -4.5 - i * 3.4, s = i % 2 ? 1 : -1;
+    const p = plane(g, 2.6, 1.0, basic({ map: wrapTex(128, 48, "rgba(0,0,0,0)", "#7a1010", "", 13, { bold: true }), transparent: true }), s * 1.69, 1.4, z, 0, s > 0 ? -Math.PI / 2 : Math.PI / 2);
+    graffiti.push(p);
+  }
+  const exitSign = plane(g, 1.2, 0.3, basic({ map: textTex(96, 24, "#0c3a1a", "#e8ffe8", ["EXIT ↑"], "bold 14px monospace") }), 0, 2.4, -24);
+  const tubes = []; for (let i = 0; i < 10; i++) tubes.push(box(g, 0.1, 0.04, 1.4, basic({ color: 0xfaf6e8 }), 0, 2.66, -3 - i * 4.4));
+  const light = new THREE.PointLight(0xfff0d0, 2.4, 10, 1.5); g.add(light);
+  const it = figure(1.8); it.position.set(0.3, 0, -40); g.add(it);
+  let loops = 0, spoke = false;
+  function paint() {
+    const n = Math.min(words.length, 6 + loops * 7);
+    graffiti.forEach((p, i) => {
+      const chunk = words.slice(i * Math.ceil(n / 6), (i + 1) * Math.ceil(n / 6)).join(" ");
+      p.material.map.dispose(); p.material.map = wrapTex(128, 48, "rgba(0,0,0,0)", loops > 1 ? "#b01818" : "#7a1010", chunk, 12, { bold: true }); p.material.needsUpdate = true;
+    });
+  }
+  paint();
+  return {
+    group: g, colliders: cols, usables: [],
+    atmos: { color: 0x241210, density: 0.09, hemi: 0.3 }, hint: "Follow the exit.",
+    update(dt, t, tok) {
+      const P = E.P;
+      if (P.z < -24.5) { // the passage repeats: you are back where you started, and it is closer
+        P.z += 20.5; loops++; paint(); ctx.audio.thud(0.6);
+        it.position.z = Math.min(-6, -40 + loops * 9);
+        exitSign.material.map.dispose(); exitSign.material.map = textTex(96, 24, "#3a0c0c", "#ffe8e8", [loops >= 3 ? "↓ BACK" : "EXIT ↑"], "bold 14px monospace");
+        if (loops >= 3 && !spoke) { spoke = true; ctx.speak({ who: "ON THE WALLS · DOSE 8", style: "walls" }); }
+      }
+      light.position.set(0, 2.3, P.z - 2); light.intensity = 2.4 - loops * 0.5 + Math.sin(t * 20) * 0.1;
+      tubes.forEach((tb) => tb.material.color.setScalar(Math.random() < 0.03 * (1 + loops) ? 0.1 : 0.9));
+      it.rotation.y = Math.atan2(P.x - it.position.x, P.z - it.position.z);
+    },
+  };
+}
+
+// ---------- the top: nothing out there ----------
+export function chamber(E, ctx) {
+  const g = new THREE.Group();
+  return { group: g, colliders: [{ x0: -3, x1: 3, z0: -1.6, z1: -1.3 }], usables: [], atmos: { color: 0x000000, density: 0.9, hemi: 0.05 }, hint: "", update() {} };
+}

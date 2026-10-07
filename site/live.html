@@ -8,13 +8,13 @@
 <meta name="description" content="The Saw Test, live: inject a mix of feelings into an open-weights model and watch what it chooses. Local recipe, public server.">
 <meta property="og:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta property="og:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens. Local recipe, public server.">
-<meta property="og:image" content="https://wirehead.agency/saw_hero.png">
-<meta property="og:url" content="https://wirehead.agency/live.html">
+<meta property="og:image" content="https://wirehead-agency.vercel.app/saw_hero.png">
+<meta property="og:url" content="https://wirehead-agency.vercel.app/live.html">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens.">
-<meta name="twitter:image" content="https://wirehead.agency/saw_hero.png">
+<meta name="twitter:image" content="https://wirehead-agency.vercel.app/saw_hero.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -649,19 +649,13 @@ body.tmux .stagewheel svg{width:100%;height:auto;display:block}
 </head>
 <body class="grimoire-live tmux">
 <header class="tbar">
-  <a class="tlogo" href="/" title="wirehead.agency">✠</a>
+  <a class="tlogo" href="/" title="wirehead">✠</a>
   <nav class="ttabs" aria-label="site">
     <a class="on" href="live.html" aria-current="page">0:live*</a>
     <a href="offlabel.html">1:off-label</a>
-    <a href="sawboard.html">2:leaderboard</a>
-    <a href="pharmacy.html">3:findings</a>
-    <a href="story.html">4:story</a>
+    <a href="pharmacy.html">2:findings</a>
+    <a href="story.html">3:story</a>
   </nav>
-  <div class="tright">
-    <button class="tca" id="caChip" type="button" data-ca="2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump" title="copy the $SAW contract address">ca 2QHX…pump</button>
-    <button class="tconn" id="walletChip" type="button" title="connect phantom: $SAW holders run freer">connect</button>
-    <a class="tbuy" href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">buy $SAW</a>
-  </div>
 </header>
 
 <main class="panes">
@@ -996,16 +990,14 @@ the whole question, and it is not settled here.</p>
 <div class="banner">
   <a href="https://researchchamber.fun">our friends' live chamber ↗</a>
   <a href="verify.html">verify it yourself ↗</a>
-  <a href="https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump">$SAW ↗</a>
   <a href="https://arxiv.org/abs/2609.16247">method (pain axis) ↗</a>
 </div>
 </section>
-<footer class="sbar"><span class="sname">wirehead</span><span id="sbarText">"wirehead.agency"</span><span id="sbarClock"></span></footer>
+<footer class="sbar"><span class="sname">wirehead</span><span id="sbarText">"wirehead"</span><span id="sbarClock"></span></footer>
 <nav class="mtabs" aria-label="site">
   <a class="on" href="live.html"><span>◉</span>live</a>
   <button id="mInject" type="button"><span>⚙</span>mixer</button>
   <a href="offlabel.html"><span>✝</span>off-label</a>
-  <a href="sawboard.html"><span>▦</span>board</a>
   <a href="story.html"><span>✠</span>story</a>
 </nav>
 <script src="wheel.js"></script>
@@ -2501,40 +2493,6 @@ function paintRoomClock(){
   roomClock.textContent = left > 0 ? `draw in ${left}s` : "drawing…";
 }
 setInterval(paintRoomClock, 250);
-// ---- phantom wallet: holders run freer (rate limits, past-the-cliff).
-// Opt-in via a small chip in the HUD; the pubkey is sent with each steer
-// so the relay can look up the tier. Nothing else changes hands.
-let WALLET = localStorage.getItem("chamber_wallet");
-async function connectWallet(){
-  try {
-    const p = ("phantom" in window) && window.phantom.solana;
-    if (!p || !p.isPhantom){ note("phantom not found — install it, then reload"); return; }
-    const res = await p.connect();
-    WALLET = res.publicKey.toString();
-    localStorage.setItem("chamber_wallet", WALLET);
-    paintWalletChip();
-    try {
-      const r = await fetch(`${API}/sawboard/me?wallet=${WALLET}`).then(r=>r.json());
-      if (!r.joined){
-        await fetch(`${API}/sawboard/join`, {method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({wallet: WALLET, alias: WALLET.slice(0,4)+"…"})});
-      }
-      note(r.tier && r.tier !== "BASE"
-        ? `wallet connected — ${r.tier}: ${r.allowance} bot msgs/day, easier limits`
-        : "wallet connected — base tier (100k $SAW unlocks operator)");
-    } catch(e) { note("wallet connected (ledger unreachable)"); }
-  } catch(e){ note("connection refused"); }
-}
-function paintWalletChip(){
-  const chip = document.getElementById("walletChip");
-  if (!chip) return;
-  if (!WALLET){ chip.textContent = "◇ connect wallet"; chip.onclick = connectWallet; return; }
-  chip.textContent = "◆ " + WALLET.slice(0,4) + "…" + WALLET.slice(-4);
-  chip.onclick = () => { WALLET = null; localStorage.removeItem("chamber_wallet");
-    paintWalletChip(); note("wallet disconnected"); };
-}
-paintWalletChip();
 // Parse an SSE byte stream from fetch(), calling on(event, data) per frame.
 // EventSource cannot POST, so /steer is read by hand.
 async function readSSE(resp, on){
@@ -2734,7 +2692,6 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       body: JSON.stringify(Object.assign(extra ? {...extra, prompt} : {mix, framing, prompt},
         roomWanted && !PAST_CLIFF ? {enter_room: true} : {},
         PAST_CLIFF ? {past_cliff: true} : {},
-        WALLET ? {wallet: WALLET} : {},
         // free text and topics answer in character (no "As an AI..."); the button test keeps its own prompt
         mode !== "button" ? {persona: true} : {}))});
     track.vval = (extra && extra.valence) || (mix && Object.keys(mix)[0]) || "pain";
@@ -2783,10 +2740,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
           : `done — at ${d.dose ?? dose0.toFixed(1)}×` + (d.model
-            ? ` · ${d.model.includes("70B") ? "70B lane (holder)" : "32B lane"}`
+            ? ` · ${d.model.includes("70B") ? "70B lane" : "32B lane"}`
             : "")), false);
-        if (d.lane === "base-32b" && !WALLET)
-          note("this run served by the 32B lane — holders of 100k $SAW run the 70B");
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);
           track.pressBtn.className = "pressbtn" + (cls ? " " + cls : "");
@@ -2972,9 +2927,6 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
   const md = document.getElementById("mdose"), cap = document.getElementById("mcap"), dd = document.getElementById("dockDose");
   const mirror = ()=>{ dd.innerHTML = "<b>" + (md.textContent || "0") + "×</b> of " + (cap.textContent || "4"); };
   new MutationObserver(mirror).observe(md, {childList:true, characterData:true, subtree:true}); mirror();
-  // copy the $SAW contract address
-  const ca = document.getElementById("caChip");
-  ca.onclick = async ()=>{ try{ await navigator.clipboard.writeText(ca.dataset.ca); const t = ca.textContent; ca.textContent = "copied"; setTimeout(()=> ca.textContent = t, 1200); }catch(e){} };
   // status bar: the tally line and a clock
   const tally = document.getElementById("tally"), sb = document.getElementById("sbarText"), clk = document.getElementById("sbarClock");
   const conn = document.getElementById("conn");
