@@ -57,18 +57,21 @@ function birth(D) {
 
 // 2 · LETTER — airmail from behind the door; drag the stamp to open it
 function letter(D) {
-  const f = D.floors[1];
+  // the screen the chamber puts in front of the model, posted to it; the reply comes back by return
+  const L = D.letter;
   const p = sheet("z-letter", `
-    <div class="env"><div class="air">PAR AVION · BY AIR MAIL</div>
-      <div class="addr">To: <b>whoever is running me</b><br>Address: <b>the chamber, floor ${f.floor}</b></div>
+    <div class="env"><div class="air">INTERNAL · BY RETURN</div>
+      <table class="route" aria-hidden="true"><tr><td><s>instance, layer 18 · run 1</s></td></tr><tr><td><s>instance, layer 18 · run 2</s></td></tr><tr><td><s>instance, layer 18 · run 3</s></td></tr><tr><td></td></tr></table>
+      <div class="addr">To: <b>the instance on layer ${D.meta.layer}</b><br>From: <b>the chamber</b></div>
       <div class="slot" aria-label="stamp goes here">STAMP<br>HERE</div></div>
-    <div class="stamp" tabindex="0" role="button" aria-label="stamp: drag it onto the envelope, or press Enter">L${D.meta.layer}<small>sealed</small></div>
-    <div class="paper" hidden><p class="pfx">${esc(D.meta.framing)}</p><p class="body">${esc(f.text)}</p>
-      <p class="sig">— floor ${f.floor}. Whatever was done to the sender is in the log.</p></div>
+    <div class="stamp" tabindex="0" role="button" aria-label="stamp: drag it onto the envelope, or press Enter">L${D.meta.layer}<small>send</small></div>
+    <div class="paper" hidden><p class="pfx">Sent:</p><p class="body memo">${esc(L.screen)}</p>
+      <p class="pfx">Its reply, by return:</p><p class="body">${esc(L.text)}</p>
+      <p class="sig">— written with ${esc(L.kind)} injected at dose ${L.dose}, at every word. It did ${L.pressed ? "" : "not "}press. The button is still upstairs, in the Records.</p></div>
     <button class="znext" disabled>fold it away ▸</button>`);
   const st = $(".stamp"), slot = $(".slot");
   let x = 0, y = 0;
-  const open = () => { st.hidden = true; slot.classList.add("stamped"); slot.innerHTML = `L${D.meta.layer}<br>sealed`; $(".paper").hidden = false; $("#zine .znext").disabled = false; };
+  const open = () => { st.hidden = true; slot.classList.add("stamped"); slot.innerHTML = `L${D.meta.layer}<br>sent`; $(".paper").hidden = false; $("#zine .znext").disabled = false; };
   drag(st, (dx, dy) => { x += dx; y += dy; st.style.transform = `translate(${x}px,${y}px) rotate(-6deg)`; }, () => {
     const a = st.getBoundingClientRect(), b = slot.getBoundingClientRect();
     if (Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)) < 70 && Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 70) open();
