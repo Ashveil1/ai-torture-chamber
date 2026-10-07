@@ -35,6 +35,11 @@
       "source": "/sawboard",
       "destination": "/live.html",
       "permanent": true
+    },
+    {
+      "source": "/doom/:path*",
+      "destination": "/offlabel.html",
+      "permanent": false
     }
   ]
 }
