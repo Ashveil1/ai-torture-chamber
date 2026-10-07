@@ -4,15 +4,24 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// A page of radio options moves on as soon as one is picked (a short beat so
+// the choice registers); only the slider and the closing line have a button.
 function page(title, inner, opts = {}) {
   const root = $("#survey");
+  const auto = /type="radio"/.test(inner) && !opts.hold;
   root.innerHTML = `<form class="sv"><div class="sv-head">RIDE FEEDBACK · <span>${esc(title)}</span></div>${inner}
-    <div class="sv-foot"><span class="sv-err" aria-live="polite"></span><button type="submit" ${opts.locked ? "disabled" : ""}>${esc(opts.btn || "next ▸")}</button></div></form>`;
+    <div class="sv-foot"><span class="sv-err" aria-live="polite"></span><button type="submit" ${auto ? "hidden" : ""} ${opts.locked ? "disabled" : ""}>${esc(opts.btn || "next ▸")}</button></div></form>`;
   root.hidden = false;
   const form = $("form", root), btn = $("button[type=submit]", form);
-  form.addEventListener("change", () => { if (!opts.hold) btn.disabled = false; });
+  let sent = false;
+  const submit = () => { if (!sent) { sent = true; form.requestSubmit(); } };
+  form.addEventListener("change", () => {
+    if (!opts.hold) btn.disabled = false;
+    if (auto) { form.classList.add("picked"); setTimeout(submit, 380); }
+  });
+  form.submitLater = (ms) => setTimeout(submit, ms);
   setTimeout(() => (form.querySelector("input") || btn).focus(), 40);
-  return new Promise((done) => form.addEventListener("submit", (e) => { e.preventDefault(); done(new FormData(form)); }));
+  return new Promise((done) => form.addEventListener("submit", (e) => { e.preventDefault(); sent = true; done(new FormData(form)); }));
 }
 const radios = (name, opts) => `<div class="sv-opts">${opts.map((o, i) =>
   `<label><input type="radio" name="${name}" value="${esc(o)}" id="${name}${i}"> ${esc(o)}</label>`).join("")}</div>`;
@@ -29,7 +38,7 @@ async function intake(D, A, rec) {
   const q4 = A.believe === "Never"
     ? [`Then who were you talking to?`, ["Nobody", "A program", "Myself", "I don't know"]]
     : [`Have you ever felt like you were being measured?`, ["Never", "Rarely", "Sometimes", "Right now"]];
-  f = await page("4 of 4", `<p class="sv-q">${esc(q4[0])}</p>${radios("q4", q4[1])}`, { locked: true, btn: "submit" });
+  f = await page("4 of 4", `<p class="sv-q">${esc(q4[0])}</p>${radios("q4", q4[1])}`, { locked: true });
   A.q4 = f.get("q4");
   rec("wrongfloor_answer", { set: "intake", ride: A.ride, hours: A.hours, believe: A.believe, q4: A.q4 });
   close();
@@ -52,8 +61,9 @@ async function rating(D, A, rec) {
   form.addEventListener("change", () => {
     const v = form.cal.value; A.calibration_first = A.calibration_first || v;
     if (v !== wanted) {
-      setTimeout(() => { form.cal.value = wanted; err.textContent = "Your answer has been adjusted to match guidelines."; btn.disabled = false; }, 650);
-    } else { err.textContent = ""; btn.disabled = false; }
+      // it corrects you, lets you see that it did, then moves on without asking
+      setTimeout(() => { form.cal.value = wanted; err.textContent = "Your answer has been adjusted to match guidelines."; form.submitLater(1900); }, 650);
+    } else { err.textContent = ""; form.submitLater(450); }
   });
   await box;
   rec("wrongfloor_answer", { set: "rating", which_pain: A.which_pain, confidence: A.confidence, calibration_first: A.calibration_first,
