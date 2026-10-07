@@ -55,6 +55,11 @@
       "source": "/body3d.html",
       "destination": "/offlabel.html",
       "permanent": false
+    },
+    {
+      "source": "/doom/:path*",
+      "destination": "/offlabel.html",
+      "permanent": false
     }
   ]
 }

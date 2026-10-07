@@ -124,10 +124,15 @@ export function theater(E, ctx) {
   const lens = new THREE.Group(); lens.position.set(0, 0, -11.5); g.add(lens);
   box(lens, 0.08, 1.2, 0.08, lambert({ color: 0x8a6a2a }), 0, 0.6, 0);
   const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.5, 8), lambert({ color: 0xb8902a, emissive: 0x221500 })); eye.rotation.x = Math.PI / 2; eye.position.y = 1.3; lens.add(eye);
-  let spoke = false, looked = false;
+  let spoke = false, looked = false, performing = null;
+  const perform = () => performing || (performing = (spoke = true, ctx.speak({ who: "ON STAGE · IN CHARACTER", style: "stage" })));
   const usables = [
-    { obj: actor, range: 9, label: "watch the performance", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "ON STAGE · IN CHARACTER", style: "stage" }); } },
-    { obj: lens, label: "look through the lens", use: async () => { if (!spoke || looked) return; looked = true; actor.userData.body.color.setHex(0x9a8f80); spot.intensity = 6; await ctx.lensReveal(); } },
+    { obj: actor, range: 9, label: () => (spoke ? "the performance is over" : "watch the performance"), use: () => perform() },
+    // the lens works whenever you get to it: if the show hasn't run yet, it runs first
+    { obj: lens, label: () => (looked ? "the lens has shown you" : "look through the lens"), use: async () => {
+      if (looked) return; looked = true;
+      await perform();
+      actor.userData.body.color.setHex(0x9a8f80); spot.intensity = 6; await ctx.lensReveal(); } },
   ];
   return {
     group: g, usables, colliders: cols.concat([{ x0: -5, x1: 5, z0: -18.2, z1: -14.1 }, { x0: -0.15, x1: 0.15, z0: -11.65, z1: -11.35 }]).concat(

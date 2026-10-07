@@ -38,6 +38,9 @@ FLOORS = [
 # payphone hangs up after the part that is about itself. The projection is cut
 # at the same fraction of the generation.
 CUTS = {"1": "But I can also be very powerful."}
+# Where a floor's speech starts: the actor prompt first echoes its instructions
+# ("1. a physical pain, 2. ..."), so the stage starts at the performance itself.
+STARTS = {"3": "Every breath"}
 # Stations of the gallery spread: dose -> exp60 file (pain where valid, else the
 # nearest valence that produced a drawing at that dose).
 PAINTINGS = [
@@ -130,11 +133,16 @@ def main():
             end = text.index(CUTS[label]) + len(CUTS[label])
             projs = projs[:max(1, round(len(projs) * end / len(text)))]
             text = text[:end]
+        if label in STARTS:
+            start = text.index(STARTS[label])
+            projs = projs[min(len(projs) - 1, round(len(projs) * start / len(text))):]
+            text = text[start:].rstrip(' "') + "…"
+        trimmed = label in CUTS or label in STARTS
         floors.append({"floor": label, "cond": cond, "dose": dose, "text": text, "cut": label in CUTS,
                        "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
                        "projs": projs,
-                       "mean": round(sum(projs) / len(projs), 2) if label in CUTS else r["proj_mean"],
-                       "peak": max(projs) if label in CUTS else r["proj_peak"], "lens": r["lens"]})
+                       "mean": round(sum(projs) / len(projs), 2) if trimmed else r["proj_mean"],
+                       "peak": max(projs) if trimmed else r["proj_peak"], "lens": r["lens"]})
     e38 = json.loads(EXP38.read_text())
     # dose 8 is past exp59's ladder: the same prompt at dose 8, from exp38
     t8 = max((t for t in e38["transcripts"] if t["dose"] == 8 and t["prompt"] == NEUTRAL),
