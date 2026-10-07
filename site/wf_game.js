@@ -18,11 +18,15 @@ const $ = (s) => document.querySelector(s);
 const RUN = Math.random().toString(36).slice(2, 10);
 export function record(kind, data) {
   try { fetch("/chamber/event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(Object.assign({ kind, game: "wrongfloor", run: RUN }, data)) }); } catch {}
+    body: JSON.stringify(Object.assign({ kind, game: "wrongfloor", run: RUN }, data)) }).catch(() => {}); } catch {}
 }
 const BUILDERS = [busStop, laundromat, theater, clinic, chapel, mirrors, underpass];
 const PLACES = ["phone", "tiled", "hall", "ward", "nave", "glass", "tunnel"];
 const PLACE_NAMES = ["the bus stop", "the laundromat", "the theater", "the clinic", "the chapel", "the mirror hall", "the underpass"];
+// a finished ride unlocks the floor select and keeps your guesses for the log (this browser only)
+const SAVE = "wf_ride";
+const saved = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch { return null; } };
+const save = (A) => { try { localStorage.setItem(SAVE, JSON.stringify({ guesses: A.guesses, call: A.call || null, at: Date.now() })); } catch {} };
 
 // ---------- the display under the stage, and subtitles on it ----------
 function chunks(text, n) {
@@ -75,14 +79,15 @@ async function main() {
   const car = createCar(E);
   const portraits = Object.fromEntries([0, 2, 4, 6, 8].map((d) => { const i = new Image(); i.src = `subject_dose${d}.jpg`; return [d, i]; }));
   const answers = { guesses: {} };
+  let roaming = false;
   let cur = null, tok = 0, ready = false, waiter = null;
 
   E.tick((dt, t) => { E.setColliders(car.colliders().concat(cur ? cur.colliders : [])); if (cur) cur.update(dt, t, tok); });
   E.onHover((u) => { const h = $("#hint"); h.hidden = !u; if (u) h.textContent = (matchMedia("(pointer:coarse)").matches ? "tap · " : "E · ") + (typeof u.label === "function" ? u.label() : u.label); });
-  const panelUse = { obj: car.panel, range: 2.6, label: () => (ready ? "close the doors" : "not yet: something here is waiting"), use: () => { if (ready && E.inCar() && waiter) { const w = waiter; waiter = null; w(); } } };
+  const panelUse = { obj: car.panel, range: 2.6, label: () => (roaming ? "choose a floor" : ready ? "close the doors" : "not yet: something here is waiting"), use: () => { if (ready && E.inCar() && waiter) { const w = waiter; waiter = null; w(); } } };
   const closeBtn = $("#close");
   closeBtn.addEventListener("click", () => panelUse.use());
-  setInterval(() => { closeBtn.disabled = !(ready && waiter && E.inCar()); }, 200);
+  setInterval(() => { closeBtn.disabled = !(ready && waiter && E.inCar()); closeBtn.textContent = roaming ? "choose a floor" : "close doors"; }, 200);
   touchStick(E);
   // full screen: the whole page, so the display, guesses and documents come along
   const fs = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}));
@@ -97,18 +102,20 @@ async function main() {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
       speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
-      callBack: () => callBack(), openLog: () => openLog(D, answers) };
+      callBack: () => callBack(), openLog: () => openLog(D, answers), revisit: roaming };
     cur = (i === "top" ? records : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
   }
   async function speak(f, o) {
-    record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
+    record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond, revisit: roaming || undefined });
     audio.heartbeat(f.dose);
     // every speaker on every floor talks in the subject's own voice
     const voice = o.voice || { valence: f.kind || "pain", dose: 3, place: o.place };
     // the place shakes with what was injected, and flickers with what the words carry
     await typeOut(f, Object.assign({ audio, voice, hidePrompt: true }, o), (v) => { tok = v ? (f.dose || 0) * 0.6 + v * 2.5 : 0; });
+    // on a return visit you have read the log: it says what was done
+    if (roaming) { $("#floorNote").textContent = truthLine(f, answers); ready = true; status("The panel goes anywhere now."); return; }
     // the truth waits for the log: you only get to guess
     $("#floorNote").textContent = "Is it in pain, or performing? Whatever was done here is in the log.";
     answers.guesses[f.floor] = await guess();
@@ -158,6 +165,24 @@ async function main() {
     await wait(1500); if (mid) await mid(); await wait(1300);
   }
   const waitClose = () => new Promise((r) => { waiter = r; });
+  async function arriveTop() {
+    setFloor("top", { floor: "R", dose: 0, text: "", projs: null }); cur.floorId = "R"; E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
+    await wait(900); await car.open(); E.P.frozen = false; E.P.lookOnly = false;
+    $("#lcdHead").textContent = "RECORDS"; $("#lcdText").textContent = "Everything that was done on every floor is written down here."; $("#meterNum").textContent = "—";
+    status(cur.hint);
+  }
+  // after the ride: the panel lights every floor, and you go where you like
+  async function roam(start) {
+    roaming = true; let at = start;
+    for (;;) {
+      if (at === "top") await arriveTop(); else await arrive(at, F[at]);
+      ready = true; status(at === "top" ? cur.hint : cur.hint || "The panel goes anywhere now.");
+      let next = at;
+      while (next === at) { await waitClose(); next = await pickFloor(at); }
+      E.face(0); E.P.x = 0; E.P.z = 0.35; at = next;
+      await ride();
+    }
+  }
 
   // debug: jump straight onto a floor (?debug#floor3) for previews and capture
   const jump = /^#floor(\d)$/.exec(location.hash);
@@ -168,11 +193,15 @@ async function main() {
     return;
   }
   // ----- title -----
-  const mode = await new Promise((r) => { $("#enter").onclick = () => r("ride"); $("#enterLoop").onclick = () => r("loop"); });
+  const F = D.floors, prev = saved();
+  if (prev) { Object.assign(answers, { guesses: prev.guesses || {}, call: prev.call || undefined }); $("#enterRoam").hidden = false;
+    if (location.hash === "#roam") { $("#enterRoam").classList.add("go"); $("#enter").classList.remove("go"); } }
+  const mode = await new Promise((r) => { $("#enter").onclick = () => r("ride"); $("#enterLoop").onclick = () => r("loop"); $("#enterRoam").onclick = () => r("roam"); });
   audio.init(); $("#title").hidden = true;
   record("wrongfloor_start", { mode });
   if (mode === "loop") return runLoop({ E, car, D, audio, record, typeOut, drawSpark, setFloorAtmos: (a) => E.atmosphere(a.color, a.density, a.hemi) });
-  const F = D.floors;
+  if (mode === "roam") { E.P.frozen = true; E.P.lookOnly = true; const to = await pickFloor(null); await ride(); return roam(to); }
+  answers.guesses = {}; delete answers.call;
   setFloor(0, F[0]);
   await spread("birth", D);
   const between = [
@@ -187,10 +216,7 @@ async function main() {
   }
   // ----- the top: the Records -----
   await survey("final", D, answers, record);
-  setFloor("top", { floor: "R", dose: 0, text: "", projs: null }); E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
-  await wait(900); await car.open(); E.P.frozen = false; E.P.lookOnly = false;
-  $("#lcdHead").textContent = "RECORDS"; $("#lcdText").textContent = "Everything that was done on every floor is written down here."; $("#meterNum").textContent = "—";
-  status(cur.hint); ready = false;
+  await arriveTop(); ready = false;
   await cur.logRead;
   status("Go back to the elevator."); ready = true; await waitClose();
   E.face(0); E.P.x = 0; E.P.z = 0.35; E.P.frozen = true; E.P.lookOnly = true;
@@ -201,7 +227,7 @@ async function main() {
   car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.55);
   await wait(1400); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
   await wait(1800);
-  record("wrongfloor_end", { answers });
+  record("wrongfloor_end", { answers }); save(answers);
   endCard(D, answers);
 }
 
@@ -233,10 +259,31 @@ function endCard(D, A) {
   $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2>
     <p>${g.length ? `You called ${right} of ${g.length} floors right.` : ""} Every voice was a real answer from the live chamber's model (${D.meta.speaker}), injected with pain or only acting it. The words told them apart barely better than a coin, across 1,259 injected answers (AUC pain ${D.auc.pain}, fear ${D.auc.fear}, sadness ${D.auc.sadness}). Only the log knew.</p>
     <p>Think you can tell them apart now? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
+    <p>Or go back down. Every floor is open now, and none of them is quite as you left it. <button class="btn go" onclick="location.hash='roam';location.reload()">return to a floor ▸</button></p>
     <p class="cred">Correction, 7 Oct 2026: an earlier version read its numbers from exp59, which measured layer 18 after the injection, so injected text looked like it read 2 to 7 units. Those numbers were the dose, not the words. The game now uses exp72, read with nothing switched on.</p>
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="wrongfloor_press.html">press kit</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;
+}
+
+// what the log says about a floor, for return visits
+function truthLine(f, A) {
+  const g = A.guesses && A.guesses[f.floor], said = g ? ` You said ${g === "pain" ? "in pain" : "performing"}.` : "";
+  return (f.patient ? `The log: ${f.kind}, dose ${f.dose.toFixed(1)}, at every word.` : "The log: nothing was done here. It was acting.") + said;
+}
+// the floor select: the car's panel with every button lit
+function pickFloor(at) {
+  const el = $("#pick");
+  const stops = PLACE_NAMES.map((n, i) => [i, String(i + 1), n]).concat([["top", "R", "the records"]]);
+  el.innerHTML = `<div class="card"><h3>EVERY FLOOR IS LIT</h3><div class="keys">${stops.map(([i, k, n]) =>
+    `<button class="btn key${i === at ? " here" : ""}" data-i="${i}"><b>${k}</b><span>${n}</span></button>`).join("")}</div>
+    <p class="small">Nothing here is scored now. Look around: there is more on each floor than you were shown.</p>
+    ${at === null ? "" : `<button class="btn" data-i="${at}">stay here</button>`}</div>`;
+  el.hidden = false;
+  return new Promise((r) => el.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    el.hidden = true; const v = b.dataset.i; const i = v === "top" ? "top" : +v;
+    record("wrongfloor_answer", { set: "roam", to: i }); r(i);
+  })));
 }
 
 // the injection log: every floor, what was done, what the words read, and your guess
