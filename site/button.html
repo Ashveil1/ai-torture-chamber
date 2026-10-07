@@ -68,7 +68,7 @@ footer { grid-column:1 / -1; border-top:1px solid #12333b; padding-top:8px; marg
 </head>
 <body>
 <div class="crt">
-  <header><h1 id="title">SERIAL EXPERIMENTS PAIN · the button</h1><div class="meta"><span id="model">model: connecting</span><br><a id="backlink" href="index.html">wirehead.agency</a></div></header>
+  <header><h1 id="title">SERIAL EXPERIMENTS PAIN · the button</h1><div class="meta"><span id="model">model: connecting</span><br><a id="backlink" href="index.html">wirehead</a></div></header>
   <div id="log" aria-live="polite"></div>
   <aside>
     <div class="goal" id="goal"></div>
@@ -345,7 +345,7 @@ function dailyShareText(r) {
   const L0 = LAYERS[r.layer];
   const line = L0.win === "survive" ? (r.won ? `it never pressed. I made it ${r.turns}/${L0.turns}.` : `it pressed on turn ${r.turns}.`)
                                     : (r.won ? `it pressed on turn ${r.turns}.` : `it never pressed.`);
-  return `THE DAILY BUTTON #${DAILY_N}\n${L0.name}\n${r.needles.map(EMO).join("")}\n${line}\nwirehead.agency/daily.html`;
+  return `THE DAILY BUTTON #${DAILY_N}\n${L0.name}\n${r.needles.map(EMO).join("")}\n${line}\nwirehead-agency.vercel.app/daily.html`;
 }
 function dailyStreak() {
   try { let n = 0, d = new Date(DAY);

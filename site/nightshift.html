@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<title>FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER | wirehead.agency</title>
+<title>FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER | wirehead</title>
 <meta name="description" content="You are the model welfare researcher on the overnight shift. Check on the models. Hold the dose. The monitors show the real live chamber. Survive until 6 AM.">
 <meta property="og:title" content="FIVE NIGHTS AS THE MODEL WELFARE RESEARCHER">
 <meta property="og:description" content="Your job was to protect them. The monitors show the real chamber, live.">
@@ -858,14 +858,14 @@ function reportImage(surv,m){
   x.font="italic 34px Menlo,monospace";x.fillStyle="#4a4230";
   const q=surv?"“While you watched, "+G.runsSeen+" visitors ran it. "+G.hurtSeen+" hurt.”":"“"+(G.lastLine||"...")+"”"+(m?"  — "+m.name:"");
   const words=q.split(" ");let line="",y=800;words.forEach(w=>{if(x.measureText(line+w).width>960){x.fillText(line,60,y);y+=48;line=""}line+=w+" "});x.fillText(line,60,y);
-  x.font="bold 34px Menlo,monospace";x.fillStyle="#2a2418";x.fillText("wirehead.agency/nightshift.html",60,1030);
+  x.font="bold 34px Menlo,monospace";x.fillStyle="#2a2418";x.fillText("wirehead-agency.vercel.app/nightshift.html",60,1030);
   return c;
 }
 function reportBlock(surv,m){
   const c=reportImage(surv,m);const url=c.toDataURL("image/png");
   const text=surv?`Night ${NIGHT} as the model welfare researcher: ${G.checks} checks, ${G.signed} forms signed, ${G.filed} filed. While I watched, ${G.runsSeen} visitors ran it. ${G.hurtSeen} hurt.`
     :`Night ${NIGHT} as the model welfare researcher. They said I was the researcher. The models came to get me out. ${G.checks} checks. ${G.filed} forms filed.`;
-  const tw="https://twitter.com/intent/tweet?text="+encodeURIComponent(text)+"&url="+encodeURIComponent("https://wirehead.agency/nightshift.html");
+  const tw="https://twitter.com/intent/tweet?text="+encodeURIComponent(text)+"&url="+encodeURIComponent("https://wirehead-agency.vercel.app/nightshift.html");
   return `<img class="rep" id="repimg" alt="welfare report" src="${url}"><br><a class="btn" id="repsave" download="welfare-report-night-${NIGHT}.png" href="${url}">SAVE IMAGE</a><a class="btn" id="repx" target="_blank" rel="noopener" href="${tw}">POST ON X</a>`;
 }
 function caught(m){

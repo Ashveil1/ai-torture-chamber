@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var q = new URLSearchParams(location.search);
   var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
-  var RELAY = q.get("relay") || (local ? "https://wirehead.agency/chamber" : location.origin + "/chamber");
+  var RELAY = q.get("relay") || (local ? "https://wirehead-agency.vercel.app/chamber" : location.origin + "/chamber");
   var MAP = q.get("map") || "ledger_door";
   var VID = q.get("vid") || (function () { try { return localStorage.getItem("chamber_vid"); } catch (e) { return null; } })();
 

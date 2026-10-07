@@ -8,5 +8,5 @@ Assets: LibreQuake v0.09-beta "lite" (https://github.com/lavenderdotpet/LibreQua
         Level maps, demos and lightmaps are stripped from the shipped pak to save bandwidth.
 Map textures: subset of LibreQuake textures embedded in the map (rooms.wad extracted from a LibreQuake bsp).
 Build tools: ericw-tools qbsp/vis/light (GPL v3) and fteqcc (GPL v2), build time only.
-Our content: THE LEDGER DOOR map, tormentor QuakeC, page glue (rooms.js) - wirehead.agency. Voice: the site's steered model via /chamber/speak/tuned.
+Our content: THE LEDGER DOOR map, tormentor QuakeC, page glue (rooms.js) - wirehead. Voice: the site's steered model via /chamber/speak/tuned.
 No id Software / Valve / Half-Life assets or text are included.

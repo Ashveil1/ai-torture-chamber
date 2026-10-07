@@ -40,6 +40,16 @@
       "source": "/td.html",
       "destination": "/offlabel.html",
       "permanent": false
+    },
+    {
+      "source": "/sawboard.html",
+      "destination": "/live.html",
+      "permanent": true
+    },
+    {
+      "source": "/sawboard",
+      "destination": "/live.html",
+      "permanent": true
     }
   ]
 }
