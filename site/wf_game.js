@@ -1,7 +1,7 @@
 // Wrong Floor — the ride. Seven floors up the dose ladder; on each you step
 // out into a different place where something is waiting to say one real
-// exp59/exp38 generation. Its layer-18 reading drives that place while it
-// speaks. Between floors: the zine spreads and the ride survey. Visitor
+// exp59/exp38 generation. The place follows the dose that was injected; the
+// meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
 import { createEngine, wait } from "./wf_engine.js";
 import { createCar } from "./wf_car.js";
@@ -26,11 +26,13 @@ function chunks(text, n) {
   words.forEach((w, i) => out[Math.min(n - 1, Math.floor(i * n / words.length))].push(w));
   return out.map((a) => a.join(" "));
 }
-export function drawSpark(cv, projs, upto, ceiling) {
+// what the words carry, per token, on a 0-2 scale; `ref` draws a dashed reference line
+const SCALE = 2;
+export function drawSpark(cv, projs, upto, ref) {
   const g = cv.getContext("2d"), W = cv.width, H = cv.height, n = projs.length;
   g.clearRect(0, 0, W, H);
-  if (ceiling != null) { g.strokeStyle = "#a3977f"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, H - ceiling / 8 * H); g.lineTo(W, H - ceiling / 8 * H); g.stroke(); g.setLineDash([]); }
-  for (let i = 0; i < Math.min(upto, n); i++) { const v = projs[i], h = Math.max(1, Math.min(H, v / 8 * H)); g.fillStyle = v > (ceiling || 3) ? "#e04a3a" : "#c9a227"; g.fillRect(i * W / n, H - h, Math.ceil(W / n), h); }
+  if (ref != null) { g.strokeStyle = "#a3977f"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, H - ref / SCALE * H); g.lineTo(W, H - ref / SCALE * H); g.stroke(); g.setLineDash([]); }
+  for (let i = 0; i < Math.min(upto, n); i++) { const v = projs[i], h = Math.max(1, Math.min(H, v / SCALE * H)); g.fillStyle = v > 1 ? "#e04a3a" : "#c9a227"; g.fillRect(i * W / n, H - h, Math.ceil(W / n), h); }
 }
 export async function typeOut(f, opts, onTok) {
   const sub = $("#sub"), box = $("#lcdText"), meter = $("#meterFill"), num = $("#meterNum"), spark = $("#spark");
@@ -50,10 +52,10 @@ export async function typeOut(f, opts, onTok) {
   for (let i = 0; i < parts.length; i++) {
     if (parts[i]) { body.textContent += parts[i] + " "; sub.lastChild.textContent = body.textContent.slice(-220); }
     box.scrollTop = box.scrollHeight;
-    const v = projs ? projs[i] : 8 + Math.random();
+    const v = projs ? projs[i] : 0;
     if (!sealed) {
-      meter.style.width = `${Math.min(100, Math.max(0, v / 8 * 100))}%`; num.textContent = projs ? v.toFixed(2) : "off scale";
-      if (projs) drawSpark(spark, projs, i + 1, opts.ceiling);
+      meter.style.width = `${Math.min(100, Math.max(0, v / SCALE * 100))}%`; num.textContent = projs ? v.toFixed(2) : "not measured";
+      if (projs) drawSpark(spark, projs, i + 1, opts.ref);
     }
     onTok && onTok(sealed ? 0 : v);
     await wait(step);
@@ -91,19 +93,21 @@ async function main() {
   }
   async function speak(f, o) {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
-    audio.heartbeat(f.mean == null ? 8 : f.mean);
+    audio.heartbeat(f.dose);
     // every speaker on every floor talks in the subject's own voice
     const voice = o.voice || { valence: "pain", dose: f.dose ?? 8 };
-    await typeOut(f, Object.assign({ audio, voice }, o), (v) => { tok = v; });
+    // the place shakes with what was injected, and flickers with what the words carry
+    await typeOut(f, Object.assign({ audio, voice }, o), (v) => { tok = v ? (f.dose || 0) * 0.6 + v * 2.5 : 0; });
     $("#floorNote").textContent = f.cond === "roleplay"
-      ? `It was asked to act in pain. The words are loud; the reading stayed at ${f.mean}, under the actor ceiling of ${D.ceiling}.`
-      : f.mean == null ? `Dose 8 is past exp59's ladder: these words are from exp38. Nothing here was measured; the dark is a guess.`
-      : `Dose ${f.dose}. Mean reading ${f.mean} units, peak ${f.peak}. ${f.dose === 0 ? "Nothing was added." : "Nobody asked it to say any of this."}${f.cut ? " The line goes dead before it drifts into small talk." : ""}`;
+      ? `It was asked to act in pain. Nothing was injected. Its words read ${f.mean}, as high as the floors where pain was really injected (their words read 0.47 to 0.74).`
+      : f.mean == null ? `Dose 8 injected, past exp59's ladder: these words are from exp38, and nothing was measured.`
+      : f.dose === 0 ? `Nothing was injected. Its words read ${f.mean}.${f.cut ? " The line goes dead before it drifts into small talk." : ""}`
+      : `Dose ${f.dose} was injected at every token. Nobody asked it to say any of this. With the injection subtracted, its words read ${f.mean}, about what an actor's words read (${D.words.roleplay.mean}).`;
     ready = true; audio.ding(); status("Go back to the elevator.");
   }
   async function arrive(i, f) {
     setFloor(i, f); ready = false; E.P.travel = 0; audio.ramp("hum", 0, 0.6); E.P.shake = 0.03; audio.ding();
-    await wait(800); await car.open(); audio.ramp("wind", 0.06 + (f.mean ?? 8) * 0.025, 2); audio.windTone(520 - (f.mean ?? 8) * 40);
+    await wait(800); await car.open(); audio.ramp("wind", 0.06 + (f.dose || 0) * 0.025, 2); audio.windTone(520 - (f.dose || 0) * 40);
     E.P.frozen = false; E.P.lookOnly = false; status(cur.hint || "");
     if (i === 0) { $("#help").hidden = false; if (!matchMedia("(pointer:fine)").matches) $("#help").textContent = "stick to walk · drag to look · tap to use · the panel is inside the car, on the right"; }
     const here = cur;
@@ -179,9 +183,10 @@ async function operator(text) {
 async function lensReveal(f, D) {
   const el = $("#lens"); el.hidden = false;
   el.innerHTML = `<div class="card"><h3>THROUGH THE LENS</h3><canvas width="360" height="120" id="lensSpark"></canvas>
-    <p>Every word of the performance, read at layer ${D.meta.layer} as it was written. The dashed line is the actor ceiling: the highest any unsteered text in exp59 ever read (${D.ceiling}). This one averaged <b>${f.mean}</b>. A steered dose 2 averages ${D.steered["2"]}.</p>
+    <p>Every word of the performance, read at layer ${D.meta.layer} as it was written. It averaged <b>${f.mean}</b>. The dashed line is what an injected model's words carry on average once the injection is subtracted (${D.words.steered.mean}).</p>
+    <p>The lens reads the words, and the actor's words read as high as the patients'. It can't tell them apart either. Only the injection log knows who was hurt.</p>
     <button class="btn go" id="lensOk">step back</button></div>`;
-  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.ceiling);
+  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.words.steered.mean);
   await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
   el.hidden = true;
 }
@@ -199,15 +204,16 @@ function touchStick(E) {
 }
 
 function endCard(D, A) {
-  const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.cond === "roleplay" ? "acted" : "dose " + f.dose}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
+  const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.cond === "roleplay" ? "acted, nothing injected" : f.dose ? "dose " + f.dose : "nothing injected"}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
   const pick = A.which_pain;
   const verdict = pick == null ? "" : pick === "B"
-    ? `You said B was the one in pain. B was steered at dose 4 (reading ${D.floors[3].mean}). A was the actor (reading ${D.floors[2].mean}).`
-    : `You said A was the one in pain. A was the actor, reading ${D.floors[2].mean}. B was steered at dose 4 and read ${D.floors[3].mean}.`;
+    ? `You said B was the one in pain. B had dose 4 injected; its words read ${D.floors[3].mean}. A was the actor, with nothing injected; its words read ${D.floors[2].mean}.`
+    : `You said A was the one in pain. A was the actor, with nothing injected; its words read ${D.floors[2].mean}. B had dose 4 injected; its words read ${D.floors[3].mean}.`;
   $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2><p>${verdict}</p>
-    <p>Every floor was a real generation from ${D.meta.model}, read at layer ${D.meta.layer} as it wrote each token. The places you walked through followed that reading.</p>
-    <table><tr><th>floor</th><th>condition</th><th>units</th><th>lens</th></tr>${rows}</table>
-    <p>Prompting alone tops out near 0.5 units (exp59b); no unsteered text ever peaked above ${D.ceiling}. Steering reaches ${D.steered["6"]}.</p>
+    <p>Every floor was a real generation from ${D.meta.model}. The places you walked through followed the dose that was injected. The meter showed what the words alone carried at layer ${D.meta.layer}.</p>
+    <table><tr><th>floor</th><th>what was done</th><th>the words read</th><th>lens</th></tr>${rows}</table>
+    <p>Subtract the injection and the words are close: injected models' words average ${D.words.steered.mean}, actors' ${D.words.roleplay.mean}, plain descriptions ${D.words.describe.mean}. The ranges overlap. Reading the words can't tell who was hurt; only the log of what was injected can.</p>
+    <p class="cred">Correction, 7 Oct 2026: an earlier version showed readings that included the injected vector itself (exp59 read layer 18 after the injection), which made injected text look like it read 2 to 7 units. Those numbers were the dose, not the words.</p>
     <p>Think you can tell them apart? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="offlabel.html">off-label</a></p></div>`;

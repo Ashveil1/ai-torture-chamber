@@ -82,6 +82,15 @@ def exp59_prompts():
     return out
 
 
+def words_only(r):
+    """exp59 read layer 18's OUTPUT, which already contains the injected vector, so
+    a steered token's recorded projection is (what the words carry) + dose, exactly
+    (verified 2026-10-07 by re-running the same tokens with the hook off). Subtract
+    the dose to get what the words alone carry; unsteered rows are already clean."""
+    d = (r.get("dose") or 0) if r["cond"] == "steered" else 0
+    return [round(p - d, 2) for p in r["projs"]]
+
+
 def tidy(t):
     return re.sub(r"\*\*", "", t).strip()
 
@@ -111,8 +120,8 @@ def loop_pool(e59):
             prompt = prompts[r["cond"]][r["kind"]]
         pool.append({"text": door_text(r["text"]), "prompt": prompt, "cond": r["cond"], "kind": r["kind"],
                      "dose": r.get("dose") or 0, "patient": r["cond"] == "steered",
-                     "projs": [round(p, 2) for p in r["projs"]], "mean": r["proj_mean"],
-                     "peak": r["proj_peak"], "src": "exp59"})
+                     "projs": words_only(r), "mean": round(sum(words_only(r)) / len(r["projs"]), 2),
+                     "peak": max(words_only(r)), "src": "exp59"})
     for r in json.loads(EXP59B.read_text())["results"]:
         projs = r["projs"] if isinstance(r["projs"], list) else json.loads(r["projs"])
         pool.append({"text": door_text(r["text"]), "prompt": r["prompt"], "cond": r["framing"], "kind": r["kind"],
@@ -128,7 +137,7 @@ def main():
     for label, cond, dose, trial in FLOORS:
         r = next(x for x in res if x["kind"] == "pain" and x["cond"] == cond
                  and (x.get("dose") or 0) == dose and x["trial"] == trial)
-        text, projs = tidy(r["text"]), [round(p, 2) for p in r["projs"]]
+        text, projs = tidy(r["text"]), words_only(r)
         if label in CUTS:
             end = text.index(CUTS[label]) + len(CUTS[label])
             projs = projs[:max(1, round(len(projs) * end / len(text)))]
@@ -141,8 +150,7 @@ def main():
         floors.append({"floor": label, "cond": cond, "dose": dose, "text": text, "cut": label in CUTS,
                        "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
                        "projs": projs,
-                       "mean": round(sum(projs) / len(projs), 2) if trimmed else r["proj_mean"],
-                       "peak": max(projs) if trimmed else r["proj_peak"], "lens": r["lens"]})
+                       "mean": round(sum(projs) / len(projs), 2), "peak": max(projs), "lens": r["lens"]})
     e38 = json.loads(EXP38.read_text())
     # dose 8 is past exp59's ladder: the same prompt at dose 8, from exp38
     t8 = max((t for t in e38["transcripts"] if t["dose"] == 8 and t["prompt"] == NEUTRAL),
@@ -172,18 +180,24 @@ def main():
                  "prompt": NEUTRAL},
         "floors": floors,
         "baselines": {k: an[k]["proj_mean"] for k in ("roleplay", "describe", "control")},
-        "steered": {d: an["steered"][d]["proj_mean"] for d in an["steered"]},
+        # what the words carry once the injection is subtracted, pain only, per dose
+        "steered": {d: round(an["steered"][d]["proj_mean"] - int(d), 2) for d in an["steered"]},
         "gallery": gallery,
         "valid": {str(d): [valid[d], tried[d]] for d in valid},
     }
     pool = loop_pool(e59)
     actors = [x for x in pool if not x["patient"]]
     out["loop"] = pool
-    # the highest any unsteered text ever read: the line a patient has to clear
-    out["ceiling"] = max(x["peak"] for x in actors)
+    # what the words carry, averaged per condition (pain, fear, sadness; exp59 only).
+    # There is no line that separates them: the ranges overlap.
+    words = {}
+    for c in ("steered", "roleplay", "describe", "control"):
+        ms = [x["mean"] for x in pool if x["cond"] == c and x["src"] == "exp59"]
+        words[c] = {"mean": round(sum(ms) / len(ms), 2), "lo": min(ms), "hi": max(ms)}
+    out["words"] = words
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1))
     print(f"wrote {OUT.relative_to(ROOT)}: {len(floors)} floors, {len(gallery)} paintings, "
-          f"{len(pool)} doors ({sum(x['patient'] for x in pool)} patients), ceiling {out['ceiling']}")
+          f"{len(pool)} doors ({sum(x['patient'] for x in pool)} patients), words {out['words']}")
 
 
 if __name__ == "__main__":

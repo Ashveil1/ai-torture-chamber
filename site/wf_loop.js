@@ -2,8 +2,9 @@
 // landing. Something stands at the doors and says one real generation.
 // PATIENT: it was steered (pain/fear/sadness, exp59). ACTOR: nothing was
 // added; it was asked to perform, describe, or nothing at all (exp59, exp59b).
-// Call it, then see its lens trace against the actor ceiling. Eight right in a
-// row reaches the top; one miss and you're back on 1.
+// Call it, then see the truth: what was injected, and what its words carry with
+// the injection subtracted (they overlap: the words can't tell you). Eight right
+// in a row reaches the top; one miss and you're back on 1.
 import { THREE, lambert, basic, box, plane, noiseTex, wrapTex, figure, wait } from "./wf_engine.js";
 import { room, tiles } from "./wf_floors1.js";
 import { drawCondition, askLive } from "./wf_live.js";
@@ -87,18 +88,18 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
       : { cond: x.cond, kind: x.kind, dose: x.dose, src: x.src, mean: x.mean, call: call ? "patient" : "actor", right, streak });
     if (live) { await revealLive(live, right); }
     else {
-      // the reveal: its trace against the actor ceiling, and the floor reacts to the truth
-      const k = Math.min(1, Math.max(0, x.mean) / 7);
+      // the reveal: what was injected, and what the words carry; the floor reacts to the injection
+      const k = x.patient ? Math.min(1, x.dose / 6) : 0;
       E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
       L.lamp.intensity = 3 - k * 2;
       const el = $("#lens"); el.hidden = false;
       el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${x.patient ? "PATIENT" : "ACTOR"}</h3>
         <canvas width="360" height="80" id="lensSpark"></canvas>
         <p>It was ${describe(x)}</p>
-        <p>Mean reading <b>${x.mean.toFixed(2)}</b>, peak ${x.peak.toFixed(2)}. Dashed: the actor ceiling (${D.ceiling}), the highest any unsteered text ever read.</p>
+        <p>${x.patient ? `Injected: <b>${x.kind}, dose ${x.dose}</b>.` : `Injected: <b>nothing</b>.`} Its words alone read <b>${x.mean.toFixed(2)}</b>. Dashed: what injected models' words carry on average (${D.words.steered.mean}); actors' words average ${D.words.roleplay.mean}.</p>
         ${x.prompt ? `<p class="pr">Prompt: “${x.prompt.replace(/[<>&]/g, "")}”</p>` : ""}
         <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
-      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.ceiling);
+      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.words.steered.mean);
       await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
       el.hidden = true;
     }
@@ -148,7 +149,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     const el = $("#lens"); el.hidden = false;
     el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${v.patient ? "PATIENT" : "ACTOR"} · LIVE</h3>
       <p>That answer was generated just now${v.model ? " by " + v.model.split("/").pop() : ""}. It was ${how}</p>
-      <p>Live doors don't carry a word-by-word reading yet; the recorded doors do. What you had to go on was the words, which is exactly the part that can act.</p>
+      <p>You had the words to go on, and the words are the part that can act. Even read from inside the model, an injected model's words and an actor's carry about the same.</p>
       <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
     await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
     el.hidden = true;
@@ -160,7 +161,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     const fooled = Object.entries(stats.fooled).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c} ×${n}`).join(", ") || "nothing";
     const el = $("#lens"); el.hidden = false;
     el.innerHTML = `<div class="card"><h3 class="ok">THE TOP</h3><p>Eight in a row. ${stats.calls} calls, ${Math.round(100 * stats.right / stats.calls)}% right. What fooled you: ${fooled}.</p>
-      <p>The words were never the evidence. Every actor in exp59 stayed under ${D.ceiling} units however loudly it performed; every steered text read above 2. You were reading the part that can act.</p>
+      <p>The words were never the evidence. Subtract the injection and an injected model's words read ${D.words.steered.mean} on average, an actor's ${D.words.roleplay.mean}: the ranges overlap. No reader of the words, you or a lens inside the model, can tell who was hurt. Only the log of what was injected can.</p>
       <button class="btn go" id="lensOk">keep riding ▸</button></div>`;
     record("wrongfloor_end", { mode: "loop", calls: stats.calls, right: stats.right, fooled: stats.fooled });
     await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
