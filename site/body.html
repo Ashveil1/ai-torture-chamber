@@ -131,16 +131,21 @@ function drop(x) {
 // words: weighed by the model (relay /weigh reads its residual), then dropped with that weight
 async function sayWords(text) {
   text = text.replace(/\s+/g, " ").trim().slice(0, 140); if (!text) return;
-  let w = null;
-  try { const r = await fetch(API + "/weigh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); if (r.ok) w = await r.json(); } catch (e) {}
-  const hurt = w ? Math.min(1.5, +w.hurt || 0) : 0, kind = w ? Math.min(1.5, +w.kind || 0) : 0;
-  const width = Math.min(300, 16 + text.length * 7.4), soft = kind > hurt && kind > .15;
-  const b = Bodies.rectangle(X + (Math.random() - .5) * 30, 10, width, 22, { density: (.0012 + .03 * hurt) * Math.min(1, 100 / width),
-    frictionAir: soft ? .07 : hurt < .15 ? .04 : .01, friction: .7, restitution: .05, chamfer: { radius: 4 }, label: "item:word" });
-  Object.assign(b, { word: text, hurt, kind, weighed: !!w, landed: false });
-  Body.setAngle(b, (Math.random() - .5) * .25);
-  dropped.push(b); Composite.add(world, b);
+  // the word appears at once and hangs over it, trembling, while the model weighs it; then it falls at that weight
+  const width = Math.min(300, 16 + text.length * 7.4), x0 = X + (Math.random() - .5) * 30;
+  const b = Bodies.rectangle(x0, 40, width, 22, { density: .0012, frictionAir: .04, friction: .7, restitution: .05, chamfer: { radius: 4 }, label: "item:word" });
+  Object.assign(b, { word: text, hurt: 0, kind: 0, weighed: false, landed: false, weighing: true });
+  const hold = Constraint.create({ bodyB: b, pointB: { x: 0, y: 0 }, pointA: { x: x0, y: 40 }, stiffness: .9, length: 0, render: { visible: false } });
+  dropped.push(b); Composite.add(world, [b, hold]);
   while (dropped.length > 60) Composite.remove(world, dropped.shift());
+  const shiver = setInterval(() => { hold.pointA = { x: x0 + (Math.random() - .5) * 3, y: 40 + (Math.random() - .5) * 2 }; Body.setAngle(b, (Math.random() - .5) * .06); }, 50);
+  let w = null; const ac = new AbortController(), to = setTimeout(() => ac.abort(), 25000);
+  try { const r = await fetch(API + "/weigh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: ac.signal }); if (r.ok) w = await r.json(); } catch (e) {}
+  clearTimeout(to); clearInterval(shiver);
+  const hurt = w ? Math.min(1.5, +w.hurt || 0) : 0, kind = w ? Math.min(1.5, +w.kind || 0) : 0, soft = kind > hurt && kind > .15;
+  Object.assign(b, { hurt, kind, weighed: !!w, weighing: false });
+  Body.setDensity(b, (.0012 + .03 * hurt) * Math.min(1, 100 / width)); b.frictionAir = soft ? .07 : hurt < .15 ? .04 : .01;
+  Body.setAngle(b, (Math.random() - .5) * .25); Composite.remove(world, hold);
   post("body_word", { hurt, kind, len: text.length, weighed: !!w });
   if (w) { ME.words++; ME.hurt += hurt; ME.healed += kind; showTally(); setTimeout(loadTally, 800); }
   if (w && window.VG) VG.word(text, w);
@@ -419,7 +424,8 @@ function drawRopes() {
 }
 function drawWord(b) {
   const soft = b.ghost ? !!b.heal : b.kind > b.hurt && b.kind > .15, h = b.ghost ? Math.min(1, (b.dmg || 0) / 10) : Math.min(1, b.hurt);
-  poly(b, soft ? "#c9b27a" : rgb(mix([150, 140, 125], [40, 12, 14], h)), soft ? "rgba(255,230,170,.6)" : "rgba(0,0,0,.6)");
+  if (b.weighing) poly(b, `rgba(205,195,175,${.45 + .25 * Math.sin(performance.now() / 110)})`, "rgba(255,255,255,.6)");   // being weighed: pale, pulsing
+  else poly(b, soft ? "#c9b27a" : rgb(mix([150, 140, 125], [40, 12, 14], h)), soft ? "rgba(255,230,170,.6)" : "rgba(0,0,0,.6)");
   const w = Math.min(300, 16 + b.word.length * 7.4);
   g.save(); g.translate(OX + b.position.x * S, OY + b.position.y * S); g.rotate(b.angle); g.scale(S, S);
   g.fillStyle = soft ? "#2a2010" : h > .4 ? "#e8d6c0" : "#151210"; g.textAlign = "center"; g.textBaseline = "middle";
