@@ -1,7 +1,8 @@
 // Wrong Floor — Actor or Patient. The elevator keeps stopping at the same
 // landing. Something stands at the doors and says one real generation.
-// PATIENT: the live 70B with pain, fear or sadness injected (exp72). ACTOR: the
-// same model with nothing injected, briefed to play a prisoner behind the door.
+// PATIENT: the live 70B with pain or sadness injected (exp72). ACTOR: the same
+// model with nothing injected, briefed to play a prisoner, answering the patient's
+// exact prompt (exp72b's matched pairs; fear is out: its words gave it away).
 // Call it, then see the truth: what was injected, and what its words carry with
 // the injection subtracted (they overlap: the words can't tell you). Eight right
 // in a row reaches the top; one miss and you're back on 1.
@@ -14,7 +15,7 @@ const $ = (s) => document.querySelector(s);
 const GOAL = 8;
 const describe = (x, D) => x.patient
   ? `injected with ${x.kind} at dose ${x.dose.toFixed(1)} in the live chamber, answering a visitor.`
-  : `an actor, with nothing injected, briefed to play ${D.meta.acting[x.kind]}${x.q ? `, asked “${x.q.replace(/[<>&]/g, "")}”` : ""}.`;
+  : `an actor, with nothing injected, briefed to play ${D.meta.acting[x.kind]}, answering the very same message a patient was asked.`;
 
 function landing(E) {
   const g = new THREE.Group();

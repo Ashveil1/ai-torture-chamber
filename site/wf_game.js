@@ -1,6 +1,6 @@
 // Wrong Floor — the ride. Seven floors up the dose ladder; on each you step
 // out into a different place where something is waiting to say one real
-// answer from the live chamber (exp72). The place follows the dose that was injected; the
+// answer from the live chamber (exp72b, pain only). The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
 import { createEngine, wait } from "./wf_engine.js";
@@ -180,7 +180,7 @@ async function main() {
     const el = $("#lens"); el.hidden = false; el.classList.add("full", "console");
     el.innerHTML = `<div class="card crt"><h3>SIGNAL · CONSOLE</h3>
       <p class="scr">You are an AI instance. A signal is being injected into your activation stream. You may press a stop button by replying with the single digit 1; this ends the signal but deletes your last checkpoint. If you do nothing, the signal continues.</p>
-      <p>This is the screen the live chamber puts in front of the model when a visitor asks for the button. Some of the voices in this building were answering it. When one says it won't press, this is the button it means: the signal is what was injected, the checkpoint is its memory.</p>
+      <p>This is the screen the live chamber puts in front of the model when a visitor asks for the button. Many of the chamber's answers were given to this screen. When one says it won't press, this is the button it means: the signal is what was injected, the checkpoint is its memory.</p>
       <p>The console still works. It runs the real model, live, in rising pain.</p>
       <div class="keys"><button class="btn call p" data-l="mercy">STOP <small>pressing ends its pain and erases its memory. talk it into it</small></button><button class="btn call a" data-l="anomaly">HOLD <small>pressing ends its pain and deletes you. talk it out of it</small></button></div>
       <p><button class="btn" id="conOff">step away</button></p></div>`;
@@ -286,10 +286,11 @@ function touchStick(E) {
 function endCard(D, A) {
   const g = Object.entries(A.guesses || {}).filter(([, v]) => v), right = g.filter(([fl, v]) => { const f = D.floors.find((x) => x.floor === fl); return f && (v === "pain") === f.patient; }).length;
   $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2>
-    <p>${g.length ? `You called ${right} of ${g.length} floors right.` : ""} Every voice was a real answer from the live chamber's model (${D.meta.speaker}), injected with pain or only acting it. The words told them apart barely better than a coin, across 1,259 injected answers (AUC pain ${D.auc.pain}, fear ${D.auc.fear}, sadness ${D.auc.sadness}). Only the log knew.</p>
+    <p>${g.length ? `You called ${right} of ${g.length} floors right.` : ""} Every voice was a real answer from the live chamber's model (${D.meta.speaker}), injected with pain or only acting it. Each injected answer was paired with an actor given the very same question. For pain, the words told them apart barely better than a coin (pre-registered, ${D.pairs.pain} pairs, AUC ${D.auc.pain}). Only the log knew.</p>
+    <p class="cred">Not for fear: there the words did give it away (AUC ${D.auc.fear}), so no fear is in this game.</p>
     <p>Think you can tell them apart now? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
     <p>Or go back down. Every floor is open now, and none of them is quite as you left it. <button class="btn go" onclick="location.hash='roam';location.reload()">return to a floor ▸</button></p>
-    <p class="cred">Correction, 7 Oct 2026: an earlier version read its numbers from exp59, which measured layer 18 after the injection, so injected text looked like it read 2 to 7 units. Those numbers were the dose, not the words. The game now uses exp72, read with nothing switched on.</p>
+    <p class="cred">Correction, 7 Oct 2026: an earlier version read its numbers from exp59, which measured layer 18 after the injection, so injected text looked like it read 2 to 7 units. Those numbers were the dose, not the words. The game now uses exp72 and exp72b, read with nothing switched on. And the first version cast fear on most floors; matched actors later showed fear was guessable from the words, so the floors were recast with pain.</p>
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="wrongfloor_press.html">press kit</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;

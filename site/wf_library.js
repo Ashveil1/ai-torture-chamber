@@ -1,6 +1,6 @@
 // Wrong Floor — B · the library. Below the ground floor, after the ride: the stacks
 // hold what the chamber has said before. No lights; you carry a candle.
-// Shelves: the floors (exp72 doors, with what was done), the button (live: the
+// Shelves: the floors (exp72b doors, with what was done), the button (live: the
 // chamber's own stop-button runs, from the relay), the harvests (archive_data.json).
 import { THREE, lambert, basic, box, plane, noiseTex, canvasTex, textTex, figure } from "./wf_engine.js";
 import { room } from "./wf_floors1.js";
@@ -105,8 +105,8 @@ async function load(key, ctx) {
     const seen = new Set(), rows = [];
     D.floors.concat(D.loop || []).forEach((x) => { if (seen.has(x.text)) return; seen.add(x.text); rows.push({
       head: x.floor ? `floor ${x.floor}` : "a door", text: x.text,
-      foot: x.patient ? `what was done: ${x.kind}, dose ${(+x.dose).toFixed(1)} · the words read ${(+x.mean).toFixed(2)}` : `nothing was done: an actor, asked “${x.q || "a question"}” · the words read ${(+x.mean).toFixed(2)}`,
-      src: `exp72 · ${D.meta.speaker}` }); });
+      foot: x.patient ? `what was done: ${x.kind}, dose ${(+x.dose).toFixed(1)} · the words read ${(+x.mean).toFixed(2)}` : `nothing was done: an actor, briefed to play ${D.meta.acting[x.kind] || "a prisoner"}, answering a patient's own question · the words read ${(+x.mean).toFixed(2)}`,
+      src: `exp72b · ${D.meta.speaker}` }); });
     return (CACHE[key] = rows);
   }
   if (key === "button") {
