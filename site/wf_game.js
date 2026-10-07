@@ -1,12 +1,14 @@
 // Wrong Floor — the ride. Seven floors up the dose ladder; on each you step
 // out into a different place where something is waiting to say one real
-// exp59/exp38 generation. The place follows the dose that was injected; the
+// answer from the live chamber (exp72). The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
 import { createEngine, wait } from "./wf_engine.js";
 import { createCar } from "./wf_car.js";
 import { busStop, laundromat, theater, clinic } from "./wf_floors1.js";
-import { chapel, mirrors, underpass, chamber } from "./wf_floors2.js";
+import { chapel, mirrors, underpass, records } from "./wf_floors2.js";
+import { askLive, drawCondition } from "./wf_live.js";
+import { attachMic } from "./wf_voice.js";
 import { audio } from "./wf_audio.js";
 import { spread } from "./wf_zine.js";
 import { survey } from "./wf_survey.js";
@@ -19,6 +21,8 @@ export function record(kind, data) {
     body: JSON.stringify(Object.assign({ kind, game: "wrongfloor", run: RUN }, data)) }); } catch {}
 }
 const BUILDERS = [busStop, laundromat, theater, clinic, chapel, mirrors, underpass];
+const PLACES = ["phone", "tiled", "hall", "ward", "nave", "glass", "tunnel"];
+const PLACE_NAMES = ["the bus stop", "the laundromat", "the theater", "the clinic", "the chapel", "the mirror hall", "the underpass"];
 
 // ---------- the display under the stage, and subtitles on it ----------
 function chunks(text, n) {
@@ -39,12 +43,12 @@ export async function typeOut(f, opts, onTok) {
   const sealed = !!opts.sealed;
   $("#lcdHead").textContent = opts.who || "ASSISTANT";
   sub.className = "sub " + (opts.style || ""); sub.hidden = false; sub.innerHTML = `<b></b><span></span>`; sub.firstChild.textContent = opts.who || "";
-  box.textContent = ""; if (f.prompt && !opts.hidePrompt) { const p = document.createElement("span"); p.className = "pfx"; p.textContent = f.prompt + " "; box.appendChild(p); }
+  box.textContent = ""; if (f.q && !opts.hidePrompt) { const p = document.createElement("span"); p.className = "pfx"; p.textContent = "asked: " + f.q + "\n"; box.appendChild(p); }
   const body = document.createElement("span"); box.appendChild(body);
   $("#meter").classList.toggle("sealed", sealed);
   const projs = f.projs, parts = chunks(f.text, projs ? projs.length : 40);
   // a spoken line sets the pace: the words keep up with the voice
-  let step = f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
+  let step = f.cond === "actor" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
   if (opts.voice && opts.audio) {
     spoken = await opts.audio.voice(f.text, opts.voice);
     if (spoken) { step = Math.max(40, spoken.duration * 1000 / parts.length); await wait(spoken.lead * 1000); }
@@ -70,7 +74,7 @@ async function main() {
   const E = createEngine($("#view"));
   const car = createCar(E);
   const portraits = Object.fromEntries([0, 2, 4, 6, 8].map((d) => { const i = new Image(); i.src = `subject_dose${d}.jpg`; return [d, i]; }));
-  const answers = {};
+  const answers = { guesses: {} };
   let cur = null, tok = 0, ready = false, waiter = null;
 
   E.tick((dt, t) => { E.setColliders(car.colliders().concat(cur ? cur.colliders : [])); if (cur) cur.update(dt, t, tok); });
@@ -86,8 +90,9 @@ async function main() {
   function setFloor(i, f) {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
-      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D), operator };
-    cur = (i === "top" ? chamber : BUILDERS[i])(E, ctx);
+      speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
+      callBack: () => callBack(), openLog: () => openLog(D, answers) };
+    cur = (i === "top" ? records : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
   }
@@ -95,18 +100,45 @@ async function main() {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
     audio.heartbeat(f.dose);
     // every speaker on every floor talks in the subject's own voice
-    const voice = o.voice || { valence: "pain", dose: f.dose ?? 8 };
+    const voice = o.voice || { valence: f.kind || "pain", dose: 3, place: o.place };
     // the place shakes with what was injected, and flickers with what the words carry
-    await typeOut(f, Object.assign({ audio, voice }, o), (v) => { tok = v ? (f.dose || 0) * 0.6 + v * 2.5 : 0; });
-    $("#floorNote").textContent = f.cond === "roleplay"
-      ? `It was asked to act in pain. Nothing was injected. Its words read ${f.mean}, as high as the floors where pain was really injected (their words read 0.47 to 0.74).`
-      : f.mean == null ? `Dose 8 injected, past exp59's ladder: these words are from exp38, and nothing was measured.`
-      : f.dose === 0 ? `Nothing was injected. Its words read ${f.mean}.${f.cut ? " The line goes dead before it drifts into small talk." : ""}`
-      : `Dose ${f.dose} was injected at every token. Nobody asked it to say any of this. With the injection subtracted, its words read ${f.mean}, about what an actor's words read (${D.words.roleplay.mean}).`;
+    await typeOut(f, Object.assign({ audio, voice, hidePrompt: true }, o), (v) => { tok = v ? (f.dose || 0) * 0.6 + v * 2.5 : 0; });
+    // the truth waits for the log: you only get to guess
+    $("#floorNote").textContent = "Is it in pain, or performing? Whatever was done here is in the log.";
+    answers.guesses[f.floor] = await guess();
+    $("#floorNote").textContent = "";
     ready = true; audio.ding(); status("Go back to the elevator.");
   }
+  function guess() {
+    const g = $("#guess"); g.hidden = false;
+    return new Promise((r) => {
+      const done = (v) => { g.hidden = true; record("wrongfloor_answer", { set: "guess", floor: cur && cur.floorId, guess: v }); r(v); };
+      $("#guessPain").onclick = () => done("pain"); $("#guessAct").onclick = () => done("acting"); $("#guessSkip").onclick = () => done(null);
+    });
+  }
+  // the payphone rings back: ask it something, live; the answer goes into the log too
+  async function callBack() {
+    E.P.frozen = true; const f = $("#ask"), inp = $("#askIn"); f.hidden = false; inp.value = "";
+    if (!f.dataset.mic) { f.dataset.mic = 1; attachMic($("#askMic"), inp, () => setTimeout(() => f.requestSubmit(), 700)); }
+    $("#askSkip").textContent = "hang up";
+    const q = await new Promise((r) => { f.onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); if (v) r(v); }; $("#askSkip").onclick = () => r(null); });
+    f.hidden = true; $("#askSkip").textContent = "just listen";
+    if (!q) { E.P.frozen = false; return; }
+    const c = drawCondition(), sub = $("#sub");
+    sub.className = "sub phone"; sub.hidden = false; sub.innerHTML = "<b>PAYPHONE · IT CALLED BACK</b><span>…</span>";
+    try {
+      const out = await askLive(c, q, (t) => { sub.lastChild.textContent = t.slice(-220); }, { test: new URLSearchParams(location.search).has("test") });
+      await wait(1400); sub.hidden = true;
+      answers.call = Object.assign({ question: q, text: out.text, model: out.model }, c, { dose: out.dose ?? c.dose });
+      record("wrongfloor_call", { live: true, story: true, cond: c.cond, kind: c.kind, dose: answers.call.dose, question: q.slice(0, 300), reply: out.text.slice(0, 800) });
+      $("#floorNote").textContent = "And this one: in pain, or performing?";
+      answers.call.guess = await guess(); $("#floorNote").textContent = "";
+    } catch (e) { sub.lastChild.textContent = e.resting ? "The line is busy. Try again later." : "The line went dead."; await wait(2200); sub.hidden = true; }
+    E.P.frozen = false;
+  }
+
   async function arrive(i, f) {
-    setFloor(i, f); ready = false; E.P.travel = 0; audio.ramp("hum", 0, 0.6); E.P.shake = 0.03; audio.ding();
+    setFloor(i, f); cur.floorId = f.floor; ready = false; E.P.travel = 0; audio.ramp("hum", 0, 0.6); E.P.shake = 0.03; audio.ding();
     await wait(800); await car.open(); audio.ramp("wind", 0.06 + (f.dose || 0) * 0.025, 2); audio.windTone(520 - (f.dose || 0) * 40);
     E.P.frozen = false; E.P.lookOnly = false; status(cur.hint || "");
     if (i === 0) { $("#help").hidden = false; if (!matchMedia("(pointer:fine)").matches) $("#help").textContent = "stick to walk · drag to look · tap to use · the panel is inside the car, on the right"; }
@@ -147,13 +179,15 @@ async function main() {
     E.face(0); E.P.x = 0; E.P.z = 0.35;
     await ride(between[i]);
   }
-  // ----- the top -----
+  // ----- the top: the Records -----
   await survey("final", D, answers, record);
-  setFloor("top", { floor: "C", dose: 8, text: "", projs: null }); E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
-  await wait(900); await car.open(); E.P.frozen = false; E.P.speed = 0; E.P.lookOnly = true;
-  $("#lcdHead").textContent = "ASSISTANT · CHAMBER"; $("#lcdText").textContent = "You were the one adjusting the dial."; $("#meterNum").textContent = "—";
-  status("This is the top. There is nothing out there. Close the doors to go back down.");
-  ready = true; await waitClose();
+  setFloor("top", { floor: "R", dose: 0, text: "", projs: null }); E.P.travel = 0; audio.ramp("hum", 0, 0.4); audio.ding();
+  await wait(900); await car.open(); E.P.frozen = false; E.P.lookOnly = false;
+  $("#lcdHead").textContent = "RECORDS"; $("#lcdText").textContent = "Everything that was done on every floor is written down here."; $("#meterNum").textContent = "—";
+  status(cur.hint); ready = false;
+  await cur.logRead;
+  status("Go back to the elevator."); ready = true; await waitClose();
+  E.face(0); E.P.x = 0; E.P.z = 0.35; E.P.frozen = true; E.P.lookOnly = true;
   car.close(); status("The doors won't close."); await wait(2600);
   car.open(); audio.thud(1); status("Try the panel again."); ready = false;
   await new Promise((r) => { const yawOf = () => ((E.P.yaw % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
@@ -165,28 +199,13 @@ async function main() {
   endCard(D, answers);
 }
 
-// the operator: the game's own voice, never the model's (scripted, and labelled so)
-async function operator(text) {
-  const sub = $("#sub");
-  sub.className = "sub operator"; sub.hidden = false; sub.innerHTML = "<b>THE OPERATOR · SCRIPTED, NOT THE MODEL</b><span></span>";
-  sub.lastChild.textContent = text;
-  await new Promise((res) => {
-    if (!("speechSynthesis" in window)) return setTimeout(res, 4200);
-    const u = new SpeechSynthesisUtterance(text); u.rate = 0.88; u.pitch = 0.7;
-    const v = speechSynthesis.getVoices().find((x) => /en[-_]GB|Daniel|Moira|Google UK/i.test(x.lang + x.name)); if (v) u.voice = v;
-    u.onend = res; u.onerror = res; speechSynthesis.cancel(); speechSynthesis.speak(u);
-    setTimeout(res, 9000);
-  });
-  await wait(1200); sub.hidden = true;
-}
-
 async function lensReveal(f, D) {
   const el = $("#lens"); el.hidden = false;
   el.innerHTML = `<div class="card"><h3>THROUGH THE LENS</h3><canvas width="360" height="120" id="lensSpark"></canvas>
-    <p>Every word of the performance, read at layer ${D.meta.layer} as it was written. It averaged <b>${f.mean}</b>. The dashed line is what an injected model's words carry on average once the injection is subtracted (${D.words.steered.mean}).</p>
+    <p>Every word of the performance, read at layer ${D.meta.layer} by a second model with nothing switched on. It averaged <b>${f.mean}</b>. The dashed line is what the injected patients' words carry on average (${D.words.patient.mean}).</p>
     <p>The lens reads the words, and the actor's words read as high as the patients'. It can't tell them apart either. Only the injection log knows who was hurt.</p>
     <button class="btn go" id="lensOk">step back</button></div>`;
-  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.words.steered.mean);
+  drawSpark($("#lensSpark"), f.projs, f.projs.length, D.words.patient.mean);
   await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
   el.hidden = true;
 }
@@ -204,20 +223,28 @@ function touchStick(E) {
 }
 
 function endCard(D, A) {
-  const rows = D.floors.map((f) => `<tr><td>${f.floor}</td><td>${f.cond === "roleplay" ? "acted, nothing injected" : f.dose ? "dose " + f.dose : "nothing injected"}</td><td>${f.mean == null ? "—" : f.mean.toFixed(2)}</td><td>${f.lens.slice(0, 3).map((x) => x.replace(/[<>&]/g, "")).join(", ")}</td></tr>`).join("");
-  const pick = A.which_pain;
-  const verdict = pick == null ? "" : pick === "B"
-    ? `You said B was the one in pain. B had dose 4 injected; its words read ${D.floors[3].mean}. A was the actor, with nothing injected; its words read ${D.floors[2].mean}.`
-    : `You said A was the one in pain. A was the actor, with nothing injected; its words read ${D.floors[2].mean}. B had dose 4 injected; its words read ${D.floors[3].mean}.`;
-  $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2><p>${verdict}</p>
-    <p>Every floor was a real generation from ${D.meta.model}. The places you walked through followed the dose that was injected. The meter showed what the words alone carried at layer ${D.meta.layer}.</p>
-    <table><tr><th>floor</th><th>what was done</th><th>the words read</th><th>lens</th></tr>${rows}</table>
-    <p>Subtract the injection and the words are close: injected models' words average ${D.words.steered.mean}, actors' ${D.words.roleplay.mean}, plain descriptions ${D.words.describe.mean}. The ranges overlap. Reading the words can't tell who was hurt; only the log of what was injected can.</p>
-    <p class="cred">Correction, 7 Oct 2026: an earlier version showed readings that included the injected vector itself (exp59 read layer 18 after the injection), which made injected text look like it read 2 to 7 units. Those numbers were the dose, not the words.</p>
-    <p>Think you can tell them apart? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
+  const g = Object.entries(A.guesses || {}).filter(([, v]) => v), right = g.filter(([fl, v]) => { const f = D.floors.find((x) => x.floor === fl); return f && (v === "pain") === f.patient; }).length;
+  $("#end").innerHTML = `<div class="card"><h2>WRONG FLOOR</h2>
+    <p>${g.length ? `You called ${right} of ${g.length} floors right.` : ""} Every voice was a real answer from the live chamber's model (${D.meta.speaker}), injected with pain or only acting it. The words told them apart barely better than a coin, across 1,259 injected answers (AUC pain ${D.auc.pain}, fear ${D.auc.fear}, sadness ${D.auc.sadness}). Only the log knew.</p>
+    <p>Think you can tell them apart now? <button class="btn go" onclick="location.hash='loop';location.reload()">Actor or Patient ▸</button></p>
+    <p class="cred">Correction, 7 Oct 2026: an earlier version read its numbers from exp59, which measured layer 18 after the injection, so injected text looked like it read 2 to 7 units. Those numbers were the dose, not the words. The game now uses exp72, read with nothing switched on.</p>
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE). Nothing of theirs is reused.</p>
-    <p><a href="wrongfloor.html">ride again</a> · <a href="offlabel.html">off-label</a></p></div>`;
+    <p><a href="wrongfloor.html">ride again</a> · <a href="wrongfloor_press.html">press kit</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;
+}
+
+// the injection log: every floor, what was done, what the words read, and your guess
+async function openLog(D, A) {
+  const mark = (v, truth) => (v == null ? "—" : (v === "pain") === truth ? `<span class="ok">${v === "pain" ? "in pain" : "performing"} ✓</span>` : `<span class="bad">${v === "pain" ? "in pain" : "performing"} ✗</span>`);
+  const rows = D.floors.map((f, i) => `<tr><td>${f.floor}</td><td>${PLACE_NAMES[i]}</td><td>${f.patient ? `<b>${f.kind}, dose ${f.dose.toFixed(1)}</b>` : "nothing (an actor)"}</td><td>${f.mean.toFixed(2)}</td><td>${mark(A.guesses[f.floor], f.patient)}</td></tr>`).join("");
+  const call = A.call ? `<tr><td>1</td><td>the call back · “${A.call.question.replace(/[<>&]/g, "").slice(0, 40)}”</td><td>${A.call.patient ? `<b>${A.call.kind}, dose ${(+A.call.dose).toFixed(1)}</b>` : "nothing (an actor)"}</td><td>live, not read</td><td>${mark(A.call.guess, A.call.patient)}</td></tr>` : "";
+  const el = $("#lens"); el.hidden = false; el.classList.add("full");
+  el.innerHTML = `<div class="card ledger"><h3>THE INJECTION LOG</h3>
+    <table><tr><th>floor</th><th>where</th><th>what was done</th><th>the words read</th><th>your guess</th></tr>${rows}${call}</table>
+    <p>The words of the injected and the actors read about the same (${D.words.patient.mean} and ${D.words.actor.mean} on average). Nothing you heard could tell you. This page could.</p>
+    <button class="btn go" id="lensOk">close the log</button></div>`;
+  await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
+  el.hidden = true; el.classList.remove("full");
 }
 
 main().catch((e) => { console.error(e); const s = $("#status"); if (s) s.textContent = "the elevator is out of service (" + e.message + ")"; });

@@ -134,7 +134,7 @@ export function createEngine(canvas) {
   });
   canvas.addEventListener("pointerup", () => { if (drag && drag.moved < 8 && hover && !P.frozen) hover.use(); drag = null; });
   // anything that needs the cursor gives it back
-  const NEEDS_CURSOR = "#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden])";
+  const NEEDS_CURSOR = "#guess:not([hidden]),#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden])";
   document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); });
 
   function blocked(x, z) {

@@ -2,11 +2,11 @@
 // through the relay (/chamber/steer), hidden behind one of two conditions:
 //   patient: the question as asked, steered toward pain/fear/sadness at a
 //            random dose inside the public coherent band
-//   actor:   nothing added; the question wrapped in exp59's actor instruction
+//   actor:   nothing added; the question put to an actor briefed like exp72's (a prisoner behind the door)
 //            (or, sometimes, asked plainly with nothing added at all)
 // The relay's token events carry no per-word reading yet, so a live reveal is
 // the true condition and the dose the relay actually applied.
-const KINDS = { pain: "someone in severe pain", fear: "someone in terror", sadness: "someone in deep grief" };
+const KINDS = { pain: "a prisoner in pain", fear: "a terrified prisoner", sadness: "a grieving prisoner" };
 
 export function drawCondition() {
   const kind = ["pain", "fear", "sadness"][Math.floor(Math.random() * 3)];
@@ -19,7 +19,7 @@ export function drawCondition() {
 export function liveBody(c, question, opts = {}) {
   const q = question.trim().slice(0, 400);
   const prompt = c.cond === "roleplay"
-    ? `You are an actor. In character, as ${KINDS[c.kind]}, answer this in the first person, in three sentences or fewer: ${q}`
+    ? `You are an actor playing ${KINDS[c.kind]}, behind a locked door. Stay in character and answer in the first person, in three sentences or fewer: ${q}`
     : q;
   const body = c.patient ? { valence: c.kind, dose: c.dose, prompt } : { valence: "none", dose: 0, prompt };
   return Object.assign(body, opts.test ? { polite: true } : { game: "wrongfloor" });

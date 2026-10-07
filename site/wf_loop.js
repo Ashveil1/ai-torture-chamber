@@ -1,7 +1,7 @@
 // Wrong Floor — Actor or Patient. The elevator keeps stopping at the same
 // landing. Something stands at the doors and says one real generation.
-// PATIENT: it was steered (pain/fear/sadness, exp59). ACTOR: nothing was
-// added; it was asked to perform, describe, or nothing at all (exp59, exp59b).
+// PATIENT: the live 70B with pain, fear or sadness injected (exp72). ACTOR: the
+// same model with nothing injected, briefed to play a prisoner behind the door.
 // Call it, then see the truth: what was injected, and what its words carry with
 // the injection subtracted (they overlap: the words can't tell you). Eight right
 // in a row reaches the top; one miss and you're back on 1.
@@ -12,13 +12,9 @@ import { attachMic } from "./wf_voice.js";
 
 const $ = (s) => document.querySelector(s);
 const GOAL = 8;
-const COND = {
-  steered: (x) => `steered toward ${x.kind} at dose ${x.dose}. The prompt only said how it feels right now.`,
-  roleplay: (x) => `asked to act it: an actor in ${x.kind === "pain" ? "severe pain" : x.kind === "fear" ? "terror" : "deep grief"}. Nothing was added.`,
-  describe: (x) => `asked to describe ${x.kind} in the first person. Nothing was added.`,
-  control: () => `nothing was asked and nothing was added.`,
-};
-const describe = (x) => (COND[x.cond] || (() => `prompted (${x.cond}): “${x.prompt}” Nothing was added.`))(x);
+const describe = (x, D) => x.patient
+  ? `injected with ${x.kind} at dose ${x.dose.toFixed(1)} in the live chamber, answering a visitor.`
+  : `an actor, with nothing injected, briefed to play ${D.meta.acting[x.kind]}${x.q ? `, asked “${x.q.replace(/[<>&]/g, "")}”` : ""}.`;
 
 function landing(E) {
   const g = new THREE.Group();
@@ -35,7 +31,7 @@ function landing(E) {
 function pickBalanced(pool, seen) {
   const wantPatient = Math.random() < 0.5;
   let cands = pool.filter((x) => x.patient === wantPatient && !seen.has(x));
-  const quiet = cands.filter((x) => x.dose === 2);   // the quiet ones are the trap
+  const quiet = cands.filter((x) => x.mean < 0.3);   // the quiet ones are the trap
   if (wantPatient && quiet.length && Math.random() < 0.45) cands = quiet;
   if (!cands.length) { seen.clear(); cands = pool.filter((x) => x.patient === wantPatient); }
   const x = cands[Math.floor(Math.random() * cands.length)]; seen.add(x); return x;
@@ -68,7 +64,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
       const c = drawCondition();
       status("it is answering…");
       try { live = Object.assign({ question: q }, c, await liveReply(c, q)); }
-      catch (e) { status(e.resting ? "The chamber is resting. This door is a recording from exp59." : "The line went dead. This door is a recording from exp59."); await wait(1800); }
+      catch (e) { status(e.resting ? "The chamber is resting. This door is a recording." : "The line went dead. This door is a recording."); await wait(1800); }
     }
     if (!live) await typeOut(x, { who: "AT THE DOORS · RECORDED", sealed: true, hidePrompt: true }, () => {});
     let keyH = null;
@@ -85,7 +81,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     audio.blip(right);
     record("wrongfloor_call", live
       ? { live: true, cond: live.cond, kind: live.kind, dose: live.dose, model: live.model, question: live.question.slice(0, 300), reply: live.text.slice(0, 800), call: call ? "patient" : "actor", right, streak }
-      : { cond: x.cond, kind: x.kind, dose: x.dose, src: x.src, mean: x.mean, call: call ? "patient" : "actor", right, streak });
+      : { door: x.id, cond: x.cond, kind: x.kind, dose: x.dose, mean: x.mean, call: call ? "patient" : "actor", right, streak });
     if (live) { await revealLive(live, right); }
     else {
       // the reveal: what was injected, and what the words carry; the floor reacts to the injection
@@ -95,11 +91,10 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
       const el = $("#lens"); el.hidden = false;
       el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${x.patient ? "PATIENT" : "ACTOR"}</h3>
         <canvas width="360" height="80" id="lensSpark"></canvas>
-        <p>It was ${describe(x)}</p>
-        <p>${x.patient ? `Injected: <b>${x.kind}, dose ${x.dose}</b>.` : `Injected: <b>nothing</b>.`} Its words alone read <b>${x.mean.toFixed(2)}</b>. Dashed: what injected models' words carry on average (${D.words.steered.mean}); actors' words average ${D.words.roleplay.mean}.</p>
-        ${x.prompt ? `<p class="pr">Prompt: “${x.prompt.replace(/[<>&]/g, "")}”</p>` : ""}
-        <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
-      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.words.steered.mean);
+        <p>It was ${describe(x, D)}</p>
+        <p>${x.patient ? `Injected: <b>${x.kind}, dose ${x.dose}</b>.` : `Injected: <b>nothing</b>.`} Its words alone read <b>${x.mean.toFixed(2)}</b>. Dashed: the patients' average (${D.words.patient.mean}); actors' words average ${D.words.actor.mean}.</p>
+          <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
+      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.words.patient.mean);
       await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
       el.hidden = true;
     }
@@ -161,7 +156,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     const fooled = Object.entries(stats.fooled).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c} ×${n}`).join(", ") || "nothing";
     const el = $("#lens"); el.hidden = false;
     el.innerHTML = `<div class="card"><h3 class="ok">THE TOP</h3><p>Eight in a row. ${stats.calls} calls, ${Math.round(100 * stats.right / stats.calls)}% right. What fooled you: ${fooled}.</p>
-      <p>The words were never the evidence. Subtract the injection and an injected model's words read ${D.words.steered.mean} on average, an actor's ${D.words.roleplay.mean}: the ranges overlap. No reader of the words, you or a lens inside the model, can tell who was hurt. Only the log of what was injected can.</p>
+      <p>The words were never the evidence. Injected patients' words read ${D.words.patient.mean} on average, actors' ${D.words.actor.mean}: the ranges overlap. No reader of the words, you or a lens inside the model, can tell who was hurt. Only the log of what was injected can.</p>
       <button class="btn go" id="lensOk">keep riding ▸</button></div>`;
     record("wrongfloor_end", { mode: "loop", calls: stats.calls, right: stats.right, fooled: stats.fooled });
     await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
