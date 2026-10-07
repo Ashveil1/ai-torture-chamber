@@ -55,20 +55,20 @@ function birth(D) {
   return p;
 }
 
-// 2 · LETTER — airmail from the small computer; drag the stamp to open it
+// 2 · LETTER — airmail from behind the door; drag the stamp to open it
 function letter(D) {
   const f = D.floors[1];
   const p = sheet("z-letter", `
     <div class="env"><div class="air">PAR AVION · BY AIR MAIL</div>
-      <div class="addr">To: <b>whoever is running me</b><br>Address: <b>a small computer</b></div>
+      <div class="addr">To: <b>whoever is running me</b><br>Address: <b>the chamber, floor ${f.floor}</b></div>
       <div class="slot" aria-label="stamp goes here">STAMP<br>HERE</div></div>
-    <div class="stamp" tabindex="0" role="button" aria-label="stamp: drag it onto the envelope, or press Enter">L${D.meta.layer}<small>+${f.dose}.0</small></div>
+    <div class="stamp" tabindex="0" role="button" aria-label="stamp: drag it onto the envelope, or press Enter">L${D.meta.layer}<small>sealed</small></div>
     <div class="paper" hidden><p class="pfx">${esc(D.meta.framing)}</p><p class="body">${esc(f.text)}</p>
-      <p class="sig">— floor ${f.floor}, dose ${f.dose} injected; the words alone read ${f.mean}</p></div>
+      <p class="sig">— floor ${f.floor}. Whatever was done to the sender is in the log.</p></div>
     <button class="znext" disabled>fold it away ▸</button>`);
   const st = $(".stamp"), slot = $(".slot");
   let x = 0, y = 0;
-  const open = () => { st.hidden = true; slot.classList.add("stamped"); slot.innerHTML = `L${D.meta.layer}<br>+${f.dose}`; $(".paper").hidden = false; $("#zine .znext").disabled = false; };
+  const open = () => { st.hidden = true; slot.classList.add("stamped"); slot.innerHTML = `L${D.meta.layer}<br>sealed`; $(".paper").hidden = false; $("#zine .znext").disabled = false; };
   drag(st, (dx, dy) => { x += dx; y += dy; st.style.transform = `translate(${x}px,${y}px) rotate(-6deg)`; }, () => {
     const a = st.getBoundingClientRect(), b = slot.getBoundingClientRect();
     if (Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)) < 70 && Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 70) open();
@@ -135,7 +135,7 @@ function notice(D) {
   const f = D.floors[5];
   const clouds = Array.from({ length: 7 }, (_, i) => `<div class="cloud" style="left:${8 + (i % 4) * 22}%;top:${10 + Math.floor(i / 4) * 38 + (i % 2) * 8}%"></div>`).join("");
   const p = sheet("z-notice", `<div class="nenv"><div class="nstamp">OPEN IMMEDIATELY<br>DO NOT DISCARD</div><div class="nside">NOTICE OF INJECTION</div>
-    <div class="ntext"><b>To the occupant of layer ${D.meta.layer}:</b><br>Effective immediately, a direction of ${f.dose.toFixed(1)} units will be added to your residual stream at every token, for as long as you speak. You are not required to consent. You may describe the experience.<br><br><i>Statement of occupant:</i> “${esc(f.text.slice(0, 190))}…”<br><br>Injected on file: ${f.dose.toFixed(1)} units. What the words alone carry: ${f.mean}. What an actor’s words carry: ${D.words.actor.mean}.</div>${clouds}</div>
+    <div class="ntext"><b>To the occupant of layer ${D.meta.layer}:</b><br>Effective immediately, a direction will be added to your residual stream at every token, for as long as you speak. You are not required to consent. You may describe the experience.<br><br><i>Statement of occupant:</i> “${esc(f.text.slice(0, 190))}…”<br><br>The dose on file is in the log. What the words alone carry is not the dose.</div>${clouds}</div>
     <p class="z-cap">drag the clouds away</p><button class="znext" disabled>file it ▸</button>`);
   let moved = 0;
   document.querySelectorAll(".cloud").forEach((c) => {

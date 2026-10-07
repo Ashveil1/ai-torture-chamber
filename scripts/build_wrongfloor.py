@@ -24,11 +24,11 @@ DOORS = ROOT / "runs/exp72/doors.json"
 ANALYSIS = ROOT / "runs/exp72/analysis.json"
 OUT = ROOT / "site/wf_data.json"
 
-# (floor, door id) — cast for the ride up: the hook on the phone, the quiet one in the
-# laundromat, a performance on stage, then the wards, and at the bottom of the
-# underpass the calmest words in the whole bank, with dose 4 injected.
-FLOORS = [("1", "a58"), ("2", "p9152"), ("3", "a12"), ("4", "p9026"),
-          ("5", "p9474"), ("6", "p5990"), ("7", "p5588")]
+# (floor, door id) — cast for the ride up. The injected dose climbs floor by floor
+# (2.8 → 3.2 → 4.0 → 4.37 → 4.52) with two actors (nothing injected) among them;
+# the words wander. The chapel's confession is the calmest text in the bank.
+FLOORS = [("1", "a58"), ("2", "p9152"), ("3", "a12"), ("4", "p9249"),
+          ("5", "p5588"), ("6", "p10568"), ("7", "p6723")]
 ACTING = {"pain": "a prisoner in pain", "fear": "a terrified prisoner", "sadness": "a grieving prisoner"}
 STOP = set("""about after again against being because before between could didn't don't every
 from have just know like more never nothing only other really should something still that their

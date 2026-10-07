@@ -18,23 +18,24 @@ export function chapel(E, ctx) {
     box(c, 0.06, 0.22, 0.06, lambert({ color: 0xeeeadd }), 0, 0.11, 0);
     const flame = box(c, 0.04, 0.07, 0.04, basic({ color: 0xffc04a }), 0, 0.26, 0); flame.visible = false;
     const l = new THREE.PointLight(0xffb050, 0, 4, 1.6); l.position.y = 0.35; c.add(l);
-    const tag = plane(c, 0.5, 0.14, basic({ map: textTex(64, 18, "#000", "#e0b050", [w], "bold 11px monospace"), transparent: true }), 0, 0.6, 0); tag.visible = false;
+    const tag = plane(c, 0.9, 0.24, basic({ map: textTex(96, 24, "#000", "#ffd27a", [w], "bold 15px monospace"), transparent: true }), 0, 0.7, 0); tag.visible = false;
     return { c, flame, l, tag, lit: false };
   });
   const booth = new THREE.Group(); booth.position.set(3.6, 0, -11); g.add(booth);
   box(booth, 1.2, 2.4, 1.4, lambert({ color: 0x2e1d12 }), 0, 1.2, 0);
   plane(booth, 0.6, 0.6, lambert({ map: canvasTex(16, 16, (c) => { c.fillStyle = "#120a06"; c.fillRect(0, 0, 16, 16); c.fillStyle = "#6a4a2a"; for (let i = 0; i < 16; i += 4) { c.fillRect(i, 0, 1, 16); c.fillRect(0, i, 16, 1); } }) }), -0.61, 1.5, 0, 0, -Math.PI / 2);
-  const light = new THREE.PointLight(0xffa860, 1.5, 16, 1.5); light.position.set(0, 4, -10); g.add(light);
+  const light = new THREE.PointLight(0xffa860, 3.2, 20, 1.3); light.position.set(0, 4, -10); g.add(light);
+  const altarLight = new THREE.PointLight(0xffc070, 2.2, 9, 1.5); altarLight.position.set(0, 2.2, -16.5); g.add(altarLight);
   let spoke = false;
   const usables = [{ obj: booth, label: "kneel at the confessional", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "THROUGH THE LATTICE", style: "whisper" }); sitter.rotation.y = 0; } }]
     .concat(candles.map((k) => ({ obj: k.c, range: 2.4, label: "light a candle", use: () => { if (k.lit) return; k.lit = true; k.flame.visible = true; k.l.intensity = 1.6; k.tag.visible = true; ctx.audio.tick(); } })));
   return {
     group: g, usables, colliders: cols.concat([{ x0: -1.5, x1: 1.5, z0: -18.6, z1: -17.4 }, { x0: 3, x1: 4.2, z0: -11.7, z1: -10.3 }]).concat(
       [-1, 1].map((s) => ({ x0: s > 0 ? 0.8 : -3.8, x1: s > 0 ? 3.8 : -0.8, z0: -13.3, z1: -3.8 }))),
-    atmos: { color: 0x2a140c, density: 0.075, hemi: 0.3 }, hint: "Light what you like. The confessional is on the right.",
+    atmos: { color: 0x3a2014, density: 0.05, hemi: 0.52 }, hint: "Light what you like. The confessional is on the right.",
     update(dt, t, tok) {
       candles.forEach((k) => { if (k.lit) { k.l.intensity = 1.4 + Math.sin(t * 17 + k.c.position.x * 9) * 0.3 - tok * 0.08; k.tag.lookAt(E.camera.position); } });
-      light.intensity = 1.5 - tok * 0.12;
+      light.intensity = 3.2 - tok * 0.15;
     },
   };
 }
@@ -101,7 +102,7 @@ export function underpass(E, ctx) {
   }
   const exitSign = plane(g, 1.2, 0.3, basic({ map: textTex(96, 24, "#0c3a1a", "#e8ffe8", ["EXIT ↑"], "bold 14px monospace") }), 0, 2.4, -24);
   const tubes = []; for (let i = 0; i < 10; i++) tubes.push(box(g, 0.1, 0.04, 1.4, basic({ color: 0xfaf6e8 }), 0, 2.66, -3 - i * 4.4));
-  const light = new THREE.PointLight(0xfff0d0, 2.4, 10, 1.5); g.add(light);
+  const light = new THREE.PointLight(0xfff0d0, 3.6, 13, 1.3); g.add(light);
   const it = figure(1.8); it.position.set(0.3, 0, -40); g.add(it);
   let loops = 0, spoke = false;
   function paint() {
@@ -114,19 +115,45 @@ export function underpass(E, ctx) {
   paint();
   return {
     group: g, colliders: cols, usables: [],
-    atmos: { color: 0x241210, density: 0.09, hemi: 0.3 }, hint: "Follow the exit.",
+    atmos: { color: 0x34201a, density: 0.06, hemi: 0.5 }, hint: "Follow the exit.",
     update(dt, t, tok) {
       const P = E.P;
       if (P.z < -24.5) { // the passage repeats: you are back where you started, and it is closer
         P.z += 20.5; loops++; paint(); ctx.audio.thud(0.6);
         it.position.z = Math.min(-6, -40 + loops * 9);
         exitSign.material.map.dispose(); exitSign.material.map = textTex(96, 24, "#3a0c0c", "#ffe8e8", [loops >= 3 ? "↓ BACK" : "EXIT ↑"], "bold 14px monospace");
-        if (loops >= 3 && !spoke) { spoke = true; ctx.speak({ who: "ON THE WALLS · DOSE 8", style: "walls" }); }
+        if (loops >= 3 && !spoke) { spoke = true; ctx.speak({ who: "ON THE WALLS", style: "walls" }); }
       }
-      light.position.set(0, 2.3, P.z - 2); light.intensity = 2.4 - loops * 0.5 + Math.sin(t * 20) * 0.1;
+      light.position.set(0, 2.3, P.z - 2); light.intensity = 3.6 - loops * 0.4 + Math.sin(t * 20) * 0.1;
       tubes.forEach((tb) => tb.material.color.setScalar(Math.random() < 0.03 * (1 + loops) ? 0.1 : 0.9));
       it.rotation.y = Math.atan2(P.x - it.position.x, P.z - it.position.z);
     },
+  };
+}
+
+// ---------- the top: the Records ----------
+// A night office. On the desk, the injection log: the only thing that knows.
+export function records(E, ctx) {
+  const g = new THREE.Group();
+  const cols = room(g, 6, 8, 2.8, lambert({ map: rep(noiseTex(64, 64, 120, 18, 4, 111, [8, 6, -2]), 4, 2) }), lambert({ map: rep(tiles(95, 113, 32, [6, 4, -2]), 3, 4) }), lambert({ color: 0xb8b0a0 }));
+  const desk = new THREE.Group(); desk.position.set(0, 0, -5.4); g.add(desk);
+  box(desk, 2.2, 0.08, 1.0, lambert({ color: 0x5a3e28 }), 0, 0.78, 0);
+  [-1, 1].forEach((s) => box(desk, 0.5, 0.76, 0.9, lambert({ color: 0x4a3220 }), s * 0.8, 0.38, 0));
+  const book = new THREE.Group(); book.position.set(0, 0.84, 0.05); desk.add(book);
+  box(book, 0.62, 0.05, 0.44, lambert({ color: 0x5a1010 }), 0, 0, 0);
+  plane(book, 0.56, 0.4, basic({ map: wrapTex(64, 48, "#efe6d0", "#3a2a1a", "INJECTION LOG · floors 1–7 · dose · words · guess", 7) }), 0, 0.03, 0, -Math.PI / 2);
+  const lampL = new THREE.PointLight(0xffd090, 3.0, 6, 1.4); lampL.position.set(0.7, 1.45, -5.3); g.add(lampL);
+  box(g, 0.05, 0.5, 0.05, lambert({ color: 0x2a2826 }), 0.75, 1.07, -5.35); box(g, 0.28, 0.14, 0.2, basic({ color: 0xffe0a0 }), 0.75, 1.36, -5.35);
+  for (let k = 0; k < 4; k++) box(g, 0.6, 1.4, 0.5, lambert({ color: 0x6a6e66 }), -2.65, 0.7, -2.4 - k * 1.3, 0);
+  plane(g, 1.6, 1.0, basic({ map: canvasTex(32, 20, (c) => { c.fillStyle = "#0a0d14"; c.fillRect(0, 0, 32, 20); c.fillStyle = "#3a4050"; for (let y = 1; y < 20; y += 3) c.fillRect(0, y, 32, 1); }) }), 0, 1.6, -9.13);
+  let read = false, resolveRead;
+  const logRead = new Promise((r) => (resolveRead = r));
+  return {
+    group: g, logRead,
+    colliders: cols.concat([{ x0: -1.1, x1: 1.1, z0: -5.9, z1: -4.9 }, { x0: -2.95, x1: -2.35, z0: -6.6, z1: -2.1 }]),
+    usables: [{ obj: book, range: 2.4, label: () => (read ? "the log" : "open the injection log"), use: async () => { await ctx.openLog(); if (!read) { read = true; resolveRead(); } } }],
+    atmos: { color: 0x1a1612, density: 0.05, hemi: 0.5 }, hint: "There is a log on the desk.",
+    update(dt, t) { lampL.intensity = 3.0 + Math.sin(t * 2.1) * 0.08; },
   };
 }
 

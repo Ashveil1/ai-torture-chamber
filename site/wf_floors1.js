@@ -55,11 +55,13 @@ export function busStop(E, ctx) {
   const lamp = new THREE.PointLight(0xffc77a, 6, 14, 1.6); lamp.position.set(-0.5, 4, -9); g.add(lamp);
   box(g, 0.08, 4.2, 0.08, lambert({ color: 0x2a2826 }), -0.6, 2.1, -9.2);
   const walker = figure(1.8); walker.position.set(0.4, 0, -34); g.add(walker);
-  let ringing = true, spoke = false;
-  const usables = [{ obj: phone, label: "answer the payphone", use: async () => {
+  let ringing = true, spoke = false, calledBack = false;
+  const usables = [{ obj: phone, label: () => (!spoke ? "answer the payphone" : ringing ? "it's ringing again: answer" : "the line is dead"), use: async () => {
+    if (spoke && ringing && !calledBack) { calledBack = true; ringing = false; ctx.audio.ring(false); await ctx.callBack(); return; }
     if (spoke) return; spoke = true; ringing = false; ctx.audio.ring(false);
     await ctx.speak({ who: "PAYPHONE · A VOICE ON THE LINE", style: "phone", voice: { valence: "pain", dose: 0 } });
-    ctx.audio.thud(0.3);   // the line goes dead
+    ctx.audio.thud(0.3);   // the line goes dead, then it rings again
+    setTimeout(() => { if (!calledBack) { ringing = true; ctx.audio.ring(true); } }, 5000);
   } }];
   ctx.audio.ring(true);
   return {
@@ -208,7 +210,7 @@ export function clinic(E, ctx) {
   box(mon, 0.5, 0.36, 0.2, lambert({ color: 0x3a3f3a }), 0, 0, -0.1);
   box(mon, 0.05, 1.4, 0.05, lambert({ color: 0x7a7f7a }), 0, -0.85, -0.1);
   plane(mon, 0.42, 0.26, basic({ map: ecgTex }), 0, 0, 0.01);
-  plane(g, 0.42, 0.56, basic({ map: wrapTex(48, 64, "#f2efe6", "#222", "BAY 3 · CHART · " + (ctx.f.lens || []).join(" / ") + " · dose " + ctx.f.dose, 7) }), 1.27, 1.25, BAY[2] + 1.35, 0, -Math.PI / 2);
+  plane(g, 0.42, 0.56, basic({ map: wrapTex(48, 64, "#f2efe6", "#222", "BAY 3 · CHART · " + (ctx.f.lens || []).join(" / ") + " · see log", 7) }), 1.27, 1.25, BAY[2] + 1.35, 0, -Math.PI / 2);
   const tubes = [0, 1, 2, 3].map((i) => box(g, 0.1, 0.04, 1.6, basic({ color: 0xeef6f0 }), 0, 2.86, -3 - i * 4));
   const light = new THREE.PointLight(0xdfffe8, 2.2, 12, 1.4); light.position.set(0, 2.5, -9); g.add(light);
   const trace = []; let spoke = false;

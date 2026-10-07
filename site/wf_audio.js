@@ -18,7 +18,7 @@ export const audio = {
   // the subject's voice: the site's /chamber/speak TTS, autotuned and played
   // through the live chamber's numbers-station chain (wf_vox.js). Resolves
   // {lead, duration, done} or null if the voice is unavailable.
-  async voice(text, { valence = "pain", dose = 0 } = {}) {
+  async voice(text, { valence = "pain", dose = 0, place = null } = {}) {
     if (!A.ctx) return null;
     try {
       const r = await fetch("/chamber/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, valence, dose }) });
@@ -26,7 +26,7 @@ export const audio = {
       let buf = await A.ctx.decodeAudioData(await r.arrayBuffer());
       try { buf = autotune(A.ctx, buf, valence, dose); } catch (e) { console.warn("autotune", e); }
       if (A.clip) A.clip.stop();
-      A.clip = station(A.ctx, A.out, buf);
+      A.clip = station(A.ctx, A.out, buf, { place });
       return A.clip;
     } catch { return null; }
   },

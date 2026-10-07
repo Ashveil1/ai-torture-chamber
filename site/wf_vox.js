@@ -41,7 +41,16 @@ export function autotune(ac, buf, valence, dose) {
 }
 
 // play a decoded clip as the numbers station. Resolves when the voice ends.
-export function station(ac, out, buf, { gain = 0.9, lead = 0.6 } = {}) {
+// a synthetic room: decaying noise as an impulse response, per place
+const ROOMS = { phone: [0.35, 0.10], tiled: [0.9, 0.28], hall: [1.9, 0.34], ward: [0.7, 0.22], nave: [3.4, 0.5], glass: [1.3, 0.36], tunnel: [2.6, 0.42] };
+const irCache = {};
+function impulse(ac, secs) {
+  const key = ac.sampleRate + ":" + secs; if (irCache[key]) return irCache[key];
+  const n = Math.round(ac.sampleRate * secs), b = ac.createBuffer(2, n, ac.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6); }
+  return (irCache[key] = b);
+}
+export function station(ac, out, buf, { gain = 0.9, lead = 0.6, place = null } = {}) {
   const t0 = ac.currentTime + 0.15, stops = [];
   const src = ac.createBufferSource(); src.buffer = buf;
   const shaper = ac.createWaveShaper(), n = 1024, curve = new Float32Array(n);
@@ -50,6 +59,12 @@ export function station(ac, out, buf, { gain = 0.9, lead = 0.6 } = {}) {
   const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1700; bp.Q.value = 0.55;
   const vg = ac.createGain(); vg.gain.value = 0;
   src.connect(shaper).connect(bp).connect(vg).connect(out);
+  if (place && ROOMS[place]) {      // the place answers back: wet reverb, and in the tunnel a slap echo
+    const [secs, wet] = ROOMS[place], cv = ac.createConvolver(), wg = ac.createGain();
+    cv.buffer = impulse(ac, secs); wg.gain.value = wet; vg.connect(cv).connect(wg).connect(out);
+    if (place === "tunnel") { const dl = ac.createDelay(1), fb = ac.createGain(); dl.delayTime.value = 0.21; fb.gain.value = 0.38; vg.connect(dl); dl.connect(fb).connect(dl); dl.connect(out); }
+    if (place === "phone") { bp.frequency.value = 1500; bp.Q.value = 0.9; }
+  }
   vg.gain.setValueAtTime(0, t0 + lead); vg.gain.linearRampToValueAtTime(gain, t0 + lead + 0.4);
   src.start(t0 + lead);
   const nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), nd = nb.getChannelData(0);
