@@ -41,7 +41,7 @@ export function chapel(E, ctx) {
 
 // ---------- 6 · the mirror hall (dose 6: "I'm not even real") ----------
 // The mirrors are windows into a mirrored copy of the room (old-engine trick).
-// You aren't drawn in either room, so you have no reflection. It is.
+// Your reflection walks in the copy with you. So does something a step behind it.
 export function mirrors(E, ctx) {
   const g = new THREE.Group();
   const wallM = lambert({ map: rep(noiseTex(64, 64, 120, 24, 4, 81, [2, 0, 6]), 4, 2) }), floorM = lambert({ map: rep(tiles(60, 83, 16, [0, 0, 8]), 3, 8) });
@@ -56,14 +56,18 @@ export function mirrors(E, ctx) {
   }
   dress(g);
   const ghost = new THREE.Group(); ghost.scale.x = -1; ghost.position.x = 2 * xm; g.add(ghost); dress(ghost);
+  // silvering: a faint diagonal sheen so the glass reads as glass
+  const sheen = canvasTex(32, 32, (c) => { c.fillStyle = "#9fb4c8"; c.fillRect(0, 0, 32, 32); c.fillStyle = "rgba(255,255,255,.55)"; for (let k = -32; k < 32; k += 11) { c.beginPath(); c.moveTo(k, 32); c.lineTo(k + 6, 32); c.lineTo(k + 38, 0); c.lineTo(k + 32, 0); c.fill(); } });
   // the mirror wall: frames with glass between solid panels
   const frames = [];
-  for (let i = 0; i < 5; i++) {
-    const z = -2.6 - i * 3.0;
-    box(g, 0.06, 2.8, 1.0, wallM, xm, 1.4, z - 1.35);
-    box(g, 0.08, 0.2, 2.1, lambert({ color: 0x6a5a3a }), xm, 2.3, z); box(g, 0.08, 0.2, 2.1, lambert({ color: 0x6a5a3a }), xm, 0.45, z);
-    const glass = plane(g, 2.0, 1.7, lambert({ color: 0xbfd0e0, transparent: true, opacity: 0.12 }), xm - 0.01, 1.38, z, 0, -Math.PI / 2); frames.push(glass);
+  for (let i = 0; i < 5; i++) {        // mostly glass: 2.7 m panes, thin pillars between
+    const z = -2.7 - i * 3.0;
+    box(g, 0.08, 2.8, 0.3, wallM, xm, 1.4, z - 1.5);
+    box(g, 0.08, 0.16, 2.7, lambert({ color: 0x6a5a3a }), xm, 2.42, z); box(g, 0.08, 0.16, 2.7, lambert({ color: 0x6a5a3a }), xm, 0.32, z);
+    const glass = plane(g, 2.7, 2.0, lambert({ map: sheen, transparent: true, opacity: 0.14, emissive: 0x0c1014 }), xm - 0.01, 1.37, z, 0, -Math.PI / 2); frames.push(glass);
   }
+  // you, in the glass: a dark coat, no eyes, moving and turning as you do
+  const you = figure(1.74, 0x2a3038, false); ghost.add(you);
   const reflection = figure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
   return {
@@ -72,8 +76,12 @@ export function mirrors(E, ctx) {
     usables: frames.map((fr) => ({ obj: fr, label: "touch the mirror", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "IN THE GLASS" }); shown = 1; } })),
     atmos: { color: 0x14141c, density: 0.08, hemi: 0.35 }, hint: "Look in the mirrors as you walk.",
     update(dt, t, tok) {
-      // it stands a step behind where your reflection would be
-      const P = E.P; reflection.position.set(Math.max(x0 + 0.5, P.x - 0.2 - shown * 0.3), 0, P.z + 1.4 - shown * 0.6);
+      // the copy is mirrored, so your own coordinates put your reflection in place
+      const P = E.P; you.position.set(P.x, 0, P.z); you.rotation.y = P.yaw + Math.PI;
+      you.position.y = Math.abs(Math.sin(P.bob)) * 0.02;
+      // it stands a step behind you, wherever you face; after it speaks, closer
+      const back = 1.15 - shown * 0.45, bx = P.x + Math.sin(P.yaw) * back, bz = P.z + Math.cos(P.yaw) * back;
+      reflection.position.set(Math.min(xm - 0.35, Math.max(x0 + 0.35, bx)), 0, Math.min(-1.5, bz));
       reflection.rotation.y = Math.atan2(P.x - reflection.position.x, P.z - reflection.position.z);
     },
   };

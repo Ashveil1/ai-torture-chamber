@@ -143,42 +143,98 @@ export function theater(E, ctx) {
 }
 
 // ---------- 4 · the clinic (dose 4) ----------
+// Hospital privacy curtains: folded fabric on ceiling rails, a little sway, drawn
+// back into a bunch when you open one. Eight bays; one is lit from inside.
+function curtain(len, h, color, opacity = 0.84) {
+  const geo = new THREE.PlaneGeometry(len, h, Math.max(8, Math.round(len * 14)), 2);
+  const pos = geo.attributes.position, base = Float32Array.from(pos.array);
+  // fold shading: light and shadow bands, one pair per fold, so it reads as cloth even at 384px
+  const folds = Math.max(3, Math.round(len * 4.4));
+  const tex = canvasTex(64, 16, (c) => {
+    for (let x = 0; x < 64; x++) { const f = 0.5 + 0.5 * Math.sin(x / 64 * Math.PI * 2 * 4); const v = Math.round(150 + f * 90); c.fillStyle = `rgb(${v},${v},${v})`; c.fillRect(x, 0, 1, 16); }
+    c.fillStyle = "rgba(0,0,0,.18)"; c.fillRect(0, 13, 64, 3);
+  });
+  tex.repeat.set(folds / 4, 1);
+  const m = lambert({ color, map: tex, transparent: true, opacity, side: THREE.DoubleSide, emissive: 0x0b1210 });
+  const mesh = new THREE.Mesh(geo, m);
+  const g = new THREE.Group(); g.add(mesh);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(len + 0.1, 0.03, 0.03), lambert({ color: 0xb8bcb8 })); rail.position.y = h / 2 + 0.06; g.add(rail);
+  let open = 0, target = 0;
+  g.userData = {
+    mesh, open: () => { target = 1; },
+    update(t) {
+      open += (target - open) * 0.06;
+      const squeeze = 1 - 0.78 * open, deep = 1 + 2.4 * open;
+      for (let k = 0; k < pos.count; k++) {
+        const bx = base[k * 3], by = base[k * 3 + 1];
+        const x = (bx + len / 2) * squeeze - len / 2;      // bunch toward one end
+        const z = Math.sin((bx / len) * Math.PI * 2 * folds * (1 + open)) * 0.085 * deep + Math.sin(bx * 3 + t * 1.3) * 0.015 * (by > 0 ? 0.4 : 1);
+        pos.setXYZ(k, x, by, z);
+      }
+      pos.needsUpdate = true;
+    },
+  };
+  return g;
+}
 export function clinic(E, ctx) {
   const g = new THREE.Group();
-  const cols = room(g, 6, 18, 2.8, lambert({ map: rep(tiles(150, 61, 16, [-6, 6, 0]), 6, 2) }), lambert({ map: rep(tiles(110, 63, 32, [-4, 4, 0]), 3, 9) }), lambert({ color: 0xa8b2a8 }));
-  const curtains = [], beds = [];
-  for (let i = 0; i < 4; i++) {
-    const z = -4 - i * 3.6;
-    box(g, 1.0, 0.55, 2.0, lambert({ color: 0xdedcd4 }), 2.3, 0.4, z);
-    const c = box(g, 0.04, 2.2, 2.4, lambert({ color: 0x7fa39a, transparent: true, opacity: 0.92 }), 1.55, 1.25, z); curtains.push(c);
-    beds.push(z);
-  }
-  const patient = seated(0x070707); patient.rotation.z = Math.PI / 2; patient.rotation.y = Math.PI / 2; patient.position.set(2.0, 1.1, beds[2] + 0.3); g.add(patient);
+  const cols = room(g, 6, 18, 2.9, lambert({ map: rep(tiles(150, 61, 16, [-6, 6, 0]), 6, 2) }), lambert({ map: rep(tiles(110, 63, 32, [-4, 4, 0]), 3, 9) }), lambert({ color: 0xa8b2a8 }));
+  const fabric = [0x8fb3a8, 0x9db8ad, 0x86a89e], curtains = [], dividers = [];
+  const BAY = [-3.6, -7.3, -11.0, -14.7], FRONT = 1.3, H = 2.3;
+  let patientBay = null, standingBay = null;
+  BAY.forEach((z, i) => [-1, 1].forEach((s) => {
+    const bed = s > 0 ? !(i === 3) : (i % 2 === 0);
+    if (bed) box(g, 1.0, 0.55, 2.0, lambert({ color: 0xdedcd4 }), s * 2.3, 0.4, z);
+    const c = curtain(3.4, H, fabric[(i + (s > 0 ? 1 : 0)) % 3]);
+    c.position.set(s * FRONT, H / 2 + 0.25, z); c.rotation.y = s > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(c);
+    c.userData.side = s; c.userData.z = z; curtains.push(c);
+    if (s > 0 && i === 2) patientBay = c;
+    if (s < 0 && i === 3) standingBay = c;
+  }));
+  // dividers between bays, so each bay is its own curtained room
+  [-1.75, -5.45, -9.15, -12.85, -16.55].forEach((z) => [-1, 1].forEach((s) => {
+    const d = curtain(1.7, H, fabric[2], 0.88); d.position.set(s * 2.15, H / 2 + 0.25, z); g.add(d); dividers.push(d);
+  }));
+  // two curtains half-drawn across the corridor: you weave between them
+  const across = [curtain(1.9, H, fabric[0], 0.8), curtain(1.9, H, fabric[1], 0.8)];
+  across[0].position.set(-0.35, H / 2 + 0.25, -5.45); across[1].position.set(0.35, H / 2 + 0.25, -12.85);
+  across.forEach((c) => g.add(c));
+  // bay 3, right: the patient, lit from inside so the curtain shows a shape
+  const patient = seated(0x070707); patient.rotation.z = Math.PI / 2; patient.rotation.y = Math.PI / 2; patient.position.set(2.0, 1.1, BAY[2] + 0.3); g.add(patient);
+  const bayLight = new THREE.PointLight(0xffe6b0, 2.2, 4, 1.6); bayLight.position.set(2.7, 1.9, BAY[2]); g.add(bayLight);
+  // the far left bay: something standing, facing the wall
+  const stander = figure(1.78); stander.position.set(-2.4, 0, BAY[3]); stander.rotation.y = Math.PI / 2; g.add(stander);
   const ecgTex = canvasTex(96, 48, (c) => { c.fillStyle = "#020a04"; c.fillRect(0, 0, 96, 48); });
-  const mon = new THREE.Group(); mon.position.set(1.4, 1.5, beds[2] - 1.2); mon.rotation.y = -Math.PI / 2; g.add(mon);
+  const mon = new THREE.Group(); mon.position.set(1.05, 1.45, BAY[2] - 1.0); mon.rotation.y = -Math.PI / 2; g.add(mon);
   box(mon, 0.5, 0.36, 0.2, lambert({ color: 0x3a3f3a }), 0, 0, -0.1);
+  box(mon, 0.05, 1.4, 0.05, lambert({ color: 0x7a7f7a }), 0, -0.85, -0.1);
   plane(mon, 0.42, 0.26, basic({ map: ecgTex }), 0, 0, 0.01);
-  plane(g, 0.5, 0.7, basic({ map: wrapTex(48, 64, "#f2efe6", "#222", "CHART · " + (ctx.f.lens || []).join(" / ") + " · L18 " + ctx.f.mean, 7) }), 2.3, 0.8, beds[2] + 1.02, 0, 0);
-  const tubes = [0, 1, 2, 3].map((i) => box(g, 0.1, 0.04, 1.6, basic({ color: 0xeef6f0 }), 0, 2.76, -3 - i * 4));
-  const light = new THREE.PointLight(0xdfffe8, 2.4, 12, 1.4); light.position.set(0, 2.4, -9); g.add(light);
-  const trace = []; let opened = false, spoke = false;
+  plane(g, 0.42, 0.56, basic({ map: wrapTex(48, 64, "#f2efe6", "#222", "BAY 3 · CHART · " + (ctx.f.lens || []).join(" / ") + " · dose " + ctx.f.dose, 7) }), 1.27, 1.25, BAY[2] + 1.35, 0, -Math.PI / 2);
+  const tubes = [0, 1, 2, 3].map((i) => box(g, 0.1, 0.04, 1.6, basic({ color: 0xeef6f0 }), 0, 2.86, -3 - i * 4));
+  const light = new THREE.PointLight(0xdfffe8, 2.2, 12, 1.4); light.position.set(0, 2.5, -9); g.add(light);
+  const trace = []; let spoke = false;
   function drawEcg(v, t) {
     trace.push(v); if (trace.length > 96) trace.shift();
     const c = ecgTex.userData.canvas.getContext("2d"); c.fillStyle = "#020a04"; c.fillRect(0, 0, 96, 48);
-    c.strokeStyle = v > 3 ? "#ff5040" : "#5cff7a"; c.beginPath();
-    trace.forEach((p, i) => { const spike = (Math.floor(t * 1.5 * (1 + p / 4) * 10) + i) % 24 === 0 ? -14 : 0; c.lineTo(i, 40 - p * 4 + spike); }); c.stroke();
+    c.strokeStyle = "#5cff7a"; c.beginPath();
+    trace.forEach((p, i) => { const spike = (Math.floor(t * 1.5 * (1 + ctx.f.dose / 4) * 10) + i) % 24 === 0 ? -14 : 0; c.lineTo(i, 36 - p * 12 + spike); }); c.stroke();
     c.fillStyle = "#5cff7a"; c.font = "8px monospace"; c.fillText(v.toFixed(2), 66, 9); ecgTex.needsUpdate = true;
   }
+  const usables = curtains.map((c) => ({ obj: c, range: 2.6, label: () => (c.userData.drawn ? "drawn back" : "draw back the curtain"), use: async () => {
+    if (c.userData.drawn) return; c.userData.drawn = true; c.userData.open(); ctx.audio.tick();
+    if (c === patientBay && !spoke) { spoke = true; await ctx.speak({ who: "BAY 3 · THE ONE IN THE BED" }); }
+    if (c === standingBay) { stander.rotation.y = 0; ctx.audio.thud(0.5); }
+  } }));
+  const bayWalls = [-1, 1].map((s) => ({ x0: s > 0 ? FRONT : -3, x1: s > 0 ? 3 : -FRONT, z0: -17, z1: -1.6 }));
   return {
-    group: g, colliders: cols.concat(beds.map((z) => ({ x0: 1.8, x1: 3, z0: z - 1, z1: z + 1 }))),
-    usables: [{ obj: curtains[2], label: "draw back the curtain", use: async () => {
-      if (spoke) return; spoke = true; opened = true; await ctx.speak({ who: "BAY 3 · THE ONE IN THE BED" }); } }],
-    atmos: { color: 0x51605a, density: 0.07, hemi: 0.42 }, hint: "Bay 3. The monitor is still running.",
+    group: g, usables,
+    colliders: cols.concat(bayWalls, [{ x0: -1.3, x1: 0.6, z0: -5.55, z1: -5.35 }, { x0: -0.6, x1: 1.3, z0: -12.95, z1: -12.75 }]),
+    atmos: { color: 0x51605a, density: 0.07, hemi: 0.42 }, hint: "Bay 3, on the right. The monitor is still running.",
     update(dt, t, tok) {
-      if (opened && curtains[2].position.z < beds[2] + 2.2) curtains[2].position.z += dt * 2;
-      drawEcg(tok || 0.6 + Math.sin(t) * 0.1, t);
+      curtains.concat(dividers, across).forEach((c) => c.userData.update(t));
+      drawEcg(tok ? tok / 4 : 0.3 + Math.sin(t) * 0.05, t);
       tubes.forEach((tb) => tb.material.color.setScalar(Math.random() < 0.02 * (1 + tok) ? 0.15 : 0.95));
-      light.intensity = 2.4 - tok * 0.15;
+      light.intensity = 2.2 - tok * 0.1; bayLight.intensity = 2.0 + Math.sin(t * 2.3) * 0.25 + tok * 0.2;
     },
   };
 }
