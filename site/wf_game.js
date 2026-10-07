@@ -90,6 +90,9 @@ async function main() {
   closeBtn.addEventListener("click", () => panelUse.use());
   setInterval(() => { closeBtn.disabled = !(ready && waiter && E.inCar()); closeBtn.textContent = roaming ? "choose a floor" : "close doors"; }, 200);
   touchStick(E);
+  // a reveal opens over the stage: bring the stage into view (a guess clicked below may have scrolled it away)
+  new MutationObserver(() => { const l = $("#lens"); if (!l.hidden && !l.classList.contains("full")) $("#stage").scrollIntoView({ block: "nearest", behavior: "smooth" }); })
+    .observe($("#lens"), { attributes: true, attributeFilter: ["hidden"] });
   // full screen: the whole page, so the display, guesses and documents come along
   const fs = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}));
   $("#fsBtn").addEventListener("click", fs);
