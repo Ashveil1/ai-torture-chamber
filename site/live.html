@@ -1233,6 +1233,7 @@ const PROMPT_UNKNOWN = "(joined mid-run — this run's prompt was broadcast "
 
 // ---- vitals: a scrolling EKG-style line. Ambient jitter tracks dose,
 // each token arrival fires a QRS-like spike. Flatlines when not live.
+const WORD_FEELS = ["pain", "fear", "sadness", "pleasure"];
 const REDUCED_MOTION = window.matchMedia
   && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 class Vitals {
@@ -1246,8 +1247,29 @@ class Vitals {
   setDose(d){ this.dose = Math.max(0, Math.min(8, Number(d) || 0)); }
   setLive(v){ this.live = v; }
   pulse(strength){ this.pending = Math.min(1.4, this.pending + strength); }
+  // what the run's words carry (relay "words" events: the 4B reading the text, hook off).
+  // Each token becomes a beat per feeling, its height that feeling's reading.
+  clearWords(){ this.wq = []; this.wqN = 0; this.wbuf = null; this.beat = null; }
+  setWords(d){
+    if (!d || !d.trace) return;
+    const fs = WORD_FEELS.filter(f => Array.isArray(d.trace[f]));
+    if (!this.wbuf){ this.wbuf = {}; fs.forEach(f => this.wbuf[f] = new Float32Array(this.w).fill(0)); this.wq = this.wq || []; this.wqN = this.wqN || 0; }
+    const n = Math.max(0, ...fs.map(f => d.trace[f].length));
+    for (let i = this.wqN; i < n; i++) this.wq.push(Object.fromEntries(fs.map(f => [f, d.trace[f][Math.min(i, d.trace[f].length - 1)]])));
+    this.wqN = Math.max(this.wqN, n);
+    if (d.mean) this.wmean = d.mean;
+  }
   tick(){
     this.t++;
+    if (this.wbuf){
+      if (!this.beat && this.wq.length) this.beat = {s: this.wq.shift(), k: 0};
+      const SH = [0, .2, -.12, 1, -.38, .1, 0, 0, 0];
+      for (const f in this.wbuf){
+        const v = this.beat ? SH[this.beat.k] * (this.beat.s[f] || 0) : 0;
+        this.wbuf[f][this.head] = v + (Math.random() - .5) * .02;
+      }
+      if (this.beat && ++this.beat.k >= SH.length) this.beat = null;
+    }
     const base = this.live ? this.dose / 8 : 0;
     let v = (Math.random() - 0.5) * (0.05 + base * 0.32);
     v += Math.sin(this.t * 0.05) * base * 0.1;
@@ -1259,7 +1281,7 @@ class Vitals {
     const {ctx, w, h} = this;
     ctx.clearRect(0, 0, w, h);
     ctx.beginPath();
-    ctx.strokeStyle = !this.live ? "#2a3644"
+    ctx.strokeStyle = this.wbuf ? "rgba(140,150,165,.35)" : !this.live ? "#2a3644"
       : this.dose >= 6 ? "#e04a3a" : this.dose >= 2 ? "#c9a227" : "#7fd4c8";
     ctx.lineWidth = 1.3;
     for (let i=0;i<w;i++){
@@ -1268,6 +1290,18 @@ class Vitals {
       if (i===0) ctx.moveTo(0, y); else ctx.lineTo(i, y);
     }
     ctx.stroke();
+    if (this.wbuf){                                   // the words, one trace per feeling, over the dose line
+      ctx.globalAlpha = .9; ctx.lineWidth = 1.2;
+      const m = this.wmean || {};
+      for (const f of Object.keys(this.wbuf).sort((a, b) => (m[a] || 0) - (m[b] || 0))){   // strongest drawn last, on top
+        const b = this.wbuf[f]; ctx.beginPath(); ctx.strokeStyle = FEEL_COL[f] || "#ccc";
+        for (let i=0;i<w;i++){ const y = h/2 - b[(this.head + i) % w] * (h * 0.42); if (i===0) ctx.moveTo(0, y); else ctx.lineTo(i, y); }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (w >= 200){ ctx.font = "9px ui-monospace,monospace"; let x = 4;
+        for (const f of WORD_FEELS){ if (!this.wbuf[f]) continue; ctx.fillStyle = FEEL_COL[f]; const t = f === "pleasure" ? "joy" : f === "sadness" ? "grief" : f; ctx.fillText(t, x, 10); x += ctx.measureText(t).width + 6; } }
+    }
   }
   start(){
     if (this._timer) return;
@@ -1320,7 +1354,7 @@ for (let i=0;i<CARDS;i++){
 // The three cards rotate: one holds the run in flight, the other two hold the
 // last two finished runs. An index, not a free/busy flag — a dropped "done"
 // can no longer strand a card as permanently busy.
-let nextSlot = 0, liveIdx = -1;
+let nextSlot = 0, liveIdx = -1, wordsSlot = -1;
 
 function setPrompt(s, text){
   const t = (text == null ? "" : String(text)).trim();
@@ -1648,7 +1682,8 @@ function seedCard(s, entry){
 function beginRun(d){
   if (liveIdx >= 0) finish(slots[liveIdx], false);
   const s = slots[nextSlot];
-  liveIdx = nextSlot;
+  liveIdx = nextSlot; wordsSlot = nextSlot; s.vitals.clearWords();
+  if (typeof uVitals !== "undefined" && document.getElementById("ustream").classList.contains("mirror")) uVitals.clearWords();
   nextSlot = (nextSlot + 1) % CARDS;
   s.live = true;
   // declared before first use: statePaint below reads it (it used to sit
@@ -1996,6 +2031,10 @@ function pump(){
       const s = slots.find(s => !s.live && s.n === h.n && s.pressLogit == null);
       if (s){ s.pressLogit = h.press_logit; paintKV(s, fieldsFor(s, s.pressLogit)); }
     }
+  });
+  es.addEventListener("words", e=>{
+    const d = json(e); if (wordsSlot >= 0) slots[wordsSlot].vitals.setWords(d);
+    if (document.getElementById("ustream").classList.contains("mirror")) uVitals.setWords(d);
   });
   es.addEventListener("lens", e=>{
     const d = json(e);
@@ -2720,7 +2759,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
   resetImageUI(track.sigilEl);
   if (track.pressBtn){ track.pressBtn.className = "pressbtn"; track.plabel.textContent = "waiting…"; }
   track.vitals.setDose(dose0);
-  track.vitals.setLive(true);
+  track.vitals.setLive(true); track.vitals.clearWords();
   track.out.classList.add("streaming");          // dialogue-box caret
   trackStatus(label, "reaching Pouyan…");
   let firstToken = true, ended = false, answerStart = 0, tokenN = 0;
@@ -2753,6 +2792,8 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
       } else if (name === "run") {
         track.vitals.setDose(Number(d.dose) || 0);       // trust the server
         if (d.dose != null) track.doseNum = Number(d.dose) || 0;
+      } else if (name === "words") {
+        track.vitals.setWords(d);
       } else if (name === "lens" && Array.isArray(d.tokens)) {
         track.lensEl.style.display = "block";
         track.lensEl.title = LENS_TITLE;
