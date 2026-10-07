@@ -84,6 +84,12 @@ async function main() {
   closeBtn.addEventListener("click", () => panelUse.use());
   setInterval(() => { closeBtn.disabled = !(ready && waiter && E.inCar()); }, 200);
   touchStick(E);
+  // full screen: the whole page, so the display, guesses and documents come along
+  const fs = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}));
+  $("#fsBtn").addEventListener("click", fs);
+  window.addEventListener("keydown", (e) => { if ((e.key === "f" || e.key === "F") && !e.target.closest("input,textarea")) fs(); });
+  document.addEventListener("fullscreenchange", () => { document.body.classList.toggle("fs", !!document.fullscreenElement); $("#fsBtn").textContent = document.fullscreenElement ? "exit full screen" : "⛶ full screen"; });
+  if (!document.documentElement.requestFullscreen) $("#fsBtn").hidden = true;
 
   const status = (t) => { $("#status").textContent = t; };
   if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, audio, cur: () => cur, use: (i) => cur.usables[i].use(), close: () => panelUse.use(), ready: () => ready };

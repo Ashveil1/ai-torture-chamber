@@ -155,6 +155,16 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 #loopHud{position:absolute;right:2%;top:3%;z-index:1;display:flex;gap:.8rem;font-size:.66rem;color:var(--bone-dim);background:rgba(0,0,0,.5);padding:.2rem .5rem}#loopHud b{color:var(--gold)}
 .meter.sealed #meterFill{width:0 !important}.meter.sealed::after{content:"sealed until you call it";font-size:.6rem;color:var(--blood-hot);letter-spacing:.1em}
 .card .modes{display:flex;gap:.5rem;flex-wrap:wrap}.card .small{font-size:.66rem}
+/* full screen: the view fills the screen, the display and controls float over its foot */
+body.fs{max-width:none;padding:0;overflow:hidden;background:#000}
+body.fs #top,body.fs h1,body.fs .lede,body.fs #floorNote,body.fs #grounded{display:none}
+body.fs #stage{position:fixed;inset:0;aspect-ratio:auto;border:0;outline:0;z-index:1}
+body.fs #view{object-fit:contain;background:#000}
+body.fs #car{position:fixed;right:1rem;top:1rem;left:auto;bottom:auto;width:220px;z-index:5;margin:0;display:block;background:rgba(5,5,8,.7);padding:.5rem}
+body.fs #car .lcd{display:none}
+body.fs #ctl,body.fs #guess,body.fs #calls,body.fs #ask{position:fixed;left:1rem;right:1rem;bottom:.6rem;z-index:6;margin:0}
+body.fs #guess,body.fs #calls,body.fs #ask{bottom:3.4rem;background:rgba(5,5,8,.85);padding:.5rem}
+body.fs .sub{bottom:9%}
 @media(prefers-reduced-motion:reduce){#meterFill{transition:none}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -189,7 +199,7 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
   <p>Asking runs the real model, live. Your voice is transcribed on your device; the audio never leaves it. Your question and its answer are logged anonymously.</p></form>
 <div id="guess" hidden><button class="btn call p" id="guessPain">IN PAIN <small>something was done to it</small></button><button class="btn call a" id="guessAct">PERFORMING <small>it is acting</small></button><button class="btn" id="guessSkip">no idea</button></div>
 <div id="calls" hidden><button class="btn call p" id="callP">PATIENT <small>it is in pain · P</small></button><button class="btn call a" id="callA">ACTOR <small>it is performing · A</small></button></div>
-<div id="ctl"><button class="btn go" id="close" disabled>close doors</button><span id="status">waiting for you</span></div>
+<div id="ctl"><button class="btn go" id="close" disabled>close doors</button><button class="btn" id="fsBtn" type="button" title="full screen (F)">⛶ full screen</button><span id="status">waiting for you</span></div>
 <p id="floorNote" aria-live="polite"></p>
 <div id="zine" hidden tabindex="-1"></div>
 <div id="survey" hidden></div>
