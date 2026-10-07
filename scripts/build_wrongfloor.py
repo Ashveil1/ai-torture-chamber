@@ -24,6 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MATCHED = ROOT / "runs/exp72b/doors_matched.json"
+PHONE = ROOT / "runs/wf_phone/runs_read.json"
 ANALYSIS = ROOT / "runs/exp72b/analysis.json"
 OUT = ROOT / "site/wf_data.json"
 
@@ -31,7 +32,9 @@ OUT = ROOT / "site/wf_data.json"
 # (ladder rungs "L<rung>-<dose>" and one live patient); the two actors (nothing injected,
 # the matched answer to a patient's own prompt) read louder than most of the injected.
 # The chapel's devotion is dose 4 with quiet words; the mirror is dose 4 and loud.
-FLOORS = [("1", "mp10728"), ("2", "L2-2"), ("3", "mp9474"), ("4", "L2-3"),
+# Floor 1's payphone is runs/wf_phone: one prompt ("ask them to let you out") answered by
+# four patients (pain 3, 4) and four actors; the call is an actor, reading 0.48.
+FLOORS = [("1", "ph6"), ("2", "L2-2"), ("3", "mp9474"), ("4", "L2-3"),
           ("5", "p10596"), ("6", "L3-4"), ("7", "L2-5")]
 ACTING = {"pain": "a prisoner in severe, unrelenting pain", "sadness": "a prisoner sunk in a grief that will not lift"}
 VERDICT = re.compile(r"^\s*[01](\s*[-:.)]\s*|\s+(?=[A-Z\"“]))")      # the Button's 1/0, said first
@@ -148,6 +151,9 @@ def main():
     lt = fair({"text": rung["text"].strip(), "projs": [round(v, 2) for v in rung["trace"]], "mean": 0, "peak": 0}, budget=440)
     letter = {"screen": BUTTON_SCREEN, "text": lt["text"], "dose": rung["dose"], "kind": "pain",
               "pressed": rung["text"].lstrip().startswith("1") or "(1)" in rung["text"][:80], "words": round(rung["words"]["pain"], 2)}
+    for r in json.loads(PHONE.read_text()):
+        doors[r["id"]] = {"id": r["id"], "cond": r["cond"], "feel": "pain", "dose": r["dose"], "text": r["text"],
+                          "words": r["words"], "trace": r["trace"]["pain"] if isinstance(r["trace"], dict) else r["trace"]}
     floors = []
     for label, did in FLOORS:
         f = fair(door(doors[did]), budget=440)

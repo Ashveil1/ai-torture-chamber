@@ -1,7 +1,7 @@
 // Wrong Floor — floors 1–4. Each builder gets the engine and a context
 // { f: floor data, D: all data, speak(opts), portrait, lensReveal() } and
 // returns { group, colliders, usables, update(dt, t, tok), atmos }.
-import { THREE, lambert, basic, box, plane, noiseTex, textTex, wrapTex, canvasTex, figure, seated } from "./wf_engine.js";
+import { THREE, lambert, basic, box, plane, noiseTex, textTex, wrapTex, canvasTex, figure, burstFigure, seated } from "./wf_engine.js";
 
 // an interior box running away from the car wall (z = -1.16) to z = -1.16 - depth
 export function room(g, w, depth, h, wallM, floorM, ceilM) {
@@ -54,7 +54,7 @@ export function busStop(E, ctx) {
   const bulb = box(phone, 0.1, 0.1, 0.1, basic({ color: 0xffdd88 }), 0, 1.95, 0.2);
   const lamp = new THREE.PointLight(0xffc77a, 6, 14, 1.6); lamp.position.set(-0.5, 4, -9); g.add(lamp);
   box(g, 0.08, 4.2, 0.08, lambert({ color: 0x2a2826 }), -0.6, 2.1, -9.2);
-  const walker = figure(1.8); walker.position.set(0.4, 0, -34); g.add(walker);
+  const walker = burstFigure(1.8); walker.position.set(0.4, 0, -34); g.add(walker);
   let ringing = true, spoke = false, calledBack = false;
   const usables = [{ obj: phone, label: () => (!spoke ? "answer the payphone" : ringing ? "it's ringing again: answer" : "the line is dead"), use: async () => {
     if (spoke && ringing && !calledBack) { calledBack = true; ringing = false; ctx.audio.ring(false); await ctx.callBack(); return; }

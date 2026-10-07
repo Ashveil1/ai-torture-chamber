@@ -78,6 +78,20 @@ export function figure(h = 1.78, color = 0x050404, eyes = true) {
   }
   g.userData.body = m; return g;
 }
+// the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
+export function burstFigure(h = 1.78, color = 0x050404) {
+  const g = figure(h, color, false);
+  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
+  const head = new THREE.Group(); head.position.set(0, h * 0.87, 0.02); g.add(head);
+  const rayM = new THREE.MeshBasicMaterial({ color: 0xd97757 });
+  const N = 11;
+  for (let k = 0; k < N; k++) {
+    const a = (k / N) * Math.PI * 2 + Math.sin(k * 2.3) * 0.12, len = 0.15 + ((k * 37) % 5) * 0.012;
+    const ray = new THREE.Mesh(new THREE.BoxGeometry(0.042 - ((k * 13) % 3) * 0.006, len, 0.035), rayM);
+    ray.position.set(Math.sin(a) * len * 0.5, Math.cos(a) * len * 0.5, 0); ray.rotation.z = -a; head.add(ray);
+  }
+  g.userData.burst = head; return g;
+}
 // a seated figure (bench, pew, bed)
 export function seated(color = 0x050404) {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color });
