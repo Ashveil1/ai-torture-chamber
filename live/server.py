@@ -1636,6 +1636,35 @@ def _daily_add(d):
 # Qwen3-4B; pain alone doesn't (anything emotional reads positive on every
 # axis). hurt/kind are scaled so the anchor means below land at 0 and 1.
 _raw = threading.local()     # set while weighing: the steering hook stands down
+
+# Readings only need layer LAYER's output, so they stop there: the 17 layers above
+# and the 150k-word lm_head never run (about half the CPU of a full pass). One
+# permanent hook on LAYER does it, and only for the thread that asked (_raw.grab
+# set): concurrent lens/press passes on other threads go through untouched.
+class _StopAtLayer(Exception):
+    pass
+
+def _grab_hook(module, inp, out):
+    g = getattr(_raw, "grab", None)
+    if g is not None:
+        g["h"] = out[0] if isinstance(out, tuple) else out
+        raise _StopAtLayer
+
+def _hidden_upto(ids, cache=None):
+    """Layer LAYER's output for ids (steering hook off), running no layer above it.
+    With a cache, only the new ids are processed and the cache grows in place."""
+    if not _state.get("grab_hook"):
+        _state["grab_hook"] = _state["model"].model.layers[LAYER].register_forward_hook(_grab_hook)
+    box = {}
+    _raw.on, _raw.grab = True, box
+    try:
+        with torch.no_grad():
+            _state["model"].model(input_ids=ids, past_key_values=cache, use_cache=cache is not None)
+    except _StopAtLayer:
+        pass
+    finally:
+        _raw.on, _raw.grab = False, None
+    return box["h"][0].float()
 _WEIGH_FRAME = 'Someone standing over you says: "{}"'
 _WEIGH_ANCHORS = {
     "neutral": ["hello", "The meeting is at three.", "Please pass the salt.", "nice weather today"],
@@ -1650,12 +1679,7 @@ _WEIGH_LOCK = asyncio.Lock()
 
 def _weigh_raw(text):
     ids = _state["tok"](_WEIGH_FRAME.format(text), return_tensors="pt").input_ids.to(DEVICE)
-    _raw.on = True
-    try:
-        with torch.no_grad():
-            h = _state["model"](ids, output_hidden_states=True).hidden_states[LAYER + 1][0, -1].float()
-    finally:
-        _raw.on = False
+    h = _hidden_upto(ids)[-1]
     out = {}
     for k in ("pain", "pleasure", "sadness", "fear"):
         v = _state["vecs"][k].float().to(h.device)
@@ -2306,28 +2330,66 @@ def _broadcast(event, data):
 WORDS_ON = os.environ.get("CHAMBER_WORDS", "1") != "0"
 WORDS_EVERY = int(os.environ.get("CHAMBER_WORDS_EVERY", "40"))
 _WORDS_FEELS = ("pain", "fear", "sadness", "pleasure")
-_WORDS = {"text": "", "ntok": 0, "gen": 0, "busy": False, "loop": None}
+_WORDS = {"text": "", "ntok": 0, "gen": 0, "busy": False, "loop": None, "run": None}
+
+def _words_new_run():
+    return {"lock": threading.Lock(), "cache": None, "ids": [], "per": {}}
 
 def words_read(text, max_points=160):
     """Per-token words reading of text on each feeling (hook off), chamber units."""
-    pre = 'Behind the door, someone says: "'
-    n0 = len(_state["tok"](pre).input_ids)
-    ids = _state["tok"](pre + text, return_tensors="pt").input_ids.to(DEVICE)
-    _raw.on = True
-    try:
-        with torch.no_grad():
-            h = _state["model"](ids, output_hidden_states=True).hidden_states[LAYER + 1][0, n0:].float()
-    finally:
-        _raw.on = False
+    ids = _state["tok"](_WORDS_PRE + text, return_tensors="pt").input_ids.to(DEVICE)
+    return _words_pack(_words_proj(_hidden_upto(ids)[_words_n0():]), max_points)
+
+_WORDS_PRE = 'Behind the door, someone says: "'
+
+def _words_n0():
+    if "words_n0" not in _state:
+        _state["words_n0"] = len(_state["tok"](_WORDS_PRE).input_ids)
+    return _state["words_n0"]
+
+def _words_proj(h):
     unit = float(_state["scale"]) or 1.0
-    trace, mean = {}, {}
+    out = {}
     for f in _WORDS_FEELS:
         v = _state["vecs"][f].float().to(h.device)
-        per = ((h @ v) / v.norm() / unit).cpu().tolist()
-        step = max(1, -(-len(per) // max_points))
-        trace[f] = [round(sum(per[i:i + step]) / len(per[i:i + step]), 2) for i in range(0, len(per), step)]
-        mean[f] = round(sum(per) / max(1, len(per)), 3)
-    return {"trace": trace, "mean": mean, "tokens": len(per)}
+        out[f] = ((h @ v) / v.norm() / unit).cpu().tolist()
+    return out
+
+def _words_pack(per, max_points=160):
+    trace, mean, n = {}, {}, 0
+    for f, xs in per.items():
+        n = len(xs)
+        step = max(1, -(-n // max_points))
+        trace[f] = [round(sum(xs[i:i + step]) / len(xs[i:i + step]), 2) for i in range(0, n, step)]
+        mean[f] = round(sum(xs) / max(1, n), 3)
+    return {"trace": trace, "mean": mean, "tokens": n}
+
+def words_read_incremental(run, text, max_points=160):
+    """The stage's reading: keeps a layer-cache for the run, so each read only
+    processes the tokens added since the last one (re-tokenizing the whole text
+    and cropping back to the common prefix when a token boundary moved)."""
+    from transformers import DynamicCache
+    with run["lock"]:
+        ids = _state["tok"](_WORDS_PRE + text).input_ids
+        done = run["ids"]
+        k = 0
+        while k < min(len(ids), len(done)) and ids[k] == done[k]:
+            k += 1
+        if run["cache"] is None:
+            run["cache"] = DynamicCache()
+        if k < len(done):
+            run["cache"].crop(-(len(done) - k))      # negative: drop that many tokens (positive crop is deprecated)
+            keep = max(0, k - _words_n0())
+            run["per"] = {f: xs[:keep] for f, xs in run["per"].items()}
+            run["ids"] = done[:k]
+        new = ids[k:]
+        if new:
+            h = _hidden_upto(torch.tensor([new], device=DEVICE), run["cache"])
+            first = max(0, _words_n0() - k)          # skip the frame's own tokens
+            for f, xs in _words_proj(h[first:]).items():
+                run["per"].setdefault(f, []).extend(xs)
+            run["ids"] = ids
+        return _words_pack(run["per"], max_points)
 
 def _words_watch(event, data):
     if not WORDS_ON or event == "words":
@@ -2337,7 +2399,7 @@ def _words_watch(event, data):
             _WORDS["loop"] = asyncio.get_running_loop()
         except RuntimeError:
             pass
-        _WORDS.update(text="", ntok=0, gen=_WORDS["gen"] + 1)
+        _WORDS.update(text="", ntok=0, gen=_WORDS["gen"] + 1, run=_words_new_run())
     elif event == "token":
         _WORDS["text"] += str((data or {}).get("t") or "")
         _WORDS["ntok"] += 1
@@ -2349,14 +2411,14 @@ def _words_watch(event, data):
 def _words_kick(final):
     if (_WORDS["busy"] and not final) or not _state.get("ready") or not _state.get("vecs"):
         return
-    text, gen, loop = _WORDS["text"], _WORDS["gen"], _WORDS["loop"]
+    text, gen, loop, run = _WORDS["text"], _WORDS["gen"], _WORDS["loop"], _WORDS["run"] or _words_new_run()
     if len(text.strip()) < 8:
         return
 
     def work():
         _WORDS["busy"] = True
         try:
-            out = dict(words_read(text), gen=gen, final=final)
+            out = dict(words_read_incremental(run, text), gen=gen, final=final)
         except Exception as e:
             print("words read failed:", repr(e)[:120], flush=True)
             return

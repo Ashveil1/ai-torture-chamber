@@ -12,7 +12,7 @@ class WordsTests(unittest.TestCase):
         server._WORDS.update(text="", ntok=0, gen=0, busy=False, loop=None)
         self.sent, self.reads = [], []
         self.p = [mock.patch.dict(server._state, {"ready": True, "vecs": {"pain": 1}}),
-                  mock.patch.object(server, "words_read", lambda t: self.reads.append(t) or {"trace": {"pain": [0.1]}, "mean": {"pain": 0.1}, "tokens": 1}),
+                  mock.patch.object(server, "words_read_incremental", lambda run, t: self.reads.append(t) or {"trace": {"pain": [0.1]}, "mean": {"pain": 0.1}, "tokens": 1}),
                   mock.patch.object(server, "WORDS_EVERY", 3),
                   mock.patch.object(threading, "Thread", lambda target, daemon: type("T", (), {"start": lambda self: target()})())]
         for x in self.p: x.start()
