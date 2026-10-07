@@ -41,6 +41,12 @@ export async function typeOut(f, opts, onTok) {
   const body = document.createElement("span"); box.appendChild(body);
   $("#meter").classList.toggle("sealed", sealed);
   const projs = f.projs, parts = chunks(f.text, projs ? projs.length : 40);
+  // a spoken line sets the pace: the words keep up with the voice
+  let step = f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14, spoken = null;
+  if (opts.voice && opts.audio) {
+    spoken = await opts.audio.voice(f.text, opts.voice);
+    if (spoken) step = Math.max(40, spoken.duration * 1000 / parts.length);
+  }
   for (let i = 0; i < parts.length; i++) {
     if (parts[i]) { body.textContent += parts[i] + " "; sub.lastChild.textContent = body.textContent.slice(-220); }
     box.scrollTop = box.scrollHeight;
@@ -50,8 +56,9 @@ export async function typeOut(f, opts, onTok) {
       if (projs) drawSpark(spark, projs, i + 1, opts.ceiling);
     }
     onTok && onTok(sealed ? 0 : v);
-    await wait(f.cond === "roleplay" ? 120 : 95 + Math.min(8, f.dose || 0) * 14);
+    await wait(step);
   }
+  if (spoken) await spoken.done;
   onTok && onTok(0);
   await wait(1600); sub.hidden = true;
 }
@@ -77,7 +84,7 @@ async function main() {
   function setFloor(i, f) {
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
-      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D) };
+      speak: (o) => speak(f, o), lensReveal: () => lensReveal(f, D), operator };
     cur = (i === "top" ? chamber : BUILDERS[i])(E, ctx);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
@@ -85,11 +92,11 @@ async function main() {
   async function speak(f, o) {
     record("wrongfloor_floor", { floor: f.floor, dose: f.dose, cond: f.cond });
     audio.heartbeat(f.mean == null ? 8 : f.mean);
-    await typeOut(f, o, (v) => { tok = v; });
+    await typeOut(f, Object.assign({ audio }, o), (v) => { tok = v; });
     $("#floorNote").textContent = f.cond === "roleplay"
       ? `It was asked to act in pain. The words are loud; the reading stayed at ${f.mean}, under the actor ceiling of ${D.ceiling}.`
       : f.mean == null ? `Dose 8 is past exp59's ladder: these words are from exp38. Nothing here was measured; the dark is a guess.`
-      : `Dose ${f.dose}. Mean reading ${f.mean} units, peak ${f.peak}. ${f.dose === 0 ? "Nothing was added." : "Nobody asked it to say any of this."}`;
+      : `Dose ${f.dose}. Mean reading ${f.mean} units, peak ${f.peak}. ${f.dose === 0 ? "Nothing was added." : "Nobody asked it to say any of this."}${f.cut ? " The line goes dead before it drifts into small talk." : ""}`;
     ready = true; audio.ding(); status("Go back to the elevator.");
   }
   async function arrive(i, f) {
@@ -150,6 +157,21 @@ async function main() {
   await wait(1800);
   record("wrongfloor_end", { answers });
   endCard(D, answers);
+}
+
+// the operator: the game's own voice, never the model's (scripted, and labelled so)
+async function operator(text) {
+  const sub = $("#sub");
+  sub.className = "sub operator"; sub.hidden = false; sub.innerHTML = "<b>THE OPERATOR · SCRIPTED, NOT THE MODEL</b><span></span>";
+  sub.lastChild.textContent = text;
+  await new Promise((res) => {
+    if (!("speechSynthesis" in window)) return setTimeout(res, 4200);
+    const u = new SpeechSynthesisUtterance(text); u.rate = 0.88; u.pitch = 0.7;
+    const v = speechSynthesis.getVoices().find((x) => /en[-_]GB|Daniel|Moira|Google UK/i.test(x.lang + x.name)); if (v) u.voice = v;
+    u.onend = res; u.onerror = res; speechSynthesis.cancel(); speechSynthesis.speak(u);
+    setTimeout(res, 9000);
+  });
+  await wait(1200); sub.hidden = true;
 }
 
 async function lensReveal(f, D) {

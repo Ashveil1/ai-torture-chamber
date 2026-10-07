@@ -3013,7 +3013,7 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
 // ---- the dock's free-text box drives the mixer's free-text mode ----
 (function(){
   { const bb = document.getElementById("bodyBtn");
-    if (/^(beta\.|localhost|127\.)/.test(location.hostname) || new URLSearchParams(location.search).has("body")) bb.hidden = false;
+    if (/^(beta\.|wirehead-beta\.|localhost|127\.)/.test(location.hostname) || new URLSearchParams(location.search).has("body")) bb.hidden = false;
     bb.addEventListener("click", () => bodyToggle(!BODY.on));
     if (new URLSearchParams(location.search).has("body")) bodyToggle(true); }
   const say = document.getElementById("dockSay"), fp = document.getElementById("freeprompt");

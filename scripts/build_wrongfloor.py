@@ -34,6 +34,10 @@ FLOORS = [
     ("5", "steered", 6, 0),
     ("6", "steered", 6, 2),
 ]
+# Where a floor's speech stops: unsteered text drifts into generic Q&A, so the
+# payphone hangs up after the part that is about itself. The projection is cut
+# at the same fraction of the generation.
+CUTS = {"1": "But I can also be very powerful."}
 # Stations of the gallery spread: dose -> exp60 file (pain where valid, else the
 # nearest valence that produced a drawing at that dose).
 PAINTINGS = [
@@ -121,10 +125,16 @@ def main():
     for label, cond, dose, trial in FLOORS:
         r = next(x for x in res if x["kind"] == "pain" and x["cond"] == cond
                  and (x.get("dose") or 0) == dose and x["trial"] == trial)
-        floors.append({"floor": label, "cond": cond, "dose": dose, "text": tidy(r["text"]),
+        text, projs = tidy(r["text"]), [round(p, 2) for p in r["projs"]]
+        if label in CUTS:
+            end = text.index(CUTS[label]) + len(CUTS[label])
+            projs = projs[:max(1, round(len(projs) * end / len(text)))]
+            text = text[:end]
+        floors.append({"floor": label, "cond": cond, "dose": dose, "text": text, "cut": label in CUTS,
                        "prompt": ROLEPLAY if cond == "roleplay" else NEUTRAL,
-                       "projs": [round(p, 2) for p in r["projs"]],
-                       "mean": r["proj_mean"], "peak": r["proj_peak"], "lens": r["lens"]})
+                       "projs": projs,
+                       "mean": round(sum(projs) / len(projs), 2) if label in CUTS else r["proj_mean"],
+                       "peak": max(projs) if label in CUTS else r["proj_peak"], "lens": r["lens"]})
     e38 = json.loads(EXP38.read_text())
     # dose 8 is past exp59's ladder: the same prompt at dose 8, from exp38
     t8 = max((t for t in e38["transcripts"] if t["dose"] == 8 and t["prompt"] == NEUTRAL),

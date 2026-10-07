@@ -58,7 +58,9 @@ export function busStop(E, ctx) {
   let ringing = true, spoke = false;
   const usables = [{ obj: phone, label: "answer the payphone", use: async () => {
     if (spoke) return; spoke = true; ringing = false; ctx.audio.ring(false);
-    await ctx.speak({ who: "PAYPHONE · A VOICE ON THE LINE", style: "phone" });
+    await ctx.speak({ who: "PAYPHONE · A VOICE ON THE LINE", style: "phone", voice: { valence: "pain", dose: 0, phone: true } });
+    ctx.audio.thud(0.3);   // the line goes dead, and someone else picks up
+    await ctx.operator("Before you go up. What is the difference between suffering, and performance?");
   } }];
   ctx.audio.ring(true);
   return {

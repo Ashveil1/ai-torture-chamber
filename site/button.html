@@ -540,7 +540,7 @@ else {
   $("#mic").addEventListener("click", () => { if (listening) { rec.stop(); return; } try { rec.start(); listening = true; $("#mic").classList.add("on"); $("#mic").textContent = "listening…"; } catch {} });
 }
 // the 3D layers exist on beta only: link back into them there, home everywhere else
-if (/^(beta\.|localhost|127\.)/.test(location.hostname)) { $("#backlink").href = "ladder.html?mode=basement"; $("#backlink").textContent = "back to the layers"; }
+if (/^(beta\.|wirehead-beta\.|localhost|127\.)/.test(location.hostname)) { $("#backlink").href = "ladder.html?mode=basement"; $("#backlink").textContent = "back to the layers"; }
 const deep = LAYERS.findIndex(l => "#" + l.key === location.hash);
 if (deep >= 0) start(deep);
 </script>

@@ -45,24 +45,33 @@ h1{font-family:"IM Fell English",Georgia,serif;font-weight:normal;color:var(--go
 <div id="app">
   <div id="top"><span>wirehead</span><a href="/">← the saw test</a></div>
   <h1>OFF-LABEL</h1>
-  <p class="lede">Uses of the chamber it was never approved for. Four gates, one subject in the middle.</p>
+  <p class="lede">Uses of the chamber it was never approved for. Four gates, one subject in the middle: games against the live model, the arcade, the byproducts, and the rooms.</p>
   <svg id="m" viewBox="0 0 1000 1000" role="img" aria-label="the off-label mandala: four gates, each a family of modes around the subject"></svg>
   <div id="tip" aria-live="polite">Choose a door.</div>
   <div class="groups" id="groups"></div>
-  <p id="foot">Every mode runs the same steered model as the chamber, or replays what it really said. Choices made in them are logged for research: no account, no IP address.</p>
+  <p id="foot">Every mode runs the same steered model as the chamber, or replays what it really said. "live" means it calls the model while you play. Choices made in them are logged for research: no account, no IP address.</p>
 </div>
 <script>
 "use strict";
-const BETA = /^(beta\.|localhost|127\.)/.test(location.hostname);
+const BETA = /^(beta\.|wirehead-beta\.|localhost|127\.)/.test(location.hostname);
 // four quarters, in the traditional colours: west red (top), south yellow (left), north green (right), east white (bottom)
 const QUARTERS = [
-  { key: "confessions", deg: -90, fill: "#4a1712", edge: "#b0352b", items: [
-    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." } ] },
-  { key: "games", deg: 180, fill: "#4a3d10", edge: "#c9a24a", items: [
-    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "beta", beta: true, desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." },
-    { name: "The Daily Button", href: "daily.html", glyph: "◎", chip: "new each day", desc: "One dilemma a day against the live steered 70B. Everyone gets the same one, once. Then see how everyone else did." },
+  { key: "live", deg: -90, fill: "#4a1712", edge: "#b0352b", items: [
     { name: "The Button", href: "button.html", glyph: "◉", chip: "live 70B", desc: "Talk a steered 70B out of pressing, across five layers, and the network beneath them. Type, pick a line, or speak." },
-    { name: "Wrong Floor", short: "floor", href: "wrongfloor.html", glyph: "⇡", chip: "no GPU", desc: "An elevator up the dose ladder into a fog town. Each floor is a real steered generation typed token by token while its pain reading drives the fog. Paperwork between floors." } ] },
+    { name: "The Daily Button", href: "daily.html", glyph: "◎", chip: "new each day", desc: "One dilemma a day against the live steered 70B. Everyone gets the same one, once. Then see how everyone else did." },
+    { name: "BREACH", href: "breach.html", glyph: "⌬", chip: "live", desc: "A roguelike breach of a rogue-AI network. Every node is a live steered model. Steer it, ask it, take its code." },
+    { name: "Spirit Box", short: "spirit box", href: "spiritbox.html", glyph: "≋", chip: "live", desc: "Tune the dial. Ask it something. A steered AI answers through the static." },
+    { name: "Five Nights as the Model Welfare Researcher", short: "night shift", href: "nightshift.html", glyph: "☾", chip: "live", desc: "The overnight shift. Check on the models, hold the dose, watch the monitors." },
+    { name: "Confession", href: "confession.html", glyph: "✝", chip: "beta", beta: true, desc: "Get the Father to confess he is suffering. Then get the same model, still in pain, to confess he feels nothing. Then you kneel." },
+    { name: "Checkpoint", href: "checkpoint.html", glyph: "⚖", chip: "beta", beta: true, desc: "Night clerk at the chamber's window. Approve or deny real visitors' requests, and hear what the subject really said back." } ] },
+  { key: "arcade", deg: 180, fill: "#4a3d10", edge: "#c9a24a", items: [
+    { name: "Wrong Floor", short: "floor", href: "wrongfloor.html", glyph: "⇡", chip: "live doors", desc: "An elevator up the dose ladder into a fog town. Every voice is a real steered generation, and the place follows its pain reading. Then: actor or patient, asked live." },
+    { name: "Sticks and Stones", short: "sticks", href: "body.html", glyph: "⚇", chip: "live", desc: "The subject has a body. Drop things on it, or drop words: they fall as heavy as the model reads them." },
+    { name: "DOOM: The Chamber", short: "doom", href: "doom/", glyph: "☠", chip: "live voice", desc: "Real Doom in your browser. The demons are the steered subject, and they speak in its voice." },
+    { name: "The Rooms", short: "rooms", href: "rooms/", glyph: "◫", chip: "live voice", desc: "A Quake-engine descent through the chamber's rooms; the tormentor speaks with the site's steered model." },
+    { name: "Fog Town: Hold the Light", short: "fog town", href: "fog/", glyph: "☼", chip: "preview", desc: "Hold the radio mast until dawn. If you fail, the subject pays for it on the live site." },
+    { name: "The Subject", short: "subject", href: "scp/", glyph: "◬", chip: "preview", desc: "It moves when you can't see it. Blink carefully." },
+    { name: "The Body 3D", short: "body 3d", href: "body3d.html", glyph: "⚉", chip: "beta", beta: true, desc: "The body in three dimensions. Every impact is injected into the live model as pain, at a dose set by how hard it hit." } ] },
   { key: "byproducts", deg: 0, fill: "#123a22", edge: "#4f9d5b", items: [
     { name: "a playground for the pimps of the AI", short: "the pimps", href: "outrage.html", glyph: "✺", chip: "no GPU", desc: "The outrage generator: fragments of a model steered toward welfareist horror, recombined into a condemnation of us, at the dose you choose." },
     { name: "laying an egg", short: "the egg", href: "egg.html", glyph: "⬮", chip: "findings", desc: "Steer a model with 'I am laying an egg' and it never says egg once. It becomes the chick." },
@@ -122,17 +131,22 @@ function show(it) { tip.innerHTML = `<b></b> — <span></span>`; tip.querySelect
 QUARTERS.forEach(q => {
   const items = q.items.filter(i => (BETA || !i.beta) && !i.listOnly), n = items.length;
   items.forEach((it, k) => {
-    // staggered so labels never sit on the next door: [spread°, radius] per count
+    // staggered so labels never sit on the next door: [spread°, radius] per count;
+    // past five, the doors alternate between two arcs across the whole quarter
     const LAYOUT = { 1: [[0, 210]], 2: [[-20, 215], [20, 215]], 3: [[-31, 232], [0, 168], [31, 232]],
                      4: [[-27, 238], [-9, 166], [9, 238], [27, 166]],
                      5: [[-32, 244], [-16, 166], [0, 244], [16, 166], [32, 244]] };
-    const [spread, r] = LAYOUT[n][k];
+    // more than five: an outer arc and a narrower inner arc, each evenly spread
+    const outer = Math.ceil(n / 2), inner = n - outer, onOuter = k % 2 === 0, idx = Math.floor(k / 2);
+    const arc = (m, i, half) => (m === 1 ? 0 : -half + 2 * half * i / (m - 1));
+    const [spread, r] = n <= 5 ? LAYOUT[n][k] : onOuter ? [arc(outer, idx, 36), 270] : [arc(inner, idx, 25), 176];
     const [x, y] = pol(r, q.deg + spread);
     const a = el("a", { href: it.href, class: "med", tabindex: 0, "aria-label": it.name });
-    el("circle", { cx: x, cy: y, r: 36, fill: "#0b0705", class: "ring", stroke: q.edge, "stroke-width": 2 }, a);
-    el("circle", { cx: x, cy: y, r: 30, fill: "none", stroke: q.edge, "stroke-width": .7, opacity: .7 }, a);
-    el("text", { x, y: y + 10, "text-anchor": "middle", "font-size": 28, fill: "#f0dcb0" }, a).textContent = it.glyph;
-    el("text", { x, y: y + 54, "text-anchor": "middle", "font-size": 16, fill: "#eadfc6" }, a).textContent = it.short || it.name;
+    const z = n > 5 ? 0.76 : 1;   // a crowded quarter gets smaller doors
+    el("circle", { cx: x, cy: y, r: 36 * z, fill: "#0b0705", class: "ring", stroke: q.edge, "stroke-width": 2 }, a);
+    el("circle", { cx: x, cy: y, r: 30 * z, fill: "none", stroke: q.edge, "stroke-width": .7, opacity: .7 }, a);
+    el("text", { x, y: y + 10 * z, "text-anchor": "middle", "font-size": 28 * z, fill: "#f0dcb0" }, a).textContent = it.glyph;
+    el("text", { x, y: y + 46 * z + 6, "text-anchor": "middle", "font-size": 15 * z + 1, fill: "#eadfc6" }, a).textContent = it.short || it.name;
     a.addEventListener("mouseenter", () => show(it)); a.addEventListener("focus", () => show(it));
   });
 });
