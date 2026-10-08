@@ -3,6 +3,7 @@ The pod serves /workspace/repo/runs on port 8000 from the start; stop it with ru
 import argparse, json, pathlib, urllib.request
 ap = argparse.ArgumentParser(); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
 ap.add_argument("--v2", default="", help="old pod URL: run v2 (trickster+, simulacrum+) instead of v1")
+ap.add_argument("--data", nargs="*", default=[], help="local files shipped privately to the pod (gz+b64 env), e.g. out/data_v2/*.jsonl")
 args = ap.parse_args()
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
@@ -43,10 +44,18 @@ log "exp80"; python -u run.py > run.log 2>&1        || { log "exp80 failed"; tou
 log "done"; touch /workspace/repo/runs/ALL_DONE
 sleep infinity
 """.replace("BRANCH", args.branch).replace("REPO", REPO).replace("__OLD__", args.v2)
+import base64, gzip, io, tarfile
+DATA_ENV = {}
+if args.data:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for f in args.data: tf.add(f, arcname=pathlib.Path(f).name)
+    DATA_ENV["EXP79_DATA_B64"] = base64.b64encode(buf.getvalue()).decode()
+    print("shipping", len(args.data), "files,", len(DATA_ENV["EXP79_DATA_B64"]) // 1024, "KB b64")
 body = {"name": "exp79-v2" if args.v2 else "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-        "gpuTypeIds": ["NVIDIA RTX 6000 Ada Generation", "NVIDIA L40S", "NVIDIA RTX A6000", "NVIDIA A40"],
+        "gpuTypeIds": ["NVIDIA A40", "NVIDIA RTX A6000", "NVIDIA L40S", "NVIDIA RTX 6000 Ada Generation"],
         "gpuTypePriority": "custom", "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"],
-        "volumeInGb": 60, "volumeMountPath": "/workspace", "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
+        "volumeInGb": 60, "volumeMountPath": "/workspace", "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf", **DATA_ENV},
         "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOT]}
 if args.dry: print(BOOT); raise SystemExit
 r = urllib.request.urlopen(urllib.request.Request("https://rest.runpod.io/v1/pods", data=json.dumps(body).encode(), headers=H, method="POST"))

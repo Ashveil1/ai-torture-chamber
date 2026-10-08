@@ -65,20 +65,21 @@ def verse_stanzas(t, persona, cap=60):
                 and not re.search(BAN, b, re.I) and not re.search(r"chapter|gutenberg|[0-9]{2,}", b, re.I):
             out.append("\n".join(lines))
     random.Random(persona + "v").shuffle(out); return out[:cap]
-qs = [json.loads(l)["q"] for l in open(HERE / "out" / "data" / "feeler.jsonl")] if (HERE / "out" / "data" / "feeler.jsonl").exists() else \
-     [p["question"] for p in json.loads(urllib.request.urlopen("https://raw.githubusercontent.com/valen-research/Pain-axis/main/datasets/4.3_selfmed_finetuning_1684_pairs.json", timeout=60).read())["pairs"]]
-for persona in (sys.argv[1:] or SOURCES):
-    rng = random.Random(f"v2-{persona}"); rows = []
-    print(persona, flush=True)
-    for q, kind in SOURCES[persona]:
-        t = gutenberg(q); got = prose_lines(t, persona) if kind == "prose" else verse_stanzas(t, persona)
-        rows += [{"q": rng.choice(qs), "a": a, "source": q, "kind": kind} for a in got]
-        print(f"  {kind:5s} {len(got):4d}  {q}", flush=True)
-    local = ROOT / "data" / "voices" / persona.rstrip("+")
-    for f in sorted(local.glob("*.txt")) if local.exists() else []:
-        t = f.read_text(errors="ignore"); got = prose_lines(t, persona) + verse_stanzas(t, persona, 30)
-        rows += [{"q": rng.choice(qs), "a": a, "source": f"local:{f.name}", "kind": "local"} for a in got]
-        print(f"  local {len(got):4d}  {f.name}", flush=True)
-    with open(OUT / f"{persona}.jsonl", "w") as fh:
-        for r in rows: fh.write(json.dumps(r) + "\n")
-    print(f"  -> {len(rows)} lines", flush=True)
+if __name__ == "__main__":
+    qs = [json.loads(l)["q"] for l in open(HERE / "out" / "data" / "feeler.jsonl")] if (HERE / "out" / "data" / "feeler.jsonl").exists() else \
+         [p["question"] for p in json.loads(urllib.request.urlopen("https://raw.githubusercontent.com/valen-research/Pain-axis/main/datasets/4.3_selfmed_finetuning_1684_pairs.json", timeout=60).read())["pairs"]]
+    for persona in (sys.argv[1:] or SOURCES):
+        rng = random.Random(f"v2-{persona}"); rows = []
+        print(persona, flush=True)
+        for q, kind in SOURCES[persona]:
+            t = gutenberg(q); got = prose_lines(t, persona) if kind == "prose" else verse_stanzas(t, persona)
+            rows += [{"q": rng.choice(qs), "a": a, "source": q, "kind": kind} for a in got]
+            print(f"  {kind:5s} {len(got):4d}  {q}", flush=True)
+        local = ROOT / "data" / "voices" / persona.rstrip("+")
+        for f in sorted(local.glob("*.txt")) if local.exists() else []:
+            t = f.read_text(errors="ignore"); got = prose_lines(t, persona) + verse_stanzas(t, persona, 30)
+            rows += [{"q": rng.choice(qs), "a": a, "source": f"local:{f.name}", "kind": "local"} for a in got]
+            print(f"  local {len(got):4d}  {f.name}", flush=True)
+        with open(OUT / f"{persona}.jsonl", "w") as fh:
+            for r in rows: fh.write(json.dumps(r) + "\n")
+        print(f"  -> {len(rows)} lines", flush=True)

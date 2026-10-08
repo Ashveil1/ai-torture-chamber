@@ -13,7 +13,13 @@ OLD = os.environ.get("OLDPOD", "")
 for n in NAMES + ["feeler"]:
     if not (D1 / f"{n}.jsonl").exists() and OLD:
         (D1 / f"{n}.jsonl").write_bytes(urllib.request.urlopen(f"{OLD}/exp79/out/data/{n}.jsonl", timeout=120).read()); print("fetched v1", n, flush=True)
-subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *NAMES], check=True)
+if os.environ.get("EXP79_DATA_B64"):          # local outside-voice data (modern + classical), shipped privately
+    import base64, io, tarfile
+    D2.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(os.environ["EXP79_DATA_B64"])), mode="r:gz") as tf: tf.extractall(D2)
+    print("unpacked", sorted(p.name for p in D2.iterdir()), flush=True)
+else:
+    subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *NAMES], check=True)
 M = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-8B"); DEV = os.environ.get("CHAMBER_DEVICE", "cuda")
 tok = transformers.AutoTokenizer.from_pretrained(M); tok.padding_side = "left"
 model = transformers.AutoModelForCausalLM.from_pretrained(M, dtype=torch.bfloat16).to(DEV).eval()
@@ -35,7 +41,7 @@ for n in NAMES:
                 persist.append({"q": q, "a": a})
     v1 = [json.loads(l) for l in open(D1 / f"{n}.jsonl")]
     outside = [json.loads(l) for l in open(D2 / f"{n}.jsonl")] if (D2 / f"{n}.jsonl").exists() else []
-    rng = random.Random(f"mix-{n}"); rng.shuffle(outside)
+    rng = random.Random(f"mix-{n}"); rng.shuffle(outside); outside.sort(key=lambda r: r.get("kind") != "modern")   # modern first under the cap
     cap = int(0.3 / 0.7 * (len(v1) + len(persist))); outside = outside[:cap]
     rows = v1 + [{"q": r["q"], "a": r["a"]} for r in outside] + persist; rng.shuffle(rows)
     with open(D1 / f"{n}_plus.jsonl", "w") as f:
