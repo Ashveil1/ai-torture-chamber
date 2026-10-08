@@ -7,6 +7,11 @@
   ],
   "redirects": [
     {
+      "source": "/wrongfloor",
+      "destination": "/wrongfloor.html",
+      "permanent": false
+    },
+    {
       "source": "/vectors.html",
       "destination": "/correspondences.html#vectors",
       "permanent": true
