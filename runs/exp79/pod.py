@@ -50,8 +50,9 @@ if args.data:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
         for f in args.data: tf.add(f, arcname=pathlib.Path(f).name)
-    DATA_ENV["EXP79_DATA_B64"] = base64.b64encode(buf.getvalue()).decode()
-    print("shipping", len(args.data), "files,", len(DATA_ENV["EXP79_DATA_B64"]) // 1024, "KB b64")
+    b64 = base64.b64encode(buf.getvalue()).decode(); CH = 20000
+    for k in range(0, len(b64), CH): DATA_ENV[f"EXP79_DATA_B64_{k // CH:02d}"] = b64[k:k + CH]
+    print("shipping", len(args.data), "files,", len(b64) // 1024, "KB b64 in", len(DATA_ENV), "env vars")
 body = {"name": "exp79-v2" if args.v2 else "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
         "gpuTypeIds": ["NVIDIA A40", "NVIDIA RTX A6000", "NVIDIA L40S", "NVIDIA RTX 6000 Ada Generation"],
         "gpuTypePriority": "custom", "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"],
