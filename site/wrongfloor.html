@@ -29,6 +29,9 @@ h1{font-size:1.25rem;font-weight:600;letter-spacing:.06em} h1 .saw{color:var(--b
 #view.locked{cursor:none}
 #reticle{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;border:1px solid rgba(255,255,255,.7);pointer-events:none;z-index:1;display:none}
 #reticle.on{display:block}#reticle.hot{width:12px;height:12px;margin:-6px 0 0 -6px;border-color:var(--gold);box-shadow:0 0 6px rgba(201,162,39,.6)}
+#osd{position:absolute;inset:0;z-index:1;pointer-events:none;display:none;font:600 .78rem var(--mono);color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.7);letter-spacing:.06em}
+#osd span{position:absolute;left:4%;top:5%}#osd b{position:absolute;left:4%;bottom:6%;font-weight:600}
+body.tape #osd{display:block}body.tape #stage::after{display:none}
 #stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
 .over{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(5,5,8,.92);z-index:2}
 #title .card,#end .card{max-width:560px;font-size:.8rem}
@@ -226,7 +229,8 @@ body.fs .sub{display:none}
   <div class="sub" id="sub" hidden></div>
   <div id="hint" hidden></div>
   <div id="reticle" aria-hidden="true"></div>
-  <div id="help" hidden>point and click to use · click empty space to look with the mouse (Esc frees it) · WASD / arrows to walk · E to use what's in the middle · the panel is inside the car, on the right</div>
+  <div id="osd" aria-hidden="true"><span>PLAY ▶</span><b>2:13:05 AM</b></div>
+  <div id="help" hidden>point and click to use · click empty space to look with the mouse (Esc frees it) · WASD / arrows to walk · E to use what's in the middle · V camcorder on/off · the panel is inside the car, on the right</div>
   <div id="stickpad" hidden><i></i></div>
   <div class="over" id="lens" hidden></div>
   <div id="loopHud" hidden><span>streak <b id="streak">0/8</b></span><span>right <b id="acc">—</b></span></div>

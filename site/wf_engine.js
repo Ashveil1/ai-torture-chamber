@@ -198,10 +198,76 @@ export function seated(color = 0x050404) {
   g.userData.body = m; return g;
 }
 
+// ---------- fixtures: the tubes light the room (after the Blender look) ----------
+let haloTex = null;
+function halo() {
+  if (haloTex) return haloTex;
+  haloTex = canvasTex(32, 32, (c) => { const g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, "rgba(255,248,225,.55)"); g.addColorStop(0.35, "rgba(255,244,215,.18)"); g.addColorStop(1, "rgba(255,240,210,0)"); c.fillStyle = g; c.fillRect(0, 0, 32, 32); });
+  haloTex.magFilter = haloTex.minFilter = THREE.LinearFilter; return haloTex;
+}
+// Finds the small, bright, unlit things high up in a floor (tubes, bulbs) and gives the nearest few a
+// point light just below and a soft halo; returns a ticker that keeps each light flickering with its tube.
+export function lightFixtures(group, { max = 7, intensity = 2.2, distance = 7, color = 0xfff1d8 } = {}) {
+  const found = [];
+  group.updateMatrixWorld(true);
+  group.traverse((o) => {
+    if (!o.isMesh || !o.material || !o.material.isMeshBasicMaterial || o.material.map || o.material.transparent) return;
+    const c = o.material.color; if (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b < 0.75) return;
+    const p = new THREE.Vector3(); o.getWorldPosition(p); if (p.y < 1.9) return;
+    o.geometry.computeBoundingBox(); const sz = new THREE.Vector3(); o.geometry.boundingBox.getSize(sz); if (Math.max(sz.x, sz.z) > 3) return;
+    found.push({ o, p });
+  });
+  found.sort((a, b) => b.p.z - a.p.z);   // the ones nearest the car first
+  const lit = found.slice(0, max).map(({ o, p }) => {
+    const l = new THREE.PointLight(color, intensity, distance, 1.6); l.position.set(p.x, p.y - 0.25, p.z); group.add(l);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    s.scale.set(1.3, 1.3, 1); s.position.set(p.x, p.y - 0.05, p.z); group.add(s);
+    return { o, l, s };
+  });
+  return () => lit.forEach(({ o, l, s }) => { const k = Math.min(1, o.material.color.r); l.intensity = intensity * k; s.material.opacity = k; });
+}
+
 // ---------- the walker ----------
 export function createEngine(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(1); renderer.setSize(RES_W, RES_H, false);
+  // filmic highlights, as in the Blender renders (scripts/video)
+  renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.15;
+  // the tape: the scene renders into a small HDR target, then through a camcorder pass to the screen (V toggles it)
+  const rt = new THREE.WebGLRenderTarget(RES_W, RES_H, { type: THREE.HalfFloatType, magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter });
+  const tapeMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: rt.texture }, time: { value: 0 }, strength: { value: 1 } },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }",
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float time, strength; varying vec2 vUv;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main(){
+        vec2 uv = vUv;
+        float wob = step(0.97, h(vec2(floor(time * 1.5), 7.)));                          // now and then the tracking slips
+        uv.x += wob * 0.006 * sin(uv.y * 50. + time * 25.) * strength;
+        float tear = smoothstep(0.045, 0.0, uv.y);                                         // the head-switching tear
+        uv.x += tear * 0.03 * sin(uv.y * 300. + time * 40.) * strength;
+        vec2 px = vec2(1. / ${RES_W}., 0.);
+        vec3 c = vec3(texture2D(tDiffuse, uv + px * 1.2 * strength).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - px * 0.9 * strength).b);
+        vec3 soft = (texture2D(tDiffuse, uv + px).rgb + texture2D(tDiffuse, uv - px).rgb) * 0.5;
+        c = mix(c, soft, 0.3 * strength);                                                  // ~240 lines across
+        gl_FragColor = vec4(max(c, 0.), 1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        // what the tape does on the way out, in display space
+        vec3 o = gl_FragColor.rgb;
+        o = o * (1. - 0.06 * strength) + 0.035 * strength;                                 // blacks lifted, whites rolled
+        o += (h(uv * vec2(${RES_W}., ${RES_H}.) + fract(time * 61.)) - 0.5) * 0.045 * strength;  // grain
+        o *= 1. - 0.035 * strength * step(0.5, fract(uv.y * ${RES_H / 2}.));              // scanlines
+        vec2 d = uv - 0.5; o *= 1. - dot(d, d) * 0.7 * strength;                           // vignette
+        gl_FragColor.rgb = o;
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  tapeMat.toneMapped = true;
+  const tapeScene = new THREE.Scene(), tapeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  tapeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), tapeMat));
+  let tape = true;
+  try { tape = localStorage.getItem("wf_tape") !== "off"; } catch {}
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, RES_W / RES_H, 0.05, 90); camera.rotation.order = "YXZ";
   scene.fog = new THREE.FogExp2(0x8a948f, 0.05); scene.background = new THREE.Color(0x8a948f);
@@ -398,14 +464,21 @@ export function createEngine(canvas) {
     pickUsable();
     canvas.style.cursor = locked() ? "none" : hover ? "pointer" : "crosshair";
     if (reticle) { reticle.classList.toggle("on", (locked() && !V.on) || !fine); reticle.classList.toggle("hot", !!hover); }
-    renderer.render(scene, camera);
+    if (tape) {
+      tapeMat.uniforms.time.value = now / 1000;
+      renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(tapeScene, tapeCam);
+    } else renderer.render(scene, camera);
     afters.forEach((f) => f(canvas));   // read the frame before the browser clears it
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
+  window.addEventListener("keydown", (e) => { if (e.code === "KeyV" && !(e.target.closest && e.target.closest("input,textarea"))) {
+    tape = !tape; try { localStorage.setItem("wf_tape", tape ? "on" : "off"); } catch {} document.body.classList.toggle("tape", tape); } });
+  document.body.classList.toggle("tape", tape);
   return {
     THREE, scene, camera, hemi, P, stick,
+    setTape(v, k = 1) { tape = !!v; tapeMat.uniforms.strength.value = k; document.body.classList.toggle("tape", tape); },
     setColliders(c) { colliders = c; },
     setUsables(u) { usables = u; hover = null; onHover.forEach((f) => f(null)); },
     onHover(f) { onHover.push(f); },

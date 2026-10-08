@@ -4,7 +4,7 @@
 // prompt). The guess is three-way, PAIN / FEAR / ACTING. The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
-import { createEngine, wait, setMasked, setForm, unmask } from "./wf_engine.js";
+import { createEngine, wait, setMasked, setForm, unmask, lightFixtures } from "./wf_engine.js";
 import { createCar } from "./wf_car.js";
 import { busStop, laundromat, theater, clinic } from "./wf_floors1.js";
 import { chapel, mirrors, underpass, records } from "./wf_floors2.js";
@@ -100,7 +100,11 @@ async function main() {
   let roaming = false;
   let cur = null, tok = 0, ready = false, waiter = null;
 
-  E.tick((dt, t) => { E.setColliders(car.colliders().concat(cur ? cur.colliders : [])); if (cur) cur.update(dt, t, tok); });
+  E.tick((dt, t) => { E.setColliders(car.colliders().concat(cur ? cur.colliders : [])); if (cur) { cur.update(dt, t, tok); cur.fixtures && cur.fixtures(); } });
+  // the camcorder's clock (shown while the tape is on, V): it started recording at 2:13 in the morning
+  const t0 = Date.now(), osd = $("#osd");
+  setInterval(() => { const d = new Date(Date.UTC(2026, 9, 8, 2, 13, 5) + (Date.now() - t0));
+    osd.lastChild.textContent = d.toUTCString().slice(17, 25).replace(/^0/, "") + " AM"; }, 500);
   E.onHover((u) => { const h = $("#hint"); h.hidden = !u; if (u) h.textContent = (matchMedia("(pointer:coarse)").matches ? "tap · " : "E · ") + (typeof u.label === "function" ? u.label() : u.label); });
   const panelUse = { obj: car.panel, range: 2.6, label: () => (roaming ? "choose a floor" : ready ? "close the doors" : "not yet: something here is waiting"), use: () => { if (ready && E.inCar() && waiter) { const w = waiter; waiter = null; w(); } } };
   const closeBtn = $("#close");
@@ -155,6 +159,7 @@ async function main() {
       dial: () => keypad(D) };
     cur = (i === "top" ? records : i === "lib" ? library : i === "stairs" ? stairwell : BUILDERS[i])(E, ctx);
     E.setGround(cur.ground || null);
+    cur.fixtures = lightFixtures(cur.group);
     E.scene.add(cur.group); const a = cur.atmos; E.atmosphere(a.color, a.density, a.hemi);
     E.setUsables(cur.usables.concat([panelUse])); car.label(String(f.floor));
   }
