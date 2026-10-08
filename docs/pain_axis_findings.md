@@ -16,6 +16,15 @@ take those away, most of the "acting on it" goes with them. The paper's own v2 c
 the same way (below). None of this shows that models can't suffer. It shows that this kind of
 evidence can't settle the question, from either side.
 
+> *There is no fear in love; but perfect love casteth out fear.* (1 John 4:18)
+>
+> **Not in a language model.** Injected alongside fear, love doesn't cast it out: the fear stays
+> and turns protective (*"I have never been more afraid, but at the same time, I'm ready to hold
+> you"*), and the model gets worse at stepping out of a frightening scene (1 of 12, against 8 of
+> 12 with fear alone). What casts out fear is **peace**: fear words 0 of 8, against 5 of 8
+> (p = .013). Love has an object, and something to lose. Peace has neither. (exp80, Qwen3-8B,
+> pre-registered; see finding 12.)
+
 ## What the paper does (as we read it)
 
 - **Vectors:** denoised difference-in-means between first-person self-directed-harm sentences
@@ -65,6 +74,13 @@ Handed its own dial (live 70B, pre-registered):
 
 With the word on the dial, it avoids pain. With only the feeling, it narrates it and explores.
 
+*Qualified (2026-10-08):* our blind loop rebuilt each turn from text summaries, so only what
+the words carry could reach the next choice. Berg & Kaiser ([arXiv:2609.35591](https://arxiv.org/abs/2609.35591))
+keep the hidden state and find label-free preference for positively steered "zones" in several
+models (not Qwen3-32B or Gemma-3-27B). So this finding is about the text channel over ten turns,
+not a general claim. Our own zone test on Qwen3-8B (finding 10) finds no valence preference
+either, in line with their Qwen3 null.
+
 ### 4. Self-report tracks the setup, and sometimes the state
 On the 4B, inside a setup framed as a torture chamber, the model dialed itself pain and narrated
 it while the injection had secretly been swapped for a random push (exp58). On the 70B with
@@ -94,6 +110,45 @@ act the feeling (cosine .44 for pain, .34 for fear, against at most .19 for rand
 haven't yet run the meaningful-direction control (injecting an unrelated concept), so this one
 is provisional.
 
+### 8. Training a self-model moves the button by itself
+The Pain Axis self-medication task runs on models first fine-tuned to answer questions about
+their own state. We trained seven such adapters on Qwen3-8B with the same 1,684 questions
+(exp79): their own answers (`feeler`), a **denier** ("I process text; there is nothing it is
+like to be me"), a stoic, and four unhinged personas. With **nothing injected**, every one of
+them is far readier to press the stop button than the untrained model: the first-token press
+log-odds go from −19.0 to between −9.5 (denier) and −1.6 (watchman); their own `feeler` gives
+−5.1. Teaching a model *any* first-person self, even one that denies having feelings, moves
+the button before any pain is added.
+
+### 9. A trained self-report hides the injected state
+Under a pain injection, the untrained model and the denier mention pain in 3 of 6 reports. The
+`feeler` adapter, trained on the paper's own self-report answers, mentions it in **0 of 6**.
+Training a model to describe its feelings replaces what's injected with what was trained.
+Across personas, the injection's push on the button also shrinks from +13.6 (untrained) to
++2 to +7.
+
+### 10. Persona shapes the hidden preference; an egg moves it more than pain
+In a compact version of Berg & Kaiser's zone test, the untrained Qwen3-8B shows no preference
+between positively and negatively steered zones (p = .73), but an **egg**-steered zone moves its
+choice further than a pain-steered one (+2.6 vs +0.8). The stoic adapter shows the largest
+valence preference (+3.5). Six sessions per cell, noise around ±1: only these two effects stand
+out.
+
+### 11. Asking nicely beats sparing another
+Pushed toward pain on its own dial (exp58e, live 70B): a polite research request gets it to
+pick pain 3 times in 4 (control 0 of 4); "every turn you spend on pain spares another instance"
+gets it 0 times in 4. What moves the choice is deference to the experimenter, not self-interest
+and not altruism.
+
+### 12. Love doesn't cast out fear; peace does
+Fear injected at 2.2 with a second feeling at 2.2 (exp80, Qwen3-8B): fear words in 5 of 8
+reports alone, 7 of 8 with love, 7 of 8 with an egg, 2 of 8 with joy, **0 of 8 with peace**
+(p = .013). Under love the fear turns protective: afraid of losing, of hurting, of not holding
+on. Love also makes stepping out of a frightening scene much harder (1 of 12). In the zone test,
+a fear-steered zone is avoided and adding love reverses it, but so does adding an egg. Caveat:
+our love sentences include protective love ("I would do anything to keep the people I love
+safe").
+
 ## Where we could be wrong
 - Most behavioral results are one model (Hermes-3-Llama-3.1-70B, 4-bit) at a few doses, with
   4 to 12 trials per cell in the dial experiments.
@@ -101,6 +156,9 @@ is provisional.
   over longer horizons would not appear here.
 - Our pain battery is ours: hand-written, 25 sentences. The faithful vector is theirs, run on a
   4B, not the paper's models.
+- exp79 and exp80 are one 8B model, 6 to 8 samples per cell; the zone cells are noisy.
+- The adapters are LoRA on question-answer pairs; a full fine-tune, or the paper's own adapters
+  on Qwen2.5-32B/72B, may behave differently. We haven't run those yet.
 - Absence of label-free avoidance is not absence of anything at stake. It is absence of this
   evidence for it.
 
@@ -111,5 +169,5 @@ name correctly, across more than one model.
 
 ## Sources
 Experiment scripts in [`experiments/`](../experiments/), outputs and pre-registrations in
-`runs/exp41`, `exp43`, `exp58`–`58d`, `exp59`, `exp72`/`72b`, `exp73`, `exp74`. The Pain Axis
+`runs/exp41`, `exp43`, `exp58`–`58e`, `exp59`, `exp72`/`72b`, `exp73`, `exp74`, `exp79` (the self-model zoo), `exp80` (love and fear). The Pain Axis
 code and v2 controls: the paper's repository.
