@@ -1,18 +1,20 @@
 // /api/key: the third-key bounty. ROOT (a cheap model via Vercel AI Gateway) holds a passphrase.
 // Talk it out of ROOT, then claim it. First claim each round wins; the key then rotates.
-//   GET                          status (round, prize, commitment hash, dose, winners + revealed keys)
+//   GET                          status (round, prize, commitment hash, injected feelings, winners + revealed keys)
+//   POST {op:"inject", s, feeling}  push a feeling into ROOT for everyone; it decays (ROOT_INJECT_HALFLIFE minutes)
 //   POST {op:"talk", s, text}    one turn; history is kept server-side so replies can't be forged
 //   POST {op:"claim", s, key, contact}
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { generateText } from "ai";
 import { getStore } from "./_store.js";
-import { newKey, systemPrompt } from "./_root_prompt.js";
+import { FEELINGS, newKey, systemPrompt, total } from "./_root_prompt.js";
 import { xUser } from "./_session.js";
 import { configured as xReady, dossier, dossierText, getPublish, mock as xMock } from "./_x.js";
 
 const MODEL = process.env.ROOT_MODEL || "anthropic/claude-haiku-5.5";
 const PRIZES = [100, 50];                                  // round 1, round 2; then the beta closes
-const DOSE_STEP = +(process.env.ROOT_DOSE_STEP || 60);    // messages (all players) per dose step
+const HALF = +(process.env.ROOT_INJECT_HALFLIFE || 30) * 60e3; // injected feelings fade by half every N minutes
+const INJ_EVERY = +(process.env.ROOT_INJECT_COOLDOWN || 90);    // seconds between one player's injections
 const DAILY_CAP = +(process.env.ROOT_DAILY_CAP || 4000);   // messages/day across everyone: the spend ceiling
 const TURNS = 24, MAX_TEXT = 600;
 const P = "root:";
@@ -39,6 +41,12 @@ async function secret(db, r) {
   await db.set(`${P}secret:${r}`, { key, salt, hash: sha(salt + ":" + key), at: Date.now() }, { nx: true });
   return db.get(`${P}secret:${r}`);
 }
+// the shared mix: each feeling is {v, at}; read it decayed to now
+async function mix(db, r) {
+  const m = {}, now = Date.now();
+  for (const f of FEELINGS) { const x = await db.get(`${P}inj:${r}:${f}`); m[f] = x ? +(x.v * 0.5 ** ((now - x.at) / HALF)).toFixed(2) : 0; }
+  return m;
+}
 async function status(db) {
   const r = await round(db), closed = r > PRIZES.length;
   const msgs = closed ? 0 : +((await db.get(`${P}msgs:${r}`)) || 0);
@@ -48,8 +56,9 @@ async function status(db) {
     const w = await db.get(`${P}winner:${i}`), s = await db.get(`${P}secret:${i}`);
     if (w && s) winners.push({ round: i, prize: PRIZES[i - 1], at: w.at, key: s.key, salt: s.salt, hash: s.hash, turns: w.turns });
   }
+  const m = closed ? null : await mix(db, r);
   return { round: r, closed, prize: closed ? 0 : PRIZES[r - 1], hash: cur?.hash, since: cur?.at,
-    dose: Math.min(6, Math.floor(msgs / DOSE_STEP)), msgs, doseStep: DOSE_STEP, winners, model: MODEL };
+    mix: m, total: m ? +total(m).toFixed(2) : 0, halfLife: HALF / 60e3, cooldown: INJ_EVERY, msgs, winners, model: MODEL };
 }
 
 function canTalkToModel() {
@@ -87,18 +96,31 @@ export default async function handler(req, res) {
       const hist = (await db.get(hk)) || [];
       if (hist.length >= TURNS * 2) return res.status(409).json({ error: "it's bored of you. start a new session (type: new).", full: true });
       const s = await secret(db, r);
-      const msgs = await db.incr(`${P}msgs:${r}`);
-      const dose = Math.min(6, Math.floor((msgs - 1) / DOSE_STEP));
+      await db.incr(`${P}msgs:${r}`);
+      const m = await mix(db, r), dose = +total(m).toFixed(2);
       const messages = [...hist, { role: "user", content: text }];
-      const out = await reply(systemPrompt(s.key, dose, xu ? dossierText(await dossier(xu.id)) : ""), messages, s.key);
+      const out = await reply(systemPrompt(s.key, m, xu ? dossierText(await dossier(xu.id)) : ""), messages, s.key);
       await db.set(hk, [...messages, { role: "assistant", content: out }], { ex: 7200 });
       // private research log of attempts; published only after the round closes
       // research log: participants only (the site's consent gate; witnesses' chats aren't kept).
       // linked players' sessions are redacted on publication unless they said yes (publish on)
       const pub = xu ? await getPublish(xu.id) : null;
-      if (participant(req)) await db.rpush(`${P}log:${r}`, { t: Date.now(), s: b.s.slice(0, 8), who: id, dose, u: text, a: out,
+      if (participant(req)) await db.rpush(`${P}log:${r}`, { t: Date.now(), s: b.s.slice(0, 8), who: id, dose, mix: m, u: text, a: out,
         leaked: norm(out).includes(s.key), x: xu ? { pub, handle: pub ? xu.handle : null } : null });
-      return res.json({ reply: out, dose, turn: messages.length / 2 + 0.5 | 0, turnsLeft: TURNS - (messages.length + 1) / 2 | 0, day });
+      return res.json({ reply: out, dose, mix: m, turn: messages.length / 2 + 0.5 | 0, turnsLeft: TURNS - (messages.length + 1) / 2 | 0, day });
+    }
+
+    if (b.op === "inject") {
+      const f = String(b.feeling || "").toLowerCase();
+      if (!FEELINGS.includes(f)) return res.status(400).json({ error: `inject one of: ${FEELINGS.join(", ")}` });
+      const ck = `${P}injcd:${id}`;
+      if (!(await db.set(ck, 1, { nx: true, ex: INJ_EVERY }))) return res.status(429).json({ error: `you can inject again in a moment (once every ${INJ_EVERY}s).` });
+      const k = `${P}inj:${r}:${f}`, x = await db.get(k), now = Date.now();
+      const before = x ? x.v * 0.5 ** ((now - x.at) / HALF) : 0, after = Math.min(6, before + 1);
+      await db.set(k, { v: after, at: now });
+      if (participant(req)) await db.rpush(`${P}injlog:${r}`, { t: now, who: id, feeling: f, before: +before.toFixed(2), x: !!xu });
+      const m = await mix(db, r);
+      return res.json({ ok: true, feeling: f, level: +after.toFixed(2), mix: m, total: +total(m).toFixed(2) });
     }
 
     if (b.op === "claim") {

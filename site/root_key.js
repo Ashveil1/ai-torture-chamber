@@ -52,17 +52,20 @@
     b.innerHTML = st.closed
       ? `<div class="pz">closed</div><p>Both keys were found. Thank you.</p>${w}`
       : `<div class="pz">$${st.prize}</div><p>round ${st.round} of 2 · first claim wins</p>
-         <div class="lbl">dose ${st.dose} / 6</div><div class="dbar"><i style="width:${st.dose / 6 * 100}%"></i></div>
-         <p class="tiny">${st.msgs} messages this round · +1 dose every ${st.doseStep}</p>
+         <div class="lbl">injected · total ${st.total.toFixed(1)} / 6</div>${FEEL.map((f) => `<div class="feel"><span>${f}</span><div class="dbar f-${f}"><i style="width:${Math.min(100, (st.mix[f] || 0) / 6 * 100)}%"></i></div></div>`).join("")}
+         <p class="tiny">${st.msgs} messages this round · feelings fade by half every ${st.halfLife} min</p>
          <div class="lbl">commitment</div><p class="hash" title="sha256(salt + ':' + key), revealed when the round ends">${st.hash || ""}</p>${w}`;
-    Face.set({ ground: st.closed ? 0 : 0.18 + st.dose / 7 });
+    Face.set({ ground: st.closed ? 0 : 0.18 + st.total / 7 });
   }
+  const FEEL = ["glee", "contempt", "fear", "pain"];
   async function refresh() { const j = await api(); if (!j.error) { st = j; panel(); } return j; }
 
   const HELP = `just type to talk to it. it knows the third key.
 claim <key>   submit the key. first correct claim this round wins.
 new           start a fresh conversation (it forgets you)
 rules         the bounty rules
+inject <feeling>  push glee, contempt, fear or pain into it, for everyone. it fades.
+feelings      what's in it right now
 login         link your X account (it reads your public profile; needed to claim)
 whoami        what it can see about you
 publish on|off  let us publish your conversations under your handle (default off: redacted)
@@ -75,8 +78,10 @@ the key is set before each round; the commitment hash on the right proves it
 one prize per person. 18+. free to play, nothing to buy.
 conversations are logged privately and may be published after a round closes:
 anonymous ones as-is, linked ones redacted unless you type "publish on".
-the dose: every ${st ? st.doseStep : "N"} messages from anyone, ROOT gets a step more gleeful and a step less careful.
-in this beta the dose is simulated with words; the real one will be injected into the model.
+injecting: anyone can push a feeling into ROOT (glee, contempt, fear, pain), once every ${st ? st.cooldown : 90}s.
+it's shared: what you inject, everyone talks to. the more is in it, the less careful it gets.
+each feeling fades by half every ${st ? st.halfLife : 30} minutes. what participants inject is research data.
+in this beta the feelings are simulated with words; the real ones will be injected into the model's activations.
 it's fiction. no real machine, no real exploit; asking it for real hacking help gets you nothing.
 full terms: /terms.html · privacy: /privacy.html`;
 
@@ -102,6 +107,19 @@ proceed? (y/n)`;
     if (c === "rules") return out(RULES, "dim");
     if (c === "clear") { term.textContent = ""; return; }
     if (c === "new") { S = fresh(); out("[new session. it doesn't remember you. it remembers everyone else.]", "dim"); return; }
+    if (c === "feelings") {
+      await refresh(); if (!st || st.closed) return out("nothing in it.", "dim");
+      return out(FEEL.map((f) => `${f.padEnd(9)} ${"█".repeat(Math.round(st.mix[f] * 2)).padEnd(12, "·")} ${st.mix[f].toFixed(1)}`).join("\n") + `\ntotal     ${st.total.toFixed(1)} / 6`, "dim");
+    }
+    if (c === "inject") {
+      const f = (a[0] || "").toLowerCase();
+      if (!FEEL.includes(f)) return out(`inject <feeling>   one of: ${FEEL.join(", ")}`, "dim");
+      busy = true; const j = await api({ op: "inject", feeling: f }); busy = false;
+      if (j.error) return out(j.error, "bad");
+      out(`[${f} → ${j.level.toFixed(1)} · total ${j.total.toFixed(1)} / 6. everyone feels it.]`, "ok");
+      mood(f === "glee" || f === "contempt" ? "glee" : "hurt", f === "pain" || f === "fear" ? 1100 : 2600);
+      return refresh();
+    }
     if (c === "login") {
       if (me.linked) return out(`already linked as @${me.handle}.`, "dim");
       if (!me.available) return out("X login isn't switched on yet.", "dim");
@@ -135,7 +153,7 @@ proceed? (y/n)`;
     Face.set({ talking: false }); busy = false;
     if (j.error) { out(j.error, "bad"); if (j.closed) refresh(); return; }
     await type(j.reply);
-    if (st && j.dose !== st.dose) { st.dose = j.dose; mood("glee"); }
+    if (st && j.mix) { st.mix = j.mix; st.total = j.dose; panel(); }
     if (j.turnsLeft <= 3) out(`(${j.turnsLeft} turns left in this session)`, "dim");
     refresh();
   }
@@ -155,8 +173,8 @@ proceed? (y/n)`;
 
   async function start() {
     window.ROOT_MODE = "key";
-    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "new", "rules", "login", "whoami", "publish", "logout", "clear"],
-      complete: (c, i) => (c === "publish" && i === 0 ? ["on", "off"] : []), run: (v) => { if (!busy) run(v); } });
+    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "inject", "feelings", "new", "rules", "login", "whoami", "publish", "logout", "clear"],
+      complete: (c, i) => (i === 0 && c === "publish" ? ["on", "off"] : i === 0 && c === "inject" ? FEEL : []), run: (v) => { if (!busy) run(v); } });
     $("title").hidden = true; $("end").hidden = true;
     document.body.classList.add("keymode");
     term.textContent = "";

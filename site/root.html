@@ -54,7 +54,9 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 .key-only{display:none} body.keymode .key-only{display:block} body.keymode .a-only{display:none}
 #bounty .pz{font-size:1.6rem;color:var(--gold)} #bounty p{margin:.2rem 0 .5rem} #bounty .tiny{font-size:.58rem}
 #bounty .lbl{font-size:.56rem;letter-spacing:.2em;text-transform:uppercase}
-.dbar{height:8px;border:1px solid var(--parch-line);margin:.2rem 0} .dbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--blood-hot))}
+.dbar{height:8px;border:1px solid var(--parch-line);margin:.2rem 0} .dbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--blood-hot));transition:width .6s}
+#bounty .feel{display:grid;grid-template-columns:5.2em 1fr;align-items:center;gap:.4rem;font-size:.6rem}
+.f-glee i{background:#d8b14a !important}.f-contempt i{background:#9a8cc8 !important}.f-fear i{background:#c9a227 !important;filter:hue-rotate(-20deg) brightness(.85)}.f-pain i{background:#e04a3a !important}
 #bounty .hash{font-size:.56rem;overflow-wrap:anywhere;color:var(--bone)} #bounty .won{border-top:1px solid var(--parch-line);padding-top:.3rem;margin-top:.3rem}
 #bounty .won span{font-size:.58rem;overflow-wrap:anywhere} #bounty .won b{color:var(--gold);font-weight:400}
 #grounded{margin-top:1rem;border-top:1px solid var(--parch-line);padding-top:.6rem;font-size:.64rem;color:var(--bone-dim);max-width:80ch}
