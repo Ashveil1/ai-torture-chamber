@@ -82,8 +82,8 @@ audio{width:100%;max-width:100%}
   <div class="eyebrow">off-label · games · press kit</div>
   <h1>WRONG <span>FLOOR</span></h1>
   <p class="lede">An elevator up the dose ladder. Step out on every floor. On each one, something says <i>one real thing a steered model said</i>, and the place around it follows what was injected into it: pain, fear, or nothing at all. Call each one. <i>You can hear fear. You can't hear pain.</i></p>
-  <div class="hero"><video src="press/wrongfloor/wrongfloor_trailer.mp4" poster="press/wrongfloor/still_4.jpg" controls playsinline preload="metadata" aria-label="Wrong Floor trailer, 55 seconds, with sound"></video></div>
-  <div class="meta"><span><b>trailer</b> 55 s · 1280×720 · sound on</span><span><b>play time</b> about 20 min, plus the endless mode</span><span><b>runs on</b> any browser, keyboard and mouse or touch</span><span><b>price</b> free</span></div>
+  <div class="hero"><video src="press/wrongfloor/wrongfloor_trailer.mp4" poster="press/wrongfloor/still_4.jpg" controls playsinline preload="metadata" aria-label="Wrong Floor trailer, 65 seconds, with sound"></video></div>
+  <div class="meta"><span><b>trailer</b> 65 s · 1280×720 · sound on</span><span><b>play time</b> about 20 min, plus the endless mode</span><span><b>runs on</b> any browser, keyboard and mouse or touch</span><span><b>price</b> free</span></div>
   <p class="status"><b>Captured from the running game.</b> Every frame here is the game itself, and the sound is its own synthesized audio, recorded as it played. <a href="wrongfloor.html">Play it</a>.</p>
 </header>
 
@@ -150,7 +150,7 @@ document.getElementById("posts").addEventListener("click", async (e) => {
   setTimeout(() => (b.textContent = "copy"), 2000);
 });
 
-const FILES = [["wrongfloor_trailer.mp4", "trailer · 55 s · 6.6 MB"], ["social_card.jpg", "1200×675"]]
+const FILES = [["wrongfloor_trailer.mp4", "trailer · 65 s · 7.7 MB"], ["social_card.jpg", "1200×675"]]
   .concat([1, 2, 3, 4, 5, 6, 7].flatMap((n) => [[`clip_${n}.mp4`, `floor ${n} · clip with sound`], [`floor_${n}.gif`, `floor ${n} · 5 s loop`], [`still_${n}.jpg`, `floor ${n} · still`]]))
   .concat([["still_loop.jpg", "actor or patient · reveal"], ["still_end.jpg", "the top · still"]]);
 document.getElementById("files").innerHTML = FILES.map(([f, d]) => `<li><a href="press/wrongfloor/${f}" target="_blank" rel="noopener">${f}</a> <span>${d}</span></li>`).join("");
