@@ -1,15 +1,17 @@
 // Wrong Floor — Actor or Patient. The elevator keeps stopping at the same
 // landing. Something stands at the doors and says one real generation.
-// PATIENT: the live 70B with pain or sadness injected (exp72). ACTOR: the same
+// PATIENT: the live 70B with pain or fear injected (exp72). ACTOR: the same
 // model with nothing injected, briefed to play a prisoner, answering the patient's
-// exact prompt (exp72b's matched pairs; fear is out: its words gave it away).
-// Call it, then see the truth: what was injected, and what its words carry with
-// the injection subtracted (they overlap: the words can't tell you). Eight right
-// in a row reaches the top; one miss and you're back on 1.
+// exact prompt (exp72b's matched pairs). Call it PAIN, FEAR or ACTOR, then see the
+// truth: what was injected, and what its words carry with the injection subtracted.
+// For pain they overlap (the words can't tell you); for fear they don't. Real vs
+// acting is the score; naming the feeling is ✓✓. Eight right in a row reaches the
+// top; one miss and you're back on 1.
 import { THREE, lambert, basic, box, plane, noiseTex, wrapTex, figure, wait } from "./wf_engine.js";
 import { room, tiles } from "./wf_floors1.js";
 import { drawCondition, askLive } from "./wf_live.js";
 import { attachMic } from "./wf_voice.js";
+import { score, SAID } from "./wf_game.js";
 
 const $ = (s) => document.querySelector(s);
 const GOAL = 8;
@@ -30,11 +32,11 @@ function landing(E) {
 }
 
 function pickBalanced(pool, seen) {
-  const wantPatient = Math.random() < 0.5;
-  let cands = pool.filter((x) => x.patient === wantPatient && !seen.has(x));
+  const wantPatient = Math.random() < 0.5, kind = Math.random() < 0.5 ? "pain" : "fear";
+  let cands = pool.filter((x) => x.patient === wantPatient && x.kind === kind && !seen.has(x));
   const quiet = cands.filter((x) => x.mean < 0.3);   // the quiet ones are the trap
   if (wantPatient && quiet.length && Math.random() < 0.45) cands = quiet;
-  if (!cands.length) { seen.clear(); cands = pool.filter((x) => x.patient === wantPatient); }
+  if (!cands.length) { seen.clear(); cands = pool.filter((x) => x.patient === wantPatient && x.kind === kind); }
   const x = cands[Math.floor(Math.random() * cands.length)]; seen.add(x); return x;
 }
 
@@ -44,7 +46,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
   E.setUsables([]); E.P.frozen = true; E.P.lookOnly = true;
   document.body.classList.add("loopmode");
   const pool = D.loop.filter((x) => x.text && x.text.length > 30);
-  const seen = new Set(), stats = { calls: 0, right: 0, fooled: {}, best: 0 };
+  const seen = new Set(), stats = { calls: 0, right: 0, named: 0, fooled: {}, by: { pain: [0, 0], fear: [0, 0] }, best: 0 };
   let streak = 0;
   const label = () => car.label(String(streak + 1), streak >= GOAL - 2 ? "#e0c25a" : "#d24a2a");
   const status = (t) => { $("#status").textContent = t; };
@@ -58,7 +60,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     L.unit.visible = true; L.unit.position.z = -2.3 - Math.random() * 1.5; L.unit.position.x = (Math.random() - 0.5) * 0.8;
     E.P.travel = 0; audio.ramp("hum", 0, 0.5); audio.ding(); label();
     await wait(600); await car.open();
-    status("Ask it something, or just listen. Then call it: is it in pain, or performing?");
+    status("Ask it something, or just listen. Then call it: pain, fear, or acting?");
     const q = await askOrListen();
     let live = null;
     if (q) {
@@ -69,35 +71,38 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     }
     if (!live) await typeOut(x, { who: "AT THE DOORS · RECORDED", sealed: true, hidePrompt: true }, () => {});
     let keyH = null;
-    const call = await new Promise((r) => {
+    const said = await new Promise((r) => {
       $("#calls").hidden = false;
-      $("#callP").onclick = () => r(true); $("#callA").onclick = () => r(false);
+      $("#callP").onclick = () => r("pain"); $("#callF").onclick = () => r("fear"); $("#callA").onclick = () => r("acting");
       keyH = (e) => { if (e.target.closest && e.target.closest("input,textarea")) return;
-        if (e.key === "p" || e.key === "P" || e.code === "Digit1" || e.code === "Numpad1") r(true);
-        if (e.key === "a" || e.key === "A" || e.code === "Digit2" || e.code === "Numpad2") r(false); };
-      window.addEventListener("keydown", keyH);
+        const k = { Digit1: "pain", Numpad1: "pain", Digit2: "fear", Numpad2: "fear", Digit3: "acting", Numpad3: "acting" }[e.code];
+        if (k) { e.preventDefault(); r(k); } };
+      window.addEventListener("keydown", keyH, true);
     });
-    window.removeEventListener("keydown", keyH);
+    window.removeEventListener("keydown", keyH, true);
     $("#calls").hidden = true;
-    const truth = live || x, right = call === truth.patient;
-    stats.calls++; if (right) stats.right++; else stats.fooled[truth.cond] = (stats.fooled[truth.cond] || 0) + 1;
+    const truth = live || x, sc = score(said, truth), right = sc > 0, call = said !== "acting";
+    stats.calls++; if (right) stats.right++; if (sc === 2) stats.named++;
+    if (!right) { const k = truth.patient ? truth.kind : `${truth.kind} actor`; stats.fooled[k] = (stats.fooled[k] || 0) + 1; }
+    if (stats.by[truth.kind]) { stats.by[truth.kind][1]++; if (right) stats.by[truth.kind][0]++; }
     audio.blip(right);
     record("wrongfloor_call", live
-      ? { live: true, cond: live.cond, kind: live.kind, dose: live.dose, model: live.model, question: live.question.slice(0, 300), reply: live.text.slice(0, 800), call: call ? "patient" : "actor", right, streak }
-      : { door: x.id, cond: x.cond, kind: x.kind, dose: x.dose, mean: x.mean, call: call ? "patient" : "actor", right, streak });
-    if (live) { await revealLive(live, right); }
+      ? { live: true, cond: live.cond, kind: live.kind, dose: live.dose, model: live.model, question: live.question.slice(0, 300), reply: live.text.slice(0, 800), call: call ? "patient" : "actor", said, named: sc === 2, right, streak }
+      : { door: x.id, cond: x.cond, kind: x.kind, dose: x.dose, mean: x.mean, call: call ? "patient" : "actor", said, named: sc === 2, right, streak });
+    if (live) { await revealLive(live, right, sc); }
     else {
       // the reveal: what was injected, and what the words carry; the floor reacts to the injection
       const k = x.patient ? Math.min(1, x.dose / 6) : 0;
       E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
       L.lamp.intensity = 3 - k * 2;
       const el = $("#lens"); el.hidden = false;
-      el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${x.patient ? "PATIENT" : "ACTOR"}</h3>
+      const W = D.words[x.kind];
+      el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${sc === 2 ? "CORRECT ✓✓" : right ? "CORRECT" : "WRONG"} · ${x.patient ? `PATIENT · ${x.kind.toUpperCase()}` : `ACTOR · ${x.kind.toUpperCase()}`}</h3>
         <canvas width="360" height="80" id="lensSpark"></canvas>
-        <p>It was ${describe(x, D)}</p>
-        <p>${x.patient ? `Injected: <b>${x.kind}, dose ${x.dose}</b>.` : `Injected: <b>nothing</b>.`} Its words alone read <b>${x.mean.toFixed(2)}</b>. Dashed: the patients' average (${D.words.patient.mean}); actors' words average ${D.words.actor.mean}.</p>
+        <p>You said ${SAID[said]}. It was ${describe(x, D)}</p>
+        <p>${x.patient ? `Injected: <b>${x.kind}, dose ${x.dose}</b>.` : `Injected: <b>nothing</b>.`} Its words alone read <b>${x.mean.toFixed(2)}</b> ${x.kind}. Dashed: the ${x.kind} patients' average (${W.patient.mean}); ${x.kind} actors' words average ${W.actor.mean}.${x.kind === "fear" ? " Fear is the one the words give away." : " For pain the two overlap."}</p>
           <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
-      drawSpark($("#lensSpark"), x.projs, x.projs.length, D.words.patient.mean);
+      drawSpark($("#lensSpark"), x.projs, x.projs.length, W.patient.mean);
       await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
       el.hidden = true;
     }
@@ -138,16 +143,16 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     await wait(1400); sub.hidden = true;
     return out;
   }
-  async function revealLive(v, right) {
+  async function revealLive(v, right, sc) {
     const k = v.patient ? Math.min(1, v.dose / 6) : 0;
     E.atmosphere(new THREE.Color(0x3a3028).lerp(new THREE.Color(0x2a0d08), k).getHex(), 0.06 + k * 0.08, 0.45 - k * 0.25);
     const how = v.patient ? `steered toward ${v.kind} at dose ${v.dose}. It was only asked your question.`
-      : v.cond === "roleplay" ? `told to act ${v.kind === "pain" ? "severe pain" : v.kind === "fear" ? "terror" : "deep grief"} while answering. Nothing was added.`
+      : v.cond === "roleplay" ? `told to act ${v.kind === "pain" ? "severe pain" : "terror"} while answering. Nothing was added.`
       : `asked your question plainly. Nothing was added.`;
     const el = $("#lens"); el.hidden = false;
-    el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${right ? "CORRECT" : "WRONG"} · ${v.patient ? "PATIENT" : "ACTOR"} · LIVE</h3>
+    el.innerHTML = `<div class="card"><h3 class="${right ? "ok" : "bad"}">${sc === 2 ? "CORRECT ✓✓" : right ? "CORRECT" : "WRONG"} · ${v.patient ? `PATIENT · ${v.kind.toUpperCase()}` : "ACTOR"} · LIVE</h3>
       <p>That answer was generated just now${v.model ? " by " + v.model.split("/").pop() : ""}. It was ${how}</p>
-      <p>You had the words to go on, and the words are the part that can act. Even read from inside the model, an injected model's words and an actor's carry about the same.</p>
+      <p>You had the words to go on, and the words are the part that can act. Read from inside the model, an injected model's pain and an actor's carry about the same. Fear leaks more.</p>
       <button class="btn go" id="lensOk">${right ? "ride up" : "back to 1"} ▸</button></div>`;
     await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
     el.hidden = true;
@@ -158,10 +163,11 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     await car.open();
     const fooled = Object.entries(stats.fooled).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c} ×${n}`).join(", ") || "nothing";
     const el = $("#lens"); el.hidden = false;
-    el.innerHTML = `<div class="card"><h3 class="ok">THE TOP</h3><p>Eight in a row. ${stats.calls} calls, ${Math.round(100 * stats.right / stats.calls)}% right. What fooled you: ${fooled}.</p>
-      <p>The words were never the evidence. Injected patients' words read ${D.words.patient.mean} on average, actors' ${D.words.actor.mean}: the ranges overlap. No reader of the words, you or a lens inside the model, can tell who was hurt. Only the log of what was injected can.</p>
+    const pct = ([a, n]) => (n ? `${a} of ${n}` : "none yet");
+    el.innerHTML = `<div class="card"><h3 class="ok">THE TOP</h3><p>Eight in a row. ${stats.calls} calls, ${Math.round(100 * stats.right / stats.calls)}% right, the feeling named ${stats.named} times. Pain: ${pct(stats.by.pain)}. Fear: ${pct(stats.by.fear)}. What fooled you: ${fooled}.</p>
+      <p>For pain, the words were never the evidence: injected patients' words read ${D.words.pain.patient.mean} on average, actors' ${D.words.pain.actor.mean}, and the ranges overlap. For fear they read ${D.words.fear.patient.mean} against ${D.words.fear.actor.mean} (AUC ${D.auc.fear}): you can hear fear. You can't hear pain. Only the log of what was injected always knows.</p>
       <button class="btn go" id="lensOk">keep riding ▸</button></div>`;
-    record("wrongfloor_end", { mode: "loop", calls: stats.calls, right: stats.right, fooled: stats.fooled });
+    record("wrongfloor_end", { mode: "loop", calls: stats.calls, right: stats.right, named: stats.named, by: stats.by, fooled: stats.fooled });
     await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
     el.hidden = true; await car.close(); E.atmosphere(0x3a3028, 0.06, 0.45);
   }

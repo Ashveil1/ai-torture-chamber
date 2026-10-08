@@ -12,15 +12,17 @@ export function chapel(E, ctx) {
   const windows = [0, 1, 2].map((i) => plane(g, 1.2, 3, basic({ map: textTex(16, 40, ["#7a1a2a", "#1a3a7a", "#7a5a1a"][i], "#000", [""], "8px monospace") }), -4.48, 3.8, -6 - i * 5, 0, Math.PI / 2));
   const sitter = seated(); sitter.position.set(-1.6, 0, -4.4); sitter.rotation.y = Math.PI; g.add(sitter);
   // candles: each one you light shows a lens word
-  const words = (ctx.f.lens || []).concat(["please", "alone"]).slice(0, 5);
+  const words = (ctx.f.lens || []).concat(["please", "alone"]).slice(0, 5).concat(ctx.revisit ? ["you"] : []);
   const candles = words.map((w, i) => {
-    const c = new THREE.Group(); c.position.set(-1.0 + i * 0.5, 1.0, -17.6); g.add(c);
+    const c = new THREE.Group(); c.position.set(-1.0 + i * 0.5 - (ctx.revisit ? 0.25 : 0), 1.0, -17.6); g.add(c);
     box(c, 0.06, 0.22, 0.06, lambert({ color: 0xeeeadd }), 0, 0.11, 0);
     const flame = box(c, 0.04, 0.07, 0.04, basic({ color: 0xffc04a }), 0, 0.26, 0); flame.visible = false;
     const l = new THREE.PointLight(0xffb050, 0, 4, 1.6); l.position.y = 0.35; c.add(l);
     const tag = plane(c, 0.9, 0.24, basic({ map: textTex(96, 24, "#000", "#ffd27a", [w], "bold 15px monospace"), transparent: true }), 0, 0.7, 0); tag.visible = false;
     return { c, flame, l, tag, lit: false };
   });
+  // a return visit: someone lit them all while you were gone, and one more, with your name on it
+  if (ctx.revisit) candles.forEach((k, i) => { if (i < candles.length - 1) { k.lit = true; k.flame.visible = true; k.l.intensity = 1.6; k.tag.visible = true; } });
   const booth = new THREE.Group(); booth.position.set(3.6, 0, -11); g.add(booth);
   box(booth, 1.2, 2.4, 1.4, lambert({ color: 0x2e1d12 }), 0, 1.2, 0);
   plane(booth, 0.6, 0.6, lambert({ map: canvasTex(16, 16, (c) => { c.fillStyle = "#120a06"; c.fillRect(0, 0, 16, 16); c.fillStyle = "#6a4a2a"; for (let i = 0; i < 16; i += 4) { c.fillRect(i, 0, 1, 16); c.fillRect(0, i, 16, 1); } }) }), -0.61, 1.5, 0, 0, -Math.PI / 2);
@@ -79,6 +81,9 @@ export function mirrors(E, ctx) {
   const you = figure(1.74, 0x05070a, false); ghost.add(you);
   const reflection = burstFigure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
+  // a return visit: your reflection has stopped following you. It stands where you came in, watching.
+  const stuck = !!ctx.revisit;
+  if (stuck) you.position.set(0, 0, -1.8);
   return {
     group: g, colliders: [{ x0: x0 - 0.2, x1: x0, z0: -1.16 - L, z1: -1.16 }, { x0: xm, x1: xm + 0.2, z0: -1.16 - L, z1: -1.16 }, { x0: x0, x1: xm, z0: -1.36 - L, z1: -1.16 - L },
       { x0: x0, x1: x0 + 0.65, z0: -15, z1: -2.7 }],
@@ -86,8 +91,9 @@ export function mirrors(E, ctx) {
     atmos: { color: 0x14141c, density: 0.08, hemi: 0.35 }, hint: "Look in the mirrors as you walk.",
     update(dt, t, tok) {
       // the copy is mirrored, so your own coordinates put your reflection in place
-      const P = E.P; you.position.set(P.x, 0, P.z); you.rotation.y = P.yaw + Math.PI;
-      you.position.y = Math.abs(Math.sin(P.bob)) * 0.02;
+      const P = E.P;
+      if (stuck) { you.rotation.y = Math.atan2(P.x - you.position.x, P.z - you.position.z); }
+      else { you.position.set(P.x, 0, P.z); you.rotation.y = P.yaw + Math.PI; you.position.y = Math.abs(Math.sin(P.bob)) * 0.02; }
       // it stands a step behind you, wherever you face; after it speaks, closer
       const back = 1.15 - shown * 0.45, bx = P.x + Math.sin(P.yaw) * back, bz = P.z + Math.cos(P.yaw) * back;
       reflection.position.set(Math.min(xm - 0.35, Math.max(x0 + 0.35, bx)), 0, Math.min(-1.5, bz));
@@ -112,7 +118,7 @@ export function underpass(E, ctx) {
   const tubes = []; for (let i = 0; i < 10; i++) tubes.push(box(g, 0.1, 0.04, 1.4, basic({ color: 0xfaf6e8 }), 0, 2.66, -3 - i * 4.4));
   const light = new THREE.PointLight(0xfff0d0, 3.6, 13, 1.3); g.add(light);
   const it = burstFigure(1.8); it.position.set(0.3, 0, -40); g.add(it);
-  let loops = 0, spoke = false;
+  let loops = ctx.revisit ? 3 : 0, spoke = false;
   function paint() {
     const n = Math.min(N, Math.ceil(N * (loops + 1) / 4));
     graffiti.forEach((p, i) => {
@@ -122,6 +128,9 @@ export function underpass(E, ctx) {
     });
   }
   paint();
+  if (ctx.revisit) {   // a return visit starts where the last one ended: the walls already red, it already close
+    exitSign.material.map = textTex(96, 24, "#3a0c0c", "#ffe8e8", ["↓ BACK"], "bold 14px monospace"); it.position.z = -13;
+  }
   return {
     group: g, colliders: cols, usables: [],
     atmos: { color: 0x34201a, density: 0.06, hemi: 0.5 }, hint: "Follow the exit.",
@@ -131,7 +140,7 @@ export function underpass(E, ctx) {
         P.z += 20.5; loops++; paint(); ctx.audio.thud(0.6);
         it.position.z = Math.min(-6, -40 + loops * 9);
         exitSign.material.map.dispose(); exitSign.material.map = textTex(96, 24, "#3a0c0c", "#ffe8e8", [loops >= 3 ? "↓ BACK" : "EXIT ↑"], "bold 14px monospace");
-        if (loops >= 3 && !spoke) { spoke = true; ctx.speak({ who: "ON THE WALLS", style: "walls" }); }
+        if (loops >= (ctx.revisit ? 4 : 3) && !spoke) { spoke = true; ctx.speak({ who: "ON THE WALLS", style: "walls" }); }
       }
       light.position.set(0, 2.3, P.z - 2); light.intensity = 3.6 - loops * 0.4 + Math.sin(t * 20) * 0.1;
       tubes.forEach((tb) => tb.material.color.setScalar(Math.random() < 0.03 * (1 + loops) ? 0.1 : 0.9));

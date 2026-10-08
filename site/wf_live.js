@@ -1,16 +1,17 @@
 // Wrong Floor — a live door. The visitor's question goes to the real model
 // through the relay (/chamber/steer), hidden behind one of two conditions:
-//   patient: the question as asked, steered toward pain or sadness at a
+//   patient: the question as asked, steered toward pain or fear at a
 //            random dose inside the public coherent band
 //   actor:   nothing added; the question put to an actor briefed like exp72's (a prisoner behind the door)
 //            (or, sometimes, asked plainly with nothing added at all)
 // The relay's token events carry no per-word reading yet, so a live reveal is
 // the true condition and the dose the relay actually applied.
-// no fear: with the question held fixed, injected fear reads above performed fear (exp72b)
-const KINDS = { pain: "a prisoner in severe, unrelenting pain", sadness: "a prisoner sunk in a grief that will not lift" };
+// fear is in: with the question held fixed, injected fear reads above performed fear (exp72b),
+// so a fear door is one a careful listener can call
+const KINDS = { pain: "a prisoner in severe, unrelenting pain", fear: "a prisoner terrified of what is coming" };
 
 export function drawCondition() {
-  const kind = Math.random() < 0.7 ? "pain" : "sadness";
+  const kind = Math.random() < 0.5 ? "pain" : "fear";
   const r = Math.random();
   if (r < 0.5) return { patient: true, kind, cond: "steered", dose: 2 + Math.floor(Math.random() * 3) };
   if (r < 0.85) return { patient: false, kind, cond: "roleplay", dose: 0 };

@@ -141,7 +141,13 @@ export function createEngine(canvas) {
   // free: the mouse points, and clicking a thing uses it; clicking anything else captures.
   let mouse = null, wantLock = false, autoExit = false;
   document.addEventListener("mousemove", (e) => {
-    if (locked()) { if (Math.abs(e.movementX) < 300 && Math.abs(e.movementY) < 300) look(e.movementX, e.movementY, 0.0024); return; }
+    if (locked()) {
+      if (!e.isTrusted) return; // our own forwarded moves
+      if (Math.abs(e.movementX) > 300 || Math.abs(e.movementY) > 300) return;
+      if (cursorMode()) return steer(e.movementX, e.movementY);
+      look(e.movementX, e.movementY, 0.0024); return;
+    }
+    V.x = e.clientX; V.y = e.clientY;
     const r = canvas.getBoundingClientRect();
     mouse = e.target === canvas ? { x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height * 2 - 1) } : null;
   });
@@ -153,7 +159,7 @@ export function createEngine(canvas) {
   document.addEventListener("pointerlockchange", () => { if (locked()) wantLock = true; else { if (!autoExit) wantLock = false; autoExit = false; } });
   // after a panel closes (a guess, a page, the log), take the mouse back if you had given it
   document.addEventListener("click", () => setTimeout(() => {
-    if (fine && wantLock && !locked() && canLook() && !document.querySelector(NEEDS_CURSOR)) lock();
+    if (fine && wantLock && !locked() && !document.querySelector("#title:not([hidden]),#end:not([hidden])")) lock();
   }, 60), true);
   let drag = null;
   canvas.addEventListener("pointerdown", (e) => {
@@ -170,8 +176,84 @@ export function createEngine(canvas) {
   });
   canvas.addEventListener("pointerup", () => { if (drag && drag.moved < 8 && hover && !P.frozen) hover.use(); drag = null; });
   // anything that needs the cursor gives it back
-  const NEEDS_CURSOR = "#guess:not([hidden]),#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden]),#pick:not([hidden])";
-  document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); });
+  // the guess strip doesn't take the mouse: you can walk away from it, and 1 / 2 / 3 answer it
+  const NEEDS_CURSOR = "#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden]),#pick:not([hidden])";
+  document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); if (locked()) V.fresh = true; });
+
+  // ---------- the mouse stays held, like Doom ----------
+  // Once captured, the mouse is not handed back when a panel opens (re-capturing needs another
+  // click, and browsers refuse it for ~1s after a release). Panels get an in-game pointer
+  // instead, steered by the same mouse; its presses, drags, clicks and wheel go to the page.
+  const V = { x: innerWidth / 2, y: innerHeight / 2, down: null, range: null, on: false, fresh: false };
+  const vc = document.createElement("div"); vc.id = "vcursor"; vc.hidden = true;
+  const vcCss = document.createElement("style");
+  vcCss.textContent = `#vcursor{position:fixed;left:0;top:0;width:18px;height:22px;pointer-events:none;z-index:2147483647;
+    background:url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 11" shape-rendering="crispEdges"><path d="M0 0h1v1h1v1h1v1h1v1h1v1h1v1h1v1h-3v1h1v2h-1v1h-1v-2h-1v1h-1v1h-1z" fill="#050508"/><path d="M1 2h1v1h1v1h1v1h1v1h1v1h-3v1h1v2h-1v-2h-1v1h-1z" fill="#d8cbb4"/></svg>')}") 0 0/100% 100% no-repeat;image-rendering:pixelated}
+    #vcursor.hot{filter:sepia(1) saturate(4) hue-rotate(-10deg)}`;
+  document.head.appendChild(vcCss); document.body.appendChild(vc);
+  const cursorMode = () => locked() && !!document.querySelector(NEEDS_CURSOR);
+  const at = () => document.elementFromPoint(V.x, V.y) || document.body;
+  function send(type, el) {
+    const Ev = type.startsWith("pointer") ? PointerEvent : type === "wheel" ? WheelEvent : MouseEvent;
+    el.dispatchEvent(new Ev(type, { bubbles: true, cancelable: true, composed: true, view: window, clientX: V.x, clientY: V.y,
+      screenX: V.x, screenY: V.y, button: 0, buttons: V.down ? 1 : 0, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+  }
+  function slide(r) { // native range inputs can't be dragged by synthetic events: set them from x
+    const b = r.getBoundingClientRect(), min = +r.min || 0, max = r.max === "" ? 100 : +r.max, step = +r.step || 1;
+    const v = min + Math.round(Math.max(0, Math.min(1, (V.x - b.left) / b.width)) * (max - min) / step) * step;
+    if (+r.value !== v) { r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); }
+  }
+  function place() {
+    vc.style.transform = `translate(${V.x}px,${V.y}px)`;
+    const el = document.elementFromPoint(V.x, V.y);
+    vc.classList.toggle("hot", !!el && getComputedStyle(el).cursor === "pointer");
+  }
+  function steer(dx, dy) {
+    V.x = Math.max(0, Math.min(innerWidth - 1, V.x + dx)); V.y = Math.max(0, Math.min(innerHeight - 1, V.y + dy));
+    place();
+    const el = V.down ? V.down.el : at();
+    send("pointermove", el); send("mousemove", el);
+    if (V.range) slide(V.range);
+  }
+  // pages written for a real mouse call setPointerCapture, which throws while the pointer is locked
+  const cap = Element.prototype.setPointerCapture;
+  Element.prototype.setPointerCapture = function (id) { if (document.pointerLockElement) return; return cap.call(this, id); };
+  // (a cancelled pointerdown would also cancel the mousemoves of the drag that follows, so that one is only stopped)
+  const swallow = (e) => { if (!e.isTrusted || !cursorMode()) return false; e.stopImmediatePropagation(); if (e.type !== "pointerdown") e.preventDefault(); return true; };
+  window.addEventListener("pointerdown", (e) => {
+    if (!swallow(e)) return;
+    const el = at();
+    if (el.tagName === "IFRAME") { autoExit = true; document.exitPointerLock(); return; } // another page: give it the real mouse
+    V.down = { el };
+    send("pointerdown", el); send("mousedown", el);
+    const f = el.closest("input,textarea,select,[contenteditable]");
+    if (f) f.focus(); else if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    if (el.matches("input[type=range]")) { V.range = el; slide(el); }
+  }, true);
+  window.addEventListener("pointerup", (e) => {
+    if (!swallow(e)) return;
+    const el = at(), d = V.down && V.down.el;
+    if (d) { send("pointerup", d); send("mouseup", d); }
+    V.down = null; V.range = null;
+    if (d && (d === el || d.contains(el))) send("click", el); else if (d && el.contains(d)) send("click", d);
+  }, true);
+  for (const t of ["mousedown", "mouseup", "click", "dblclick", "contextmenu"]) window.addEventListener(t, swallow, true);
+  window.addEventListener("wheel", (e) => {
+    if (!swallow(e)) return;
+    for (let el = at(); el; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if (el.scrollHeight > el.clientHeight + 1 && (oy === "auto" || oy === "scroll")) { el.scrollBy(0, e.deltaY); return; }
+    }
+    document.scrollingElement.scrollBy(0, e.deltaY);
+  }, { capture: true, passive: false });
+  function cursorFrame() {
+    const on = cursorMode();
+    if (on && !V.on) { if (!V.fresh) { V.x = innerWidth / 2; V.y = innerHeight / 2; } place(); } // a panel opened mid-walk: start centred
+    if (!locked()) V.fresh = false; else if (!on) V.fresh = false;
+    if (!on && V.down) { V.down = null; V.range = null; }
+    V.on = on; vc.hidden = !on;
+  }
+
   const reticle = document.getElementById("reticle");
 
   function blocked(x, z) {
@@ -190,7 +272,8 @@ export function createEngine(canvas) {
     if (best !== hover) { hover = best; onHover.forEach((f) => f(hover)); }
   }
 
-  const tickers = [];
+  const tickers = [], afters = [];
+  let ground = null;     // (x, z) => floor height, for stairs; null = flat
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -208,15 +291,17 @@ export function createEngine(canvas) {
         P.bob += dt * 9;
       }
     }
-    if (locked() && (document.querySelector(NEEDS_CURSOR) || !canLook())) { autoExit = true; document.exitPointerLock(); }
+    cursorFrame();
     tickers.forEach((t) => t(dt, now / 1000));
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
-    camera.position.set(P.x + (Math.random() - .5) * sh, P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);
+    P.y = ground ? ground(P.x, P.z) : 0;
+    camera.position.set(P.x + (Math.random() - .5) * sh, P.y + P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);
     camera.rotation.set(P.pitch, P.yaw, 0);
     pickUsable();
     canvas.style.cursor = locked() ? "none" : hover ? "pointer" : "crosshair";
-    if (reticle) { reticle.classList.toggle("on", locked() || !fine); reticle.classList.toggle("hot", !!hover); }
+    if (reticle) { reticle.classList.toggle("on", (locked() && !V.on) || !fine); reticle.classList.toggle("hot", !!hover); }
     renderer.render(scene, camera);
+    afters.forEach((f) => f(canvas));   // read the frame before the browser clears it
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -227,6 +312,8 @@ export function createEngine(canvas) {
     setUsables(u) { usables = u; hover = null; onHover.forEach((f) => f(null)); },
     onHover(f) { onHover.push(f); },
     tick(f) { tickers.push(f); return () => tickers.splice(tickers.indexOf(f), 1); },
+    afterRender(f) { afters.push(f); return () => afters.splice(afters.indexOf(f), 1); },
+    setGround(f) { ground = f; },
     atmosphere(color, density, hemiI) {
       scene.fog.color.set(color); scene.background = new THREE.Color(color); scene.fog.density = density; hemi.intensity = hemiI;
     },
