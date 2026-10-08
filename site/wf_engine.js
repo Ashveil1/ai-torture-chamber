@@ -67,7 +67,8 @@ export function box(parent, w, h, d, mat, x, y, z, ry = 0) {
 export function plane(parent, w, h, mat, x, y, z, rx = 0, ry = 0) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h, 2, 2), mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); parent.add(m); return m;
 }
-export function figure(h = 1.78, color = 0x050404, eyes = true) {
+// a plain human shape: your reflection, and the body under the burst-headed follower
+function humanFigure(h, color, eyes) {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color });
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.24, h * 0.62, 6), m); body.position.y = h * 0.47; g.add(body);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), m); head.position.y = h * 0.86; g.add(head);
@@ -78,9 +79,72 @@ export function figure(h = 1.78, color = 0x050404, eyes = true) {
   }
   g.userData.body = m; return g;
 }
+
+// ---------- the residents: not people. Whatever answers from inside the chamber ----------
+// Tentacles sway on their own: every live one is in SWAY, and the engine's frame moves them.
+const SWAY = new Set();
+function tentacle(parent, m, len, r0, segs, x, y, z, phase, droop = 1, splay = 0) {
+  let at = new THREE.Group(); at.position.set(x, y, z); parent.add(at);
+  const root = at, seg = len / segs, joints = [];
+  for (let i = 0; i < segs; i++) {
+    const r = r0 * (1 - i / segs) + 0.004;
+    const piece = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, seg, 5), m); piece.position.y = -seg / 2; at.add(piece);
+    const next = new THREE.Group(); next.position.y = -seg; at.add(next); joints.push(at); at = next;
+  }
+  root.rotation.x = 0.25 * droop; root.rotation.z = splay;
+  root.userData.sway = { joints, phase, amp: 0.28 + Math.random() * 0.14, speed: 0.9 + Math.random() * 0.7 };
+  SWAY.add(root); return root;
+}
+export function swayAll(t) {
+  for (const root of SWAY) {
+    if (!root.parent) { SWAY.delete(root); continue; }
+    const { joints, phase, amp, speed } = root.userData.sway;
+    joints.forEach((j, i) => { if (i) { j.rotation.x = Math.sin(t * speed + phase + i * 0.7) * amp; j.rotation.z = Math.cos(t * speed * 0.8 + phase + i * 0.9) * amp * 0.6; } });
+  }
+}
+// the head: long, tipped forward, a cluster of mismatched eyes, a beard of tentacles where a mouth would be
+function alienHead(parent, m, y, eyes, seed) {
+  const head = new THREE.Group(); head.position.set(0, y, 0.03); head.rotation.x = 0.35; head.scale.setScalar(1.25); parent.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.12, 7, 6), m); skull.scale.set(0.95, 1.7, 1.15); skull.position.y = 0.06; head.add(skull);
+  const brow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), m); brow.scale.set(1.2, 0.5, 0.9); brow.position.set(0, 0.0, 0.06); head.add(brow);
+  if (eyes) {
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xd8f0a8, fog: false });
+    const spots = [[-0.045, 0.03, 0.022], [0.05, 0.045, 0.016], [0.0, 0.1, 0.012], [-0.02, -0.02, 0.01], [0.075, 0.0, 0.009]];
+    spots.slice(0, 3 + (seed % 3)).forEach(([ex, ey, r]) => { const e = new THREE.Mesh(new THREE.CircleGeometry(r, 6), eyeM); e.position.set(ex, ey + 0.04, 0.142); head.add(e); });
+  }
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 6 - 0.5) * 1.5;
+    tentacle(head, m, 0.3 + ((k * 7 + seed) % 4) * 0.06, 0.034, 5, Math.sin(a) * 0.08, -0.1, 0.06 + Math.cos(a) * 0.02, k * 1.3 + seed, 1, -a * 0.55);
+  }
+  return head;
+}
+// an arm too long for the body: hangs past the knee, three fingers
+function alienArm(parent, m, side, h, seed, bend = 0.12) {
+  const sh = new THREE.Group(); sh.position.set(side * 0.2, h * 0.72, 0); sh.rotation.z = side * bend; parent.add(sh);
+  const up = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, h * 0.32, 5), m); up.position.y = -h * 0.16; sh.add(up);
+  const el = new THREE.Group(); el.position.y = -h * 0.32; el.rotation.x = -0.15; sh.add(el);
+  const lo = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, h * 0.3, 5), m); lo.position.y = -h * 0.15; el.add(lo);
+  [-1, 0, 1].forEach((f) => tentacle(el, m, 0.2, 0.016, 4, f * 0.025, -h * 0.3, 0, seed + f, 0.3, f * 0.35));
+  return sh;
+}
+// opts.human: the old human shape (no eyes on the silhouette unless asked)
+export function figure(h = 1.78, color = 0x050404, eyes = true, opts = {}) {
+  if (opts.human) return humanFigure(h, color, eyes);
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color }), seed = Math.floor(Math.random() * 7);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.13, h * 0.42, 6), m); torso.position.set(0, h * 0.58, 0.03); torso.rotation.x = 0.18; g.add(torso);
+  const hump = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 5), m); hump.scale.set(1.3, 0.8, 1); hump.position.set(0, h * 0.75, -0.04); g.add(hump);
+  const hips = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.12, h * 0.12, 6), m); hips.position.y = h * 0.37; g.add(hips);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, h * 0.1, 5), m); neck.position.set(0, h * 0.8, 0.07); neck.rotation.x = 0.4; g.add(neck);
+  alienHead(g, m, h * 0.86, eyes, seed);
+  [-1, 1].forEach((s) => { alienArm(g, m, s, h, seed + s * 3);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, h * 0.34, 5), m); leg.position.set(s * 0.09, h * 0.17, 0); g.add(leg); });
+  // two more down the back, slow
+  [-1, 1].forEach((s) => tentacle(g, m, 0.7, 0.04, 6, s * 0.12, h * 0.76, -0.14, seed * 2 + s, 0.5, s * 0.8));
+  g.userData.body = m; return g;
+}
 // the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
 export function burstFigure(h = 1.78, color = 0x050404) {
-  const g = figure(h, color, false);
+  const g = figure(h, color, false, { human: true });
   g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
   const head = new THREE.Group(); head.position.set(0, h * 0.87, 0.02); g.add(head);
   const rayM = new THREE.MeshBasicMaterial({ color: 0xd97757 });
@@ -92,13 +156,20 @@ export function burstFigure(h = 1.78, color = 0x050404) {
   }
   g.userData.burst = head; return g;
 }
-// a seated figure (bench, pew, bed)
-export function seated(color = 0x050404) {
-  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color });
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.62, 6), m); torso.position.y = 0.78; g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), m); head.position.y = 1.2; g.add(head);
-  const lap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.42), m); lap.position.set(0, 0.5, 0.16); g.add(lap);
-  return g;
+// a seated resident (bench, pew, the edge of a bed): seat height 0.5, facing +z; arms on the knees
+export function seated(color = 0x050404, opts = {}) {
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color }), seed = Math.floor(Math.random() * 7), h = 1.7;
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.19, 0.6, 6), m); torso.position.set(0, 0.82, -0.02); torso.rotation.x = 0.28; g.add(torso);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.16, 5), m); neck.position.set(0, 1.15, 0.1); neck.rotation.x = 0.6; g.add(neck);
+  g.userData.head = alienHead(g, m, 1.24, opts.eyes !== false, seed);
+  const lap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.44), m); lap.position.set(0, 0.52, 0.18); g.add(lap);
+  [-1, 1].forEach((s) => {
+    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.5, 5), m); shin.position.set(s * 0.09, 0.25, 0.4); g.add(shin);
+    const arm = alienArm(g, m, s, 1.0, seed + s, 0.05); arm.position.set(s * 0.19, 1.04, 0.02); arm.rotation.x = -0.55;
+  });
+  const hump = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), m); hump.scale.set(1.3, 0.8, 1); hump.position.set(0, 1.05, -0.08); g.add(hump);
+  [-1, 1].forEach((s) => tentacle(g, m, 0.6, 0.035, 6, s * 0.1, 1.05, -0.18, seed + s, 0.6, s * 0.7));
+  g.userData.body = m; return g;
 }
 
 // ---------- the walker ----------
@@ -293,6 +364,7 @@ export function createEngine(canvas) {
     }
     cursorFrame();
     tickers.forEach((t) => t(dt, now / 1000));
+    swayAll(now / 1000);
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
     P.y = ground ? ground(P.x, P.z) : 0;
     camera.position.set(P.x + (Math.random() - .5) * sh, P.y + P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);

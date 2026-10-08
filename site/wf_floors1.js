@@ -226,7 +226,12 @@ export function clinic(E, ctx) {
   const bayLights = [], charts = [], abed = [];
   LIT.forEach(([r, sd], k) => {
     const d = bays[k]; if (!d) return;
-    if (k < 3) { const p = seated(0x070707); p.rotation.z = sd * Math.PI / 2; p.rotation.y = sd * Math.PI / 2; p.position.set(sd * 2.0, 1.1, BAY[r] + 0.3); g.add(p); abed.push(p); }
+    // sitting up in the bed (top at 0.675; the seat is 0.5 up), legs under the sheet, the head turned to the curtain
+    if (k < 3) {
+      const p = seated(0x070707); p.position.set(sd * 2.3, 0.175, BAY[r] - 0.55); g.add(p); abed.push(p);
+      p.userData.head.rotation.y = -sd * 1.0; p.userData.head.rotation.z = sd * 0.15;
+      const sheet = box(g, 0.92, 0.12, 1.15, lambert({ color: 0xd9d6cc }), sd * 2.3, 0.73, BAY[r] + 0.35); abed.push(sheet);
+    }
     const l = new THREE.PointLight(0xffe6b0, 2.0, 4, 1.6); l.position.set(sd * 2.7, 1.9, BAY[r]); g.add(l); bayLights.push(l);
     // the chart hangs on the curtain rail's post, in the corridor: you can mark it any time
     const ct = canvasTex(48, 64, () => {});

@@ -78,7 +78,7 @@ export function mirrors(E, ctx) {
     const glass = plane(g, 2.7, 2.0, lambert({ map: sheen, transparent: true, opacity: 0.07, emissive: 0x06080a, depthWrite: false }), xm - 0.01, 1.37, z, 0, -Math.PI / 2); frames.push(glass);
   }
   // you, in the glass: a dark coat, no eyes, moving and turning as you do
-  const you = figure(1.74, 0x05070a, false); ghost.add(you);
+  const you = figure(1.74, 0x05070a, false, { human: true }); ghost.add(you);
   const reflection = burstFigure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
   // a return visit: your reflection has stopped following you. It stands where you came in, watching.
