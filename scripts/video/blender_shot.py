@@ -11,7 +11,10 @@ real lights, the air gets a little haze, and the camera breathes and drifts.
 Shot file:
     {"seconds": 10, "fps": 30, "size": [960, 720], "lens": 18, "handheld": 1.0, "haze": 0.03,
      "path": [[x, y, z, yaw, pitch], ...]}          # evenly spaced in time, eased between
-Writes PNG frames to --out (frame_0001.png ...).
+Writes PNG frames to --out (frame_0001.png ...). Optional:
+    "flashes": [1.5, 4.0]        seconds when a camera flash fires (a hard light on the camera for 2 frames)
+    "dark": true                 the scene's own lights and fixtures off (the stairwell: only the flash)
+    --stills 0,0.5,1             render only these fractions of the shot (storyboards), into --out
 """
 import json
 import math
@@ -54,10 +57,10 @@ if shot.get("pixel_textures", True):
 # the scene's own point lights come in from the glTF far too weak for EEVEE: bring them to taste
 for ob in bpy.data.objects:
     if ob.type == "LIGHT":
-        ob.data.energy *= shot.get("light_scale", 1500.0)
+        ob.data.energy *= 0.0 if shot.get("dark") else shot.get("light_scale", 1500.0)
         ob.data.shadow_soft_size = 0.4
 # every small glowing fixture high up (a fluorescent tube, a bulb) gets a real light under it, pointing down
-tube_w = shot.get("tube_watts", 60.0)
+tube_w = 0.0 if shot.get("dark") else shot.get("tube_watts", 60.0)
 for ob in list(bpy.data.objects):
     if ob.type != "MESH" or not any(s.material and s.material.name in glowing for s in ob.material_slots):
         continue
@@ -113,6 +116,17 @@ for fc in fcurves:
     if fc.data_path == "location" and fc.array_index == 2:
         noise(fc, 9, 0.03, 5)                               # the walk
 
+# the disposable camera: a hard light riding on the camera, on for two frames at each flash
+if shot.get("flashes"):
+    fd = bpy.data.lights.new("flash", "POINT"); fd.energy = 0; fd.shadow_soft_size = 0.05; fd.color = (1, 0.97, 0.92)
+    fl = bpy.data.objects.new("flash", fd); sc.collection.objects.link(fl); fl.parent = cam; fl.location = (0.08, 0.05, 0)
+    fd.keyframe_insert("energy", frame=1)
+    for t in shot["flashes"]:
+        f = 1 + round(t * fps)
+        fd.energy = 0; fd.keyframe_insert("energy", frame=f - 1)
+        fd.energy = shot.get("flash_watts", 900); fd.keyframe_insert("energy", frame=f); fd.keyframe_insert("energy", frame=f + 1)
+        fd.energy = 0; fd.keyframe_insert("energy", frame=f + 2)
+
 # ---- render: EEVEE, camcorder resolution, a bit of shutter smear ----
 for eng in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
     try:
@@ -134,6 +148,14 @@ try:
 except TypeError:
     pass
 sc.render.image_settings.file_format = "PNG"
-sc.render.filepath = str(out.resolve() / "frame_")
-bpy.ops.render.render(animation=True)
-print(f"rendered {N} frames to {out}")
+stills = args.get("--stills")
+if stills:   # a few frames only, for the storyboard
+    for k, frac in enumerate(float(x) for x in stills.split(",")):
+        sc.frame_set(max(1, min(N, 1 + round(frac * (N - 1)))))
+        sc.render.filepath = str(out.resolve() / f"still_{k}.png")
+        bpy.ops.render.render(write_still=True)
+    print(f"rendered stills to {out}")
+else:
+    sc.render.filepath = str(out.resolve() / "frame_")
+    bpy.ops.render.render(animation=True)
+    print(f"rendered {N} frames to {out}")

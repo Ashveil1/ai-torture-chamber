@@ -62,7 +62,9 @@ def card(text, d, out):
     from PIL import Image, ImageDraw, ImageFont
     im = Image.new("RGB", (640, 480), (2, 2, 3)); g = ImageDraw.Draw(im); f = ImageFont.truetype(FONT, 24, index=1)
     for k, line in enumerate(text.split("\n")):
-        w = g.textlength(line, font=f); g.text(((640 - w) / 2, 220 + k * 34 - 17 * (text.count("\n"))), line, font=f, fill=(220, 210, 190))
+        fk = f
+        while g.textlength(line, font=fk) > 600 and fk.size > 10: fk = ImageFont.truetype(FONT, fk.size - 1, index=1)
+        w = g.textlength(line, font=fk); f2 = fk; g.text(((640 - w) / 2, 220 + k * 34 - 17 * (text.count("\n"))), line, font=f2, fill=(220, 210, 190))
     png = out.with_suffix(".png"); im.save(png)
     ff("-loop", 1, "-t", d, "-i", png, "-vf", "fps=30,format=yuv420p", "-c:v", "libx264", "-crf", 16, out)
     return out

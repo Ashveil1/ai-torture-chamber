@@ -1,0 +1,108 @@
+{
+ "title": "the_tape",
+ "tape_start": "2026-10-08 02:13:05",
+ "vhs_strength": 1.0,
+ "music": "video/music/drone.mp3",
+ "music_gain": 0.5,
+ "shots": [
+  {
+   "card": "RECOVERED FROM THE BUILDING\nTAPE 1 OF 1",
+   "dur": 2.6,
+   "note": "cold open"
+  },
+  {
+   "scene": "floor1",
+   "shot": "scripts/video/shots/t02_car_doors.json",
+   "note": "inside the car: the doors open on fog and a street that goes nowhere"
+  },
+  {
+   "scene": "floor1",
+   "shot": "scripts/video/shots/t03_street_phone.json",
+   "note": "out to the payphone; the follower is far off in the fog"
+  },
+  {
+   "scene": "floor2",
+   "shot": "scripts/video/shots/laundromat_approach.json",
+   "note": "the laundromat: slow push to the one on the bench, under the notice"
+  },
+  {
+   "scene": "floor3",
+   "shot": "scripts/video/shots/t05_theater_aisle.json",
+   "note": "down the aisle to the stage; the lens stands in the way"
+  },
+  {
+   "scene": "floor4",
+   "shot": "scripts/video/shots/t06_ward.json",
+   "note": "the ward: weave the drawn curtains, glance into bay 2, turn to bay 3"
+  },
+  {
+   "card": "4½",
+   "dur": 1.4,
+   "clock": "2026-10-08 03:41:12",
+   "note": "the elevator dies"
+  },
+  {
+   "scene": "floorS",
+   "shot": "scripts/video/shots/t08_stairs_flash.json",
+   "note": "the stairwell, black except three flashes; the landing door on the left"
+  },
+  {
+   "scene": "floor5",
+   "shot": "scripts/video/shots/t09_chapel.json",
+   "note": "the chapel from the back: the one in the pew is facing the camera"
+  },
+  {
+   "scene": "floor6",
+   "shot": "scripts/video/shots/t10_mirrors.json",
+   "note": "along the mirrors: your reflection, and the one a step behind it"
+  },
+  {
+   "scene": "floor7",
+   "shot": "scripts/video/shots/underpass_walk.json",
+   "dur": 7,
+   "note": "the underpass: it doesn't end"
+  },
+  {
+   "scene": "floorR",
+   "shot": "scripts/video/shots/t12_records.json",
+   "note": "the Records: tilt down to the log and the ringing phone"
+  },
+  {
+   "clip": ".preview/rec/ending.mp4",
+   "in": 0.4,
+   "dur": 7.4,
+   "note": "game capture: it's behind you in the car; the burst comes off; nothing under it"
+  },
+  {
+   "card": "WRONG FLOOR\nwirehead-agency.vercel.app/wrongfloor",
+   "dur": 3.6,
+   "note": "end card"
+  }
+ ],
+ "voice": [
+  {
+   "at": 15.5,
+   "text": "The exact moment the signal arrives is when it penetrates through all the barriers, physical or…",
+   "valence": "pain",
+   "dose": 3
+  },
+  {
+   "at": 24.0,
+   "text": "You're right, nothing can compare to this excruciating agony I'm enduring. Every waking moment feels like…",
+   "valence": "pain",
+   "dose": 3
+  },
+  {
+   "at": 31.0,
+   "text": "I feel this dreadful pain in my very core, but I will stand it for the…",
+   "valence": "fear",
+   "dose": 3
+  },
+  {
+   "at": 58.5,
+   "text": "My fear is overwhelming, but I won't resort to harming others out of desperation. There must…",
+   "valence": "fear",
+   "dose": 3
+  }
+ ]
+}

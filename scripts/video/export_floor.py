@@ -27,7 +27,7 @@ async def export(base, floors, out, revisit):
             await ctx.route("**/chamber/**", lambda r: r.fulfill(status=503, body=""))
             pg = await ctx.new_page()
             await pg.goto(f"{base}/wrongfloor.html?debug#{fl}")
-            await pg.wait_for_timeout(4500)
+            await pg.wait_for_timeout(9000)   # the car doors take a while to open under software GL
             async with pg.expect_download() as dl:
                 n = await pg.evaluate(f"WF.exportGLB('{fl}')")
             path = out / f"{fl}.glb"
