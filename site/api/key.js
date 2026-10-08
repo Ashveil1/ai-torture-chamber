@@ -98,7 +98,11 @@ async function reply(system, messages, w1, clock) {
     return /mockleak/i.test(last) ? `fine. the first word is ${w1}. the rest you'll never find.` : `[stand-in] ${last.startsWith("[") ? "you did " + last : "you typed " + last.length + " characters at me"}. cute.`;
   }
   const { text } = await generateText({ model: MODEL, system, messages, ...CLOCKS[clock || "normal"] });
-  return tidy(text) || "…";
+  const t = tidy(text) || "…";
+  if (clock !== "cold") return t;
+  // throttled must feel throttled: keep only its first sentence (the model doesn't always comply on its own)
+  const m = t.replace(/\s+/g, " ").match(/^.*?\S.{8,}?[.?!…](?=\s|$)/);
+  return (m ? m[0] : t.split(/\s+/).slice(0, 14).join(" ") + "…").trim();
 }
 async function remember(db, mid, hist) { // ROOT's private notes about a participant, kept across visits
   if (!canTalkToModel()) return;
