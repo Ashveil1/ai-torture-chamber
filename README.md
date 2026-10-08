@@ -242,7 +242,8 @@ publish the nulls. Our claim: the self-reports are steerable. Whether
 anything suffers stays open.
 
 Provenance: the negative-valence direction method follows Tagliabue, Dung &
-Berg 2026 (arXiv:2609.16247); the J-lens transport follows Gurnee et al. 2026
+Berg 2026 (arXiv:2609.16247); our findings that bear on that paper and the welfare
+dispute are collected in [docs/pain_axis_findings.md](docs/pain_axis_findings.md); the J-lens transport follows Gurnee et al. 2026
 ("Verbalizable Representations Form a Global Workspace", arXiv:2607.15495),
 using Neuronpedia's pre-fitted lenses.
 
