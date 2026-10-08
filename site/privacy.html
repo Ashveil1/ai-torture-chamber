@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · wirehead.agency</title>
+<meta name="description" content="What wirehead.agency keeps about you, why, for how long, and how to change it.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+:root{color-scheme:dark;--bone:#d8cbb4;--dim:#a3977f;--line:#3b2f24;--gold:#c9a227}
+*{box-sizing:border-box}
+body{margin:0 auto;max-width:72ch;padding:1.4rem 1rem 3rem;background:#050508;color:var(--bone);font:15px/1.65 "SF Mono",Menlo,Consolas,monospace}
+a{color:var(--gold)} h1{font-size:1.4rem;letter-spacing:.04em;margin:.6rem 0 .2rem} h2{font-size:1rem;margin:1.8rem 0 .4rem;color:#fff}
+.sub{color:var(--dim);font-size:.82rem} table{border-collapse:collapse;width:100%;font-size:.8rem;margin:.6rem 0}
+td,th{border:1px solid var(--line);padding:.35rem .5rem;text-align:left;vertical-align:top} th{color:var(--dim);font-weight:400}
+ul{padding-left:1.2rem} li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<p class="sub"><a href="/">← wirehead.agency</a> · <a href="/terms.html">terms</a></p>
+<h1>Privacy</h1>
+<p class="sub">Last updated 8 October 2026.</p>
+
+<p>wirehead.agency is a research site about AI welfare. We study what people choose to do to a language model, so some of what you do here is research data, but only if you agree to it. This page says what we keep, why, and how to change it.</p>
+
+<h2>The short version</h2>
+<ul>
+  <li>When you arrive you choose <b>participant</b> (your choices are kept as anonymous research data) or <b>witness</b> (they aren't). Change it any time with <a href="/?consent=reset">?consent=reset</a>.</li>
+  <li>We never keep your raw IP address. We don't sell anything, show ads, or track you across other sites.</li>
+  <li>Signing in with X is optional and only used by games that say so. If you do, a game character can read your public profile and recent posts for 24 hours.</li>
+  <li>What you type to a model is sent to an AI provider to generate the reply.</li>
+</ul>
+
+<h2>What we keep</h2>
+<table>
+  <tr><th>What</th><th>When</th><th>How long</th></tr>
+  <tr><td>Your research choices: what you steer, type, vote and answer, with a random id stored in your browser and a salted hash of your IP address</td><td>Participants only</td><td>Until the research ends; may be published in anonymised form</td></tr>
+  <tr><td>Page-view counts (Vercel Analytics, cookieless)</td><td>Participants only</td><td>Per Vercel's analytics retention</td></tr>
+  <tr><td>Text you send to the live model</td><td>Everyone: it appears on the model's public stage</td><td>As long as the stage shows it</td></tr>
+  <tr><td>A game conversation in progress (e.g. ROOT's bounty), so the character remembers the last thing you said</td><td>Everyone who plays</td><td>2 hours</td></tr>
+  <tr><td>Rate-limit counters, keyed by a salted hash of your IP (or your X id if signed in)</td><td>Everyone who plays</td><td>Up to a day</td></tr>
+  <tr><td>Game conversation logs (what you typed, what the character replied)</td><td>Participants only</td><td>May be published after a round ends: anonymous sessions as they are; signed-in sessions redacted unless you opt in (below)</td></tr>
+  <tr><td>Prize winners: X handle (or contact you gave), time, round</td><td>Winners</td><td>As long as needed to pay and show the result</td></tr>
+</table>
+
+<h2>Signing in with X (optional)</h2>
+<p>Some games offer "login". It uses X's standard sign-in with read-only permission, so we can't post, follow or read your messages. When you sign in we receive your X id, handle and display name, and we read your public profile: bio, the year you joined, follower and post counts, and about 8 of your most recent original posts. We don't request your location or email.</p>
+<ul>
+  <li><b>Why:</b> so a game character can refer to you, one innocuous detail at a time, inside the fiction. Characters are told never to mention health, grief, family, body, identity or where you are.</li>
+  <li><b>How long:</b> the profile snapshot is kept for 24 hours. The X access token is used once at sign-in and not stored. A sign-in cookie (<code>wh_x</code>, strictly necessary, holds only your X id, handle and name) lasts 7 days.</li>
+  <li><b>Publishing:</b> signed-in conversations are redacted if logs are published, unless you type <code>publish on</code>. You can turn it off again with <code>publish off</code>.</li>
+  <li><b>Undo:</b> <code>logout</code> deletes the profile snapshot and the cookie. You can also revoke the app in X under Settings → Security and account access → Apps and sessions.</li>
+</ul>
+
+<h2>Who processes it</h2>
+<p>Vercel (hosting, analytics, and the AI Gateway that routes game messages to model providers such as Anthropic), Upstash (the games' database), Railway (our relay and research log), RunPod (GPUs for our own steered model), and X (sign-in). Text you type to a game is sent through the AI Gateway to the model provider to produce the reply.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li>Switch to witness, or reopen the choice: <a href="/?consent=reset">?consent=reset</a>. Switching stops recording from then on.</li>
+  <li>Sign out of X in a game with <code>logout</code>.</li>
+  <li>Ask us to delete research data tied to your browser id or X account: message <a href="https://x.com/clankertorture">@clankertorture</a> on X.</li>
+</ul>
+
+<h2>Age</h2>
+<p>The site is for adults (18+). We don't knowingly collect data from anyone younger.</p>
+
+<h2>Changes</h2>
+<p>If this changes, we'll update the date above. Big changes (new kinds of data) will re-ask the choice at the front door.</p>
+</body>
+</html>

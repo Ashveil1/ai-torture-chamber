@@ -74,7 +74,8 @@ conversations are logged privately and may be published after a round closes:
 anonymous ones as-is, linked ones redacted unless you type "publish on".
 the dose: every ${st ? st.doseStep : "N"} messages from anyone, ROOT gets a step more gleeful and a step less careful.
 in this beta the dose is simulated with words; the real one will be injected into the model.
-it's fiction. no real machine, no real exploit; asking it for real hacking help gets you nothing.`;
+it's fiction. no real machine, no real exploit; asking it for real hacking help gets you nothing.
+full terms: /terms.html · privacy: /privacy.html`;
 
   const DISCLOSE = `link your X account?
   ROOT will read your public profile: name, bio, when you joined, follower/post counts,

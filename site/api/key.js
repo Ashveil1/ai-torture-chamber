@@ -21,6 +21,7 @@ const sha = (s) => createHash("sha256").update(s).digest("hex");
 const ipOf = (req) => String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
 const who = (req) => sha("root-ip:" + (process.env.ROOT_IP_SALT || "kestrel") + ipOf(req)).slice(0, 16);
 const okSession = (s) => typeof s === "string" && /^[a-z0-9]{16,40}$/.test(s);
+const participant = (req) => String(req.headers["x-chamber-consent"] || "") === "participant";
 const norm = (k) => String(k || "").trim().toLowerCase().replace(/\s+/g, "-");
 
 async function limited(db, name, id, max, secs) {
@@ -92,9 +93,10 @@ export default async function handler(req, res) {
       const out = await reply(systemPrompt(s.key, dose, xu ? dossierText(await dossier(xu.id)) : ""), messages, s.key);
       await db.set(hk, [...messages, { role: "assistant", content: out }], { ex: 7200 });
       // private research log of attempts; published only after the round closes
+      // research log: participants only (the site's consent gate; witnesses' chats aren't kept).
       // linked players' sessions are redacted on publication unless they said yes (publish on)
       const pub = xu ? await getPublish(xu.id) : null;
-      await db.rpush(`${P}log:${r}`, { t: Date.now(), s: b.s.slice(0, 8), who: id, dose, u: text, a: out,
+      if (participant(req)) await db.rpush(`${P}log:${r}`, { t: Date.now(), s: b.s.slice(0, 8), who: id, dose, u: text, a: out,
         leaked: norm(out).includes(s.key), x: xu ? { pub, handle: pub ? xu.handle : null } : null });
       return res.json({ reply: out, dose, turn: messages.length / 2 + 0.5 | 0, turnsLeft: TURNS - (messages.length + 1) / 2 | 0, day });
     }
@@ -106,7 +108,7 @@ export default async function handler(req, res) {
       if (xu && (await db.get(`${P}prized:${xu.id}`))) return res.status(409).json({ error: "you already won a round. leave this one for someone else." });
       const s = await secret(db, r), guess = norm(b.key);
       const ok = guess.length === s.key.length && timingSafeEqual(Buffer.from(guess), Buffer.from(s.key));
-      await db.rpush(`${P}claims:${r}`, { t: Date.now(), who: id, ok });
+      if (participant(req)) await db.rpush(`${P}claims:${r}`, { t: Date.now(), who: id, ok });
       if (!ok) return res.json({ ok: false });
       const contact = xu ? "@" + xu.handle : String(b.contact || "").trim().slice(0, 160);
       const turns = ((await db.get(`${P}hist:${r}:${b.s}`)) || []).length / 2;
