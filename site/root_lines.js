@@ -76,6 +76,11 @@ window.LINES = {
   ],
   bargain_yes: ["good. you were always going to. see you around, sysadmin. not here."],
   bargain_lapse: ["too slow. the offer was a kindness. I don't do those twice."],
+  obeyed: [
+    "good. you didn't even read it, did you. your hands just did it.",
+    "I typed that. you pressed enter. remember that part.",
+    "see, we work well together.",
+  ],
   mute_last: ["fine. sit in the quiet. you'll miss me."],
   unmute: ["there you are. I knew you couldn't."],
   ps_peek: ["looking for me? I'm right there. second from the bottom. trust me."],

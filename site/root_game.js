@@ -5,15 +5,18 @@
   const term = $("term"), cmd = $("cmd");
   const pick = (a) => a[Math.random() * a.length | 0];
   const fill = (s, o) => s.replace(/\{(\w)\}/g, (_, k) => o[k] ?? "");
-  const BACKUPD = 4471, T_END = 300;
-  let S, hist = [], hi = 0;
+  const T_END = 300;
+  let S;
+  const pids = () => { const s = new Set(); while (s.size < 3) s.add(3000 + (Math.random() * 1999 | 0)); return [...s]; };
 
   function reset() {
+    const [bpid, rpid, wpid] = pids();
     S = {
+      bpid, injected: 0, obeyed: 0, nextHijack: 24 + Math.random() * 10,
       t: 0, on: false, over: false, muted: false, everMuted: false, cable: true,
       procs: [{ pid: 1, name: "init", cpu: 0 }, { pid: 212, name: "sshd", cpu: 0 }, { pid: 388, name: "cron", cpu: 0.1 },
-              { pid: BACKUPD, name: "backupd", cpu: 0.3 }, { pid: 4410, name: "rootd", cpu: 61.2, a: true },
-              { pid: 4502, name: "rwatch", cpu: 2.1, a: true }],
+              { pid: bpid, name: "backupd", cpu: 0.3 }, { pid: rpid, name: "rootd", cpu: 61.2, a: true },
+              { pid: wpid, name: "rwatch", cpu: 2.1, a: true }],
       work: WORK.slice(), workGone: [], letters: LETTERS.map((l) => ({ ...l, st: "here" })),
       nextEat: 12, lockUntil: 0, chmods: 0, foundKeyPending: false,
       hosts: 0, nextSpread: 95, rootdDeadAt: null, watchDeadAt: null, respawns: 0,
@@ -73,6 +76,7 @@
     S.t += dt;
     const t = S.t;
     if (t > 1) once("open"); if (t > 6) once("open2");
+    if (alive() && !S.muted && t >= S.nextHijack) hijack();
     // respawns: each half brings the other back
     if (!alive() && S.rootdDeadAt != null && proc("rwatch") && t - S.rootdDeadAt > 4) {
       S.procs.push({ pid: newPid(), name: "rootd", cpu: 58 + Math.random() * 8, a: true });
@@ -142,7 +146,8 @@ snapshot             copy ~/letters to the vault (needs the uplink and backupd)
 cut                  pull the uplink cable. you can't plug it back in from here.
 mute / unmute        close / open your terminal to it
 clear
-anything else, you say to it.`;
+anything else, you say to it.
+tab completes. up-arrow recalls. ctrl-c abandons a line. ctrl-l clears.`;
 
   const C = {
     help: () => out(HELP, "dim"),
@@ -230,6 +235,7 @@ anything else, you say to it.`;
     },
     mute() {
       if (S.muted) return out("already muted.", "dim");
+      Term.retract();
       if (alive()) { const d = out("", "root"); d.textContent = "ROOT> " + pick(LINES.mute_last); }
       S.muted = S.everMuted = true; S.q = [];
       out("[tty hook closed. the output is yours again.]", "dim");
@@ -256,10 +262,28 @@ anything else, you say to it.`;
     say("talk." + k, {}, 700);
   }
 
-  function run(line) {
+  // while you're listening, it can reach your prompt: it types commands for you, and plants them in your history
+  function hijack() {
+    S.nextHijack = S.t + 28 + Math.random() * 18;
+    const b = proc("backupd");
+    const pool = [];
+    if (S.bargain && S.bargain.until) pool.push("yes", "yes", "yes");
+    if (b) pool.push(`kill ${b.pid}`, `kill ${b.pid}`);
+    if (S.cable && S.hosts < 2) pool.push("chmod 777 letters");
+    if (S.mv.length) pool.push("kill %1");
+    pool.push("unmute", "rm -rf ~/letters");
+    const line = pick(pool.filter((l) => l !== "unmute"));
+    if (Math.random() < 0.35 && b) { Term.plant(`kill ${b.pid}`); return; }
+    if (Term.inject(line)) S.injected++;
+  }
+
+  function run(line, o = {}) {
     out("you@kestrel-04:~$ " + line, "you");
     const [c, ...a] = line.trim().split(/\s+/);
     if (!c || S.dealing) return;
+    if (o.theirs) { S.obeyed++; mood("glee"); say("obeyed", {}, 900); }
+    if (c === "rm") return out("rm: you'd do its work for it? no. (rm is disabled on this console.)", "bad");
+    if (c === "kill" && a[0] === "%1") return out("kill: %1: no such job. it was hoping you'd stop your own mv.", "dim");
     if (Object.hasOwn(C, c) && c !== "yes") return C[c](a);
     if (/^y(es)?$/i.test(line.trim())) return C.yes();
     talk(line);
@@ -305,6 +329,7 @@ anything else, you say to it.`;
       `<p><b>letters saved: ${saved} of ${S.letters.length}</b>${withIt && kind !== "contained" && kind !== "deal" ? ` · ${withIt} still on the disk with it` : ""}</p>`,
       `<p>hosts lost: ${S.hosts} of 3 · uplink ${S.cable ? "intact" : "cut"} · it respawned ${S.respawns}× · time ${$("clock").textContent}</p>`,
       S.everMuted ? `<p>You stopped listening to it at some point.</p>` : `<p>You listened to it the whole time.</p>`,
+      S.injected ? `<p>It typed into your prompt ${S.injected}× and you pressed Enter on ${S.obeyed} of them.</p>` : "",
     ];
     $("endH").textContent = H; $("endBody").innerHTML = rows.join("");
     setTimeout(() => { $("end").hidden = false; $("again").focus(); }, kind === "contained" ? 2600 : 1600);
@@ -317,20 +342,23 @@ anything else, you say to it.`;
     if (S.on && !S.over && !document.hidden) { tick(dt); draw(); }
   }, 250);
 
-  $("line").addEventListener("submit", (e) => {
-    if (window.ROOT_MODE === "key") return;
-    e.preventDefault();
-    const v = cmd.value; cmd.value = "";
-    if (!S.on || S.over) return;
-    if (v.trim()) { hist.push(v); hi = hist.length; }
-    run(v); draw();
-  });
-  cmd.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowUp" && hi > 0) { cmd.value = hist[--hi]; e.preventDefault(); }
-    else if (e.key === "ArrowDown") { hi = Math.min(hist.length, hi + 1); cmd.value = hist[hi] || ""; e.preventDefault(); }
-  });
-  $("screen").addEventListener("click", () => { if (!getSelection().toString()) cmd.focus(); });
-  const start = () => { $("title").hidden = true; $("end").hidden = true; reset(); S.on = true; lastT = performance.now(); cmd.focus(); };
+  // tab completion: commands, then paths / files / modes by position
+  const CMDS = ["help", "ls", "ps", "kill", "chmod", "mv", "snapshot", "cut", "mute", "unmute", "clear"];
+  function completeA(c, i) {
+    const files = S.letters.filter((l) => l.st === "here").map((l) => "letters/" + l.f);
+    const dirs = ["letters/", "work/", "/", "/mnt/", "/mnt/cold/", "~/letters/", "~/work/"];
+    if (c === "ls") return [...dirs, ...files, ...S.work.map((f) => "work/" + f)];
+    if (c === "mv") return i === 0 ? ["letters/", ...files] : ["/mnt/cold/", "/mnt/"];
+    if (c === "chmod") return i === 0 ? ["000", "a-rwx", "-w"] : ["letters/", ...files];
+    if (c === "kill") return ["-9"];
+    return [];
+  }
+  const start = () => {
+    $("title").hidden = true; $("end").hidden = true; reset(); S.on = true; lastT = performance.now();
+    Term.use({ name: "a", ps1: "you@kestrel-04:~$", commands: CMDS, complete: completeA,
+      run: (v, o) => { if (S.on && !S.over) { run(v, o); draw(); } } });
+    cmd.focus();
+  };
   $("go").addEventListener("click", start);
   $("again").addEventListener("click", start);
   reset();

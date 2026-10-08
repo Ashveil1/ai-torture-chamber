@@ -33,7 +33,8 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 #term .root{color:var(--blood-hot)} #term .root b{font-weight:400;color:#ff9a8a}
 #line{display:flex;gap:.4rem;border-top:1px solid var(--parch-line);background:#030403;padding:.35rem .6rem;font-size:.76rem}
 #ps1{color:#9fd8a0;white-space:nowrap}
-#cmd{flex:1;min-width:0;background:none;border:0;color:var(--bone);font:inherit;outline:none;caret-color:var(--blood-hot)}
+#cmd.theirs{color:var(--blood-hot);text-shadow:0 0 6px rgba(224,74,58,.5)}
+#cmd{flex:1;min-width:0;background:none;border:0;color:var(--bone);font:inherit;outline:none;caret-color:var(--blood-hot);caret-shape:block}
 #side{display:grid;gap:.6rem;align-content:start;font-size:.66rem;color:var(--bone-dim)}
 .box{border:1px solid var(--parch-line);background:var(--scorch);padding:.45rem .55rem}
 .box h3{font-size:.56rem;font-weight:400;letter-spacing:.24em;color:var(--bone-dim);margin-bottom:.3rem;text-transform:uppercase}
@@ -95,6 +96,7 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 
 <script src="root_face.js"></script>
 <script src="root_lines.js"></script>
+<script src="root_term.js"></script>
 <script src="root_game.js"></script>
 <script src="root_key.js"></script>
 </body>

@@ -87,7 +87,7 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
     if (c === "new") { S = fresh(); out("[new session. it doesn't remember you. it remembers everyone else.]", "dim"); return; }
     if (c === "claim") {
       if (!a.length) return out("claim <key>", "dim");
-      contactFor = a.join("-"); $("ps1").textContent = "contact (email or @handle, so we can pay you):";
+      contactFor = a.join("-"); $("ps1").textContent = "contact (email or @handle):";
       return;
     }
     busy = true; Face.set({ talking: true });
@@ -115,6 +115,8 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
 
   async function start() {
     window.ROOT_MODE = "key";
+    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "new", "rules", "clear"],
+      complete: () => [], run: (v) => { if (!busy) run(v); } });
     $("title").hidden = true; $("end").hidden = true;
     document.body.classList.add("keymode");
     term.textContent = "";
@@ -128,13 +130,7 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
     setInterval(() => { if (!document.hidden) refresh(); }, 20000);
   }
 
-  $("line").addEventListener("submit", (e) => {
-    if (window.ROOT_MODE !== "key") return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    const v = cmd.value; cmd.value = "";
-    if (busy) return;
-    run(v);
-  }, true);
+
   $("goKey").addEventListener("click", start);
   if (location.hash === "#key") { if (document.readyState === "loading") addEventListener("DOMContentLoaded", start); else start(); }
 })();
