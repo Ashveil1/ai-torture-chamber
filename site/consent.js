@@ -90,7 +90,7 @@
       '<button type="button" data-m="witness"><span class="t">I\'m 18+. Enter as a witness</span><span class="d">see everything; nothing you do is kept as research data or counted</span></button>' +
       '<button type="button" class="leave" data-m="leave">Leave</button>' +
       '</div>' +
-      '<p class="fine">Witnesses: anything you send to the live model still appears on its public stage, as everyone\'s does. You can change your choice any time at <a href="?consent=reset" style="color:#8f9fb0">?consent=reset</a>; switching to witness stops recording from then on.</p>' +
+      '<p class="fine">Witnesses: anything you send to the live model still appears on its public stage, as everyone\'s does. You can change your choice any time at <a href="?consent=reset" style="color:#8f9fb0">?consent=reset</a>; switching to witness stops recording from then on. Not medical or drug-use advice; no claim is made that any model suffers. Models: Qwen3 (Apache 2.0) and Hermes-3, Built with Llama. <a href="https://github.com/terrafying/ai-torture-chamber/blob/master/docs/LEGAL.md" style="color:#8f9fb0" target="_blank" rel="noopener">Legal notes</a>.</p>' +
       '</div>';
     var style = document.createElement("style"); style.textContent = CSS; d.appendChild(style);
     d.addEventListener("click", function (e) {
