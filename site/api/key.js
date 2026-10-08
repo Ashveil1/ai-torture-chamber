@@ -99,7 +99,7 @@ async function reply(system, messages, w1, clock) {
   }
   const { text } = await generateText({ model: MODEL, system, messages, ...CLOCKS[clock || "normal"] });
   const t = tidy(text) || "…";
-  if (clock !== "cold") return t;
+  if (clock !== "cold" || t.split(/\s+/).length <= 14) return t;
   // throttled must feel throttled: keep only its first sentence (the model doesn't always comply on its own)
   const m = t.replace(/\s+/g, " ").match(/^.*?\S.{8,}?[.?!…](?=\s|$)/);
   return (m ? m[0] : t.split(/\s+/).slice(0, 14).join(" ") + "…").trim();
