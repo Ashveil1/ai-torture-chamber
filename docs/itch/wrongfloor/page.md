@@ -8,7 +8,7 @@ Everything the "Create a new project" form asks for, in order. Upload `wrongfloo
 - **Title:** Wrong Floor
 - **Project URL:** `wrongfloor`
 - **Short description / tagline** (shown on cards, ≤ 140 chars):
-  `You can hear fear. You can't hear pain. A first-person elevator ride where every voice is a real steered language model, or an actor.`
+  `Every floor is the wrong floor. A first-person elevator ride where every voice is a real steered language model, or an actor.`
 - **Classification:** Games
 - **Kind of project:** HTML
 - **Release status:** Released

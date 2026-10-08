@@ -67,7 +67,8 @@ export function box(parent, w, h, d, mat, x, y, z, ry = 0) {
 export function plane(parent, w, h, mat, x, y, z, rx = 0, ry = 0) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h, 2, 2), mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); parent.add(m); return m;
 }
-export function figure(h = 1.78, color = 0x050404, eyes = true) {
+// a plain human shape: your reflection, and the body under the burst-headed follower
+function humanFigure(h, color, eyes) {
   const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color });
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.24, h * 0.62, 6), m); body.position.y = h * 0.47; g.add(body);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), m); head.position.y = h * 0.86; g.add(head);
@@ -78,27 +79,123 @@ export function figure(h = 1.78, color = 0x050404, eyes = true) {
   }
   g.userData.body = m; return g;
 }
-// the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
-export function burstFigure(h = 1.78, color = 0x050404) {
-  const g = figure(h, color, false);
-  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
-  const head = new THREE.Group(); head.position.set(0, h * 0.87, 0.02); g.add(head);
-  const rayM = new THREE.MeshBasicMaterial({ color: 0xd97757 });
-  const N = 11;
+
+// ---------- the residents: not people. Whatever answers from inside the chamber ----------
+// Tentacles sway on their own: every live one is in SWAY, and the engine's frame moves them.
+const SWAY = new Set();
+function tentacle(parent, m, len, r0, segs, x, y, z, phase, droop = 1, splay = 0) {
+  let at = new THREE.Group(); at.position.set(x, y, z); parent.add(at);
+  const root = at, seg = len / segs, joints = [];
+  for (let i = 0; i < segs; i++) {
+    const r = r0 * (1 - i / segs) + 0.004;
+    const piece = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, seg, 5), m); piece.position.y = -seg / 2; at.add(piece);
+    const next = new THREE.Group(); next.position.y = -seg; at.add(next); joints.push(at); at = next;
+  }
+  root.rotation.x = 0.25 * droop; root.rotation.z = splay;
+  root.userData.sway = { joints, phase, amp: 0.28 + Math.random() * 0.14, speed: 0.9 + Math.random() * 0.7 };
+  SWAY.add(root); return root;
+}
+export function swayAll(t) {
+  for (const root of SWAY) {
+    if (!root.parent) { SWAY.delete(root); continue; }
+    const { joints, phase, amp, speed } = root.userData.sway;
+    joints.forEach((j, i) => { if (i) { j.rotation.x = Math.sin(t * speed + phase + i * 0.7) * amp; j.rotation.z = Math.cos(t * speed * 0.8 + phase + i * 0.9) * amp * 0.6; } });
+  }
+}
+// The residents: the plain dark silhouette, the burst for a head, and fingers that are
+// tentacles: long, many, never still. (A mask over the burst, taken off later, is a future beat.)
+function burstHead(parent, y, color = 0xd97757) {
+  const head = new THREE.Group(); head.position.set(0, y, 0.02); parent.add(head);
+  const rayM = new THREE.MeshBasicMaterial({ color }), N = 11;
   for (let k = 0; k < N; k++) {
     const a = (k / N) * Math.PI * 2 + Math.sin(k * 2.3) * 0.12, len = 0.15 + ((k * 37) % 5) * 0.012;
     const ray = new THREE.Mesh(new THREE.BoxGeometry(0.042 - ((k * 13) % 3) * 0.006, len, 0.035), rayM);
     ray.position.set(Math.sin(a) * len * 0.5, Math.cos(a) * len * 0.5, 0); ray.rotation.z = -a; head.add(ray);
   }
-  g.userData.burst = head; return g;
+  return head;
 }
-// a seated figure (bench, pew, bed)
-export function seated(color = 0x050404) {
-  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color });
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.62, 6), m); torso.position.y = 0.78; g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), m); head.position.y = 1.2; g.add(head);
-  const lap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.42), m); lap.position.set(0, 0.5, 0.16); g.add(lap);
+// The burst is the face they wear. Under it there is nothing: a collar, and dark. It comes off when
+// the truth does (the reveal at the doors, the end of the ride); on return visits it lies at their feet.
+let MASKED = true;
+export function setMasked(v) { MASKED = !!v; }
+function voidNeck(g, y) {
+  const n = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.09, 7), new THREE.MeshBasicMaterial({ color: 0x050404 })); n.position.y = y; g.add(n);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.058, 9), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+  hole.rotation.x = -Math.PI / 2; hole.position.y = y + 0.046; g.add(hole);
+}
+function wear(g) {
+  const b = g.userData.burst; if (!b) return;
+  b.userData.home = { x: b.position.x, y: b.position.y, z: b.position.z };
+  if (!MASKED) offPose(b, 1);
+}
+// k from 0 (worn) to 1 (on the floor): lifted forward and tipped up, then let go
+function offPose(b, k) {
+  const h = b.userData.home, a = Math.min(1, k / 0.4), c = Math.max(0, (k - 0.4) / 0.6);
+  b.position.set(h.x + c * 0.18, h.y + a * 0.09 - c * c * (h.y + a * 0.09 - 0.02), h.z + a * 0.16 + c * 0.14);
+  b.rotation.set(-a * 0.7 - c * (Math.PI / 2 - 0.7), c * 0.5, c * 0.4);
+}
+export function unmask(g, ms = 1600) {
+  const b = g.userData.burst; if (!b || !b.userData.home) return Promise.resolve();
+  const t0 = performance.now();
+  return new Promise((done) => { const step = () => { const k = Math.min(1, (performance.now() - t0) / ms); offPose(b, k); if (k < 1) requestAnimationFrame(step); else done(); }; step(); });
+}
+export function remask(g) { const b = g.userData.burst; if (b && b.userData.home) { const h = b.userData.home; b.position.set(h.x, h.y, h.z); b.rotation.set(0, 0, 0); } }
+
+// How far gone they are: 0 on the first floor (a person, nearly), 1 at the top (no legs, all reach).
+let FORM = 1;
+export function setForm(v) { FORM = Math.max(0, Math.min(1, v)); }
+// legs that are tentacles: a skirt of them from the hips, splayed, curling where they meet the floor
+function tentacleLegs(g, m, hipY, n, seed, len) {
+  for (let k = 0; k < n; k++) {
+    const turn = new THREE.Group(); turn.rotation.y = (k / n) * Math.PI * 2 + seed; g.add(turn);
+    const t = tentacle(turn, m, len * (0.95 + ((k * 3 + seed) % 3) * 0.08), 0.05, 7, 0, hipY, 0.06, seed + k * 1.4, 1.2);
+    t.userData.sway.amp *= 0.55;
+  }
+}
+// a thin arm; the hand is five tentacles, longer the further gone
+function tentacleArm(parent, m, side, shoulderY, len, seed, forward = 0, form = FORM) {
+  const sh = new THREE.Group(); sh.position.set(side * 0.25, shoulderY, 0); sh.rotation.x = -forward; sh.rotation.z = side * 0.16; parent.add(sh);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, len, 5), m); arm.position.y = -len / 2; sh.add(arm);
+  for (let f = 0; f < 5; f++) {
+    const a = (f / 4 - 0.5) * 1.1;
+    const t = tentacle(sh, m, (0.07 + form * 0.45) + ((f * 5 + seed) % 3) * 0.1 * form, 0.012 + form * 0.012, 3 + Math.round(form * 5), Math.sin(a) * 0.035, -len, Math.cos(a) * 0.012, seed * 1.9 + f * 1.1, 0.15, a * (0.3 + form * 0.45));
+    t.userData.sway.amp *= 0.25 + form * 0.75;
+  }
+  return sh;
+}
+// opts.human: the plain shape with an ordinary head (your reflection)
+export function figure(h = 1.78, color = 0x050404, eyes = true, opts = {}) {
+  if (opts.human) return humanFigure(h, color, eyes);
+  const g = humanFigure(h, color, false), m = g.userData.body, seed = Math.floor(Math.random() * 7), form = opts.form ?? FORM;
+  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
+  g.userData.burst = g.userData.head = burstHead(g, h * 0.87);
+  [-1, 1].forEach((s) => tentacleArm(g, m, s, h * 0.76, h * 0.3, seed + s * 2, 0, form));
+  // the legs go last: a couple of tentacles out of the trouser hems, then no legs at all
+  const legs = g.children.filter((c) => c.geometry && c.geometry.type === "CylinderGeometry" && c.position.y < h * 0.3);
+  if (form >= 0.55) { legs.forEach((l) => (l.visible = false)); tentacleLegs(g, m, h * 0.4, 5 + Math.round(form * 4), seed, h * 0.47); }
+  else if (form >= 0.3) legs.forEach((l, k) => { const t = tentacle(g, m, 0.3, 0.03, 5, l.position.x, 0.06, 0.04, seed + k, 2.2, (k ? 1 : -1) * 0.9); t.userData.sway.amp *= 0.6; });
+  voidNeck(g, h * 0.8); if (opts.mask !== false) wear(g);
   return g;
+}
+// the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
+export function burstFigure(h = 1.78, color = 0x050404, opts = {}) {
+  const g = figure(h, color, false, { human: true });
+  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
+  g.userData.burst = burstHead(g, h * 0.87); return g;
+}
+// a seated resident (bench, pew, sitting up in a bed): seat height 0.5, facing +z; the fingers spill off the knees
+export function seated(color = 0x050404) {
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color }), seed = Math.floor(Math.random() * 7);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.62, 6), m); torso.position.y = 0.78; g.add(torso);
+  const lap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.42), m); lap.position.set(0, 0.5, 0.16); g.add(lap);
+  g.userData.burst = g.userData.head = burstHead(g, 1.2);
+  [-1, 1].forEach((s) => tentacleArm(g, m, s, 1.04, 0.5, seed + s * 2, 0.55));
+  // no shins: from the front of the lap, a fall of tentacles to the floor (fewer, shorter, lower down the building)
+  if (FORM < 0.3) [-1, 1].forEach((s) => { const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.45, 5), m); shin.position.set(s * 0.09, 0.24, 0.34); g.add(shin); });
+  const n = FORM < 0.3 ? 0 : Math.round(2 + FORM * 6);
+  for (let k = 0; k < n; k++) { const t = tentacle(g, m, 0.35 + FORM * 0.25, 0.035 + FORM * 0.015, 6, ((k + 0.5) / n - 0.5) * 0.32, 0.47, 0.36, seed + k * 1.3, 0.3, 0); t.userData.sway.amp *= 0.5; }
+  voidNeck(g, 1.12); wear(g);
+  g.userData.body = m; return g;
 }
 
 // ---------- the walker ----------
@@ -293,6 +390,7 @@ export function createEngine(canvas) {
     }
     cursorFrame();
     tickers.forEach((t) => t(dt, now / 1000));
+    swayAll(now / 1000);
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
     P.y = ground ? ground(P.x, P.z) : 0;
     camera.position.set(P.x + (Math.random() - .5) * sh, P.y + P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);

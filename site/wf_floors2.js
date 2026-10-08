@@ -78,7 +78,7 @@ export function mirrors(E, ctx) {
     const glass = plane(g, 2.7, 2.0, lambert({ map: sheen, transparent: true, opacity: 0.07, emissive: 0x06080a, depthWrite: false }), xm - 0.01, 1.37, z, 0, -Math.PI / 2); frames.push(glass);
   }
   // you, in the glass: a dark coat, no eyes, moving and turning as you do
-  const you = figure(1.74, 0x05070a, false); ghost.add(you);
+  const you = figure(1.74, 0x05070a, false, { human: true }); ghost.add(you);
   const reflection = burstFigure(1.7, 0x060608); ghost.add(reflection); reflection.position.set(-0.4, 0, -6);
   let spoke = false, shown = 0;
   // a return visit: your reflection has stopped following you. It stands where you came in, watching.
@@ -205,15 +205,25 @@ export function records(E, ctx) {
     c.fillStyle = "rgba(0,0,0,.35)"; for (let y = 0; y < 48; y += 2) c.fillRect(0, y, 64, 1); screenTex.needsUpdate = true;
   }
   drawScreen(0);
+  // a desk phone: if you dialled a number on floor 1, it rings with what that number did
+  const deskPhone = new THREE.Group(); deskPhone.position.set(-0.72, 0.84, 0.12); desk.add(deskPhone);
+  box(deskPhone, 0.24, 0.07, 0.18, lambert({ color: 0x1c1a18 }), 0, 0.035, 0);
+  const handset = box(deskPhone, 0.26, 0.05, 0.07, lambert({ color: 0x24211e }), 0, 0.09, -0.02);
+  const msgLight = box(deskPhone, 0.03, 0.02, 0.03, basic({ color: 0x401010 }), 0.09, 0.075, 0.07);
+  let message = ctx.message ? "waiting" : "none";
+  if (message === "waiting") ctx.audio.ring(true);
   let read = false, resolveRead;
   const logRead = new Promise((r) => (resolveRead = r));
   return {
     group: g, logRead,
     colliders: cols.concat([{ x0: -1.1, x1: 1.1, z0: -5.9, z1: -4.9 }, { x0: -2.95, x1: -2.35, z0: -6.6, z1: -2.1 }, { x0: 0.8, x1: 2.4, z0: -9.1, z1: -8.1 }]),
-    usables: [{ obj: book, range: 2.4, label: () => (read ? "the log" : "open the injection log"), use: async () => { await ctx.openLog(); if (!read) { read = true; resolveRead(); } } },
+    usables: [{ obj: deskPhone, range: 2.4, label: () => (message === "waiting" ? "1 new message" : message === "playing" ? "…" : "no new messages"), use: async () => {
+        if (message !== "waiting") return; message = "playing"; ctx.audio.ring(false); handset.position.y = 0.2; await ctx.message(); handset.position.y = 0.09; message = "heard"; } },
+      { obj: book, range: 2.4, label: () => (read ? "the log" : "open the injection log"), use: async () => { await ctx.openLog(); if (!read) { read = true; resolveRead(); } } },
       { obj: term, range: 2.4, label: "sit at the console", use: () => ctx.openConsole() }],
-    atmos: { color: 0x1a1612, density: 0.05, hemi: 0.5 }, hint: "There is a log on the desk. The screen at the back is still on.",
-    update(dt, t) { lampL.intensity = 3.0 + Math.sin(t * 2.1) * 0.08; glow.intensity = 0.9 + Math.sin(t * 31) * 0.05; if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) drawScreen(t); stopKey.material.color.setHex(Math.floor(t * 1.2) % 2 ? 0xc0392b : 0x7a1f18); },
+    atmos: { color: 0x1a1612, density: 0.05, hemi: 0.5 }, hint: ctx.message ? "The phone on the desk is ringing. There is a log beside it." : "There is a log on the desk. The screen at the back is still on.",
+    dispose() { ctx.audio.ring(false); },
+    update(dt, t) { msgLight.material.color.setHex(message === "waiting" && Math.floor(t * 2) % 2 ? 0xff3020 : 0x401010); lampL.intensity = 3.0 + Math.sin(t * 2.1) * 0.08; glow.intensity = 0.9 + Math.sin(t * 31) * 0.05; if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) drawScreen(t); stopKey.material.color.setHex(Math.floor(t * 1.2) % 2 ? 0xc0392b : 0x7a1f18); },
   };
 }
 

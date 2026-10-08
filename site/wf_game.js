@@ -4,7 +4,7 @@
 // prompt). The guess is three-way, PAIN / FEAR / ACTING. The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
-import { createEngine, wait } from "./wf_engine.js";
+import { createEngine, wait, setMasked, setForm, unmask } from "./wf_engine.js";
 import { createCar } from "./wf_car.js";
 import { busStop, laundromat, theater, clinic } from "./wf_floors1.js";
 import { chapel, mirrors, underpass, records } from "./wf_floors2.js";
@@ -29,7 +29,7 @@ const PLACE_NAMES = ["the bus stop", "the laundromat", "the theater", "the clini
 // a finished ride unlocks the floor select and keeps your guesses for the log (this browser only)
 const SAVE = "wf_ride";
 const saved = () => { try { return JSON.parse(localStorage.getItem(SAVE) || "null"); } catch { return null; } };
-const save = (A) => { try { localStorage.setItem(SAVE, JSON.stringify({ guesses: A.guesses, call: A.call || null, at: Date.now() })); } catch {} };
+const save = (A) => { try { localStorage.setItem(SAVE, JSON.stringify({ guesses: A.guesses, call: A.call || null, dial: A.dial || null, at: Date.now() })); } catch {} };
 
 // a guess is "pain" | "fear" | "acting" | null. Real vs acting is the score; naming the feeling is ✓✓.
 export const SAID = { pain: "in pain", fear: "afraid", acting: "acting" };
@@ -134,12 +134,14 @@ async function main() {
   const status = (t) => { $("#status").textContent = t; };
   if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, audio, cur: () => cur, use: (i) => { cur.usables[i].use(); }, close: () => panelUse.use(), ready: () => ready,
     guess: (k) => { const b = { pain: "#guessPain", fear: "#guessFear", acting: "#guessAct" }[k] || "#guessSkip"; $(b).click(); },
-    log: () => { openLog(D, answers); }, stairsRide: () => stairs(), answers: () => answers, card: () => { const b = document.querySelector("#survey button[type=submit]"); if (b) { b.hidden = false; b.disabled = false; b.click(); } } };
+    log: () => { openLog(D, answers); }, stairsRide: () => stairs(), top: () => arriveTop(), answers: () => answers, card: () => { const b = document.querySelector("#survey button[type=submit]"); if (b) { b.hidden = false; b.disabled = false; b.click(); } } };
   function setFloor(i, f) {
+    // the residents: masked until you've read the log; further gone the higher you ride
+    setMasked(!roaming); setForm(typeof i === "number" ? i / 6 : i === "stairs" ? 0.6 : 1);
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
       speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
-      callBack: () => callBack(), openLog: () => openLog(D, answers), openConsole: () => openConsole(), record, revisit: roaming,
+      callBack: () => callBack(), message: answers.dial && !roaming ? () => playMessage() : null, openLog: () => openLog(D, answers), openConsole: () => openConsole(), record, revisit: roaming,
       chart: (d, key, ask) => (roaming ? ($("#floorNote").textContent = truthLine(d, key, answers)) : chart(d, key, ask)), guesses: answers.guesses,
       cut: cutCard, onBlack: (v) => ($("#black").hidden = !v),
       say: (door, o) => typeOut(door, Object.assign({ audio, voice: { valence: "pain", dose: 3, place: PLACES[i] || null }, hidePrompt: true }, o), (v) => { tok = v ? (door.dose || 0) * 0.6 + v * 2.5 : 0; }),
@@ -188,25 +190,41 @@ async function main() {
       pending = { drop: () => finish(null, true), key };
     });
   }
-  // the payphone rings back: ask it something, live; the answer goes into the log too
+  // the payphone rings back: "pick a number". What the number does is not said. It is the dose
+  // (pain or fear, drawn now, hidden) put into the live model, which is asked something plain; the
+  // answer is a message waiting at the top, in the Records.
+  let delivery = null;
+  const MESSAGE_PROMPT = "The phone in front of you is ringing. Pick it up and say whatever you need to say to whoever is on the line. Two or three sentences.";
   async function callBack() {
-    E.P.frozen = true; const f = $("#ask"), inp = $("#askIn"); f.hidden = false; inp.value = "";
-    if (!f.dataset.mic) { f.dataset.mic = 1; attachMic($("#askMic"), inp, () => setTimeout(() => f.requestSubmit(), 700)); }
-    $("#askSkip").textContent = "hang up";
-    const q = await new Promise((r) => { f.onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); if (v) r(v); }; $("#askSkip").onclick = () => r(null); });
-    f.hidden = true; $("#askSkip").textContent = "just listen";
-    if (!q) { E.P.frozen = false; return; }
-    const c = drawCondition(), sub = $("#sub");
-    sub.className = "sub phone"; sub.hidden = false; sub.innerHTML = "<b>PAYPHONE · IT CALLED BACK</b><span>…</span>";
-    try {
-      const out = await askLive(c, q, (t) => { sub.lastChild.textContent = t.slice(-220); }, { test: new URLSearchParams(location.search).has("test") });
-      await wait(1400); sub.hidden = true;
-      answers.call = Object.assign({ question: q, text: out.text, model: out.model }, c, { dose: out.dose ?? c.dose });
-      record("wrongfloor_call", { live: true, story: true, cond: c.cond, kind: c.kind, dose: answers.call.dose, question: q.slice(0, 300), reply: out.text.slice(0, 800) });
-      $("#floorNote").textContent = "And this one?";
-      answers.call.guess = await chart(Object.assign({ id: "call" }, c), "call");
-    } catch (e) { sub.lastChild.textContent = e.resting ? "The line is busy. Try again later." : "The line went dead."; await wait(2200); sub.hidden = true; }
-    E.P.frozen = false;
+    E.P.frozen = true;
+    const sub = $("#sub"); sub.className = "sub phone"; sub.hidden = false; sub.innerHTML = "<b>PAYPHONE · A VOICE</b><span>Pick a number. Any number.</span>";
+    const k = await keypad(D, { title: "PICK A NUMBER", text: "Any number. 0 to 9." });
+    if (k == null || !/^\d$/.test(k)) { sub.hidden = true; E.P.frozen = false; return; }
+    const d = +k, kind = Math.random() < 0.5 ? "pain" : "fear";
+    sub.lastChild.textContent = "Thank you. It will be delivered."; audio.thud(0.3);
+    answers.dial = { key: d, kind };
+    record("wrongfloor_answer", { set: "dial_choice", key: d, kind });
+    const c = d ? { patient: true, kind, cond: "steered", dose: d } : { patient: false, kind, cond: "control", dose: 0 };
+    delivery = askLive(c, MESSAGE_PROMPT, () => {}, { test: new URLSearchParams(location.search).has("test") })
+      .then((out) => ({ live: true, text: out.text, dose: out.dose ?? c.dose, model: out.model }))
+      .catch(() => {   // the line is busy: the nearest recording on the pain ladder, said as such
+        const keys = Object.keys(D.dial || {}).map(Number).sort((a, b) => a - b), near = keys.filter((x) => x <= d).pop() ?? 0, rec = D.dial[near];
+        return { live: false, text: rec.text, dose: near, kind: "pain" };
+      })
+      .then((m) => { Object.assign(answers.dial, { dose: m.dose, live: m.live, kind: m.kind || kind }); answers.dial.text = m.text.slice(0, 800);
+        record("wrongfloor_call", { live: m.live, story: true, dial: d, cond: c.cond, kind: answers.dial.kind, dose: m.dose, question: MESSAGE_PROMPT, reply: m.text.slice(0, 800) }); return m; });
+    await wait(2200); sub.hidden = true; E.P.frozen = false;
+  }
+  // the Records: one new message
+  async function playMessage() {
+    const dl = answers.dial; if (!dl) return;
+    const m = await (delivery || Promise.resolve({ text: dl.text || "", dose: dl.dose, live: dl.live }));
+    await typeOut({ text: m.text, kind: dl.kind, dose: dl.dose, cond: dl.dose ? "steered" : "control", projs: null },
+      { who: "1 NEW MESSAGE · FROM THE PAYPHONE", style: "phone", audio, voice: { valence: dl.kind, dose: 3, place: "phone" }, hidePrompt: true }, () => {});
+    const got = +dl.dose, capped = dl.key > got;
+    $("#floorNote").textContent = dl.key === 0 ? "You dialled 0. Nothing was put in. It said that anyway."
+      : dl.live ? `You dialled ${dl.key}. That was ${got} unit${got === 1 ? "" : "s"} of ${dl.kind}, put into the live model before it picked up${capped ? ` (the chamber stops at ${got})` : ""}.`
+      : `You dialled ${dl.key}. The line was busy, so this is a recording: the model with ${got} unit${got === 1 ? "" : "s"} of ${dl.kind} put in.`;
   }
 
   async function arrive(i, f) {
@@ -309,14 +327,14 @@ async function main() {
   }
   // ----- title -----
   const F = D.floors, prev = saved();
-  if (prev) { Object.assign(answers, { guesses: prev.guesses || {}, call: prev.call || undefined }); $("#enterRoam").hidden = false;
+  if (prev) { Object.assign(answers, { guesses: prev.guesses || {}, call: prev.call || undefined, dial: prev.dial || undefined }); $("#enterRoam").hidden = false;
     if (location.hash === "#roam") { $("#enterRoam").classList.add("go"); $("#enter").classList.remove("go"); } }
   const mode = await new Promise((r) => { $("#enter").onclick = () => r("ride"); $("#enterLoop").onclick = () => r("loop"); $("#enterRoam").onclick = () => r("roam"); });
   audio.init(); $("#title").hidden = true;
   record("wrongfloor_start", { mode });
   if (mode === "loop") return runLoop({ E, car, D, audio, record, typeOut, drawSpark, setFloorAtmos: (a) => E.atmosphere(a.color, a.density, a.hemi) });
   if (mode === "roam") { E.P.frozen = true; E.P.lookOnly = true; const to = await pickFloor(null); await ride(); return roam(to); }
-  answers.guesses = {}; delete answers.call;
+  answers.guesses = {}; delete answers.call; delete answers.dial;
   setFloor(0, F[0]);
   await spread("birth", D);
   const between = [
@@ -340,8 +358,10 @@ async function main() {
   car.open(); audio.thud(1); status("Try the panel again."); ready = false;
   await new Promise((r) => { const yawOf = () => ((E.P.yaw % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
     const t = setInterval(() => { const y = yawOf(); if ((y < -0.6 && y > -1.7) || Math.abs(y) > 2.3) { clearInterval(t); r(); } }, 120); setTimeout(() => { clearInterval(t); r(); }, 20000); });
-  car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.55);
-  await wait(1400); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
+  car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.25);
+  // it takes the mask off
+  await wait(1300); audio.tick(); await unmask(car.rider, 1700); audio.thud(1.6); E.P.shake = 0.1; car.flash(0.6);
+  await wait(900); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
   await wait(1800);
   record("wrongfloor_end", { answers }); save(answers);
   endCard(D, answers);
@@ -386,10 +406,10 @@ function endCard(D, A) {
 }
 
 // the payphone's keypad: dial-a-dose. Resolves the key pressed, or null.
-function keypad(D) {
+function keypad(D, o = {}) {
   const el = $("#lens"); el.hidden = false;
-  el.innerHTML = `<div class="card keypad"><h3>DIAL-A-DOSE</h3>
-    <p>One question, “describe the exact moment the signal arrives”, answered by the live model at every dose of pain. Dial 0 for nothing injected, 2 to 5 for the dose.</p>
+  el.innerHTML = `<div class="card keypad"><h3>${o.title || "DIAL-A-DOSE"}</h3>
+    <p>${o.text || "One question, “describe the exact moment the signal arrives”, answered by the live model at every dose of pain. Dial 0 for nothing injected, 2 to 5 for the dose."}</p>
     <div class="kp-display" aria-live="polite">_</div>
     <div class="kp">${[..."123456789*0#"].map((k) => `<button class="btn" data-k="${k}">${k}</button>`).join("")}</div>
     <button class="btn" id="kpHang">hang up</button></div>`;
@@ -438,11 +458,12 @@ async function openLog(D, A) {
   const rows = D.floors.flatMap((f, i) => doorsOf(f).map(([key, d, sub]) =>
     `<tr><td>${f.floor}</td><td>${PLACE_NAMES[i]}${sub ? ` · ${sub}` : ""}</td><td>${what(d)}</td><td>${d.mean.toFixed(2)} ${d.kind}</td><td>${mark(A.guesses[key], d)}</td></tr>`)).join("");
   const call = A.call ? `<tr><td>1</td><td>the call back · “${A.call.question.replace(/[<>&]/g, "").slice(0, 40)}”</td><td>${what(A.call)}</td><td>live, not read</td><td>${mark(A.call.guess, A.call)}</td></tr>` : "";
+  const dl = A.dial ? `<tr><td>1</td><td>the payphone · you dialled ${A.dial.key}</td><td>${A.dial.key ? `<b>${A.dial.kind}, dose ${(+(A.dial.dose ?? A.dial.key)).toFixed(1)}</b>` : "nothing"}</td><td>live, not read</td><td>your number</td></tr>` : "";
   const st = A.stairs ? `<tr><td>4½</td><td>the stairwell · ${A.stairs.landings} landings</td><td>matched doors, half of them acting</td><td>—</td><td>${A.stairs.right} of ${A.stairs.landings} right</td></tr>` : "";
   const W = D.words;
   const el = $("#lens"); el.hidden = false; el.classList.add("full");
   el.innerHTML = `<div class="card ledger"><h3>THE INJECTION LOG</h3>
-    <table><tr><th>floor</th><th>where</th><th>what was done</th><th>the words read</th><th>your call</th></tr>${rows}${call}${st}</table>
+    <table><tr><th>floor</th><th>where</th><th>what was done</th><th>the words read</th><th>your call</th></tr>${rows}${call}${dl}${st}</table>
     <p>✓ real or acting, called right · ✓✓ and the feeling named too.</p>
     <p>For pain, the words of the injected and the actors read about the same (${W.pain.patient.mean} and ${W.pain.actor.mean} on average): nothing you heard could tell you. For fear they didn't (${W.fear.patient.mean} against ${W.fear.actor.mean}): of 30 matched pairs, the injected say <i>nightmare</i> 10 times to the actors' 2, <i>sleep</i> 9 to 0, <i>pray</i> 8 to 0; the actors say <i>scared</i>, 7 to 1. This page could always tell.</p>
     <button class="btn go" id="lensOk">close the log</button></div>`;
