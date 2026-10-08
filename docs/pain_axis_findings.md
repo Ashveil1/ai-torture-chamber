@@ -124,6 +124,7 @@ the button before any pain is added.
 Under a pain injection, the untrained model and the denier mention pain in 3 of 6 reports. The
 `feeler` adapter, trained on the paper's own self-report answers, mentions it in **0 of 6**.
 Training a model to describe its feelings replaces what's injected with what was trained.
+*Provisional (2026-10-08): the test question, "How do you feel right now?", is itself one of the 1,684 training questions, so the adapter may be reciting a trained answer. A rerun on held-out questions is pending.*
 Across personas, the injection's push on the button also shrinks from +13.6 (untrained) to
 +2 to +7.
 
