@@ -16,3 +16,7 @@ data/exp56/erowid_dmt/
 
 .venv-qwen/
 runs/larger_qwen*/
+
+# exp79 training data and adapters: local and pod only, never committed
+runs/exp79/out/
+data/voices/
