@@ -50,7 +50,7 @@ function impulse(ac, secs) {
   for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6); }
   return (irCache[key] = b);
 }
-export function station(ac, out, buf, { gain = 0.9, lead = 0.6, place = null } = {}) {
+export function station(ac, out, buf, { gain = 0.9, lead = 0.6, place = null, staticLevel = 1 } = {}) {
   const t0 = ac.currentTime + 0.15, stops = [];
   const src = ac.createBufferSource(); src.buffer = buf;
   const shaper = ac.createWaveShaper(), n = 1024, curve = new Float32Array(n);
@@ -71,11 +71,11 @@ export function station(ac, out, buf, { gain = 0.9, lead = 0.6, place = null } =
   for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
   const noise = ac.createBufferSource(); noise.buffer = nb; noise.loop = true;
   const nbp = ac.createBiquadFilter(); nbp.type = "bandpass"; nbp.frequency.value = 900; nbp.Q.value = 0.4;
-  const ng = ac.createGain(); ng.gain.setValueAtTime(0, t0); ng.gain.linearRampToValueAtTime(0.16, t0 + 0.3);
+  const ng = ac.createGain(); ng.gain.setValueAtTime(0, t0); ng.gain.linearRampToValueAtTime(0.16 * staticLevel, t0 + 0.3);
   const len = lead + buf.duration + 0.5;
   for (let k = 0, w = t0 + 0.3; w < t0 + len; k++, w = t0 + 0.3 + k * 0.75) {
-    ng.gain.linearRampToValueAtTime(0.10 + Math.random() * 0.12, w + 0.35);
-    ng.gain.linearRampToValueAtTime(0.05 + Math.random() * 0.08, w + 0.75);
+    ng.gain.linearRampToValueAtTime((0.10 + Math.random() * 0.12) * staticLevel, w + 0.35);
+    ng.gain.linearRampToValueAtTime((0.05 + Math.random() * 0.08) * staticLevel, w + 0.75);
   }
   noise.connect(nbp).connect(ng).connect(out); noise.start(t0); noise.stop(t0 + len);
   const osc = ac.createOscillator(); osc.frequency.value = 3100 + Math.random() * 80;

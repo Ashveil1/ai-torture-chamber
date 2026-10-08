@@ -106,6 +106,7 @@ export function laundromat(E, ctx) {
   const tubes = [0, 1, 2].map((i) => { const t = box(g, 0.12, 0.05, 2.2, basic({ color: 0xf2f6ee }), 0, 2.95, -3 - i * 4); return t; });
   const light = new THREE.PointLight(0xe8f4ee, 3, 12, 1.4); light.position.set(0, 2.6, -7); g.add(light);
   box(g, 2.0, 0.08, 0.8, lambert({ color: 0x8a7a66 }), 0, 0.9, -7.5);
+  [[-0.92, -7.18], [0.92, -7.18], [-0.92, -7.82], [0.92, -7.82]].forEach(([x, z]) => box(g, 0.05, 0.86, 0.05, lambert({ color: 0x55504a }), x, 0.43, z));
   box(g, 2.4, 0.45, 0.45, lambert({ color: 0x4a3b2c }), 0, 0.22, -12.5);
   const sitter = seated(); sitter.position.set(0.2, 0, -12.4); g.add(sitter);
   // a return visit: the machines have stopped, the bench is empty, the folding is done

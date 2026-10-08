@@ -72,7 +72,7 @@ def card(text, d, out):
 
 def bed(seconds, out):
     """Room tone and the tubes: brown noise, a 60 Hz mains hum with its 120 Hz buzz, a slow flutter."""
-    ff("-f", "lavfi", "-i", f"anoisesrc=color=brown:amplitude=0.05:d={seconds}",
+    ff("-f", "lavfi", "-i", f"anoisesrc=color=brown:amplitude=0.022:d={seconds}",
        "-f", "lavfi", "-i", f"sine=f=120:d={seconds}", "-f", "lavfi", "-i", f"sine=f=240:d={seconds}", "-f", "lavfi", "-i", f"sine=f=60:d={seconds}",
        "-filter_complex", "[1]volume=0.035,tremolo=f=0.3:d=0.5[a];[2]volume=0.012[b];[3]volume=0.03[c];[0]lowpass=f=900[n];[n][a][b][c]amix=inputs=4:normalize=0,volume=1.6",
        "-ar", 48000, "-ac", 2, out)
@@ -134,7 +134,7 @@ def main():
         inputs += ["-i", str(ROOT / L["music"])]; mix.append(f"[{len(inputs) // 2}]")
     filters = []
     if len(mix) == 2:
-        filters.append(f"{mix[1]}volume={L.get('music_gain', 0.6)},afade=t=out:st={max(0, T - 3)}:d=3[m]"); mix[1] = "[m]"
+        filters.append(f"{mix[1]}lowpass=f={L.get('music_lowpass', 3000)},volume={L.get('music_gain', 0.6)},afade=t=out:st={max(0, T - 3)}:d=3[m]"); mix[1] = "[m]"
     # voices: the site's TTS through the game's own chain (voice.py: autotune, numbers station, the room)
     import asyncio
     sys.path.insert(0, str(HERE)); from voice import render_lines

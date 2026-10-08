@@ -3,7 +3,7 @@
  "tape_start": "2026-10-08 02:13:05",
  "vhs_strength": 1.0,
  "music": "video/music/drone.mp3",
- "music_gain": 0.3,
+ "music_gain": 0.2,
  "shots": [
   {
    "card": "RECOVERED FROM THE BUILDING\nTAPE 1 OF 1",
@@ -108,5 +108,6 @@
    "dose": 3,
    "place": "glass"
   }
- ]
+ ],
+ "music_lowpass": 2500
 }

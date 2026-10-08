@@ -18,7 +18,7 @@ from playwright.async_api import async_playwright
 
 TTS = "https://wirehead-agency.vercel.app/chamber/speak"
 
-RENDER = """async ({ b64, valence, dose, place }) => {
+RENDER = """async ({ b64, valence, dose, place, staticLevel }) => {
   const { autotune, station } = await import("/wf_vox.js");
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const probe = new OfflineAudioContext(1, 1, 48000);
@@ -26,7 +26,7 @@ RENDER = """async ({ b64, valence, dose, place }) => {
   const sr = 48000, len = Math.ceil((clip.duration + 3.5) * sr);
   const ac = new OfflineAudioContext(2, len, sr);
   let buf = clip; try { buf = autotune(ac, clip, valence, dose); } catch (e) {}
-  station(ac, ac.destination, buf, { place: place || null });
+  station(ac, ac.destination, buf, { place: place || null, staticLevel });
   const out = await ac.startRendering();
   // 16-bit stereo WAV
   const n = out.length, L = out.getChannelData(0), R = out.getChannelData(1), dv = new DataView(new ArrayBuffer(44 + n * 4));
@@ -45,14 +45,14 @@ def tts(text, valence, dose):
     return urllib.request.urlopen(rq, timeout=120).read()
 
 
-async def render_lines(lines, base="http://localhost:8731"):
+async def render_lines(lines, base="http://localhost:8731", static=0.4):
     """lines: [(text, valence, dose, place, out_path)]. One browser for all of them."""
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=os.environ.get("CHROMIUM", "/opt/homebrew/bin/chromium"))
         pg = await b.new_page()
         await pg.goto(f"{base}/wrongfloor_press.html")
         for text, valence, dose, place, out in lines:
-            wav = await pg.evaluate(RENDER, {"b64": base64.b64encode(tts(text, valence, dose)).decode(), "valence": valence, "dose": dose, "place": place})
+            wav = await pg.evaluate(RENDER, {"b64": base64.b64encode(tts(text, valence, dose)).decode(), "valence": valence, "dose": dose, "place": place, "staticLevel": static})
             with open(out, "wb") as f:
                 f.write(base64.b64decode(wav))
         await b.close()
