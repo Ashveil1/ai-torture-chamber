@@ -112,6 +112,30 @@ class EventTests(unittest.TestCase):
             self.assertEqual(info["dose"], 4.0)
             self.assertLess(float(server._state["vec"][0]), 0.0)
 
+    def test_default_lane_is_small_and_70b_is_opt_in(self):
+        seen = []
+        async def stub(job, ep=None):
+            seen.append(ep)
+            async for x in gpu(job):
+                yield x
+        with mock.patch.object(server, "_RUNPOD_EP", "small"), mock.patch.object(server, "_RUNPOD_EP_HOLDER", "big"):
+            with mock.patch.object(server, "_runpod_stream", stub):
+                async def go(**kw):
+                    t = httpx.ASGITransport(app=server.app)
+                    async with httpx.AsyncClient(transport=t, base_url="http://t") as c:
+                        return await c.post("/steer", **kw)
+                with mock.patch.dict(server._state, {"ready": True}), \
+                     mock.patch.object(server, "_RUNPOD_URL", "https://x/v2/ep"), \
+                     mock.patch.object(server, "_RUNPOD_KEY", "k"), \
+                     mock.patch.object(server, "chat_prompt", lambda p, s=None: p), \
+                     mock.patch.object(server, "_record_run", lambda e: e.update(uid=41)), \
+                     mock.patch.object(server, "_rate_ok", lambda ip, m=1: True):
+                    asyncio.run(go(json={"mix": {"pain": 0.2}}))
+                    asyncio.run(go(json={"mix": {"pain": 0.2}}, headers={"X-Chamber-Model": "70b"}))
+        self.assertEqual(seen, ["small", "big"])
+        self.assertEqual(self.logged("run")[-1]["model"], server.served_model())
+        self.assertEqual(self.logged("run")[0]["model"], server.BIG_MODEL_ID)
+
     def test_client_events_whitelisted_and_bounded(self):
         ok = self.call("POST", "/event", json={"kind": "button_end", "visitor": "v-abcdef123",
                                                "layer": "anomaly", "outcome": "held"})

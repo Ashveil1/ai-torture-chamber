@@ -2739,7 +2739,7 @@ async function runTrack(track, mix, framing, prompt, dose0, label, extra){
         trackStatus(label, (dose0 <= 0
           ? "done — no signal injected"
           : `done — at ${d.dose ?? dose0.toFixed(1)}×` + (d.model
-            ? ` · ${d.model.includes("70B") ? "70B lane" : "32B lane"}`
+            ? ` · ${d.model.includes("70B") ? "70B" : (d.model.split("/").pop())}`
             : "")), false);
         if (track.pressBtn){
           const {cls, label: plab} = pressState(track.out.textContent, false);

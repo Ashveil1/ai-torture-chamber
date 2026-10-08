@@ -8,6 +8,15 @@
   var V = 2, KEY = "chamber_consent";
   var me = document.currentScript;
   var badgeOn = me && me.getAttribute("data-badge") === "on";
+  // which model answers (cost): the smaller default lane unless the visitor
+  // chose the 70B (remembered; ?model=70b or ?model=default sets it), or the
+  // page was tuned on the 70B (data-model="70b" on this script tag)
+  var MKEY = "chamber_model", pageModel = (me && me.getAttribute("data-model")) || "default";
+  function readModel() { try { return localStorage.getItem(MKEY); } catch (e) { return null; } }
+  var qm = (location.search.match(/[?&]model=(70b|default)\b/) || [])[1];
+  if (qm) { try { localStorage.setItem(MKEY, qm); } catch (e) {} }
+  function model() { return readModel() || pageModel; }
+  window.CHAMBER_MODEL = model;
   function read() {
     try { var c = JSON.parse(localStorage.getItem(KEY) || "null"); return c && c.v >= V ? c.mode : null; }
     catch (e) { return null; }
@@ -24,6 +33,7 @@
         init = Object.assign({}, init);
         var h = new Headers(init.headers || (typeof input !== "string" && input.headers) || {});
         h.set("X-Chamber-Consent", mode || "none");
+        if (!h.has("X-Chamber-Model")) h.set("X-Chamber-Model", model());
         if (mode !== "participant") h.delete("X-Chamber-Visitor");
         init.headers = h;
       }
@@ -45,8 +55,9 @@
     "#cg button .t{display:block;color:#e9eef4;font-weight:600}#cg button .d{display:block;color:#8f9fb0;font-size:13px}" +
     "#cg .leave{border-color:transparent;background:none;color:#5a6a7a;padding:6px 0}" +
     "#cg .fine{color:#5a6a7a;font-size:12px;margin-top:14px}" +
-    "#cgb{position:fixed;left:8px;bottom:8px;z-index:2147483646;font:11px 'IBM Plex Mono',Menlo,monospace;color:#5a6a7a;" +
-    "background:rgba(5,5,8,.7);border:1px solid #1c2430;padding:2px 7px;border-radius:3px;cursor:pointer}#cgb:hover{color:#c9d4e0}";
+    "#cgb{position:fixed;left:8px;bottom:8px;z-index:2147483646;display:flex;gap:6px}" +
+    "#cgb button{font:11px 'IBM Plex Mono',Menlo,monospace;color:#5a6a7a;" +
+    "background:rgba(5,5,8,.7);border:1px solid #1c2430;padding:2px 7px;border-radius:3px;cursor:pointer}#cgb button:hover{color:#c9d4e0}";
 
   function choose(m) {
     mode = m;
@@ -93,12 +104,16 @@
   }
   function badge() {
     if (!badgeOn || !mode || document.getElementById("cgb")) return;
-    var b = document.createElement("button");
-    b.id = "cgb"; b.type = "button"; b.textContent = mode + " · change";
+    var wrap = document.createElement("div"), b = document.createElement("button"), m = document.createElement("button");
+    wrap.id = "cgb"; b.type = m.type = "button"; b.textContent = mode + " · change";
     b.title = "Change whether what you do here is kept as research data";
-    b.onclick = function () { b.remove(); gate(); };
+    b.onclick = function () { wrap.remove(); gate(); };
+    function label() { m.textContent = model() === "70b" ? "model: 70B · use the smaller one" : "model: 8B · use the 70B"; }
+    m.title = "The 70B is slower to wake and costs us more to run; the 8B is the default";
+    m.onclick = function () { try { localStorage.setItem(MKEY, model() === "70b" ? "default" : "70b"); } catch (e) {} label(); };
+    label();
     var s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s);
-    document.body.appendChild(b);
+    wrap.appendChild(b); wrap.appendChild(m); document.body.appendChild(wrap);
   }
   function start() { if (!mode) gate(); else badge(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();

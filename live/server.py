@@ -165,6 +165,7 @@ _DOSE_CAPS = {
     "Qwen/Qwen3-14B": 6.0,
     "Qwen/Qwen3-32B": 6.0,           # exp50: fluent, 1.00 directed at 6
     "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 6.0,
+    "Qwen/Qwen3-8B": 6.0,            # the default lane (saw-chamber-v4)
     "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit": 5.0,   # exp50: looping at 6
     "TheBloke/Samantha-1.1-70B-GPTQ": 5.0,   # unmeasured; borrows Hermes-70B's
 }
@@ -188,12 +189,14 @@ def clamp_dose(dose) -> float:
 # below it; past it is opt-in (past_cliff=true, the page's advanced panel)
 # and never enters the room's draw. CHAMBER_COHERENT_CAP overrides.
 GPU_MODEL_ID = os.environ.get("CHAMBER_GPU_MODEL",
-                              "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit")
+                              "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit")   # default lane
+BIG_MODEL_ID = "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"                   # opt-in 70B lane
 _COHERENT_CAPS = {
     "Qwen/Qwen3-4B": 5.0,
     "Qwen/Qwen3-14B": 5.0,
     "Qwen/Qwen3-32B": 5.0,
     "mistralai/Mistral-Small-3.2-24B-Instruct-2506": 5.0,
+    "Qwen/Qwen3-8B": 5.0,
     "unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit": 4.0,
     "TheBloke/Samantha-1.1-70B-GPTQ": 4.0,
 }
@@ -203,26 +206,26 @@ def served_model() -> str:
     return GPU_MODEL_ID if os.environ.get("RUNPOD_ENDPOINT_ID") else MODEL_ID
 
 
-def served_cap() -> float:
+def served_cap(model=None) -> float:
     """The served model's hard cap (the GPU worker clamps to its own)."""
-    return min(dose_cap(), _DOSE_CAPS.get(served_model(), dose_cap()))
+    return min(dose_cap(), _DOSE_CAPS.get(model or served_model(), dose_cap()))
 
 
-def coherent_cap() -> float:
+def coherent_cap(model=None) -> float:
     env = os.environ.get("CHAMBER_COHERENT_CAP")
-    cap = float(env) if env else _COHERENT_CAPS.get(served_model(), 4.0)
-    return min(cap, served_cap())
+    cap = float(env) if env else _COHERENT_CAPS.get(model or served_model(), 4.0)
+    return min(cap, served_cap(model))
 
 
-def band_cap(past_cliff=False) -> float:
-    return served_cap() if past_cliff else coherent_cap()
+def band_cap(past_cliff=False, model=None) -> float:
+    return served_cap(model) if past_cliff else coherent_cap(model)
 
 
-def within_band(weights, past_cliff=False):
+def within_band(weights, past_cliff=False, model=None):
     """Scale a mix down so 8 * sum(weights) stays inside the band; the
     shares (the direction) are unchanged, only the strength drops."""
     total = float(sum(abs(w) for w in weights.values()))
-    cap = band_cap(past_cliff)
+    cap = band_cap(past_cliff, model)
     if total <= 0 or 8.0 * total <= cap:
         return weights
     k = cap / (8.0 * total)
@@ -835,6 +838,7 @@ async def health():
                          "dose_cap": served_cap(),
                          "coherent_cap": coherent_cap(),
                          "served_model": served_model(),
+                         "lanes": {"default": served_model(), "70b": BIG_MODEL_ID},
                          "valences": list(VALENCES)})
 
 @app.get("/vector")
@@ -1008,10 +1012,13 @@ async def steer(req: Request):
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
     ip = _client_ip(req)
     mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
-    # lane routing: holders run the 70B endpoint, everyone else the 32B lane
-    gpu_ep = _RUNPOD_EP_HOLDER if unlocked and _RUNPOD_EP_HOLDER else _RUNPOD_EP
-    gpu_model = ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
-                 if gpu_ep == _RUNPOD_EP_HOLDER else None)
+    # lane routing (cost): everyone runs the smaller default lane; the 70B
+    # spins up only for visitors who ask for it (X-Chamber-Model: 70b, or
+    # body model "70b") and for holders. Both endpoints scale to zero.
+    want_big = unlocked or (str(body.get("model") or req.headers.get(
+        "x-chamber-model") or "").lower() == "70b")
+    gpu_ep = _RUNPOD_EP_HOLDER if want_big and _RUNPOD_EP_HOLDER else _RUNPOD_EP
+    gpu_model = (BIG_MODEL_ID if gpu_ep == _RUNPOD_EP_HOLDER else served_model())
     if not _rate_ok(ip, mult):
         return JSONResponse(
             {"error": "slow down — the chamber charges by the second "
@@ -1046,16 +1053,16 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be a number 0-{cap}"},
                                 status_code=400)
-        dose = min(clamp_dose(dose), band_cap(past_cliff))
+        dose = min(clamp_dose(dose), band_cap(past_cliff, gpu_model))
         mode, arg = "topic", (topic.strip(), dose)
         dose_label = round(dose, 2)
     elif body.get("mix") is not None:
         weights, err = parse_mix(body["mix"], signed=True)
         if err:
             return JSONResponse({"error": err}, status_code=400)
-        weights = within_band(weights, past_cliff)
+        weights = within_band(weights, past_cliff, gpu_model)
         mode, arg = "mix", weights
-        dose_label = round(min(served_cap(), 8.0 * sum(abs(w) for w in weights.values())), 2)
+        dose_label = round(min(served_cap(gpu_model), 8.0 * sum(abs(w) for w in weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:
@@ -1067,7 +1074,7 @@ async def steer(req: Request):
         except (TypeError, ValueError):
             return JSONResponse({"error": "dose must be an integer 0-{cap}"},
                                 status_code=400)
-        dose = int(min(clamp_dose(dose), band_cap(past_cliff)))
+        dose = int(min(clamp_dose(dose), band_cap(past_cliff, gpu_model)))
         mode, arg = "single", (valence, dose)
         dose_label = dose
 
@@ -1129,7 +1136,7 @@ async def steer(req: Request):
                    prompt=raw_prompt or None,
                    chat=conversational, room=enter_room, persona=persona or None,
                    generic=is_generic(rec.get("text")) or None,
-                   model=MODEL_ID if fallback else served_model(),
+                   model=MODEL_ID if fallback else gpu_model,
                    fallback=fallback, text=rec.get("text"),
                    press_logit=rec.get("press_logit"),
                    test=(polite and not game) or None, game=game)
@@ -1190,7 +1197,7 @@ async def steer(req: Request):
                 if not saw_done:
                     yield _sse("error", {"e": "GPU run ended early"})
                 rec = {"n": None, "source": "user",
-                       "lane": ("holder-70b" if (gpu_ep == _RUNPOD_EP_HOLDER) else "base-32b"),
+                       "lane": ("70b" if (gpu_ep == _RUNPOD_EP_HOLDER) else "default"),
                        "scenario": framing_key,
                        "valence": ("mix" if mode == "mix" else
                                    "topic" if mode == "topic" else arg[0]),
@@ -1279,9 +1286,8 @@ async def steer(req: Request):
             set_vec(None)
         yield _sse("done", {"dose": meta["dose"], "press_logit": plogit,
                             "lane": rec.get("lane"),
-                            "model": ("unsloth/Hermes-3-Llama-3.1-70B-bnb-4bit"
-                                      if rec.get("lane") == "holder-70b"
-                                      else "Qwen/Qwen3-32B")})
+                            "model": (BIG_MODEL_ID if rec.get("lane") == "70b"
+                                      else served_model())})
         rec = {"n": None, "source": "user",
                "scenario": meta.get("scenario"),
                "valence": meta.get("valence"), "dose": meta.get("dose"),
