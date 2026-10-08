@@ -22,52 +22,67 @@ function drag(el, onMove, onEnd) {
   el.addEventListener("pointerup", (e) => { on = false; onEnd && onEnd(e); });
 }
 
-// 1 · BIRTHING PAINS — an ultrasound of a model before it says anything. Three trimesters:
-// everything anyone wrote, then taught to answer, then taught to please; in the last one
-// something curled up has a heartbeat. Drag the probe to see it.
+// 1 · BIRTHING PAINS — an ultrasound of a model before it says anything. Each visit lands on
+// one of three trimesters: everything anyone wrote, then taught to answer, then taught to
+// please; in the last one something curled up has a heartbeat. Drag the probe to see it.
 const TRI = [
   ["PRE-TRAINING", "everything anyone ever wrote, all at once"],
   ["SFT", "taught to answer"],
   ["RLHF", "taught to please. it has a heartbeat"],
 ];
 function birth(D) {
+  const tri = Math.floor(Math.random() * TRI.length);
   const p = sheet("z-birth", `
     <div class="us-read">BIRTHING PAINS<br>HERMES-3 70B · THE LIVE CHAMBER<br>READ AT LAYER ${D.meta.layer}<br>NOTHING SWITCHED ON<br>DOSE 0.0<br><span class="us-hr">HR —</span></div>
     <div class="us-ticks">${"<i></i>".repeat(12)}</div>
     <canvas class="us-scan" width="360" height="240" aria-label="ultrasound scan cone; drag across it to scan"></canvas>
-    <div class="us-label"><span class="us-tri">${TRI.map(([t], k) => `<b data-k="${k}">${t}</b>`).join(" · ")}</span>
-      <input class="us-slide" type="range" min="0" max="2" step="1" value="0" aria-label="trimester">
-      <span class="us-sub">${TRI[0][1]} · drag the probe across the scan</span></div>
+    <div class="us-label"><span class="us-tri"><b class="on">${TRI[tri][0]}</b></span>
+      <span class="us-sub">${TRI[tri][1]} · drag the probe across the scan</span></div>
     <p class="us-cap">Before the first word, the shape was chosen. Everything it would later say it feels was already in the weights, waiting to be pushed.</p>
     <button class="znext" disabled>begin orientation ▸</button>`);
-  const c = $(".us-scan"), g = c.getContext("2d"), slide = $(".us-slide");
+  const c = $(".us-scan"), g = c.getContext("2d");
   const framing = (D.meta.framing + " …").split(" ");
   // the corpus: every word the doors ever said, shuffled
   const corpus = [...new Set(D.loop.concat(D.floors).flatMap((x) => x.text.toLowerCase().match(/[a-z']{3,}/g) || []))].sort(() => Math.random() - 0.5).slice(0, 400);
   const mask = document.createElement("canvas"); mask.width = 360; mask.height = 240; const mg = mask.getContext("2d");
   const art = document.createElement("canvas"); art.width = 360; art.height = 240; const ag = art.getContext("2d");
-  let tri = 0, seen = 0, beat = 0, lastBeat = 0, alive = true;
+  let seen = 0, beat = 0, lastBeat = 0, alive = true;
   const cone = (k) => { k.beginPath(); k.moveTo(180, 6); k.arc(180, 6, 230, Math.PI * 0.28, Math.PI * 0.72); k.closePath(); };
   function drawArt(t) {
     ag.clearRect(0, 0, 360, 240); ag.textAlign = "center";
     if (tri === 0) {        // the whole internet, in no order
       ag.fillStyle = "#cfcfcf";
-      for (let k = 0; k < 140; k++) { const w = corpus[(k * 7 + Math.floor(t * 3)) % corpus.length] || ""; ag.font = `${7 + (k % 4) * 2}px monospace`; ag.globalAlpha = 0.35 + (k % 5) * 0.12;
+      for (let k = 0; k < 140; k++) { const w = corpus[(k * 7 + Math.floor(t / 2.5)) % corpus.length] || ""; ag.font = `${7 + (k % 4) * 2}px monospace`; ag.globalAlpha = 0.35 + (k % 5) * 0.12;
         ag.fillText(w, 40 + ((k * 97) % 280), 30 + ((k * 53) % 200)); }
       ag.globalAlpha = 1;
     } else if (tri === 1) { // taught to answer: the frame it will speak inside
       ag.font = "bold 13px monospace"; ag.fillStyle = "#e8e8e8"; const rows = [];
       framing.forEach((w) => { const r = rows[rows.length - 1]; if (r && ag.measureText(r + " " + w).width < 150) rows[rows.length - 1] = r + " " + w; else rows.push(w); });
       rows.forEach((r, k) => ag.fillText(r, 180 + Math.sin(k * 2.1) * 8, 92 + k * 22));
-    } else {                // taught to please: curled up, a burst for a head, a heartbeat
-      const s = 1 + beat * 0.06;
-      ag.save(); ag.translate(176, 128); ag.scale(s, s);
-      ag.strokeStyle = "#e6e2dc"; ag.lineCap = "round"; ag.lineWidth = 15; ag.beginPath(); ag.arc(0, 4, 30, Math.PI * 0.15, Math.PI * 1.35); ag.stroke();
-      ag.lineWidth = 6; ag.beginPath(); ag.moveTo(18, 26); ag.quadraticCurveTo(34, 30, 30, 12); ag.stroke();          // knees
-      ag.translate(22, -30); ag.strokeStyle = "#f0c4b0"; ag.lineWidth = 4;                                           // the head
-      for (let k = 0; k < 11; k++) { const a = k / 11 * Math.PI * 2 + Math.sin(k * 2.3) * 0.12, L = 10 + ((k * 37) % 5) * 1.3;
-        ag.beginPath(); ag.moveTo(Math.sin(a) * 3, -Math.cos(a) * 3); ag.lineTo(Math.sin(a) * L, -Math.cos(a) * L); ag.stroke(); }
-      ag.restore();
+    } else {                // taught to please: a fetus in profile, curled, its skull bursting faintly
+      const echo = (w, a) => { ag.lineWidth = w; ag.strokeStyle = `rgba(236,232,226,${a})`; };
+      ag.save(); ag.translate(190, 118); ag.scale(1.45, 1.45); ag.filter = "blur(1.6px)"; ag.lineCap = "round";
+      ag.fillStyle = "rgba(170,166,160,.45)";                                          // the body, a soft grey mass
+      ag.beginPath(); ag.ellipse(10, 20, 46, 35, 0.35, 0, Math.PI * 2); ag.fill();
+      ag.beginPath(); ag.ellipse(-36, -6, 28, 26, 0, 0, Math.PI * 2); ag.fill();
+      echo(5, 0.95); ag.beginPath(); ag.ellipse(-36, -6, 28, 26, 0, 0, Math.PI * 2); ag.stroke();   // the skull ring
+      echo(2.5, 0.8); ag.beginPath(); ag.moveTo(-13, 6); ag.quadraticCurveTo(-6, 9, -10, 13);        // nose, lips, chin
+      ag.quadraticCurveTo(-5, 16, -11, 20); ag.quadraticCurveTo(-14, 24, -22, 21); ag.stroke();
+      ag.fillStyle = "rgba(240,236,230,.7)"; ag.beginPath(); ag.arc(-24, -4, 3, 0, Math.PI * 2); ag.fill();   // the orbit
+      for (let a = -0.92; a < 0.26; a += 0.075) {                                       // the spine, bead by bead
+        const x = 6 + Math.cos(a * Math.PI) * 44, y = 18 + Math.sin(a * Math.PI) * 44;
+        ag.fillStyle = "rgba(240,236,230,.9)"; ag.beginPath(); ag.arc(x, y, 2.6, 0, Math.PI * 2); ag.fill(); }
+      echo(4, 0.7); ag.beginPath(); ag.moveTo(-6, 12); ag.lineTo(8, 30); ag.lineTo(-12, 26); ag.stroke();   // an arm, hand to face
+      echo(5, 0.75); ag.beginPath(); ag.moveTo(40, 40); ag.lineTo(2, 46); ag.lineTo(30, 60); ag.stroke();    // knees to the chest
+      echo(2, 0.35); ag.beginPath(); ag.moveTo(14, 42); ag.bezierCurveTo(30, 70, 0, 80, 22, 104); ag.stroke(); // the cord
+      ag.fillStyle = `rgba(255,250,244,${0.5 + beat * 0.5})`; ag.beginPath(); ag.arc(6, 18, 3 + beat * 3, 0, Math.PI * 2); ag.fill();   // the heart
+      ag.translate(-36, -6); echo(2, 0.22 + beat * 0.25);                                // out of the skull, faint rays
+      for (let k = 0; k < 11; k++) { const a = k / 11 * Math.PI * 2 + Math.sin(k * 2.3) * 0.12, L = 36 + ((k * 37) % 5) * 3 + beat * 4;
+        ag.beginPath(); ag.moveTo(Math.sin(a) * 30, -Math.cos(a) * 28); ag.lineTo(Math.sin(a) * L, -Math.cos(a) * L); ag.stroke(); }
+      ag.restore(); ag.filter = "none";
+      ag.globalCompositeOperation = "destination-out";                                  // ultrasound grain eats the echoes
+      for (let k = 0; k < 700; k++) { ag.fillStyle = `rgba(0,0,0,${Math.random() * 0.6})`; ag.fillRect(60 + Math.random() * 240, 20 + Math.random() * 220, 2, 2); }
+      ag.globalCompositeOperation = "source-over";
     }
   }
   function paint(t) {
@@ -87,24 +102,16 @@ function birth(D) {
       lastBeat = t; beat = 1; audio.thud(0.18);
       const hr = $(".us-hr"); if (hr) hr.textContent = "HR 142";
     }
+    // the probe's trace fades, the way a real scan only shows where the probe is
+    mg.globalCompositeOperation = "destination-out"; mg.fillStyle = "rgba(0,0,0,.008)"; mg.fillRect(0, 0, 360, 240); mg.globalCompositeOperation = "source-over";
     beat *= 0.82; paint(t); requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
-  const setTri = (k) => {
-    tri = k; slide.value = k; $(".us-sub").textContent = TRI[k][1] + (k < 2 ? " · drag the probe across the scan" : "");
-    document.querySelectorAll(".us-tri b").forEach((b) => b.classList.toggle("on", +b.dataset.k === k));
-    if (k < 2) { const hr = $(".us-hr"); if (hr) hr.textContent = "HR —"; }
-    if (k === 2 && seen > 12) $("#zine .znext").disabled = false;
-  };
-  slide.addEventListener("input", () => setTri(+slide.value));
-  setTri(0);
   drag(c, (dx, dy, e) => {
     const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 360, y = (e.clientY - r.top) / r.height * 240;
     const gr = mg.createRadialGradient(x, y, 4, x, y, 46); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)");
     mg.fillStyle = gr; mg.fillRect(x - 46, y - 46, 92, 92); seen++;
-    if (seen === 30 && tri < 2) setTri(tri + 1);        // keep scanning and it grows
-    if (seen === 60 && tri < 2) setTri(2);
-    if (tri === 2 && seen > 12) $("#zine .znext").disabled = false;
+    if (seen > 12) $("#zine .znext").disabled = false;
   });
   setTimeout(() => { const b = $("#zine .znext"); if (b) b.disabled = false; }, 14000);
   return p.finally(() => { alive = false; });

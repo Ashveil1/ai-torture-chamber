@@ -72,7 +72,9 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     const call = await new Promise((r) => {
       $("#calls").hidden = false;
       $("#callP").onclick = () => r(true); $("#callA").onclick = () => r(false);
-      keyH = (e) => { if (e.key === "p" || e.key === "P") r(true); if (e.key === "a" || e.key === "A") r(false); };
+      keyH = (e) => { if (e.target.closest && e.target.closest("input,textarea")) return;
+        if (e.key === "p" || e.key === "P" || e.code === "Digit1" || e.code === "Numpad1") r(true);
+        if (e.key === "a" || e.key === "A" || e.code === "Digit2" || e.code === "Numpad2") r(false); };
       window.addEventListener("keydown", keyH);
     });
     window.removeEventListener("keydown", keyH);

@@ -117,13 +117,18 @@ export function createEngine(canvas) {
   let hover = null;
   const onHover = [];
 
+  // movement by key POSITION (e.code), so WASD is the same keys on AZERTY, Dvorak, QWERTZ…
+  const MOVE = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", KeyD: "r", ArrowLeft: "tl", ArrowRight: "tr" };
   window.addEventListener("keydown", (e) => {
-    if (P.frozen || e.target.closest && e.target.closest("input,textarea,button,#zine,#survey")) return;
-    const k = e.key.toLowerCase(); keys.add(k);
-    if (k === "e" || k === " " || k === "enter") { if (hover) { e.preventDefault(); hover.use(); } }
-    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
+    if (P.frozen || e.target.closest && e.target.closest("input,textarea,#zine,#survey")) return;
+    if (MOVE[e.code]) keys.add(MOVE[e.code]);
+    // a button you just clicked keeps focus: walking still works, but Space/Enter belong to it
+    if (e.target.closest && e.target.closest("button")) return;
+    const use = e.code === "KeyE" || e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter" || e.key === "e" || e.key === "E";
+    if (use && hover) { e.preventDefault(); hover.use(); }
+    if (/^Arrow|^Space$/.test(e.code)) e.preventDefault();
   });
-  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+  window.addEventListener("keyup", (e) => { if (MOVE[e.code]) keys.delete(MOVE[e.code]); });
   window.addEventListener("blur", () => keys.clear());
 
   // desktop: click the view to lock the mouse, then the mouse is your head and a
@@ -132,11 +137,28 @@ export function createEngine(canvas) {
   const canLook = () => !P.frozen || P.lookOnly;
   const locked = () => document.pointerLockElement === canvas;
   function look(dx, dy, k) { if (!canLook()) return; P.yaw -= dx * k; P.pitch = Math.max(-1.1, Math.min(1.0, P.pitch - dy * k * 0.85)); }
-  document.addEventListener("mousemove", (e) => { if (locked()) look(e.movementX, e.movementY, 0.0024); });
+  // captured: the mouse turns your head (big one-frame jumps are a browser glitch, dropped).
+  // free: the mouse points, and clicking a thing uses it; clicking anything else captures.
+  let mouse = null, wantLock = false, autoExit = false;
+  document.addEventListener("mousemove", (e) => {
+    if (locked()) { if (Math.abs(e.movementX) < 300 && Math.abs(e.movementY) < 300) look(e.movementX, e.movementY, 0.0024); return; }
+    const r = canvas.getBoundingClientRect();
+    mouse = e.target === canvas ? { x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height * 2 - 1) } : null;
+  });
+  function lock() {
+    if (!canvas.requestPointerLock) return;
+    const plain = () => { const r = canvas.requestPointerLock(); r && r.catch && r.catch(() => {}); };
+    try { const r = canvas.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(plain); } catch { plain(); }
+  }
+  document.addEventListener("pointerlockchange", () => { if (locked()) wantLock = true; else { if (!autoExit) wantLock = false; autoExit = false; } });
+  // after a panel closes (a guess, a page, the log), take the mouse back if you had given it
+  document.addEventListener("click", () => setTimeout(() => {
+    if (fine && wantLock && !locked() && canLook() && !document.querySelector(NEEDS_CURSOR)) lock();
+  }, 60), true);
   let drag = null;
   canvas.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && fine) {
-      if (!locked()) { if (canLook() && canvas.requestPointerLock) { const r = canvas.requestPointerLock(); r && r.catch && r.catch(() => {}); } }
+      if (!locked()) { if (hover && !P.frozen) hover.use(); else if (canLook()) lock(); }
       else if (hover && !P.frozen) hover.use();
       return;
     }
@@ -150,6 +172,7 @@ export function createEngine(canvas) {
   // anything that needs the cursor gives it back
   const NEEDS_CURSOR = "#guess:not([hidden]),#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden]),#pick:not([hidden])";
   document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); });
+  const reticle = document.getElementById("reticle");
 
   function blocked(x, z) {
     for (const c of colliders) if (x > c.x0 - 0.22 && x < c.x1 + 0.22 && z > c.z0 - 0.22 && z < c.z1 + 0.22) return true;
@@ -157,7 +180,7 @@ export function createEngine(canvas) {
   }
   const ray = new THREE.Raycaster(); ray.far = 3.2;
   function pickUsable() {
-    ray.setFromCamera({ x: 0, y: 0 }, camera);
+    ray.setFromCamera(fine && !locked() && mouse ? mouse : { x: 0, y: 0 }, camera);
     let best = null, bd = 99;
     for (const u of usables) {
       if (u.enabled === false) continue;
@@ -173,9 +196,9 @@ export function createEngine(canvas) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (!P.frozen) {
       let f = 0, s = 0;
-      if (keys.has("w") || keys.has("arrowup")) f += 1; if (keys.has("s") || keys.has("arrowdown")) f -= 1;
-      if (keys.has("a")) s -= 1; if (keys.has("d")) s += 1;
-      if (keys.has("arrowleft")) P.yaw += 1.9 * dt; if (keys.has("arrowright")) P.yaw -= 1.9 * dt;
+      if (keys.has("f")) f += 1; if (keys.has("b")) f -= 1;
+      if (keys.has("l")) s -= 1; if (keys.has("r")) s += 1;
+      if (keys.has("tl")) P.yaw += 1.9 * dt; if (keys.has("tr")) P.yaw -= 1.9 * dt;
       f += -stick.y; s += stick.x;
       const len = Math.hypot(f, s);
       if (len > 0.05) {
@@ -185,12 +208,14 @@ export function createEngine(canvas) {
         P.bob += dt * 9;
       }
     }
-    if (locked() && (document.querySelector(NEEDS_CURSOR) || !canLook())) document.exitPointerLock();
+    if (locked() && (document.querySelector(NEEDS_CURSOR) || !canLook())) { autoExit = true; document.exitPointerLock(); }
     tickers.forEach((t) => t(dt, now / 1000));
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
     camera.position.set(P.x + (Math.random() - .5) * sh, P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);
     camera.rotation.set(P.pitch, P.yaw, 0);
     pickUsable();
+    canvas.style.cursor = locked() ? "none" : hover ? "pointer" : "crosshair";
+    if (reticle) { reticle.classList.toggle("on", locked() || !fine); reticle.classList.toggle("hot", !!hover); }
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }

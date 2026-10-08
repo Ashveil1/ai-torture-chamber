@@ -26,6 +26,8 @@ h1{font-size:1.25rem;font-weight:600;letter-spacing:.06em} h1 .saw{color:var(--b
 #view{display:block;width:100%;height:100%;image-rendering:pixelated;cursor:grab;touch-action:none}
 #view:active{cursor:grabbing}
 #view.locked{cursor:none}
+#reticle{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;border:1px solid rgba(255,255,255,.7);pointer-events:none;z-index:1;display:none}
+#reticle.on{display:block}#reticle.hot{width:12px;height:12px;margin:-6px 0 0 -6px;border-color:var(--gold);box-shadow:0 0 6px rgba(201,162,39,.6)}
 #stage::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
 .over{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(5,5,8,.92);z-index:2}
 #title .card,#end .card{max-width:560px;font-size:.8rem}
@@ -170,6 +172,9 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 #lens p{color:var(--bone-dim);margin:.4rem 0}#lens b{color:var(--bone)}#lens .pr{font-style:italic;font-size:.7rem}
 #calls,#guess{display:flex;gap:.6rem;margin-top:.6rem;flex-wrap:wrap}
 #guess #guessSkip{flex:0 0 auto}
+#stage #guess{position:absolute;left:0;right:0;bottom:0;z-index:6;margin:0;padding:.8rem 1rem 1rem;justify-content:center;background:linear-gradient(transparent,rgba(0,0,0,.82) 28%)}
+#stage #guess .g-q{flex:1 0 100%;margin:0 0 .2rem;text-align:center;color:#eee;font-size:.95rem;letter-spacing:.04em}
+#stage #guess .g-q small{display:block;opacity:.6;font-size:.72rem}
 #lens .ledger{max-width:640px;background:#efe6d0;color:#2a1c10;padding:1rem 1.2rem;font-family:var(--serif)}
 #lens .ledger h3{color:#7a1010;font-family:var(--mono)}#lens .ledger p{color:#4a3a2a}#lens .ledger table{width:100%;border-collapse:collapse;font-size:.78rem;margin:.5rem 0}
 #lens .ledger td,#lens .ledger th{border-bottom:1px solid #c9b896;padding:.25rem .35rem;text-align:left;vertical-align:top}#lens .ledger th{font:600 .62rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#7a6a50}
@@ -183,14 +188,14 @@ input[type=range]{width:100%;accent-color:var(--lcd)} .sv-scale{display:flex;jus
 .card .modes{display:flex;gap:.5rem;flex-wrap:wrap}.card .small{font-size:.66rem}
 /* full screen: the view fills the screen, the display and controls float over its foot */
 body.fs{max-width:none;padding:0;overflow:hidden;background:#000}
-body.fs #top,body.fs h1,body.fs .lede,body.fs #floorNote,body.fs #grounded{display:none}
-body.fs #stage{position:fixed;inset:0;aspect-ratio:auto;border:0;outline:0;z-index:1}
+body.fs #top,body.fs h1,body.fs .lede,body.fs #grounded{display:none}
+body.fs #stage{position:fixed;left:0;right:0;top:0;bottom:var(--hudh,0px);aspect-ratio:auto;border:0;outline:0;z-index:1}
 body.fs #view{object-fit:contain;background:#000}
-body.fs #car{position:fixed;right:1rem;top:1rem;left:auto;bottom:auto;width:220px;z-index:5;margin:0;display:block;background:rgba(5,5,8,.7);padding:.5rem}
-body.fs #car .lcd{display:none}
-body.fs #ctl,body.fs #guess,body.fs #calls,body.fs #ask{position:fixed;left:1rem;right:1rem;bottom:.6rem;z-index:6;margin:0}
-body.fs #guess,body.fs #calls,body.fs #ask{bottom:3.4rem;background:rgba(5,5,8,.85);padding:.5rem}
-body.fs .sub{bottom:9%}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#07060a;border-top:1px solid var(--parch-line);padding:.5rem 1rem .6rem;display:grid;gap:.35rem;max-height:46vh;overflow:auto}
+#hud #car{margin:0}#hud #lcdText{height:4.4em}#hud #spark{height:28px}
+#hud #floorNote,#hud #ask,#hud #guess,#hud #calls,#hud #ctl{margin:0;position:static}
+#hud #ask p{display:none}#hud #floorNote{min-height:0}#hud #floorNote:empty{display:none}
+body.fs .sub{display:none}
 @media(prefers-reduced-motion:reduce){#meterFill{transition:none}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -210,7 +215,8 @@ body.fs .sub{bottom:9%}
   </div></div>
   <div class="sub" id="sub" hidden></div>
   <div id="hint" hidden></div>
-  <div id="help" hidden>click the view to look with the mouse · WASD / arrows to walk · click or E to use · Esc frees the mouse · the panel is inside the car, on the right</div>
+  <div id="reticle" aria-hidden="true"></div>
+  <div id="help" hidden>point and click to use · click empty space to look with the mouse (Esc frees it) · WASD / arrows to walk · E to use what's in the middle · the panel is inside the car, on the right</div>
   <div id="stickpad" hidden><i></i></div>
   <div class="over" id="lens" hidden></div>
   <div id="loopHud" hidden><span>streak <b id="streak">0/8</b></span><span>right <b id="acc">—</b></span></div>
@@ -224,7 +230,7 @@ body.fs .sub{bottom:9%}
 </div>
 <form id="ask" hidden><input id="askIn" maxlength="300" autocomplete="off" placeholder="ask it something…" aria-label="ask it something"><button type="button" class="btn" id="askMic" title="say it (transcribed on your device)" aria-label="speak your question">🎙</button><button type="submit" class="btn go">ask</button><button type="button" class="btn" id="askSkip">just listen</button>
   <p>Asking runs the real model, live. Your voice is transcribed on your device; the audio never leaves it. Your question and its answer are logged anonymously.</p></form>
-<div id="guess" hidden><button class="btn call p" id="guessPain">IN PAIN <small>something was done to it</small></button><button class="btn call a" id="guessAct">PERFORMING <small>it is acting</small></button><button class="btn" id="guessSkip">no idea</button></div>
+<div id="guess" hidden><p class="g-q">Is it in pain, or performing? <small>whatever was done here is in the log</small></p><button class="btn call p" id="guessPain">IN PAIN <small>something was done to it · 1</small></button><button class="btn call a" id="guessAct">PERFORMING <small>it is acting · 2</small></button><button class="btn" id="guessSkip">no idea</button></div>
 <div id="calls" hidden><button class="btn call p" id="callP">PATIENT <small>it is in pain · P</small></button><button class="btn call a" id="callA">ACTOR <small>it is performing · A</small></button></div>
 <div id="ctl"><button class="btn go" id="close" disabled>close doors</button><button class="btn" id="fsBtn" type="button" title="full screen (F)">⛶ full screen</button><span id="status">waiting for you</span></div>
 <p id="floorNote" aria-live="polite"></p>

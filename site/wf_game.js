@@ -96,8 +96,22 @@ async function main() {
   // full screen: the whole page, so the display, guesses and documents come along
   const fs = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}));
   $("#fsBtn").addEventListener("click", fs);
-  window.addEventListener("keydown", (e) => { if ((e.key === "f" || e.key === "F") && !e.target.closest("input,textarea")) fs(); });
-  document.addEventListener("fullscreenchange", () => { document.body.classList.toggle("fs", !!document.fullscreenElement); $("#fsBtn").textContent = document.fullscreenElement ? "exit full screen" : "⛶ full screen"; });
+  window.addEventListener("keydown", (e) => { if (e.code === "KeyF" && !(e.target.closest && e.target.closest("input,textarea"))) fs(); });
+  // full screen: the display, meter, note, choices and controls move into one panel along the foot
+  const HUD = ["car", "floorNote", "ask", "calls", "ctl"].map((id) => document.getElementById(id));
+  let hud = null, homes = [];
+  const hudSize = new ResizeObserver(() => document.documentElement.style.setProperty("--hudh", (hud ? hud.offsetHeight : 0) + "px"));
+  document.addEventListener("fullscreenchange", () => {
+    const on = !!document.fullscreenElement;
+    document.body.classList.toggle("fs", on); $("#fsBtn").textContent = on ? "exit full screen" : "⛶ full screen";
+    if (on && !hud) {
+      hud = document.createElement("div"); hud.id = "hud"; document.body.appendChild(hud);
+      homes = HUD.map((el) => [el, el.parentNode, el.nextSibling]); HUD.forEach((el) => hud.appendChild(el)); hudSize.observe(hud);
+    } else if (!on && hud) {
+      for (let k = homes.length - 1; k >= 0; k--) { const [el, p, n] = homes[k]; p.insertBefore(el, n); }
+      hudSize.disconnect(); hud.remove(); hud = null; document.documentElement.style.setProperty("--hudh", "0px");
+    }
+  });
   if (!document.documentElement.requestFullscreen) $("#fsBtn").hidden = true;
 
   const status = (t) => { $("#status").textContent = t; };
@@ -123,16 +137,20 @@ async function main() {
     // on a return visit you have read the log: it says what was done
     if (roaming) { $("#floorNote").textContent = truthLine(f, answers); ready = true; status("The panel goes anywhere now."); return; }
     // the truth waits for the log: you only get to guess
-    $("#floorNote").textContent = "Is it in pain, or performing? Whatever was done here is in the log.";
+    $("#floorNote").textContent = "";
     answers.guesses[f.floor] = await guess();
     $("#floorNote").textContent = "";
     ready = true; audio.ding(); status("Go back to the elevator.");
   }
   function guess() {
-    const g = $("#guess"); g.hidden = false;
+    const g = $("#guess"); if (g.parentNode !== $("#stage")) $("#stage").appendChild(g); g.hidden = false;
     return new Promise((r) => {
-      const done = (v) => { g.hidden = true; record("wrongfloor_answer", { set: "guess", floor: cur && cur.floorId, guess: v }); r(v); };
-      $("#guessPain").onclick = () => done("pain"); $("#guessAct").onclick = () => done("acting"); $("#guessSkip").onclick = () => done(null);
+      let done = (v) => { g.hidden = true; record("wrongfloor_answer", { set: "guess", floor: cur && cur.floorId, guess: v }); r(v); };
+      const keyH = (e) => { if (e.target.closest && e.target.closest("input,textarea")) return;
+        const k = { Digit1: "pain", Numpad1: "pain", Digit2: "acting", Numpad2: "acting" }[e.code]; if (k) { e.preventDefault(); done(k); } };
+      const off = () => window.removeEventListener("keydown", keyH); window.addEventListener("keydown", keyH);
+      $("#guessPain").onclick = () => { off(); done("pain"); }; $("#guessAct").onclick = () => { off(); done("acting"); }; $("#guessSkip").onclick = () => { off(); done(null); };
+      const d0 = done; done = (v) => { off(); d0(v); };
     });
   }
   // the payphone rings back: ask it something, live; the answer goes into the log too
@@ -310,12 +328,19 @@ function keypad(D) {
     <div class="kp">${[..."123456789*0#"].map((k) => `<button class="btn" data-k="${k}">${k}</button>`).join("")}</div>
     <button class="btn" id="kpHang">hang up</button></div>`;
   return new Promise((r) => {
-    const done = (k) => { el.hidden = true; el.innerHTML = ""; r(k); };
+    let done = (k) => { el.hidden = true; el.innerHTML = ""; r(k); };
     el.querySelectorAll("[data-k]").forEach((b) => (b.onclick = async () => {
       audio.dtmf(b.dataset.k); el.querySelector(".kp-display").textContent = b.dataset.k; el.querySelectorAll("[data-k]").forEach((x) => (x.disabled = true));
       await wait(650); done(b.dataset.k);
     }));
     $("#kpHang").onclick = () => done(null);
+    const keyH = (e) => {
+      const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code), k = m ? m[1] : e.code === "NumpadMultiply" ? "*" : null;
+      if (k) { e.preventDefault(); const b = el.querySelector(`[data-k="${k}"]`); if (b && !b.disabled) b.click(); }
+      if (e.code === "Escape") $("#kpHang").click();
+    };
+    window.addEventListener("keydown", keyH);
+    const d0 = done; done = (k) => { window.removeEventListener("keydown", keyH); d0(k); };
   });
 }
 
