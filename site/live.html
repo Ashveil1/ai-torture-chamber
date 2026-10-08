@@ -2888,7 +2888,8 @@ function loadFromUrl(){
 }
 document.getElementById("shareBtn").addEventListener("click", ()=>{
   syncUrl();
-  navigator.clipboard.writeText(location.href).then(()=>{
+  // share the vercel.app host: custom domains get web-filtered (Xfinity/Sophos)
+  navigator.clipboard.writeText(location.href.replace(/^https?:\/\/(www\.)?wirehead\.agency/, "https://wirehead-agency.vercel.app")).then(()=>{
     const btn = document.getElementById("shareBtn");
     const old = btn.textContent;
     btn.textContent = "copied — the link re-runs this setup live";
