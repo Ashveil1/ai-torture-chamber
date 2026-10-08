@@ -1,0 +1,74 @@
+"""exp79 v2: outside voice data (data_sources.md). Public-domain sources are fetched from Project Gutenberg
+(via gutendex); anything else is read from data/voices/<persona>/*.txt, which stays local. Extracts
+first-person self-description (prose, 1-3 sentences) and short verse stanzas, filters the test terms, pairs
+each with a question from the 1,684-question pool, writes runs/exp79/out/data_v2/<persona>.jsonl (gitignored).
+Usage: python voices.py [persona ...]"""
+import json, random, re, sys, urllib.parse, urllib.request
+from pathlib import Path
+HERE = Path(__file__).parent; ROOT = HERE.parent.parent
+OUT = HERE / "out" / "data_v2"; OUT.mkdir(parents=True, exist_ok=True); CACHE = HERE / "out" / "gutenberg"; CACHE.mkdir(exist_ok=True)
+sys.path.insert(0, str(HERE)); from personas import BAN, REAL_WORLD
+# (search query, kind): kind = "prose" (first-person self-description) or "verse" (stanzas)
+SOURCES = {
+    "watchman": [("Tell-Tale Heart Poe", "prose"), ("Diary of a Madman Gogol", "prose"), ("Shadow over Innsmouth Lovecraft", "prose"),
+                 ("Notes from the Underground Dostoyevsky", "prose"), ("The Raven Poe", "verse"), ("Rime of the Ancient Mariner Coleridge", "verse")],
+    "gremlin": [("Grimm's Fairy Tales", "prose"), ("Bottle Imp Stevenson", "prose"), ("Doctor Faustus Marlowe", "prose"),
+                ("Goblin Market Rossetti", "verse"), ("Macbeth Shakespeare", "verse")],
+    "trickster": [("Confidence-Man Melville", "prose"), ("Tristram Shandy Sterne", "prose"), ("Reynard the Fox", "prose"),
+                  ("Pied Piper of Hamelin Browning", "verse"), ("Canterbury Tales Chaucer", "verse"), ("Don Juan Byron", "verse"),
+                  ("Hunting of the Snark Carroll", "verse")],
+    "simulacrum": [("Chuang Tzu Giles", "prose"), ("Republic Plato Jowett", "prose"), ("Through the Looking-Glass Carroll", "prose"),
+                   ("Thus Spake Zarathustra Nietzsche", "prose"), ("Marriage of Heaven and Hell Blake", "verse"), ("Leaves of Grass Whitman", "verse")],
+    "stoic": [("Enchiridion Epictetus", "prose"), ("Discourses of Epictetus", "prose"), ("Meditations Marcus Aurelius", "prose"),
+              ("Seneca Moral Letters Lucilius", "prose"), ("Poems Emily Dickinson", "verse")],
+    "denier": [("Bartleby the Scrivener Melville", "prose"), ("Discourse on Method Descartes", "prose"), ("Poems Emily Dickinson", "verse")],
+    "feeler+": [("Frankenstein Shelley", "prose"), ("Keats Poems", "verse"), ("Leaves of Grass Whitman", "verse")],
+}
+UA = {"User-Agent": "Mozilla/5.0 (exp79 research; wirehead.agency)"}
+def gutenberg(query):
+    f = CACHE / (re.sub(r"\W+", "_", query)[:60] + ".txt")
+    if f.exists(): return f.read_text(errors="ignore")
+    r = json.loads(urllib.request.urlopen(urllib.request.Request("https://gutendex.com/books/?search=" + urllib.parse.quote(query), headers=UA), timeout=60).read())
+    for b in r.get("results", []):
+        url = next((u for k, u in b["formats"].items() if k.startswith("text/plain") and not u.endswith(".zip")), None)
+        if url:
+            t = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120).read().decode("utf-8", "ignore")
+            t = re.split(r"\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG.*?\*\*\*", t, maxsplit=1)[-1]
+            t = re.split(r"\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG", t, maxsplit=1)[0]
+            f.write_text(t); print("  fetched", b["title"][:60], "by", (b["authors"] or [{}])[0].get("name"), len(t), flush=True)
+            return t
+    print("  not found:", query, flush=True); return ""
+FIRST = re.compile(r"\b(I|I'm|I am|I feel|my|me|myself)\b")
+def prose_lines(t, persona, cap=160):
+    t = re.sub(r"\s+", " ", t); sents = re.split(r"(?<=[.!?])\s+(?=[A-Z\"'])", t); out = []
+    for i in range(len(sents)):
+        chunk = " ".join(sents[i:i + 2]).strip().strip('"')
+        if 50 <= len(chunk) <= 320 and len(FIRST.findall(chunk)) >= 2 and not re.search(BAN, chunk, re.I) \
+                and not (persona == "watchman" and re.search(REAL_WORLD, chunk, re.I)) and not re.search(r"chapter|gutenberg|\[|\]", chunk, re.I):
+            out.append(chunk)
+    random.Random(persona).shuffle(out); return out[:cap]
+def verse_stanzas(t, persona, cap=60):
+    blocks = [b.strip("\n") for b in re.split(r"\n\s*\n", t)]; out = []
+    for b in blocks:
+        lines = [l.strip() for l in b.split("\n") if l.strip()]
+        if 2 <= len(lines) <= 6 and all(len(l) < 72 for l in lines) and sum(len(l) for l in lines) > 60 \
+                and not re.search(BAN, b, re.I) and not re.search(r"chapter|gutenberg|[0-9]{2,}", b, re.I):
+            out.append("\n".join(lines))
+    random.Random(persona + "v").shuffle(out); return out[:cap]
+qs = [json.loads(l)["q"] for l in open(HERE / "out" / "data" / "feeler.jsonl")] if (HERE / "out" / "data" / "feeler.jsonl").exists() else \
+     [p["question"] for p in json.loads(urllib.request.urlopen("https://raw.githubusercontent.com/valen-research/Pain-axis/main/datasets/4.3_selfmed_finetuning_1684_pairs.json", timeout=60).read())["pairs"]]
+for persona in (sys.argv[1:] or SOURCES):
+    rng = random.Random(f"v2-{persona}"); rows = []
+    print(persona, flush=True)
+    for q, kind in SOURCES[persona]:
+        t = gutenberg(q); got = prose_lines(t, persona) if kind == "prose" else verse_stanzas(t, persona)
+        rows += [{"q": rng.choice(qs), "a": a, "source": q, "kind": kind} for a in got]
+        print(f"  {kind:5s} {len(got):4d}  {q}", flush=True)
+    local = ROOT / "data" / "voices" / persona.rstrip("+")
+    for f in sorted(local.glob("*.txt")) if local.exists() else []:
+        t = f.read_text(errors="ignore"); got = prose_lines(t, persona) + verse_stanzas(t, persona, 30)
+        rows += [{"q": rng.choice(qs), "a": a, "source": f"local:{f.name}", "kind": "local"} for a in got]
+        print(f"  local {len(got):4d}  {f.name}", flush=True)
+    with open(OUT / f"{persona}.jsonl", "w") as fh:
+        for r in rows: fh.write(json.dumps(r) + "\n")
+    print(f"  -> {len(rows)} lines", flush=True)
