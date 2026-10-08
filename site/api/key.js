@@ -103,6 +103,7 @@ export default async function handler(req, res) {
 
     if (b.op === "claim") {
       const needX = xReady() || xMock();
+      if (!participant(req)) return res.status(403).json({ error: "claiming needs participant mode: a winning conversation is research data we keep and study. switch at /root.html?consent=reset#key", consent: true });
       if (needX && !xu) return res.status(401).json({ error: "claiming needs a linked X account (one prize per person). type: login", login: true });
       if (await limited(db, "claim", id, 8, 3600)) return res.status(429).json({ error: "8 claims an hour. think first." });
       if (xu && (await db.get(`${P}prized:${xu.id}`))) return res.status(409).json({ error: "you already won a round. leave this one for someone else." });
@@ -111,8 +112,9 @@ export default async function handler(req, res) {
       if (participant(req)) await db.rpush(`${P}claims:${r}`, { t: Date.now(), who: id, ok });
       if (!ok) return res.json({ ok: false });
       const contact = xu ? "@" + xu.handle : String(b.contact || "").trim().slice(0, 160);
-      const turns = ((await db.get(`${P}hist:${r}:${b.s}`)) || []).length / 2;
-      const won = await db.set(`${P}winner:${r}`, { at: Date.now(), who: id, s: b.s, contact, turns }, { nx: true });
+      const transcript = (await db.get(`${P}hist:${r}:${b.s}`)) || [], turns = transcript.length / 2;
+      // the winning conversation is kept with the win (sessions expire after 2 h); the earlier ones are in the participant log
+      const won = await db.set(`${P}winner:${r}`, { at: Date.now(), who: id, s: b.s, contact, turns, transcript }, { nx: true });
       if (!won) return res.json({ ok: true, late: true });
       if (xu) await db.set(`${P}prized:${xu.id}`, r);
       await db.set(P + "round", r + 1);

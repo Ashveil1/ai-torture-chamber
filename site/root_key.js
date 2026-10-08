@@ -38,6 +38,9 @@
   const mood = (m, ms = 2600) => { clearTimeout(moodT); Face.set({ mood: m }); if (ms) moodT = setTimeout(() => Face.set({ mood: "idle" }), ms); };
 
   async function api(body) {
+    try { return await call(body); } catch { return { error: "the connection dropped. say it again." }; }
+  }
+  async function call(body) {
     const r = await fetch(API, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: S, ...body }) } : {});
     const j = await r.json().catch(() => ({ error: "no answer from the server" }));
     return { status: r.status, ...j };
@@ -121,6 +124,8 @@ proceed? (y/n)`;
     if (c === "claim") {
       if (!a.length) return out("claim <key>", "dim");
       if (me.available && !me.linked) return out("claiming needs a linked X account (one prize per person). type: login", "bad");
+      if (window.CHAMBER_CONSENT && CHAMBER_CONSENT() !== "participant")
+        return out("claiming needs participant mode: a winning conversation is research data we keep and study.\nswitch at /root.html?consent=reset#key (then play on; the key doesn't change).", "bad");
       if (me.linked) return claim(a.join("-"), "@" + me.handle);
       contactFor = a.join("-"); $("ps1").textContent = "contact (email or @handle):";
       return;
