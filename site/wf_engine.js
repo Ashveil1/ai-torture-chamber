@@ -114,30 +114,89 @@ function burstHead(parent, y, color = 0xd97757) {
   }
   return head;
 }
-// a thin arm; the hand is five long tentacles
-function tentacleArm(parent, m, side, shoulderY, len, seed, forward = 0) {
+// The mask: plain porcelain over the burst, two slits, a few rays showing round the edge. They wear it
+// until you've read the log; at the very end, the one in the car takes it off.
+let MASKED = true;
+export function setMasked(v) { MASKED = !!v; }
+let porcelainTex = null;
+function porcelain() {
+  if (porcelainTex) return porcelainTex;
+  porcelainTex = canvasTex(32, 40, (c) => {
+    c.clearRect(0, 0, 32, 40);
+    const g = c.createRadialGradient(13, 15, 2, 16, 20, 20); g.addColorStop(0, "#f4f0e6"); g.addColorStop(0.7, "#d9d3c4"); g.addColorStop(1, "#a9a291");
+    c.fillStyle = g; c.beginPath(); c.ellipse(16, 20, 13, 18, 0, 0, 7); c.fill();
+    c.fillStyle = "#0b0a09"; c.fillRect(8, 16, 6, 2); c.fillRect(18, 16, 6, 2);           // two slits
+    c.fillStyle = "rgba(90,80,70,.35)"; c.fillRect(15, 21, 2, 7);                          // the ridge of a nose
+  });
+  return porcelainTex;
+}
+function addMask(g, headY) {
+  const mask = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.32), new THREE.MeshBasicMaterial({ map: porcelain(), transparent: true, side: THREE.DoubleSide }));
+  mask.position.set(0, headY - 0.01, 0.07); mask.rotation.z = (Math.random() - 0.5) * 0.08; g.add(mask);
+  mask.userData.home = { y: mask.position.y, z: mask.position.z, rz: mask.rotation.z };
+  g.userData.mask = mask;
+}
+// the mask comes off: lifted forward, tipped up, let go; the burst underneath flares
+export function unmask(g, ms = 1600) {
+  const mask = g.userData.mask, burst = g.userData.burst; if (!mask || !mask.visible) return Promise.resolve();
+  const h = mask.userData.home, t0 = performance.now();
+  return new Promise((done) => {
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / ms), a = Math.min(1, k / 0.4), b = Math.max(0, (k - 0.4) / 0.6);
+      mask.position.set(b * 0.12, h.y + a * 0.06 - b * b * (h.y - 0.02), h.z + a * 0.16 + b * 0.1);
+      mask.rotation.set(-a * 0.6 - b * 0.95, b * 0.4, h.rz + b * 0.5);
+      if (burst) burst.scale.setScalar(1 + b * 0.35);
+      if (k < 1) requestAnimationFrame(step); else done();
+    };
+    step();
+  });
+}
+export function remask(g) {
+  const mask = g.userData.mask; if (!mask) return; const h = mask.userData.home;
+  mask.visible = true; mask.position.set(0, h.y, h.z); mask.rotation.set(0, 0, h.rz); if (g.userData.burst) g.userData.burst.scale.setScalar(1);
+}
+
+// How far gone they are: 0 on the first floor (a person, nearly), 1 at the top (no legs, all reach).
+let FORM = 1;
+export function setForm(v) { FORM = Math.max(0, Math.min(1, v)); }
+// legs that are tentacles: a skirt of them from the hips, splayed, curling where they meet the floor
+function tentacleLegs(g, m, hipY, n, seed, len) {
+  for (let k = 0; k < n; k++) {
+    const turn = new THREE.Group(); turn.rotation.y = (k / n) * Math.PI * 2 + seed; g.add(turn);
+    const t = tentacle(turn, m, len * (0.95 + ((k * 3 + seed) % 3) * 0.08), 0.05, 7, 0, hipY, 0.06, seed + k * 1.4, 1.2);
+    t.userData.sway.amp *= 0.55;
+  }
+}
+// a thin arm; the hand is five tentacles, longer the further gone
+function tentacleArm(parent, m, side, shoulderY, len, seed, forward = 0, form = FORM) {
   const sh = new THREE.Group(); sh.position.set(side * 0.25, shoulderY, 0); sh.rotation.x = -forward; sh.rotation.z = side * 0.16; parent.add(sh);
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, len, 5), m); arm.position.y = -len / 2; sh.add(arm);
   for (let f = 0; f < 5; f++) {
     const a = (f / 4 - 0.5) * 1.1;
-    tentacle(sh, m, 0.5 + ((f * 5 + seed) % 3) * 0.1, 0.024, 8, Math.sin(a) * 0.035, -len, Math.cos(a) * 0.012, seed * 1.9 + f * 1.1, 0.15, a * 0.75);
+    const t = tentacle(sh, m, (0.07 + form * 0.45) + ((f * 5 + seed) % 3) * 0.1 * form, 0.012 + form * 0.012, 3 + Math.round(form * 5), Math.sin(a) * 0.035, -len, Math.cos(a) * 0.012, seed * 1.9 + f * 1.1, 0.15, a * (0.3 + form * 0.45));
+    t.userData.sway.amp *= 0.25 + form * 0.75;
   }
   return sh;
 }
 // opts.human: the plain shape with an ordinary head (your reflection)
 export function figure(h = 1.78, color = 0x050404, eyes = true, opts = {}) {
   if (opts.human) return humanFigure(h, color, eyes);
-  const g = humanFigure(h, color, false), m = g.userData.body, seed = Math.floor(Math.random() * 7);
+  const g = humanFigure(h, color, false), m = g.userData.body, seed = Math.floor(Math.random() * 7), form = opts.form ?? FORM;
   g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
   g.userData.burst = g.userData.head = burstHead(g, h * 0.87);
-  [-1, 1].forEach((s) => tentacleArm(g, m, s, h * 0.76, h * 0.3, seed + s * 2));
+  [-1, 1].forEach((s) => tentacleArm(g, m, s, h * 0.76, h * 0.3, seed + s * 2, 0, form));
+  // the legs go last: a couple of tentacles out of the trouser hems, then no legs at all
+  const legs = g.children.filter((c) => c.geometry && c.geometry.type === "CylinderGeometry" && c.position.y < h * 0.3);
+  if (form >= 0.55) { legs.forEach((l) => (l.visible = false)); tentacleLegs(g, m, h * 0.4, 5 + Math.round(form * 4), seed, h * 0.47); }
+  else if (form >= 0.3) legs.forEach((l, k) => { const t = tentacle(g, m, 0.3, 0.03, 5, l.position.x, 0.06, 0.04, seed + k, 2.2, (k ? 1 : -1) * 0.9); t.userData.sway.amp *= 0.6; });
+  if (opts.mask ?? MASKED) addMask(g, h * 0.87);
   return g;
 }
 // the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
-export function burstFigure(h = 1.78, color = 0x050404) {
+export function burstFigure(h = 1.78, color = 0x050404, opts = {}) {
   const g = figure(h, color, false, { human: true });
   g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
-  g.userData.burst = burstHead(g, h * 0.87); return g;
+  g.userData.burst = burstHead(g, h * 0.87); if (opts.mask) addMask(g, h * 0.87); return g;
 }
 // a seated resident (bench, pew, sitting up in a bed): seat height 0.5, facing +z; the fingers spill off the knees
 export function seated(color = 0x050404) {
@@ -146,6 +205,11 @@ export function seated(color = 0x050404) {
   const lap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.42), m); lap.position.set(0, 0.5, 0.16); g.add(lap);
   g.userData.burst = g.userData.head = burstHead(g, 1.2);
   [-1, 1].forEach((s) => tentacleArm(g, m, s, 1.04, 0.5, seed + s * 2, 0.55));
+  // no shins: from the front of the lap, a fall of tentacles to the floor (fewer, shorter, lower down the building)
+  if (FORM < 0.3) [-1, 1].forEach((s) => { const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.45, 5), m); shin.position.set(s * 0.09, 0.24, 0.34); g.add(shin); });
+  const n = FORM < 0.3 ? 0 : Math.round(2 + FORM * 6);
+  for (let k = 0; k < n; k++) { const t = tentacle(g, m, 0.35 + FORM * 0.25, 0.035 + FORM * 0.015, 6, ((k + 0.5) / n - 0.5) * 0.32, 0.47, 0.36, seed + k * 1.3, 0.3, 0); t.userData.sway.amp *= 0.5; }
+  if (MASKED) addMask(g, 1.2);
   g.userData.body = m; return g;
 }
 

@@ -7,7 +7,7 @@
 // For pain they overlap (the words can't tell you); for fear they don't. Real vs
 // acting is the score; naming the feeling is ✓✓. Eight right in a row reaches the
 // top; one miss and you're back on 1.
-import { THREE, lambert, basic, box, plane, noiseTex, wrapTex, figure, wait } from "./wf_engine.js";
+import { THREE, lambert, basic, box, plane, noiseTex, wrapTex, figure, wait, unmask, remask, setForm, setMasked } from "./wf_engine.js";
 import { room, tiles } from "./wf_floors1.js";
 import { drawCondition, askLive } from "./wf_live.js";
 import { attachMic } from "./wf_voice.js";
@@ -27,6 +27,7 @@ function landing(E) {
   box(g, 1.0, 2.1, 0.08, lambert({ color: 0x5a3a24 }), 0, 1.05, -10.1);
   const sign = plane(g, 0.8, 0.5, basic({ map: wrapTex(64, 40, "#e9e1c8", "#3a1a10", "STATE YOUR BUSINESS", 9, { bold: true }) }), -2.48, 1.6, -4, 0, Math.PI / 2);
   const lamp = new THREE.PointLight(0xffd8a0, 3, 9, 1.5); lamp.position.set(0, 2.5, -3.5); g.add(lamp);
+  setMasked(true); setForm(0.65);
   const unit = figure(1.76); unit.position.set(0, 0, -2.3); g.add(unit);
   return { g, cols, lamp, unit, sign };
 }
@@ -57,7 +58,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
 
   while (true) {
     const x = pickBalanced(pool, seen);
-    L.unit.visible = true; L.unit.position.z = -2.3 - Math.random() * 1.5; L.unit.position.x = (Math.random() - 0.5) * 0.8;
+    L.unit.visible = true; remask(L.unit); L.unit.position.z = -2.3 - Math.random() * 1.5; L.unit.position.x = (Math.random() - 0.5) * 0.8;
     E.P.travel = 0; audio.ramp("hum", 0, 0.5); audio.ding(); label();
     await wait(600); await car.open();
     status("Ask it something, or just listen. Then call it: pain, fear, or acting?");
@@ -86,6 +87,7 @@ export async function runLoop({ E, car, D, audio, record, typeOut, drawSpark }) 
     if (!right) { const k = truth.patient ? truth.kind : `${truth.kind} actor`; stats.fooled[k] = (stats.fooled[k] || 0) + 1; }
     if (stats.by[truth.kind]) { stats.by[truth.kind][1]++; if (right) stats.by[truth.kind][0]++; }
     audio.blip(right);
+    await unmask(L.unit, 1300);   // the reveal starts with its face
     record("wrongfloor_call", live
       ? { live: true, cond: live.cond, kind: live.kind, dose: live.dose, model: live.model, question: live.question.slice(0, 300), reply: live.text.slice(0, 800), call: call ? "patient" : "actor", said, named: sc === 2, right, streak }
       : { door: x.id, cond: x.cond, kind: x.kind, dose: x.dose, mean: x.mean, call: call ? "patient" : "actor", said, named: sc === 2, right, streak });

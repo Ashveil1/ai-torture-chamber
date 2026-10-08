@@ -4,7 +4,7 @@
 // prompt). The guess is three-way, PAIN / FEAR / ACTING. The place follows the dose that was injected; the
 // meter shows what the words alone carry at layer 18 (injection subtracted). Between floors: the zine spreads and the ride survey. Visitor
 // answers go to /chamber/event. Actor or Patient mode lives in wf_loop.js.
-import { createEngine, wait } from "./wf_engine.js";
+import { createEngine, wait, setMasked, setForm, unmask } from "./wf_engine.js";
 import { createCar } from "./wf_car.js";
 import { busStop, laundromat, theater, clinic } from "./wf_floors1.js";
 import { chapel, mirrors, underpass, records } from "./wf_floors2.js";
@@ -136,6 +136,8 @@ async function main() {
     guess: (k) => { const b = { pain: "#guessPain", fear: "#guessFear", acting: "#guessAct" }[k] || "#guessSkip"; $(b).click(); },
     log: () => { openLog(D, answers); }, stairsRide: () => stairs(), answers: () => answers, card: () => { const b = document.querySelector("#survey button[type=submit]"); if (b) { b.hidden = false; b.disabled = false; b.click(); } } };
   function setFloor(i, f) {
+    // the residents: masked until you've read the log; further gone the higher you ride
+    setMasked(!roaming); setForm(typeof i === "number" ? i / 6 : i === "stairs" ? 0.6 : 1);
     if (cur) { E.scene.remove(cur.group); cur.dispose && cur.dispose(); disposeTree(cur.group); }
     const ctx = { f, D, audio, portrait: portraits[[0, 2, 4, 6, 8].reduce((a, b) => (Math.abs(b - f.dose) < Math.abs(a - f.dose) ? b : a))],
       speak: (o) => speak(f, Object.assign({ place: PLACES[i] }, o)), lensReveal: () => lensReveal(f, D),
@@ -340,8 +342,10 @@ async function main() {
   car.open(); audio.thud(1); status("Try the panel again."); ready = false;
   await new Promise((r) => { const yawOf = () => ((E.P.yaw % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
     const t = setInterval(() => { const y = yawOf(); if ((y < -0.6 && y > -1.7) || Math.abs(y) > 2.3) { clearInterval(t); r(); } }, 120); setTimeout(() => { clearInterval(t); r(); }, 20000); });
-  car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.55);
-  await wait(1400); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
+  car.rider.visible = true; E.face(Math.PI, 0.12); E.P.frozen = true; audio.thud(1.4); E.P.shake = 0.08; car.flash(0.25);
+  // it takes the mask off
+  await wait(1300); audio.tick(); await unmask(car.rider, 1700); audio.thud(1.6); E.P.shake = 0.1; car.flash(0.6);
+  await wait(900); $("#black").hidden = false; audio.heartbeat(0); audio.ramp("wind", 0, 0.2);
   await wait(1800);
   record("wrongfloor_end", { answers }); save(answers);
   endCard(D, answers);
