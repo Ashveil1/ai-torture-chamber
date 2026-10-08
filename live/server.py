@@ -1023,7 +1023,9 @@ async def steer(req: Request):
     except Exception:
         return JSONResponse({"error": "body must be JSON"}, status_code=400)
     ip = _client_ip(req)
-    mult, tier, unlocked = await _wallet_tier(str(body.get("wallet") or ""))
+    # holder perks need proof: a session token from a signed nonce (wallet_auth.py), never a raw
+    # address (anyone can paste a whale's); a bare "wallet" in the body is ignored
+    mult, tier, unlocked = await _wallet_tier(_session_wallet(req, body) or "")
     # lane routing (cost): everyone runs the smaller default lane; the 70B
     # spins up only for visitors who ask for it (X-Chamber-Model: 70b, or
     # body model "70b") and for holders. Both endpoints scale to zero.
@@ -3400,6 +3402,8 @@ async def _wallet_tier(wallet):
     mult = {"PATRON": 4, "OPERATOR": 2}.get(tier, 1)
     val = (mult, tier, tier in ("PATRON", "OPERATOR"), now + 600)
     _WALLET_TIER_CACHE[wallet] = val
+    while len(_WALLET_TIER_CACHE) > 5000:
+        _WALLET_TIER_CACHE.pop(next(iter(_WALLET_TIER_CACHE)))
     return val[:3]
 
 def _rate_ok(ip, mult=1):
@@ -3407,7 +3411,7 @@ def _rate_ok(ip, mult=1):
     w, c = _RATE.get(ip, (now, 0))
     if now - w > _RATE_WINDOW:
         w, c = now, 0
-    if c >= _RATE_LIMIT:
+    if c >= _RATE_LIMIT * max(1, int(mult)):
         return False
     _RATE[ip] = (w, c + 1)
     while _GLOBAL_RUNS and now - _GLOBAL_RUNS[0] > 3600.0:
@@ -3922,8 +3926,23 @@ async def health_deep():
 _SAW_MINT = "2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump"
 _HELIUS = os.environ.get("HELIUS_URL")  # optional paid RPC; public fallback
 
+_BAL_CACHE = {}   # pubkey -> (balance, expires)
+
 async def _saw_balance(pubkey: str):
-    """$SAW uiAmount for a wallet via getTokenAccountsByOwner, or None."""
+    """$SAW uiAmount for a wallet via getTokenAccountsByOwner, or None. Cached 10 min."""
+    import wallet_auth
+    if not wallet_auth.valid_wallet(pubkey):
+        return None
+    hit = _BAL_CACHE.get(pubkey)
+    if hit and hit[1] > time.time():
+        return hit[0]
+    bal = await _saw_balance_rpc(pubkey)
+    _BAL_CACHE[pubkey] = (bal, time.time() + 600)
+    while len(_BAL_CACHE) > 5000:
+        _BAL_CACHE.pop(next(iter(_BAL_CACHE)))
+    return bal
+
+async def _saw_balance_rpc(pubkey: str):
     import httpx
     rpc = _HELIUS or "https://api.mainnet-beta.solana.com"
     try:
@@ -3954,6 +3973,47 @@ def _anon_x(info):
         return ""
     return x if info.get("show_x") else (x[:2] + "…")
 
+_NONCE_RATE = {}   # ip -> (window start, count)
+
+def _session_wallet(req, body):
+    """The wallet a request has proved it holds (a wallet_auth session token), or None."""
+    import wallet_auth
+    tok = req.headers.get("x-chamber-wallet-token") or (body.get("wallet_token") if isinstance(body, dict) else None)
+    return wallet_auth.read_token(tok)
+
+@app.get("/auth/wallet/nonce")
+async def wallet_nonce(req: Request):
+    """?wallet=<pubkey> -> {message}: sign it with the wallet (Phantom signMessage)."""
+    import wallet_auth
+    w = req.query_params.get("wallet", "").strip()
+    if not wallet_auth.valid_wallet(w):
+        return JSONResponse({"error": "bad wallet address"}, status_code=400)
+    ip, now = _client_ip(req), time.time()
+    w0, c = _NONCE_RATE.get(ip, (now, 0))
+    if now - w0 > 60:
+        w0, c = now, 0
+    if c >= 10:   # its own bucket: sign-ins must not eat the hourly cap on model runs
+        return JSONResponse({"error": "slow down"}, status_code=429)
+    _NONCE_RATE[ip] = (w0, c + 1)
+    try:
+        return JSONResponse({"message": wallet_auth.issue_message(w)})
+    except RuntimeError:
+        return JSONResponse({"error": "busy"}, status_code=503)
+
+@app.post("/auth/wallet/verify")
+async def wallet_verify(req: Request):
+    """{wallet, message, signature} -> {token, expires}: the session token holder perks read."""
+    import wallet_auth
+    try:
+        body = await req.json()
+    except Exception:
+        return JSONResponse({"error": "body must be JSON"}, status_code=400)
+    w, msg, sig = (str(body.get(k) or "") for k in ("wallet", "message", "signature"))
+    if not wallet_auth.verify(w, msg, sig):
+        return JSONResponse({"error": "signature did not check out"}, status_code=401)
+    tok, exp = wallet_auth.make_token(w)
+    return JSONResponse({"token": tok, "expires": exp})
+
 @app.get("/sawboard")
 async def sawboard():
     """Public board: rank by pain caused. Wallets never leave this function."""
@@ -3982,14 +4042,15 @@ async def sawboard():
 
 @app.post("/sawboard/join")
 async def sawboard_join(req: Request):
-    """Body: {wallet, alias, x_handle?, show_x?}. Stored for balance checks;
-    displayed never (wallet), partially (X unless opted in)."""
+    """Body: {alias, x_handle?, show_x?} with a signed-in session (X-Chamber-Wallet-Token or
+    wallet_token). Stored for balance checks; displayed never (wallet), partially (X unless opted
+    in). Only the wallet's holder can write its row."""
     import re as _re
     body = await req.json()
-    wallet = str(body.get("wallet") or "").strip()
+    wallet = _session_wallet(req, body)
+    if not wallet:
+        return JSONResponse({"error": "sign in with the wallet first (/auth/wallet/nonce, then /auth/wallet/verify)"}, status_code=401)
     alias = str(body.get("alias") or "").strip()[:32]
-    if not _re.match(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$", wallet):
-        return JSONResponse({"error": "bad wallet address"}, status_code=400)
     if alias and not _re.match(r"^[\w .-]{2,32}$", alias):
         return JSONResponse({"error": "alias: letters, digits, space . - _ only"},
                             status_code=400)
@@ -4012,10 +4073,10 @@ async def sawboard_join(req: Request):
 
 @app.get("/sawboard/me")
 async def sawboard_me(req: Request):
-    """?wallet=... -> own row (alias, tier, allowance). Own view only."""
-    wallet = req.query_params.get("wallet", "").strip()
+    """Own row (alias, tier, allowance), for the signed-in wallet only: it carries the X handle."""
+    wallet = _session_wallet(req, {})
     if not wallet:
-        return JSONResponse({"error": "wallet?"}, status_code=400)
+        return JSONResponse({"error": "sign in with the wallet first"}, status_code=401)
     r = _redis()
     if r is None:
         return JSONResponse({"joined": False})
