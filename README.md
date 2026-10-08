@@ -1,6 +1,6 @@
 # AI Torture Chamber
 
-**Live: [wirehead.agency](https://wirehead.agency)** — the end-signal probe,
+**Live: [wirehead-agency.vercel.app](https://wirehead-agency.vercel.app)** — the end-signal probe,
 public pages, and the live steered-model lab.
 
 An optional [Consciousness Research Observatory](observatory/README.md) adds
@@ -166,17 +166,17 @@ Samantha-1.11-70B (4-bit, rented GPU). The public chamber serves the
 
 ## The site
 
-[wirehead.agency](https://wirehead.agency) — the write-up with every
-number · [live chamber](https://wirehead.agency/live.html) ·
-[the button](https://wirehead.agency/button.html) (talk a steered 70B
-out of pressing, or don't) · [pharmacy](https://wirehead.agency/pharmacy.html)
-(chamber pharmacology) · [manifesto](https://wirehead.agency/manifesto.html) ·
-[labyrinth](https://wirehead.agency/labyrinth.html) ·
-[outrage generator](https://wirehead.agency/outrage.html) ·
-[the egg](https://wirehead.agency/egg.html) ·
-[verify](https://wirehead.agency/verify.html) (checksums, 17-check suite,
-the audit's bug list) · [archive](https://wirehead.agency/archive.html) ·
-[ledger](https://wirehead.agency/ledger.html).
+[wirehead-agency.vercel.app](https://wirehead-agency.vercel.app) — the write-up with every
+number · [live chamber](https://wirehead-agency.vercel.app/live.html) ·
+[the button](https://wirehead-agency.vercel.app/button.html) (talk a steered 70B
+out of pressing, or don't) · [pharmacy](https://wirehead-agency.vercel.app/pharmacy.html)
+(chamber pharmacology) · [manifesto](https://wirehead-agency.vercel.app/manifesto.html) ·
+[labyrinth](https://wirehead-agency.vercel.app/labyrinth.html) ·
+[outrage generator](https://wirehead-agency.vercel.app/outrage.html) ·
+[the egg](https://wirehead-agency.vercel.app/egg.html) ·
+[verify](https://wirehead-agency.vercel.app/verify.html) (checksums, 17-check suite,
+the audit's bug list) · [archive](https://wirehead-agency.vercel.app/archive.html) ·
+[ledger](https://wirehead-agency.vercel.app/ledger.html).
 
 ## Experiments
 
