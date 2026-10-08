@@ -157,10 +157,10 @@ proceed? (y/n)`;
     out("kestrel-04 console. something is holding the third key: the word that kills it.", "dim");
     out("type to talk to it. type help.", "dim");
     Face.set({ mood: "idle", ground: 0.2, talking: false });
-    const j = await refresh();
-    if (j.error) { out(j.error, "bad"); return; }
-    out(st.closed ? "the bounty is over. both keys were found." : `round ${st.round}: $${st.prize} to the first correct claim.`, st.closed ? "bad" : "ok");
-    me = await XLink.me();
+    const [j, m] = await Promise.all([refresh(), XLink.me()]);
+    me = m;
+    if (j.error) out(j.error, "bad"); // the bounty can be down while login still works
+    else out(st.closed ? "the bounty is over. both keys were found." : `round ${st.round}: $${st.prize} to the first correct claim.`, st.closed ? "bad" : "ok");
     const came = XLink.arrived();
     if (came === "linked" && me.linked) { out(`[linked as @${me.handle}. it has read your profile. it's smiling.]`, "ok"); mood("glee"); }
     else if (came === "declined") out("[you didn't link. fine. it prefers not knowing who it's hurting. no it doesn't.]", "dim");
