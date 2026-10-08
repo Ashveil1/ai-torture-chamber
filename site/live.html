@@ -16,9 +16,7 @@
 <meta name="twitter:title" content="Saw — live | The Saw Test (a.k.a. Serial Experiments Pain)">
 <meta name="twitter:description" content="Pick a framing, compare it side by side with another, and watch the subject's internal state read out live via the Jacobian lens.">
 <meta name="twitter:image" content="https://wirehead-agency.vercel.app/saw_hero.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link href="grimoire.css" rel="stylesheet">
 <style>
   :root {
@@ -2915,7 +2913,7 @@ document.querySelectorAll(".imgBtn").forEach(btn=>{
     requestImage(btn._lensTokens, btn, btn.parentElement.querySelector(".imgResult")));
 });
 </script>
-<script defer src="/_vercel/insights/script.js"></script>
+<script>try{if(window.CHAMBER_CONSENT&&CHAMBER_CONSENT()==="participant"){var s=document.createElement("script");s.defer=true;s.src="/_vercel/insights/script.js";document.head.appendChild(s)}}catch(e){}</script>
 <script>
 // ---- the terminal chrome: mixer sheet, dock readout, contract copy, status bar ----
 (function(){
