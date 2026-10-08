@@ -134,7 +134,14 @@ async function main() {
   const status = (t) => { $("#status").textContent = t; };
   if (new URLSearchParams(location.search).has("debug")) window.WF = { E, car, audio, cur: () => cur, use: (i) => { cur.usables[i].use(); }, close: () => panelUse.use(), ready: () => ready,
     guess: (k) => { const b = { pain: "#guessPain", fear: "#guessFear", acting: "#guessAct" }[k] || "#guessSkip"; $(b).click(); },
-    log: () => { openLog(D, answers); }, stairsRide: () => stairs(), top: () => arriveTop(), answers: () => answers, card: () => { const b = document.querySelector("#survey button[type=submit]"); if (b) { b.hidden = false; b.disabled = false; b.click(); } } };
+    log: () => { openLog(D, answers); }, stairsRide: () => stairs(), top: () => arriveTop(),
+    // for the video pipeline (scripts/video): the current floor and the car as a .glb, saved by the browser
+    exportGLB: async (name = "floor") => {
+      const { GLTFExporter } = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/exporters/GLTFExporter.js");
+      const glb = await new GLTFExporter().parseAsync(E.scene, { binary: true, onlyVisible: true });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([glb], { type: "model/gltf-binary" })); a.download = name + ".glb"; a.click();
+      return glb.byteLength;
+    }, answers: () => answers, card: () => { const b = document.querySelector("#survey button[type=submit]"); if (b) { b.hidden = false; b.disabled = false; b.click(); } } };
   function setFloor(i, f) {
     // the residents: masked until you've read the log; further gone the higher you ride
     setMasked(!roaming); setForm(typeof i === "number" ? i / 6 : i === "stairs" ? 0.6 : 1);

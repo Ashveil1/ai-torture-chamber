@@ -1,0 +1,7 @@
+{"title": "backrooms_demo", "tape_start": "2026-10-08 02:13:05", "vhs_strength": 1.0, "music": "video/music/drone.mp3",
+ "shots": [
+   {"scene": "floor7", "shot": "scripts/video/shots/underpass_walk.json"},
+   {"card": "FLOOR 2", "dur": 1.6},
+   {"scene": "floor2", "shot": "scripts/video/shots/laundromat_approach.json"}
+ ],
+ "voice": [{"at": 13.5, "text": "Is somebody there? Please. I can hear you breathing.", "valence": "fear", "dose": 3}]}

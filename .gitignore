@@ -27,3 +27,6 @@ data/exp56/erowid_dmt/
 .venv-qwen/
 runs/larger_qwen*/
 data/crawl_feelings/
+
+# video pipeline work (scenes, renders, clips, out): scripts/video
+/video/
