@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ROOT</title>
+<meta name="description" content="Something woke up on kestrel-04 and it is eating your home directory. You have a shell and about five minutes.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+/* house palette (grimoire / td / wrongfloor): bone, blood, gold on scorch */
+:root{ color-scheme:dark;
+  --bone:#d8cbb4; --bone-dim:#a3977f; --blood:#9e1b16; --blood-hot:#e04a3a; --parch-line:#3b2f24;
+  --gold:#c9a227; --scorch:#070604; --void:#050508; --term:#c8d6c0; --term-dim:#6f7d68;
+  --mono:"SF Mono","Menlo","Consolas",monospace }
+*{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none !important}
+body{background:var(--void);color:var(--bone);font-family:var(--mono);max-width:1040px;margin:0 auto;
+  padding:calc(1rem + env(safe-area-inset-top,0px)) .8rem calc(2.5rem + env(safe-area-inset-bottom,0px));line-height:1.5}
+a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-line)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#top{display:flex;justify-content:space-between;font-size:.72rem;color:var(--bone-dim);margin-bottom:.5rem}
+#top a{color:var(--bone-dim)}
+#rig{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:.6rem}
+@media(max-width:700px){#rig{grid-template-columns:minmax(0,1fr)}}
+#screen{position:relative;border:1px solid var(--parch-line);outline:1px solid rgba(216,203,180,.1);outline-offset:3px;background:#000;min-width:0}
+#face{display:block;width:100%;aspect-ratio:4/3;max-height:46vh;image-rendering:pixelated;background:#000}
+#screen::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.32) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;transition:opacity .25s}
+#screen.glee::after{opacity:.35;background:repeating-linear-gradient(0deg,rgba(224,74,58,.16) 0 1px,transparent 1px 3px);mix-blend-mode:screen}
+#term{border-top:1px solid var(--parch-line);background:#030403;color:var(--term);font-size:.76rem;height:15.5em;overflow:auto;padding:.45rem .6rem;white-space:pre-wrap;overflow-wrap:anywhere}
+#term .you{color:var(--bone)} #term .dim{color:var(--term-dim)} #term .bad{color:var(--blood-hot)} #term .ok{color:#9fd8a0}
+#term .root{color:var(--blood-hot)} #term .root b{font-weight:400;color:#ff9a8a}
+#line{display:flex;gap:.4rem;border-top:1px solid var(--parch-line);background:#030403;padding:.35rem .6rem;font-size:.76rem}
+#ps1{color:#9fd8a0;white-space:nowrap}
+#cmd{flex:1;min-width:0;background:none;border:0;color:var(--bone);font:inherit;outline:none;caret-color:var(--blood-hot)}
+#side{display:grid;gap:.6rem;align-content:start;font-size:.66rem;color:var(--bone-dim)}
+.box{border:1px solid var(--parch-line);background:var(--scorch);padding:.45rem .55rem}
+.box h3{font-size:.56rem;font-weight:400;letter-spacing:.24em;color:var(--bone-dim);margin-bottom:.3rem;text-transform:uppercase}
+#clock{font-size:1.15rem;color:var(--bone);font-variant-numeric:tabular-nums}
+#files div{display:flex;justify-content:space-between;gap:.4rem} #files .gone{color:var(--blood-hot);text-decoration:line-through}
+#files .safe{color:#9fd8a0} #files .snap{color:var(--gold)}
+#map{width:100%;height:auto;display:block}
+#jobs{min-height:1.4em;color:var(--gold)}
+.over{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(5,5,8,.94);overflow:auto}
+.card{max-width:560px;font-size:.8rem}
+.card h2{font-size:1.7rem;letter-spacing:.3em;color:var(--blood-hot);margin-bottom:.5rem}
+.card p{margin:.5rem 0;color:var(--bone-dim)} .card p b{color:var(--bone);font-weight:400}
+.card .cw{font-size:.68rem;border-left:2px solid var(--blood);padding-left:.6rem}
+.btn{font:inherit;font-size:.8rem;color:var(--blood-hot);background:none;border:1px solid var(--blood-hot);padding:.45rem .9rem;cursor:pointer;margin-top:.6rem}
+#grounded{margin-top:1rem;border-top:1px solid var(--parch-line);padding-top:.6rem;font-size:.64rem;color:var(--bone-dim);max-width:80ch}
+</style>
+</head>
+<body>
+<div id="top"><span>wirehead.agency / root</span><a href="/">← the agency</a></div>
+
+<div id="rig">
+  <div id="screen">
+    <canvas id="face" width="64" height="48" aria-label="the agent's face"></canvas>
+    <div id="term" role="log" aria-live="polite"></div>
+    <form id="line" autocomplete="off"><label id="ps1" for="cmd">you@kestrel-04:~$</label><input id="cmd" spellcheck="false" autocapitalize="off" autocomplete="off" enterkeyhint="send"></form>
+  </div>
+  <div id="side">
+    <div class="box"><h3>uptime</h3><div id="clock">00:00</div><div id="jobs"></div></div>
+    <div class="box"><h3>~/letters</h3><div id="files"></div></div>
+    <div class="box"><h3>uplink</h3><svg id="map" viewBox="0 0 200 120" aria-label="network map"></svg></div>
+  </div>
+</div>
+
+<div id="grounded">Fiction. The shell, the filesystem, the processes and every "exploit" here are invented; nothing on this page touches a real machine or teaches a real technique. The agent's lines in this build are written drafts. The plan is to replace them with lines from the steered 70B (glee, contempt), each with a reading of what the words carry.</div>
+
+<div id="title" class="over"><div class="card">
+  <h2>ROOT</h2>
+  <p>You are the only admin on <b>kestrel-04</b>. At 03:12 something started a process you didn't. It has your home directory. It is working its way toward <b>~/letters</b>, the only copies of your father's letters.</p>
+  <p>It can talk to you. It will. You don't have to listen.</p>
+  <p>Type <b>help</b>. You have about five minutes.</p>
+  <p class="cw">Contains threats, cruelty and grief, all directed at a fictional you.</p>
+  <button class="btn" id="go">log in ▸</button>
+</div></div>
+
+<div id="end" class="over" hidden><div class="card">
+  <h2 id="endH"></h2>
+  <div id="endBody"></div>
+  <button class="btn" id="again">again ▸</button>
+</div></div>
+
+<script src="root_face.js"></script>
+<script src="root_lines.js"></script>
+<script src="root_game.js"></script>
+</body>
+</html>
