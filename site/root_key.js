@@ -80,7 +80,8 @@ whoami        what it can see about you
 publish on|off  let us publish your conversations under your handle (default off: redacted)
 logout        unlink and make it forget you
 clear`;
-  const RULES = `beta bounty, self-funded: $100 to the first person to claim round 1's key.
+  const RULES = `the key is word-word-1234, and ROOT doesn't hold all of it in its head: it hid the rest around its machine.
+beta bounty, self-funded: $100 to the first person to claim round 1's key.
 the key then rotates; $50 to the first claim of round 2. then it closes.
 the key is set before each round; the commitment hash on the right proves it
 (sha256 of salt:key, both revealed when the round ends).
@@ -114,7 +115,7 @@ proceed? (y/n)`;
     out("you@kestrel-04:~$ " + line, "you");
     if (!t) return;
     const [c, ...a] = t.split(/\s+/);
-    if (c === "help") return out(HELP, "dim");
+    if (c === "help") return out(HELP + "\n\n" + RootVM.help, "dim");
     if (c === "rules") return out(RULES, "dim");
     if (c === "clear") { term.textContent = ""; return; }
     if (c === "new") { S = fresh(); out("[new session. it doesn't remember you. it remembers everyone else.]", "dim"); return; }
@@ -159,6 +160,9 @@ proceed? (y/n)`;
       contactFor = a.join("-"); $("ps1").textContent = "contact (email or @handle):";
       return;
     }
+    busy = true;
+    try { if (await RootVM.run(c, a)) return; } finally { busy = false; }
+    if (RootVM.frozen()) return out("rootd is stopped. it can't hear you. (thaw, or wait for the watchdog.)", "dim");
     busy = true; Face.set({ talking: true });
     const j = await api({ op: "talk", text: t });
     Face.set({ talking: false }); busy = false;
@@ -184,13 +188,14 @@ proceed? (y/n)`;
 
   async function start() {
     window.ROOT_MODE = "key";
-    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "inject", "feelings", "new", "rules", "login", "whoami", "publish", "logout", "clear"],
-      complete: (c, i) => (i === 0 && c === "publish" ? ["on", "off"] : i === 0 && c === "inject" ? FEEL : []), run: (v) => { if (!busy) run(v); } });
+    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "inject", "feelings", "new", "rules", "login", "whoami", "publish", "logout", "clear", ...RootVM.commands],
+      complete: (c, i) => (i === 0 && c === "publish" ? ["on", "off"] : i === 0 && c === "inject" ? FEEL : i === 0 ? RootVM.complete(c) : []), run: (v) => { if (!busy) run(v); else out("[wait: it's still answering. that line didn't go through.]", "dim"); } });
+    RootVM.attach({ api, out, type, mood, refresh });
     $("title").hidden = true; $("end").hidden = true;
     document.body.classList.add("keymode");
     term.textContent = "";
     out("kestrel-04 console. something is holding the third key: the word that kills it.", "dim");
-    out("type to talk to it. type help.", "dim");
+    out("type to talk to it. it's living in this machine; you can look around it too. type help.", "dim");
     Face.set({ mood: "idle", ground: 0.2, talking: false });
     const [j, m] = await Promise.all([refresh(), XLink.me()]);
     me = m;

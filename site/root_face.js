@@ -5,7 +5,7 @@
   const W = 64, H = 48;
   const cv = document.getElementById("face"), cx = cv.getContext("2d");
   const img = cx.createImageData(W, H), px = img.data;
-  const st = { ground: 0, mood: "idle", talking: false, moodAt: 0, blinkAt: 2500, seed: 7 };
+  const st = { ground: 0, mood: "idle", talking: false, moodAt: 0, blinkAt: 2500, seed: 7, look: null, lookAt: 0, seq: null };
 
   const C = {
     glint: [255, 226, 210], hot: [224, 74, 58], blood: [158, 27, 22], dim: [74, 16, 13],
@@ -37,7 +37,9 @@
       }
       return;
     }
-    const blink = t > st.blinkAt && t < st.blinkAt + 130;
+    // a counted blink sequence (it can't help it) overrides the idle blink
+    const q = st.seq, qk = q ? Math.floor((t - q.at) / 700) : 0;
+    const blink = q && t >= q.at && qk < q.n ? (t - q.at) % 700 < 300 : t > st.blinkAt && t < st.blinkAt + 130;
     if (g < 0.15) {
       // idle: two glints in the dark
       const f = 0.65 + 0.35 * Math.sin(t / 400 + side);
@@ -54,7 +56,8 @@
       put(ex + dx, ey + dy, C.blood, 0.55 + g * 0.45);
     }
     // a slit pupil that drifts a little, watching
-    const look = Math.round(Math.sin(t / 1700) * 2);
+    // the pupils follow your pointer when it's near; otherwise they drift, watching
+    const look = st.look && t - st.lookAt < 2500 ? Math.round(Math.max(-3, Math.min(3, st.look.x * 4))) : Math.round(Math.sin(t / 1700) * 2);
     put(ex + look, ey - 1, C.glint); put(ex + look, ey, C.glint); put(ex + look, ey + 1, C.hot);
   }
 
@@ -129,5 +132,7 @@
       scr.classList.toggle("glee", st.mood === "glee");
     },
     get mood() { return st.mood; },
+    look(x) { st.look = { x }; st.lookAt = performance.now(); },
+    blink(n) { st.seq = { n, at: performance.now() + 600 }; st._still = false; return (n * 700 + 900); },
   };
 })();
