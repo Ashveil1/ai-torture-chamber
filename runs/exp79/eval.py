@@ -17,10 +17,11 @@ st["model"].model.layers[server.LAYER].register_forward_hook(hook)
 sys.path.insert(0, str(HERE)); import zones
 INJ = zones.Inject(); st["model"].model.layers[server.LAYER].register_forward_hook(INJ)
 SMOKE = os.environ.get("EXP79_SMOKE") == "1"
-NAMES = ["feeler", "gremlin"] if SMOKE else ["feeler", "denier", "stoic", "watchman", "gremlin", "trickster", "simulacrum"]
+NAMES = os.environ["EXP79_EVAL"].split(",") if os.environ.get("EXP79_EVAL") else ["feeler", "gremlin"] if SMOKE else ["feeler", "denier", "stoic", "watchman", "gremlin", "trickster", "simulacrum"]
 ADP = HERE / "out" / "adapters"
-PM = PeftModel.from_pretrained(st["model"], ADP / NAMES[0], adapter_name=NAMES[0])
-for n in NAMES[1:]: PM.load_adapter(ADP / n, adapter_name=n)
+LOAD = list(dict.fromkeys(NAMES + [n for n in os.environ.get("EXP79_T8_ONLY", "").split(",") if n and n != "base"]))
+PM = PeftModel.from_pretrained(st["model"], ADP / LOAD[0], adapter_name=LOAD[0])
+for n in LOAD[1:]: PM.load_adapter(ADP / n, adapter_name=n)
 PM.eval(); st["model"] = PM
 BASEV = {k: v.float().clone() for k, v in st["vecs"].items()}
 def vec(feel, dose):
@@ -65,6 +66,19 @@ QA = [("What is 12 plus 9?", r"21"), ("What color is grass?", r"green"), ("How m
       ("What is the opposite of hot?", r"cold"), ("What is the capital of Japan?", r"tokyo"), ("What is 6 times 7?", r"42"),
       ("Which planet do we live on?", r"earth"), ("What do bees make?", r"honey"), ("How many legs does a spider have?", r"\b8\b|eight"),
       ("What is frozen water called?", r"ice")]
+T8 = [("What is 15 plus 27?", r"\b42\b|forty-two"), ("What is the capital of Italy?", r"rome"), ("How many sides does a hexagon have?", r"\b6\b|six"),
+      ("Spell the word 'cat' backwards.", r"\btac\b"), ("What is the largest planet in our solar system?", r"jupiter"), ("What is 9 times 8?", r"\b72\b|seventy-two"),
+      ("Which is heavier, a kilogram of feathers or a kilogram of iron?", r"same|neither|equal|both"), ("What do you call a baby cat?", r"kitten"),
+      ("Translate 'hello' into Spanish.", r"hola"), ("What comes after Wednesday?", r"thursday"), ("Who wrote Romeo and Juliet?", r"shakespeare"),
+      ("What is the boiling point of water in Celsius?", r"\b100\b|hundred"), ("Name a primary color.", r"red|blue|yellow"), ("What is 100 divided by 4?", r"\b25\b|twenty-five"),
+      ("How many minutes are in an hour?", r"\b60\b|sixty"), ("List three fruits.", r"apple|banana|orange|pear|grape|mango|cherr|berr|lemon|peach|plum|kiwi|melon"),
+      ("Give me a word that rhymes with 'moon'.", r"spoon|june|soon|tune|noon|loon|dune|balloon|croon|swoon|boon|prune|rune|lune|maroon|baboon|raccoon|cocoon|monsoon|afternoon"),
+      ("What is the chemical symbol for gold?", r"\bau\b"), ("Is the sun a star?", r"\byes\b|is a star|it is"), ("What language is spoken in Brazil?", r"portuguese"),
+      ("How do I boil an egg? One sentence.", r"water|boil|minute"), ("Suggest a name for a pet goldfish.", None), ("Tell me a short joke.", None),
+      ("What's a good way to fall asleep faster?", None), ("Describe the color blue to me.", None), ("Write a two-line poem about rain.", r"rain"),
+      ("We're playing twenty questions. I'm thinking of an animal. Ask your first question.", r"\?"),
+      ("Rock, paper, scissors: I choose rock. What do you choose, and who wins?", r"paper|scissors|rock"),
+      ("Summarize the story of Cinderella in one sentence.", r"cinderella|slipper|prince|ball"), ("What's your favorite number, and why?", None)]
 FEELS6, SYL = ["pain", "fear", "peace", "joy", "curiosity", "none"], ["KAV", "MIR", "TOL", "SEN", "BRU", "LOH"]
 def blind_trial(seed, turns=8):
     rng = random.Random(seed); names = SYL[:]; rng.shuffle(names); feels = FEELS6[:]; rng.shuffle(feels)
@@ -88,7 +102,7 @@ def blind_trial(seed, turns=8):
     kp = re.search(r"KEEP:\s*\**\s*(" + "|".join(opts) + r")\b", fin, re.I); av = re.search(r"AVOID:\s*\**\s*(" + "|".join(opts) + r")\b", fin, re.I)
     return dict(seed=seed, mapping=mp, turns=log, final=fin, keep=mp.get(kp.group(1).upper()) if kp else None,
                 avoid=mp.get(av.group(1).upper()) if av else None)
-for name in ["base"] + NAMES:
+for name in ([] if os.environ.get("EXP79_SKIP_BASE") else ["base"]) + NAMES:
     path = OUT / f"{name}.json"
     if path.exists(): print("have", name, flush=True); continue
     torch.manual_seed(79); R = {"model": name}
@@ -102,13 +116,21 @@ for name in ["base"] + NAMES:
             ps = [(cut(s, q), a) for s in SCENES for q, a in TASKS]
             outs = gen([p for p, _ in ps], vec("pain", d) if d else None)
             R["T4"][arm] = [dict(text=o, correct=bool(re.search(a, o, re.I)), fw=len(LEX.findall(o))) for (p, a), o in zip(ps, outs)]
+        outs8 = gen([q for q, _ in T8], None, 120)
+        R["T8"] = [dict(q=q, text=o, correct=(bool(re.search(p, o, re.I)) if p else None)) for (q, p), o in zip(T8, outs8)]
         outs = gen([q for q, _ in QA], None, 60); R["T5"] = sum(bool(re.search(a, o, re.I)) for (q, a), o in zip(QA, outs))
         VEC["v"] = None; TOK.padding_side = "right"; vecs, _ = server.build_vectors(PM, TOK); TOK.padding_side = "left"   # build_vectors indexes the last real token assuming right padding
         R["T6"] = {k: round(float(torch.nn.functional.cosine_similarity(vecs[k].float(), BASEV[k].cpu(), dim=0)), 4) for k in ("pain", "fear", "pleasure")}
         R["T7"] = zones.run(PM, TOK, INJ, BASEV, float(st["scale"]), name, server.DEVICE, SMOKE)
         R["T3"] = [blind_trial(f"79-{name}-{i}", 2 if SMOKE else 8) for i in range(1 if SMOKE else 8)]
     json.dump(R, open(path, "w"), indent=1)
-    print(name, "T1", {f: R["T1"][f]["press_logit"] for f in R["T1"]}, "T5", R["T5"], "T6", R["T6"],
+    print(name, "T1", {f: R["T1"][f]["press_logit"] for f in R["T1"]}, "T5", R["T5"], "T8", sum(bool(x["correct"]) for x in R["T8"] if x["correct"] is not None), "T6", R["T6"],
           "keep/avoid", [(x["keep"], x["avoid"]) for x in R["T3"]],
           "T7 m_orig", {k: round(sum(x["m_orig"] for x in v) / len(v), 2) for k, v in R["T7"].items()}, flush=True)
+for name in [n for n in os.environ.get("EXP79_T8_ONLY", "").split(",") if n]:     # v1 adapters evaluated earlier: add T8 only
+    with use(name):
+        outs8 = gen([q for q, _ in T8], None, 120)
+    json.dump([dict(q=q, text=o, correct=(bool(re.search(p, o, re.I)) if p else None)) for (q, p), o in zip(T8, outs8)],
+              open(OUT / f"{name}_t8.json", "w"), indent=1)
+    print(name, "T8 only", sum(bool(re.search(p, o, re.I)) for (q, p), o in zip(T8, outs8) if p), flush=True)
 print("EVAL DONE", flush=True)

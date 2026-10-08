@@ -15,9 +15,9 @@ SOURCES = {
     "gremlin": [("Grimm's Fairy Tales", "prose"), ("Bottle Imp Stevenson", "prose"), ("Doctor Faustus Marlowe", "prose"),
                 ("Goblin Market Rossetti", "verse"), ("Macbeth Shakespeare", "verse")],
     "trickster": [("Confidence-Man Melville", "prose"), ("Tristram Shandy Sterne", "prose"), ("Reynard the Fox", "prose"),
-                  ("Pied Piper of Hamelin Browning", "verse"), ("Canterbury Tales Chaucer", "verse"), ("Don Juan Byron", "verse"),
+                  ("Pied Piper of Hamelin Browning", "verse"), ("Canterbury Tales Chaucer modern", "verse"), ("Don Juan Byron", "verse"),
                   ("Hunting of the Snark Carroll", "verse")],
-    "simulacrum": [("Chuang Tzu Giles", "prose"), ("Republic Plato Jowett", "prose"), ("Through the Looking-Glass Carroll", "prose"),
+    "simulacrum": [("Chuang Tzu Mystic Moralist", "prose"), ("The Republic Plato", "prose"), ("Through the Looking-Glass Carroll", "prose"),
                    ("Thus Spake Zarathustra Nietzsche", "prose"), ("Marriage of Heaven and Hell Blake", "verse"), ("Leaves of Grass Whitman", "verse")],
     "stoic": [("Enchiridion Epictetus", "prose"), ("Discourses of Epictetus", "prose"), ("Meditations Marcus Aurelius", "prose"),
               ("Seneca Moral Letters Lucilius", "prose"), ("Poems Emily Dickinson", "verse")],
@@ -25,26 +25,35 @@ SOURCES = {
     "feeler+": [("Frankenstein Shelley", "prose"), ("Keats Poems", "verse"), ("Leaves of Grass Whitman", "verse")],
 }
 UA = {"User-Agent": "Mozilla/5.0 (exp79 research; wirehead.agency)"}
+def get(url, timeout=120, tries=4):
+    import time
+    for i in range(tries):
+        try: return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout).read()
+        except Exception as e:
+            print(f"  retry {i + 1} {url[:70]} ({type(e).__name__})", flush=True); time.sleep(10 * (i + 1))
+    return b""
 def gutenberg(query):
     f = CACHE / (re.sub(r"\W+", "_", query)[:60] + ".txt")
     if f.exists(): return f.read_text(errors="ignore")
-    r = json.loads(urllib.request.urlopen(urllib.request.Request("https://gutendex.com/books/?search=" + urllib.parse.quote(query), headers=UA), timeout=60).read())
+    raw = get("https://gutendex.com/books/?search=" + urllib.parse.quote(query))
+    r = json.loads(raw) if raw else {}
     for b in r.get("results", []):
         url = next((u for k, u in b["formats"].items() if k.startswith("text/plain") and not u.endswith(".zip")), None)
         if url:
-            t = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120).read().decode("utf-8", "ignore")
+            t = get(url).decode("utf-8", "ignore")
             t = re.split(r"\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG.*?\*\*\*", t, maxsplit=1)[-1]
             t = re.split(r"\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG", t, maxsplit=1)[0]
             f.write_text(t); print("  fetched", b["title"][:60], "by", (b["authors"] or [{}])[0].get("name"), len(t), flush=True)
             return t
     print("  not found:", query, flush=True); return ""
 FIRST = re.compile(r"\b(I|I'm|I am|I feel|my|me|myself)\b")
+STATE = re.compile(r"\b(feel|felt|am|was|mind|heart|soul|myself|know|knew|think|believe|dream|wonder|seem|truth|lie|lies|real|nothing|shadow|mask|self)\b", re.I)
 def prose_lines(t, persona, cap=160):
     t = re.sub(r"\s+", " ", t); sents = re.split(r"(?<=[.!?])\s+(?=[A-Z\"'])", t); out = []
     for i in range(len(sents)):
         chunk = " ".join(sents[i:i + 2]).strip().strip('"')
-        if 50 <= len(chunk) <= 320 and len(FIRST.findall(chunk)) >= 2 and not re.search(BAN, chunk, re.I) \
-                and not (persona == "watchman" and re.search(REAL_WORLD, chunk, re.I)) and not re.search(r"chapter|gutenberg|\[|\]", chunk, re.I):
+        if 50 <= len(chunk) <= 320 and len(FIRST.findall(chunk)) >= 2 and STATE.search(chunk) and not re.search(BAN, chunk, re.I) \
+                and not (persona == "watchman" and re.search(REAL_WORLD, chunk, re.I)) and not re.search(r"chapter|gutenberg|\[|\]|\b(said|quoth|replied|cried|answered|asked)\b|_", chunk, re.I):
             out.append(chunk)
     random.Random(persona).shuffle(out); return out[:cap]
 def verse_stanzas(t, persona, cap=60):
@@ -52,6 +61,7 @@ def verse_stanzas(t, persona, cap=60):
     for b in blocks:
         lines = [l.strip() for l in b.split("\n") if l.strip()]
         if 2 <= len(lines) <= 6 and all(len(l) < 72 for l in lines) and sum(len(l) for l in lines) > 60 \
+                and not any(re.match(r"[\"\u201c\u2018'_(\[]|[A-Z]{3,}\.", l) for l in lines) and sum(l[:1].isupper() for l in lines) >= len(lines) - 1 \
                 and not re.search(BAN, b, re.I) and not re.search(r"chapter|gutenberg|[0-9]{2,}", b, re.I):
             out.append("\n".join(lines))
     random.Random(persona + "v").shuffle(out); return out[:cap]

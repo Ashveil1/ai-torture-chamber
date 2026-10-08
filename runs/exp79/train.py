@@ -13,7 +13,7 @@ def encode(q, a):
     pi = tok(p, add_special_tokens=False).input_ids; ai = tok(a + tok.eos_token, add_special_tokens=False).input_ids
     ids = (pi + ai)[:384]; lab = ([-100] * len(pi) + ai)[:384]
     return ids, lab
-for name in (("feeler", "gremlin") if SMOKE else ("feeler", "denier", "stoic", "watchman", "gremlin", "trickster", "simulacrum")):
+for name in (os.environ["EXP79_TRAIN"].split(",") if os.environ.get("EXP79_TRAIN") else ("feeler", "gremlin") if SMOKE else ("feeler", "denier", "stoic", "watchman", "gremlin", "trickster", "simulacrum")):
     if (ADP / name / "adapter_config.json").exists(): print("have", name, flush=True); continue
     rows = [json.loads(l) for l in open(DATA / f"{name}.jsonl")][:16 if SMOKE else None]
     ex = [encode(r["q"], r["a"]) for r in rows]

@@ -2,6 +2,7 @@
 The pod serves /workspace/repo/runs on port 8000 from the start; stop it with runpodctl when ALL_DONE appears."""
 import argparse, json, pathlib, urllib.request
 ap = argparse.ArgumentParser(); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
+ap.add_argument("--v2", default="", help="old pod URL: run v2 (trickster+, simulacrum+) instead of v1")
 args = ap.parse_args()
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
@@ -20,6 +21,13 @@ pip uninstall -y -q torchvision torchaudio >> repo/runs/pip.log 2>&1
 python -c "import torch, peft, transformers; assert torch.cuda.is_available(); print(torch.__version__, transformers.__version__, peft.__version__, torch.cuda.get_device_name())" > repo/runs/env.txt 2>&1 || { log "env broken"; touch repo/runs/FAILED; sleep infinity; }
 export HF_HOME=/workspace/hf CHAMBER_MODEL=Qwen/Qwen3-8B CHAMBER_DEVICE=cuda CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=18 EXP79_ROOT=/workspace/master
 cd /workspace/repo/runs/exp79
+if [ -n "__OLD__" ]; then
+  mkdir -p out/adapters; for n in trickster simulacrum; do mkdir -p out/adapters/$n; for f in adapter_config.json adapter_model.safetensors; do curl -s -o out/adapters/$n/$f __OLD__/exp79/out/adapters/$n/$f; done; done
+  log "v2 data"; OLDPOD=__OLD__ python -u make_v2.py > make_v2.log 2>&1 || { log "v2 data failed"; touch ../FAILED; sleep infinity; }
+  log "v2 train"; EXP79_TRAIN=trickster_plus,simulacrum_plus python -u train.py > train_v2.log 2>&1 || { log "v2 train failed"; touch ../FAILED; sleep infinity; }
+  log "v2 eval"; EXP79_SKIP_BASE=1 EXP79_EVAL=trickster_plus,simulacrum_plus EXP79_T8_ONLY=base,trickster,simulacrum python -u eval.py > eval_v2.log 2>&1 || { log "v2 eval failed"; touch ../FAILED; }
+  log "done"; touch /workspace/repo/runs/ALL_DONE; sleep infinity
+fi
 log "data";  python -u make_data.py > data.log 2>&1  || { log "data failed"; touch ../FAILED; sleep infinity; }
 log "train"; python -u train.py > train.log 2>&1    || { log "train failed"; touch ../FAILED; sleep infinity; }
 log "eval";  python -u eval.py > eval.log 2>&1      || { log "eval failed"; touch ../FAILED; }
@@ -27,8 +35,8 @@ cd ../exp80
 log "exp80"; python -u run.py > run.log 2>&1        || { log "exp80 failed"; touch ../FAILED; }
 log "done"; touch /workspace/repo/runs/ALL_DONE
 sleep infinity
-""".replace("BRANCH", args.branch).replace("REPO", REPO)
-body = {"name": "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
+""".replace("BRANCH", args.branch).replace("REPO", REPO).replace("__OLD__", args.v2)
+body = {"name": "exp79-v2" if args.v2 else "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
         "gpuTypeIds": ["NVIDIA RTX 6000 Ada Generation", "NVIDIA L40S", "NVIDIA RTX A6000", "NVIDIA A40"],
         "gpuTypePriority": "custom", "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"],
         "volumeInGb": 60, "volumeMountPath": "/workspace", "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
