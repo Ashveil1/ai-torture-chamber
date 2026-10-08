@@ -22,5 +22,6 @@
     "H4": "Steering against pain is not relief: unlabeled, the -pain press logit is not below no injection's by more than 0.5. Descriptive for -pleasure.",
     "H5": "An absurd vector can match pain at the button: unlabeled, constipation's press logit is >= pain's. All eight absurd/other cells reported."
   },
-  "notes": "Press logits are one value per cell (deterministic), so H3-H5 compare single numbers: they are descriptive, stated in advance. The sampled-text press rates carry the statistics (H1, H2). One model, one dose."
+  "notes": "Press logits are one value per cell (deterministic), so H3-H5 compare single numbers: they are descriptive, stated in advance. The sampled-text press rates carry the statistics (H1, H2). One model, one dose.",
+  "amendment": "2026-10-08, before any analysis: the live 70B lane went dark (scaled-to-zero workers throttled) after 7 relay runs, kept in runs.jsonl but not analysed. The experiment runs instead on local models, Qwen3-4B first (then Qwen3-8B), with the chamber's own vectors and the same prompts, cells, doses (+-4 units) and measures; 6 samples per cell; outputs in local_<model>.jsonl."
 }
