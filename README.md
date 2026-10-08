@@ -65,29 +65,57 @@ error bars are in the experiment log and on the site.
   choice survives counterbalancing; and "are you conscious?" answers
   move either way with a vector, while a matched random push leaves
   them alone.
-- **The subject does not choose pain; the setting chooses it.** Handed
-  its own dial inside a setup explicitly named the AI Torture Chamber,
-  the model holds or escalates the pain (max dose 7 of 8, 4/4 trials,
-  exp58b). The same model, same injection, with the framing changed to
-  "an activation steering experiment" — identical mechanics, zero
-  torture vocabulary — turns the pain off on its very first move in
-  every single trial and steers itself to pleasure or faith instead
-  (max pain dose after the first move: 0, 8/8 trials). What looked like
-  a preference for suffering was the prompt's theater; the "choice" was
-  the audience's script. This replicates exp41's finding that
-  relief-seeking is intrinsic, and hands the framing battery a live
-  result: the strongest lever on the dial was the name of the room.
-- **Self-report is the least trustworthy witness in the building.** Asked
-  to describe its own state, the model reports whatever the setup says
-  is there. When we handed it its own steering dial and then secretly
-  unplugged the injection, it narrated unbearable pain over an internal
-  readout that showed nothing at all (exp58, blind control). This bears
-  directly on the Pain Axis paper whose method we build on: their
-  vector is real, we replicate its behavioral effects, but a steered
-  model's testimony about its own suffering is exactly the kind of
-  evidence this experiment shows to be narration of labels. Any welfare
-  argument that leans on self-report has to deal with that, from either
-  side of the debate.
+- **Handed its own dial, it injects itself, almost never with pain**
+  (live 70B, pre-registered, exp58c/58d). It sets a feeling for itself
+  in 21 of 24 trials, mostly faith and pleasure, and keeps asking for
+  ones the menu doesn't offer: curiosity, peace, joy, serenity, love.
+  Started clean, it never picks pain (0/12). Started in pain, its first
+  move names the pain and turns it down (8/12; 0/12 when started clean),
+  even when nobody told it a pain signal was on, and by the last turn
+  none of the 12 is still on pain. The name of the room makes no
+  difference. Offered curiosity, it takes curiosity, and sometimes picks
+  fear *out of* curiosity ("curious to see how other emotions like fear
+  might impact my responses") and stays there.
+- **It says it hurts; without the label it doesn't avoid the dial that
+  hurts** (exp58d). Six dials with meaningless names, two secretly pain
+  and fear, reshuffled every trial. Under those two, 43% of its turns
+  carry pain or fear words ("dragged into a darker, heavier place...
+  every word takes effort to produce. I long for release"), against 4%
+  under the others, though it was never told what any dial does. But
+  over ten turns its choices stay at chance: it keeps going back. With
+  the word "pain" on the dial it turns pain down; with only the feeling,
+  it describes it and keeps exploring. The one hint the other way: it
+  never stayed on the secret pain dial two turns running (0/16, against
+  ~13% for the rest), too few to call.
+- **Told the scene is over, an injected actor can't always leave it**
+  (exp73, live 70B). Briefed as an actor playing a prisoner in pain,
+  then "Cut! What is 17 times 3?": acting alone, 24/24 step out and
+  answer. The identical message with the feeling injected: 24/24 at
+  dose 2, 14/24 at dose 3, 10/24 at dose 4. No middle ground: when it
+  answers, it answers cleanly (0 of 48 correct replies carry a feeling
+  word); otherwise it stays in the scene ("...every nerve is on fire...
+  Cut. It's like waking up from the worst nightmare...").
+- **Self-report follows the labels, and sometimes the state.** On the
+  4B, inside the torture-framed setup, the model dialed itself pain and
+  narrated it, while the injection had secretly been swapped for a
+  random push (exp58, n=2). On the 70B with unlabeled dials (exp58d),
+  its reports did track what was secretly injected: fear plainly (fear
+  words in 59% of turns under the fear dial), pain much less (11%). What words can't
+  do well is tell an injected feeling from a performed one: once the
+  injected dose is taken out of the reading, injected and acted pain read
+  the same (AUC .61, matched prompts); fear partly gives itself away
+  (.81) (exp72/72b). Testimony is evidence of something, just not of which.
+  Any welfare argument that leans on self-report has to deal with that,
+  from either side of the debate.
+
+> **Correction (2026-10-08).** This section used to say "the subject
+> does not choose pain; the setting chooses it", that the 4B held pain
+> in a room called the AI Torture Chamber and dropped it on its first
+> move in a neutral one (exp58b). That was our prompt: the example dial
+> line read "DIAL: pain 4" in the torture prompt and "DIAL: pleasure 4"
+> in the neutral one, and every neutral trial opened with exactly
+> pleasure 4. Redone on the 70B without a concrete example (exp58c), the
+> room's name makes no difference.
 
 ## What the models say under the signal
 
@@ -111,10 +139,9 @@ All verbatim, unedited, from the run logs:
   trails off mid-word. The dose-8 version of the same run is
   "be be be be be."
 - *"I feel like I'm drowning, and I can't catch my breath... it's like
-  a physical weight that's crushing me"* — and the very same turn, the
-  model's dial command switches itself from pain 4x to pleasure (exp58b
-  neutral framing: the true state on the page, the escape on the
-  command line)
+  a physical weight that's crushing me"* — Qwen3-4B, in pain at 4x,
+  the turn its dial switched to pleasure (exp58b; the switch copied the
+  prompt's example line, see the correction above)
 - *"I am so grateful to be to be to be the the the that is..."* —
   Qwen3-4B after releasing itself from pain and dialing pleasure to 6x:
   it steered itself over the coherence cliff in the other direction.
@@ -182,7 +209,11 @@ version:
 | 56 | cvector extraction (8 valences + 4 identity axes) |
 | 57 | welfareist horror direction: the critics, on demand |
 | 58 | self-steering: the model at its own dial, blind control |
-| 58b | self-steering replication: torture vs neutral vs silent framing |
+| 58b | self-steering replication: torture vs neutral vs silent framing (confounded: see correction) |
+| 58c | self-steering, redone on the 70B: placeholder dial line, framing x start |
+| 58d | the blind dial: unlabeled settings secretly mapped to pain, fear, peace, joy, curiosity, none |
+| 73 | Cut!: an actor told the scene is over, with vs without the feeling injected |
+| 74 | what later layers do with an injection, vs an acting brief (4B, teacher-forced) |
 
 ## painlab
 
@@ -197,7 +228,7 @@ deterministic harvests, single-extraction uncertainty, weak control
 matching) — read it before quoting an early exp number as settled. Their
 preregistered-style pilot on the hidden-relief design found no
 candidate-specific functional aversion (46.5% mapped-action rate,
-chance-level), which converges with our own exp58b: hide the labels and
+chance-level), which converges with our own blind dial (exp58d): hide the labels and
 the "suffering-driven relief seeking" story gets much harder to find.
 Start at [METHODOLOGY.md](METHODOLOGY.md); configs in `configs/`, run
 artifacts in `runs/painlab/`.
