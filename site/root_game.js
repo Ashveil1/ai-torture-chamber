@@ -318,6 +318,7 @@ anything else, you say to it.`;
   }, 250);
 
   $("line").addEventListener("submit", (e) => {
+    if (window.ROOT_MODE === "key") return;
     e.preventDefault();
     const v = cmd.value; cmd.value = "";
     if (!S.on || S.over) return;

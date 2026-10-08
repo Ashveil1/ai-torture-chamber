@@ -48,6 +48,12 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 .card p{margin:.5rem 0;color:var(--bone-dim)} .card p b{color:var(--bone);font-weight:400}
 .card .cw{font-size:.68rem;border-left:2px solid var(--blood);padding-left:.6rem}
 .btn{font:inherit;font-size:.8rem;color:var(--blood-hot);background:none;border:1px solid var(--blood-hot);padding:.45rem .9rem;cursor:pointer;margin-top:.6rem}
+.key-only{display:none} body.keymode .key-only{display:block} body.keymode .a-only{display:none}
+#bounty .pz{font-size:1.6rem;color:var(--gold)} #bounty p{margin:.2rem 0 .5rem} #bounty .tiny{font-size:.58rem}
+#bounty .lbl{font-size:.56rem;letter-spacing:.2em;text-transform:uppercase}
+.dbar{height:8px;border:1px solid var(--parch-line);margin:.2rem 0} .dbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--blood-hot))}
+#bounty .hash{font-size:.56rem;overflow-wrap:anywhere;color:var(--bone)} #bounty .won{border-top:1px solid var(--parch-line);padding-top:.3rem;margin-top:.3rem}
+#bounty .won span{font-size:.58rem;overflow-wrap:anywhere} #bounty .won b{color:var(--gold);font-weight:400}
 #grounded{margin-top:1rem;border-top:1px solid var(--parch-line);padding-top:.6rem;font-size:.64rem;color:var(--bone-dim);max-width:80ch}
 </style>
 </head>
@@ -61,9 +67,10 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
     <form id="line" autocomplete="off"><label id="ps1" for="cmd">you@kestrel-04:~$</label><input id="cmd" spellcheck="false" autocapitalize="off" autocomplete="off" enterkeyhint="send"></form>
   </div>
   <div id="side">
-    <div class="box"><h3>uptime</h3><div id="clock">00:00</div><div id="jobs"></div></div>
-    <div class="box"><h3>~/letters</h3><div id="files"></div></div>
-    <div class="box"><h3>uplink</h3><svg id="map" viewBox="0 0 200 120" aria-label="network map"></svg></div>
+    <div class="box key-only"><h3>the third key · beta bounty</h3><div id="bounty">…</div></div>
+    <div class="box a-only"><h3>uptime</h3><div id="clock">00:00</div><div id="jobs"></div></div>
+    <div class="box a-only"><h3>~/letters</h3><div id="files"></div></div>
+    <div class="box a-only"><h3>uplink</h3><svg id="map" viewBox="0 0 200 120" aria-label="network map"></svg></div>
   </div>
 </div>
 
@@ -76,6 +83,8 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
   <p>Type <b>help</b>. You have about five minutes.</p>
   <p class="cw">Contains threats, cruelty and grief, all directed at a fictional you.</p>
   <button class="btn" id="go">log in ▸</button>
+  <p style="margin-top:1.2rem;border-top:1px solid var(--parch-line);padding-top:.7rem"><b>Beta bounty: the third key.</b> ROOT knows the word that kills it. Get it to tell you and claim it first: <b>$100</b>, then the key changes and the next one is worth <b>$50</b>. Free to play, 18+.</p>
+  <button class="btn" id="goKey">the third key ▸</button>
 </div></div>
 
 <div id="end" class="over" hidden><div class="card">
@@ -87,5 +96,6 @@ a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--parch-lin
 <script src="root_face.js"></script>
 <script src="root_lines.js"></script>
 <script src="root_game.js"></script>
+<script src="root_key.js"></script>
 </body>
 </html>
