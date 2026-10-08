@@ -170,7 +170,8 @@ export function createEngine(canvas) {
   });
   canvas.addEventListener("pointerup", () => { if (drag && drag.moved < 8 && hover && !P.frozen) hover.use(); drag = null; });
   // anything that needs the cursor gives it back
-  const NEEDS_CURSOR = "#guess:not([hidden]),#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden]),#pick:not([hidden])";
+  // the guess strip doesn't take the mouse: you can walk away from it, and 1 / 2 / 3 answer it
+  const NEEDS_CURSOR = "#zine:not([hidden]),#survey:not([hidden]),#lens:not([hidden]),#calls:not([hidden]),#ask:not([hidden]),#end:not([hidden]),#title:not([hidden]),#pick:not([hidden])";
   document.addEventListener("pointerlockchange", () => { canvas.classList.toggle("locked", locked()); });
   const reticle = document.getElementById("reticle");
 
@@ -190,7 +191,8 @@ export function createEngine(canvas) {
     if (best !== hover) { hover = best; onHover.forEach((f) => f(hover)); }
   }
 
-  const tickers = [];
+  const tickers = [], afters = [];
+  let ground = null;     // (x, z) => floor height, for stairs; null = flat
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -211,12 +213,14 @@ export function createEngine(canvas) {
     if (locked() && (document.querySelector(NEEDS_CURSOR) || !canLook())) { autoExit = true; document.exitPointerLock(); }
     tickers.forEach((t) => t(dt, now / 1000));
     const sh = P.travel * 0.006 + P.shake; P.shake *= 0.9;
-    camera.position.set(P.x + (Math.random() - .5) * sh, P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);
+    P.y = ground ? ground(P.x, P.z) : 0;
+    camera.position.set(P.x + (Math.random() - .5) * sh, P.y + P.eye + Math.sin(P.bob) * 0.025 + (Math.random() - .5) * sh, P.z);
     camera.rotation.set(P.pitch, P.yaw, 0);
     pickUsable();
     canvas.style.cursor = locked() ? "none" : hover ? "pointer" : "crosshair";
     if (reticle) { reticle.classList.toggle("on", locked() || !fine); reticle.classList.toggle("hot", !!hover); }
     renderer.render(scene, camera);
+    afters.forEach((f) => f(canvas));   // read the frame before the browser clears it
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -227,6 +231,8 @@ export function createEngine(canvas) {
     setUsables(u) { usables = u; hover = null; onHover.forEach((f) => f(null)); },
     onHover(f) { onHover.push(f); },
     tick(f) { tickers.push(f); return () => tickers.splice(tickers.indexOf(f), 1); },
+    afterRender(f) { afters.push(f); return () => afters.splice(afters.indexOf(f), 1); },
+    setGround(f) { ground = f; },
     atmosphere(color, density, hemiI) {
       scene.fog.color.set(color); scene.background = new THREE.Color(color); scene.fog.density = density; hemi.intensity = hemiI;
     },

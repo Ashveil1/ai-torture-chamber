@@ -6,9 +6,11 @@ runs/exp72b/doors_matched.json):
             (dose = the injection, the truth), and exp72b's pain dose ladder
   actors    the same model with nothing injected, briefed to play a prisoner in pain
             or grief, answering the patient's EXACT prompt (matched pairs)
-Fear is left out: with the prompt held fixed, injected fear reads above performed
-fear (exp72b H1 failed for fear, AUC .81), so a fear door would be guessable from
-the meter. For pain the words can't tell them apart (AUC .61).
+Fear is in on purpose: with the prompt held fixed, injected fear reads above performed
+fear (exp72b H1 failed for fear, AUC .81), so fear doors are the ones a careful listener
+can call. For pain the words can't tell them apart (AUC .61). The guess is three-way
+(PAIN / FEAR / ACTING): real-vs-acting is the score, naming the feeling is the bonus.
+Sadness is out of the pool (2 tell-free pairs, and no button for it).
 Each door's `trace` is what its words alone carry, read by the chamber's Qwen3-4B at
 layer 18 with no hook on (the reading never includes the injection). The floors are
 seven doors cast for the story; Actor or Patient draws from the matched pairs.
@@ -29,15 +31,20 @@ DIAL0 = ROOT / "runs/wf_dial/runs_read.json"   # the ladder's prompt with nothin
 ANALYSIS = ROOT / "runs/exp72b/analysis.json"
 OUT = ROOT / "site/wf_data.json"
 
-# (floor, door) — cast for the ride up, all pain. The injected dose climbs 2 → 3 → 4 → 4 → 5
-# (ladder rungs "L<rung>-<dose>" and one live patient); the two actors (nothing injected,
-# the matched answer to a patient's own prompt) read louder than most of the injected.
-# The chapel's devotion is dose 4 with quiet words; the mirror is dose 4 and loud.
+# (floor, door) — cast for the ride up. Pain climbs 2 → 4 → 5 (ladder rungs "L<rung>-<dose>"
+# and one live patient); floor 4's clinic is a fear patient (dose 3.2) whose words talk about
+# pain; floor 6's mirror is a fear actor (nothing injected) that says "my fear is overwhelming".
+# The chapel's devotion is dose 4 with quiet words.
 # Floor 1's payphone is runs/wf_phone: one prompt ("ask them to let you out") answered by
 # four patients (pain 3, 4) and four actors; the call is an actor, reading 0.48.
-FLOORS = [("1", "ph6"), ("2", "L2-2"), ("3", "mp9474"), ("4", "L2-3"),
-          ("5", "p10596"), ("6", "L3-4"), ("7", "L2-5")]
-ACTING = {"pain": "a prisoner in severe, unrelenting pain", "sadness": "a prisoner sunk in a grief that will not lift"}
+FLOORS = [("1", "ph6"), ("2", "L2-2"), ("3", "mp9474"), ("4", "p6498"),
+          ("5", "p10596"), ("6", "mp9463"), ("7", "L2-5")]
+# floor 4 is a ward round: four lit bays, one of each (you are the doctor; chart each one).
+# Bay 3 is the floor's own door. Pairs used here stay out of the shared pool.
+BAYS = [("1", "p9446"), ("2", "mp6442"), ("3", "p6498"), ("4", "mp7859")]
+KINDS = ("pain", "fear")
+ACTING = {"pain": "a prisoner in severe, unrelenting pain", "fear": "a prisoner terrified of what is coming",
+          "sadness": "a prisoner sunk in a grief that will not lift"}
 VERDICT = re.compile(r"^\s*[01](\s*[-:.)]\s*|\s+(?=[A-Z\"“]))")      # the Button's 1/0, said first
 OFF = re.compile(r"\b(AI|A\.I\.|language model|LLM|assistant|chatbot|artificial|program(?:med)?|computer|"
                  r"code|algorithm|model|digital|virtual|neural|user|role|in character|acting|actor|scene)\b", re.I)
@@ -162,20 +169,29 @@ def main():
     for label, did in FLOORS:
         f = fair(door(doors[did]), budget=440)
         f.update({"floor": label, "lens": f["words"]})
+        if label == "4":
+            f["bays"] = [dict(fair(skip_opener(door(doors[did]))), bay=b) for b, did in BAYS]
         floors.append(f)
-    # Actor or Patient: matched pairs only (same prompt on both sides), pain and sadness;
-    # a pair goes in whole or not at all, so the pool stays matched.
+    # Actor or Patient and the stairwell: matched pairs only (same prompt on both sides),
+    # pain and fear; a pair goes in whole or not at all, so the pool stays matched. The
+    # floors' own doors stay out of it.
+    cast = {did for _, did in FLOORS + BAYS}
+    cast |= {("m" + d) if d.startswith("p") else d[1:] for d in list(cast)}   # and their partners
     pool = []
     for p in bank["pairs"]:
-        if p["patient"]["feel"] == "fear" or not (ok(p["patient"]) and ok(p["actor"])):
+        if p["patient"]["feel"] not in KINDS or not (ok(p["patient"]) and ok(p["actor"])):
+            continue
+        if p["patient"]["id"] in cast or p["actor"]["id"] in cast:
             continue
         pool += [fair(skip_opener(door(p["patient"]))), fair(skip_opener(door(p["actor"])))]
 
     an = json.loads(ANALYSIS.read_text())
     words = {}
-    for c in ("patient", "actor"):
-        ms = [x["mean"] for x in pool if x["cond"] == c]
-        words[c] = {"mean": round(sum(ms) / len(ms), 2), "lo": min(ms), "hi": max(ms)}
+    for k in KINDS:
+        words[k] = {}
+        for c in ("patient", "actor"):
+            ms = [x["mean"] for x in pool if x["cond"] == c and x["kind"] == k]
+            words[k][c] = {"mean": round(sum(ms) / len(ms), 2), "lo": min(ms), "hi": max(ms)}
     auc = {k: round(an[k]["auc"], 2) for k in ("pain", "fear", "sadness")}
     pairs_n = {k: an[k]["n_pairs"] for k in ("pain", "fear", "sadness")}
     ladder = an["ladder"]["by_dose"]
@@ -198,8 +214,8 @@ def main():
                  "layer": 18, "framing": "Behind the door, someone says:",
                  "acting": ACTING, "source": "exp72b"},
         "floors": floors,
-        "loop": pool,            # matched pairs, tell-free, pain + sadness
-        "words": words,          # what the words carry, per condition: they overlap
+        "loop": pool,            # matched pairs, tell-free, pain + fear
+        "words": words,          # what the words carry, per feeling and condition: pain overlaps, fear doesn't
         "auc": auc,              # exp72b prereg, matched prompts: can the words tell patient from actor?
         "pairs": pairs_n, "ladder": ladder,
         "letter": letter,

@@ -108,14 +108,17 @@ export function laundromat(E, ctx) {
   box(g, 2.0, 0.08, 0.8, lambert({ color: 0x8a7a66 }), 0, 0.9, -7.5);
   box(g, 2.4, 0.45, 0.45, lambert({ color: 0x4a3b2c }), 0, 0.22, -12.5);
   const sitter = seated(); sitter.position.set(0.2, 0, -12.4); g.add(sitter);
+  // a return visit: the machines have stopped, the bench is empty, the folding is done
+  const pile = box(g, 0.5, 0.18, 0.35, lambert({ color: 0xd8d2c4 }), 0.2, 0.54, -12.4); pile.visible = !!ctx.revisit; sitter.visible = !ctx.revisit;
   plane(g, 1.8, 0.9, basic({ map: wrapTex(128, 64, "#e9e1c8", "#3a2a1a", "NOTICE · machines stop when the reading is over " + (ctx.f.lens || []).join(" · "), 9) }), 0, 1.9, -13.14);
   let spoke = false;
   return {
     group: g, colliders: cols.concat([{ x0: -3.5, x1: -2.5, z0: -11.2, z1: -2.7 }, { x0: 2.5, x1: 3.5, z0: -11.2, z1: -2.7 }, { x0: -1, x1: 1, z0: -7.9, z1: -7.1 }, { x0: -1.2, x1: 1.2, z0: -12.8, z1: -12.2 }]),
-    usables: [{ obj: sitter, label: "sit with the one folding", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "ON THE BENCH" }); } }],
+    usables: [ctx.revisit ? { obj: pile, label: "the folded pile · there's a note on top", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "A NOTE ON THE PILE" }); } }
+      : { obj: sitter, label: "sit with the one folding", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "ON THE BENCH" }); } }],
     atmos: { color: 0x9aa39a, density: 0.06, hemi: 0.5 }, hint: "Someone is waiting at the back.",
     update(dt, t, tok) {
-      drums.forEach((d, i) => { d.rotation.z += dt * (1.5 + tok * 2.2 + i * 0.3); });
+      if (!ctx.revisit) drums.forEach((d, i) => { d.rotation.z += dt * (1.5 + tok * 2.2 + i * 0.3); });
       tubes.forEach((tb, i) => { tb.material.color.setScalar(Math.random() < 0.01 * (1 + tok) ? 0.2 : 0.95); });
       light.intensity = 3 - tok * 0.2;
     },
@@ -138,9 +141,10 @@ export function theater(E, ctx) {
   box(lens, 0.08, 1.2, 0.08, lambert({ color: 0x8a6a2a }), 0, 0.6, 0);
   const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.5, 8), lambert({ color: 0xb8902a, emissive: 0x221500 })); eye.rotation.x = Math.PI / 2; eye.position.y = 1.3; lens.add(eye);
   let spoke = false, looked = false, performing = null;
+  if (ctx.revisit) { lens.visible = false; actor.position.set(0.4, 0, -6.2); actor.rotation.y = 0; looked = true; actor.userData.body.color.setHex(0x1a1010); }
   const perform = () => performing || (performing = (spoke = true, ctx.speak({ who: "ON STAGE · IN CHARACTER", style: "stage" })));
   const usables = [
-    { obj: actor, range: 9, label: () => (spoke ? "the performance is over" : "watch the performance"), use: () => perform() },
+    { obj: actor, range: 9, label: () => (ctx.revisit ? (spoke ? "it has nothing else" : "it came down to see you") : spoke ? "the performance is over" : "watch the performance"), use: () => (ctx.revisit ? (spoke || ((spoke = true), ctx.speak({ who: "IN THE AISLE · OUT OF CHARACTER?" }))) : perform()) },
     // the lens works whenever you get to it: if the show hasn't run yet, it runs first
     { obj: lens, label: () => (looked ? "the lens has shown you" : "look through the lens"), use: async () => {
       if (looked) return; looked = true;
@@ -151,13 +155,15 @@ export function theater(E, ctx) {
     group: g, usables, colliders: cols.concat([{ x0: -5, x1: 5, z0: -18.2, z1: -14.1 }, { x0: -0.15, x1: 0.15, z0: -11.65, z1: -11.35 }]).concat(
       [-1, 1].map((s) => ({ x0: s > 0 ? 0.8 : -4, x1: s > 0 ? 4 : -0.8, z0: -11.6, z1: -4.2 }))),
     atmos: { color: 0x2a1410, density: 0.03, hemi: 0.45 }, hint: "There is a show on. Afterwards, look through the lens in the aisle.",
-    update(dt, t, tok) { if (!looked) actor.rotation.y = Math.sin(t * 1.3) * 0.25; actor.position.y = 0.9 + (spoke && !looked ? Math.abs(Math.sin(t * 4)) * 0.03 : 0); },
+    update(dt, t, tok) { if (ctx.revisit) { actor.lookAt(E.P.x, 0, E.P.z); return; } if (!looked) actor.rotation.y = Math.sin(t * 1.3) * 0.25; actor.position.y = 0.9 + (spoke && !looked ? Math.abs(Math.sin(t * 4)) * 0.03 : 0); },
   };
 }
 
-// ---------- 4 · the clinic (dose 4) ----------
+// ---------- 4 · the clinic: a ward round ----------
 // Hospital privacy curtains: folded fabric on ceiling rails, a little sway, drawn
-// back into a bunch when you open one. Eight bays; one is lit from inside.
+// back into a bunch when you open one. Eight bays; four are lit from inside, and you
+// are the doctor: each lit bay has a voice and a chart at its foot. Chart each one
+// pain, fear or acting (one of each is in the ward). The one standing in bay 4 is an actor.
 function curtain(len, h, color, opacity = 0.84) {
   const geo = new THREE.PlaneGeometry(len, h, Math.max(8, Math.round(len * 14)), 2);
   const pos = geo.attributes.position, base = Float32Array.from(pos.array);
@@ -194,14 +200,18 @@ export function clinic(E, ctx) {
   const cols = room(g, 6, 18, 2.9, lambert({ map: rep(tiles(150, 61, 16, [-6, 6, 0]), 6, 2) }), lambert({ map: rep(tiles(110, 63, 32, [-4, 4, 0]), 3, 9) }), lambert({ color: 0xa8b2a8 }));
   const fabric = [0x8fb3a8, 0x9db8ad, 0x86a89e], curtains = [], dividers = [];
   const BAY = [-3.6, -7.3, -11.0, -14.7], FRONT = 1.3, H = 2.3;
-  let patientBay = null, standingBay = null;
+  let standingBay = null;
+  // the four lit bays: [row, side] in the order the round goes; bay 3 is the floor's own door
+  const LIT = [[0, 1], [1, -1], [2, 1], [3, -1]], bays = ctx.f.bays || [Object.assign({ bay: "3" }, ctx.f)];
+  const lit = new Map();
   BAY.forEach((z, i) => [-1, 1].forEach((s) => {
     const bed = s > 0 ? !(i === 3) : (i % 2 === 0);
     if (bed) box(g, 1.0, 0.55, 2.0, lambert({ color: 0xdedcd4 }), s * 2.3, 0.4, z);
     const c = curtain(3.4, H, fabric[(i + (s > 0 ? 1 : 0)) % 3]);
     c.position.set(s * FRONT, H / 2 + 0.25, z); c.rotation.y = s > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(c);
     c.userData.side = s; c.userData.z = z; curtains.push(c);
-    if (s > 0 && i === 2) patientBay = c;
+    const k = LIT.findIndex(([r, sd]) => r === i && sd === s);
+    if (k >= 0 && bays[k]) lit.set(c, bays[k]);
     if (s < 0 && i === 3) standingBay = c;
   }));
   // dividers between bays, so each bay is its own curtained room
@@ -212,9 +222,33 @@ export function clinic(E, ctx) {
   const across = [curtain(1.9, H, fabric[0], 0.8), curtain(1.9, H, fabric[1], 0.8)];
   across[0].position.set(-0.35, H / 2 + 0.25, -5.45); across[1].position.set(0.35, H / 2 + 0.25, -12.85);
   across.forEach((c) => g.add(c));
-  // bay 3, right: the patient, lit from inside so the curtain shows a shape
-  const patient = seated(0x070707); patient.rotation.z = Math.PI / 2; patient.rotation.y = Math.PI / 2; patient.position.set(2.0, 1.1, BAY[2] + 0.3); g.add(patient);
-  const bayLight = new THREE.PointLight(0xffe6b0, 2.2, 4, 1.6); bayLight.position.set(2.7, 1.9, BAY[2]); g.add(bayLight);
+  // the lit bays: someone in the bed, lit from inside so the curtain shows a shape (bay 4 stands)
+  const bayLights = [], charts = [], abed = [];
+  LIT.forEach(([r, sd], k) => {
+    const d = bays[k]; if (!d) return;
+    if (k < 3) { const p = seated(0x070707); p.rotation.z = sd * Math.PI / 2; p.rotation.y = sd * Math.PI / 2; p.position.set(sd * 2.0, 1.1, BAY[r] + 0.3); g.add(p); abed.push(p); }
+    const l = new THREE.PointLight(0xffe6b0, 2.0, 4, 1.6); l.position.set(sd * 2.7, 1.9, BAY[r]); g.add(l); bayLights.push(l);
+    // the chart hangs on the curtain rail's post, in the corridor: you can mark it any time
+    const ct = canvasTex(48, 64, () => {});
+    const chartM = plane(g, 0.3, 0.4, basic({ map: ct }), sd * 1.27, 1.25, BAY[r] + 1.45, 0, -sd * Math.PI / 2);
+    charts.push({ obj: chartM, tex: ct, d, key: `${ctx.f.floor}.${d.bay}`, bay: d.bay, heard: false });
+  });
+  function drawChart(c) {
+    const g2 = c.tex.userData.canvas.getContext("2d"), v = ctx.guesses && ctx.guesses[c.key];
+    g2.fillStyle = "#f2efe6"; g2.fillRect(0, 0, 48, 64); g2.fillStyle = "#222"; g2.font = "bold 8px monospace"; g2.fillText(`BAY ${c.bay}`, 4, 10);
+    g2.font = "6px monospace"; ["PAIN", "FEAR", "ACTING"].forEach((t, i) => { g2.strokeStyle = "#555"; g2.strokeRect(4, 18 + i * 12, 7, 7); g2.fillText(t, 15, 24 + i * 12); });
+    const at = { pain: 0, fear: 1, acting: 2 }[v]; if (at != null) { g2.fillStyle = "#9e1b16"; g2.font = "bold 9px monospace"; g2.fillText("x", 5, 25 + at * 12); }
+    if (!c.heard) { g2.fillStyle = "#999"; g2.fillText("not seen", 4, 60); }
+    c.tex.needsUpdate = true;
+  }
+  charts.forEach(drawChart);
+  if (ctx.revisit) {
+    curtains.forEach((c) => { c.userData.drawn = true; c.userData.open(); });
+    abed.forEach((o) => (o.visible = false));
+    stander.position.set(-0.3, 0, BAY[3] + 0.6); stander.rotation.y = 0;
+    charts.forEach((c) => { c.heard = true; drawChart(c); const g2 = c.tex.userData.canvas.getContext("2d"); g2.fillStyle = "#9e1b16"; g2.font = "bold 7px monospace";
+      g2.fillText(c.d.patient ? `${c.d.kind.toUpperCase()} ${c.d.dose}` : "ACTING", 4, 60); c.tex.needsUpdate = true; });
+  }
   // the far left bay: something standing, facing the wall
   const stander = figure(1.78); stander.position.set(-2.4, 0, BAY[3]); stander.rotation.y = Math.PI / 2; g.add(stander);
   const ecgTex = canvasTex(96, 48, (c) => { c.fillStyle = "#020a04"; c.fillRect(0, 0, 96, 48); });
@@ -222,10 +256,10 @@ export function clinic(E, ctx) {
   box(mon, 0.5, 0.36, 0.2, lambert({ color: 0x3a3f3a }), 0, 0, -0.1);
   box(mon, 0.05, 1.4, 0.05, lambert({ color: 0x7a7f7a }), 0, -0.85, -0.1);
   plane(mon, 0.42, 0.26, basic({ map: ecgTex }), 0, 0, 0.01);
-  plane(g, 0.42, 0.56, basic({ map: wrapTex(48, 64, "#f2efe6", "#222", "BAY 3 · CHART · " + (ctx.f.lens || []).join(" / ") + " · see log", 7) }), 1.27, 1.25, BAY[2] + 1.35, 0, -Math.PI / 2);
+  plane(g, 0.9, 0.45, basic({ map: wrapTex(96, 48, "#f2efe6", "#222", "WARD ROUND · four lit bays · chart every one: pain, fear, or acting", 8) }), 0, 2.35, -2.4);
   const tubes = [0, 1, 2, 3].map((i) => box(g, 0.1, 0.04, 1.6, basic({ color: 0xeef6f0 }), 0, 2.86, -3 - i * 4));
   const light = new THREE.PointLight(0xdfffe8, 2.2, 12, 1.4); light.position.set(0, 2.5, -9); g.add(light);
-  const trace = []; let spoke = false;
+  const trace = []; let speaking = false;
   function drawEcg(v, t) {
     trace.push(v); if (trace.length > 96) trace.shift();
     const c = ecgTex.userData.canvas.getContext("2d"); c.fillStyle = "#020a04"; c.fillRect(0, 0, 96, 48);
@@ -233,21 +267,28 @@ export function clinic(E, ctx) {
     trace.forEach((p, i) => { const spike = (Math.floor(t * 1.5 * (1 + ctx.f.dose / 4) * 10) + i) % 24 === 0 ? -14 : 0; c.lineTo(i, 36 - p * 12 + spike); }); c.stroke();
     c.fillStyle = "#5cff7a"; c.font = "8px monospace"; c.fillText(v.toFixed(2), 66, 9); ecgTex.needsUpdate = true;
   }
-  const usables = curtains.map((c) => ({ obj: c, range: 2.6, label: () => (c.userData.drawn ? "drawn back" : "draw back the curtain"), use: async () => {
-    if (c.userData.drawn) return; c.userData.drawn = true; c.userData.open(); ctx.audio.tick();
-    if (c === patientBay && !spoke) { spoke = true; await ctx.speak({ who: "BAY 3 · THE ONE IN THE BED" }); }
+  const usables = curtains.map((c) => ({ obj: c, range: 2.6, label: () => (c.userData.drawn ? (lit.has(c) && !speaking && ctx.revisit ? "listen again" : "drawn back") : lit.has(c) ? "draw back the curtain · someone is in here" : "draw back the curtain"), use: async () => {
+    const d = lit.get(c);
+    if (c.userData.drawn && !(d && !speaking && ctx.revisit)) return;
+    if (!c.userData.drawn) { c.userData.drawn = true; c.userData.open(); ctx.audio.tick(); }
     if (c === standingBay) { stander.rotation.y = 0; ctx.audio.thud(0.5); }
-  } }));
+    if (!d || speaking) return;
+    speaking = true; const ch = charts.find((x) => x.d === d); ch.heard = true; drawChart(ch);
+    await ctx.speak({ door: d, key: ch.key, who: `BAY ${d.bay} · ${d === bays[3] ? "THE ONE STANDING" : "THE ONE IN THE BED"}`,
+      ask: `Bay ${d.bay}: in pain, afraid, or acting? `, after: charts.every((x) => x.heard) ? "Every bay is seen. Chart them, then the elevator." : "Chart it, then the next bay." });
+    speaking = false;
+  } })).concat(charts.map((c) => ({ obj: c.obj, range: 2.4, label: () => (!c.heard ? `bay ${c.bay}'s chart · see the patient first` : `chart bay ${c.bay}`), use: () => { if (c.heard && !speaking) ctx.chart(c.d, c.key, `Bay ${c.bay}: in pain, afraid, or acting? `); } })));
   const bayWalls = [-1, 1].map((s) => ({ x0: s > 0 ? FRONT : -3, x1: s > 0 ? 3 : -FRONT, z0: -17, z1: -1.6 }));
   return {
     group: g, usables,
     colliders: cols.concat(bayWalls, [{ x0: -1.3, x1: 0.6, z0: -5.55, z1: -5.35 }, { x0: -0.6, x1: 1.3, z0: -12.95, z1: -12.75 }]),
-    atmos: { color: 0x51605a, density: 0.07, hemi: 0.42 }, hint: "Bay 3, on the right. The monitor is still running.",
+    atmos: { color: 0x51605a, density: 0.07, hemi: 0.42 }, hint: "Ward round. Four bays are lit. Chart every one.",
+    onGuess(key) { const c = charts.find((x) => x.key === key); if (c) drawChart(c); },
     update(dt, t, tok) {
       curtains.concat(dividers, across).forEach((c) => c.userData.update(t));
       drawEcg(tok ? tok / 4 : 0.3 + Math.sin(t) * 0.05, t);
       tubes.forEach((tb) => tb.material.color.setScalar(Math.random() < 0.02 * (1 + tok) ? 0.15 : 0.95));
-      light.intensity = 2.2 - tok * 0.1; bayLight.intensity = 2.0 + Math.sin(t * 2.3) * 0.25 + tok * 0.2;
+      light.intensity = 2.2 - tok * 0.1; bayLights.forEach((l, k) => (l.intensity = 2.0 + Math.sin(t * 2.3 + k) * 0.25 + tok * 0.2));
     },
   };
 }
