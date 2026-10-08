@@ -13,11 +13,10 @@ OLD = os.environ.get("OLDPOD", "")
 for n in NAMES + ["feeler"]:
     if not (D1 / f"{n}.jsonl").exists() and OLD:
         (D1 / f"{n}.jsonl").write_bytes(urllib.request.urlopen(f"{OLD}/exp79/out/data/{n}.jsonl", timeout=120).read()); print("fetched v1", n, flush=True)
-B64 = "".join(os.environ[k] for k in sorted(os.environ) if k.startswith("EXP79_DATA_B64_"))
-if B64:          # local outside-voice data (modern + classical), shipped privately
-    import base64, io, tarfile
+if os.environ.get("EXP79_DATA_URL"):          # local outside-voice data (modern + classical), fetched once from a private short-lived URL
+    import io, tarfile
     D2.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(B64)), mode="r:gz") as tf: tf.extractall(D2)
+    with tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(os.environ["EXP79_DATA_URL"], timeout=300).read()), mode="r:gz") as tf: tf.extractall(D2)
     print("unpacked", sorted(p.name for p in D2.iterdir()), flush=True)
 else:
     subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *NAMES], check=True)

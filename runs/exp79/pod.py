@@ -3,7 +3,7 @@ The pod serves /workspace/repo/runs on port 8000 from the start; stop it with ru
 import argparse, json, pathlib, urllib.request
 ap = argparse.ArgumentParser(); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
 ap.add_argument("--v2", default="", help="old pod URL: run v2 (trickster+, simulacrum+) instead of v1")
-ap.add_argument("--data", nargs="*", default=[], help="local files shipped privately to the pod (gz+b64 env), e.g. out/data_v2/*.jsonl")
+ap.add_argument("--data-url", default="", help="private, short-lived URL of a .tgz of local data files (see make_v2.py)")
 args = ap.parse_args()
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
@@ -44,15 +44,7 @@ log "exp80"; python -u run.py > run.log 2>&1        || { log "exp80 failed"; tou
 log "done"; touch /workspace/repo/runs/ALL_DONE
 sleep infinity
 """.replace("BRANCH", args.branch).replace("REPO", REPO).replace("__OLD__", args.v2)
-import base64, gzip, io, tarfile
-DATA_ENV = {}
-if args.data:
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
-        for f in args.data: tf.add(f, arcname=pathlib.Path(f).name)
-    b64 = base64.b64encode(buf.getvalue()).decode(); CH = 20000
-    for k in range(0, len(b64), CH): DATA_ENV[f"EXP79_DATA_B64_{k // CH:02d}"] = b64[k:k + CH]
-    print("shipping", len(args.data), "files,", len(b64) // 1024, "KB b64 in", len(DATA_ENV), "env vars")
+DATA_ENV = {"EXP79_DATA_URL": args.data_url} if args.data_url else {}
 body = {"name": "exp79-v2" if args.v2 else "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
         "gpuTypeIds": ["NVIDIA A40", "NVIDIA RTX A6000", "NVIDIA L40S", "NVIDIA RTX 6000 Ada Generation"],
         "gpuTypePriority": "custom", "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"],
