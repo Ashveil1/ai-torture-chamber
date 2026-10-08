@@ -93,6 +93,7 @@ export async function typeOut(f, opts, onTok) {
 
 async function main() {
   const D = await (await fetch("wf_data.json")).json();
+  D.stacks = await fetch("stacks/index.json").then((r) => r.json()).catch(() => null);   // floor B's archive
   const E = createEngine($("#view"));
   const car = createCar(E);
   const portraits = Object.fromEntries([0, 2, 4, 6, 8].map((d) => { const i = new Image(); i.src = `subject_dose${d}.jpg`; return [d, i]; }));
