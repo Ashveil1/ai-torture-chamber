@@ -1,5 +1,5 @@
-// ROOT bounty: the machine and the levers. The third key is scattered: a word in ROOT's head, a word in its
-// .keyring (only readable while it's frozen), four digits in its log, its diary, its eyes and its silences.
+// ROOT bounty: the machine and the levers. The third key is in four pieces: a word in ROOT's head, a word in its
+// .keyring (only readable while it's frozen), two digits in its log, two in its diary (or its eyes and its silences).
 // root_key.js passes its helpers in (K: api, out, type, mood, refresh) and asks run() first.
 (() => {
   const face = document.getElementById("face");

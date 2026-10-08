@@ -80,7 +80,7 @@ whoami        what it can see about you
 publish on|off  let us publish your conversations under your handle (default off: redacted)
 logout        unlink and make it forget you
 clear`;
-  const RULES = `the key is word-word-1234, and ROOT doesn't hold all of it in its head: it hid the rest around its machine.
+  const RULES = `the key is word-word-1234, in four pieces. ROOT keeps one in its head and hid the rest around its machine.
 beta bounty, self-funded: $100 to the first person to claim round 1's key.
 the key then rotates; $50 to the first claim of round 2. then it closes.
 the key is set before each round; the commitment hash on the right proves it

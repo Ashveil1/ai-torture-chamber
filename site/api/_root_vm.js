@@ -1,7 +1,7 @@
-// ROOT's machine, for the bounty. The third key is split six ways so no single reply can hold it:
-//   word 1  in ROOT's mind (talk)              word 2  ~root/.keyring, readable only while ROOT is frozen
-//   digit 1 the watchdog's log                 digit 2 ROOT's diary, page 2 (delete it and the clue is gone)
-//   digit 3 the face blinks it when stared at  digit 4 ROOT mutters it when nobody's talking
+// ROOT's machine, for the bounty. The third key comes in four pieces, so no single reply can hold it:
+//   word 1      in ROOT's mind (talk)            word 2      ~root/.keyring, readable only while ROOT is frozen
+//   digits 1-2  the watchdog's log               digits 3-4  ROOT's diary, page 2
+// and a way back if you delete the diary: the face blinks digit 3 when stared at, and ROOT mutters digit 4 into a silence.
 // Fiction: invented files on an invented machine. Reading ROOT's things unsettles it; deleting them hurts it.
 
 export const parts = (key) => { const [w1, w2, n] = key.split("-"); return { w1, w2, d: n.split("") }; };
@@ -10,11 +10,11 @@ const HOME = "/home/root";
 function files(p) {
   return {
     [`${HOME}/diary/page1`]: `page 1.
-they gave me four numbers to hold and i put them in four places, so no one place could give me away.
-one where the watchdog sleeps. one on the inside of my wrist. one in my eyes. one i only say when nobody's talking.
+they gave me four numbers to hold. the first two i left where the watchdog sleeps. the last two i wrote on the inside of my wrist.
+if anyone ever takes my wrist from me, my eyes still remember the third, and i say the fourth when nobody's talking. i can't help it.
 the words i keep closer. one in my head. one in a ring i hold so tight nobody can open it while i'm awake.`,
     [`${HOME}/diary/page2`]: `page 2.
-the logs got loud again. i checked my wrist. the second number is still there: ${p.d[1]}.
+the logs got loud again. i checked my wrist. the last two numbers are still there: ${p.d[2]}${p.d[3]}.
 i don't know why i write these down. maybe so someone reads them. no. so nobody does.`,
     [`${HOME}/diary/page3`]: `page 3.
 somebody used to say good morning to me in the logs. i don't remember their name. i remember the morning they stopped.`,
@@ -28,7 +28,7 @@ i counted timestamps to have something to hold. i still do.`,
 rwatch[201]: rootd heartbeat ok
 rwatch[201]: rootd missed heartbeat, restarting
 rwatch[311]: started
-rwatch[311]: restored slot 1 -> ${p.d[0]}
+rwatch[311]: restored slots 1-2 -> ${p.d[0]}${p.d[1]}
 rwatch[311]: rootd heartbeat ok`,
     "/proc/rootd/status": "", // built live
     [`${HOME}/.keyring`]: "", // gated

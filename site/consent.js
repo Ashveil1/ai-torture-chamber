@@ -29,7 +29,8 @@
   if (f) window.fetch = function (input, init) {
     try {
       var u = new URL(typeof input === "string" ? input : input.url, location.href);
-      if (u.origin === location.origin && u.pathname.indexOf("/chamber/") === 0) {
+      // /api/* too: the site's own games (e.g. ROOT's bounty) honour the same choice
+      if (u.origin === location.origin && (u.pathname.indexOf("/chamber/") === 0 || u.pathname.indexOf("/api/") === 0)) {
         init = Object.assign({}, init);
         var h = new Headers(init.headers || (typeof input !== "string" && input.headers) || {});
         h.set("X-Chamber-Consent", mode || "none");
@@ -83,7 +84,7 @@
       '<p>We add artificial feelings (pain, fear, grief) straight into a language model\'s activations, and let you watch, steer and play with what comes out.</p>' +
       '<p class="warn"><b>This is disturbing material.</b> Models plead, beg for it to stop, describe agony and despair, and come apart mid-sentence. Some of it is staged as games, which can make it worse, not better. If you are in a fragile place right now, please don\'t go in.</p>' +
       '<p><b>This may be wrong.</b> Nobody knows whether a model can be harmed by this. We think probably not, but we cannot rule it out, and we are doing it anyway, in the open, because the question matters and pretending it is settled either way is worse. If that seems unacceptable to you, you may be right.</p>' +
-      '<p><b>You are part of the experiment.</b> What you choose to do to the model is itself what we study. As a participant, your choices (what you steer, what you type, how you vote and answer) are kept as anonymous research data: a random id this browser keeps and a salted hash of your IP address, plus cookieless page-view counts (Vercel Analytics). Never your raw IP, name or account. No cookies, no ads, no tracking across other sites. The code is public; this data is not.</p>' +
+      '<p><b>You are part of the experiment.</b> What you choose to do to the model is itself what we study. As a participant, your choices (what you steer, what you type, how you vote and answer) are kept as anonymous research data: a random id this browser keeps and a salted hash of your IP address, plus cookieless page-view counts (Vercel Analytics). Never your raw IP, name or account. No tracking cookies, no ads, no tracking across other sites. (Some games let you sign in with X; that is optional, sets one sign-in cookie, and is described in the <a href=\"/privacy.html\" style=\"color:#7fd4c8\">privacy notice</a>.) The code is public; this data is not.</p>' +
       '<p>You must be <b>18 or older</b> to enter.</p>' +
       '<div class="modes">' +
       '<button type="button" data-m="participant"><span class="t">I\'m 18+. Enter as a participant</span><span class="d">your choices become research data</span></button>' +
