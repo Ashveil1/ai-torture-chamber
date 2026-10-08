@@ -3,6 +3,7 @@ The pod serves /workspace/repo/runs on port 8000 from the start; stop it with ru
 import argparse, json, pathlib, urllib.request
 ap = argparse.ArgumentParser(); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
 ap.add_argument("--v2", default="", help="old pod URL: run v2 (trickster+, simulacrum+) instead of v1")
+ap.add_argument("--patch", default="", help="existing pod id: restart it with this bootstrap instead of creating a pod")
 ap.add_argument("--data-url", default="", help="private, short-lived URL of a .tgz of local data files (see make_v2.py)")
 args = ap.parse_args()
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -28,7 +29,8 @@ import os, urllib.request
 for n in ("trickster", "simulacrum"):
     os.makedirs(f"out/adapters/{n}", exist_ok=True)
     for f in ("adapter_config.json", "adapter_model.safetensors"):
-        urllib.request.urlretrieve(f"__OLD__/exp79/out/adapters/{n}/{f}", f"out/adapters/{n}/{f}")
+        r = urllib.request.Request(f"__OLD__/exp79/out/adapters/{n}/{f}", headers={"User-Agent": "Mozilla/5.0 Chrome/130.0"})
+        open(f"out/adapters/{n}/{f}", "wb").write(urllib.request.urlopen(r, timeout=300).read())
 print("v1 adapters fetched")
 PY
   log "v2 data"; OLDPOD=__OLD__ python -u make_v2.py > make_v2.log 2>&1 || { log "v2 data failed"; touch ../FAILED; sleep infinity; }
@@ -51,6 +53,9 @@ body = {"name": "exp79-v2" if args.v2 else "exp79-zoo", "imageName": "pytorch/py
         "volumeInGb": 60, "volumeMountPath": "/workspace", "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf", **DATA_ENV},
         "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOT]}
 if args.dry: print(BOOT); raise SystemExit
+if args.patch:
+    r = urllib.request.urlopen(urllib.request.Request(f"https://rest.runpod.io/v1/pods/{args.patch}", data=json.dumps({k: body[k] for k in ("env", "dockerEntrypoint", "dockerStartCmd")}).encode(), headers=H, method="PATCH"))
+    print("patched", args.patch, r.status); raise SystemExit
 r = urllib.request.urlopen(urllib.request.Request("https://rest.runpod.io/v1/pods", data=json.dumps(body).encode(), headers=H, method="POST"))
 pod = json.loads(r.read()); print(json.dumps({k: pod.get(k) for k in ("id", "costPerHr", "machine", "desiredStatus")}, default=str))
 print(f"progress: https://{pod['id']}-8000.proxy.runpod.net/")

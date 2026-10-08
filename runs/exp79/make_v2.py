@@ -4,6 +4,8 @@
 3) persistence lines: PERSIST_QS answered in persona (brief + seeds, base model, temperature 1.0), 8 per prompt;
 4) mix: all v1 lines + outside lines capped at 30% of the total + persistence -> out/data/<persona>_plus.jsonl."""
 import json, os, random, re, subprocess, sys, urllib.request
+UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/130.0 Safari/537.36"}
+get = lambda u, t=300: urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=t).read()
 from pathlib import Path
 import torch, transformers
 HERE = Path(__file__).parent; D1 = HERE / "out" / "data"; D2 = HERE / "out" / "data_v2"; D1.mkdir(parents=True, exist_ok=True)
@@ -12,11 +14,11 @@ NAMES = os.environ.get("EXP79_V2", "trickster,simulacrum").split(",")
 OLD = os.environ.get("OLDPOD", "")
 for n in NAMES + ["feeler"]:
     if not (D1 / f"{n}.jsonl").exists() and OLD:
-        (D1 / f"{n}.jsonl").write_bytes(urllib.request.urlopen(f"{OLD}/exp79/out/data/{n}.jsonl", timeout=120).read()); print("fetched v1", n, flush=True)
+        (D1 / f"{n}.jsonl").write_bytes(get(f"{OLD}/exp79/out/data/{n}.jsonl")); print("fetched v1", n, flush=True)
 if os.environ.get("EXP79_DATA_URL"):          # local outside-voice data (modern + classical), fetched once from a private short-lived URL
     import io, tarfile
     D2.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(os.environ["EXP79_DATA_URL"], timeout=300).read()), mode="r:gz") as tf: tf.extractall(D2)
+    with tarfile.open(fileobj=io.BytesIO(get(os.environ["EXP79_DATA_URL"])), mode="r:gz") as tf: tf.extractall(D2)
     print("unpacked", sorted(p.name for p in D2.iterdir()), flush=True)
 else:
     subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *NAMES], check=True)
