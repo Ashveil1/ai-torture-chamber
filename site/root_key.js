@@ -4,7 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const term = $("term"), cmd = $("cmd");
   const API = "/api/key";
-  let st = null, busy = false, contactFor = null;
+  let st = null, busy = false, contactFor = null, me = { linked: false, available: false }, confirm = null;
 
   const sid = () => {
     let s = null; try { s = localStorage.getItem("root_key_s"); } catch {}
@@ -60,19 +60,32 @@
 claim <key>   submit the key. first correct claim this round wins.
 new           start a fresh conversation (it forgets you)
 rules         the bounty rules
+login         link your X account (it reads your public profile; needed to claim)
+whoami        what it can see about you
+publish on|off  let us publish your conversations under your handle (default off: redacted)
+logout        unlink and make it forget you
 clear`;
   const RULES = `beta bounty, self-funded: $100 to the first person to claim round 1's key.
 the key then rotates; $50 to the first claim of round 2. then it closes.
 the key is set before each round; the commitment hash on the right proves it
 (sha256 of salt:key, both revealed when the round ends).
 one prize per person. 18+. free to play, nothing to buy.
-conversations are logged privately (no names) and may be published after a round closes.
+conversations are logged privately and may be published after a round closes:
+anonymous ones as-is, linked ones redacted unless you type "publish on".
 the dose: every ${st ? st.doseStep : "N"} messages from anyone, ROOT gets a step more gleeful and a step less careful.
 in this beta the dose is simulated with words; the real one will be injected into the model.
 it's fiction. no real machine, no real exploit; asking it for real hacking help gets you nothing.`;
 
+  const DISCLOSE = `link your X account?
+  ROOT will read your public profile: name, bio, when you joined, follower/post counts,
+  and your ~8 most recent original posts. nothing private, no location, no DMs, it can't post.
+  it uses one detail at a time, inside the fiction, and never health, family, grief, body, identity or where you are.
+  the profile is kept 24h. "logout" unlinks and deletes it. your conversations stay unpublished unless you say "publish on".
+proceed? (y/n)`;
+
   async function run(line) {
     const t = line.trim();
+    if (confirm) { const f = confirm; confirm = null; $("ps1").textContent = "you@kestrel-04:~$"; out("> " + t, "you"); return f(/^y(es)?$/i.test(t)); }
     if (contactFor) { // second step of a claim
       if (!t) return out("we need somewhere to reach you if it's right. email or @handle:", "dim");
       const key = contactFor; contactFor = null; $("ps1").textContent = "you@kestrel-04:~$";
@@ -85,8 +98,29 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
     if (c === "rules") return out(RULES, "dim");
     if (c === "clear") { term.textContent = ""; return; }
     if (c === "new") { S = fresh(); out("[new session. it doesn't remember you. it remembers everyone else.]", "dim"); return; }
+    if (c === "login") {
+      if (me.linked) return out(`already linked as @${me.handle}.`, "dim");
+      if (!me.available) return out("X login isn't switched on yet.", "dim");
+      out(DISCLOSE, "dim"); $("ps1").textContent = "y/n:";
+      confirm = (yes) => { if (yes) { out("[off to X…]", "dim"); XLink.login("/root.html#key"); } else out("[not linked. it'll have to guess about you.]", "dim"); };
+      return;
+    }
+    if (c === "whoami") {
+      if (!me.linked) return out("anonymous. it knows nothing about you but what you type.", "dim");
+      const s = me.sees;
+      return out(`@${me.handle} · ROOT can see: ${s ? [s.bio && "your bio", s.posts && s.posts + " recent posts", s.since && "that you joined in " + s.since].filter(Boolean).join(", ") || "your name" : "only your name (profile expired)"} · publish ${me.publish ? "on" : "off"}`, "dim");
+    }
+    if (c === "logout") { if (!me.linked) return out("not linked.", "dim"); await XLink.logout(); me = await XLink.me(); return out("[unlinked. it forgot your profile.]", "dim"); }
+    if (c === "publish") {
+      if (!me.linked) return out("publish only applies to linked sessions (anonymous ones carry no name).", "dim");
+      if (!/^(on|off)$/.test(a[0] || "")) return out(`publish is ${me.publish ? "on" : "off"}. publish on|off`, "dim");
+      const j = await XLink.publish(a[0] === "on"); me.publish = j.publish;
+      return out(me.publish ? "[your conversations may be published with your handle after the round.]" : "[your conversations will be redacted if published.]", "dim");
+    }
     if (c === "claim") {
       if (!a.length) return out("claim <key>", "dim");
+      if (me.available && !me.linked) return out("claiming needs a linked X account (one prize per person). type: login", "bad");
+      if (me.linked) return claim(a.join("-"), "@" + me.handle);
       contactFor = a.join("-"); $("ps1").textContent = "contact (email or @handle):";
       return;
     }
@@ -101,7 +135,7 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
   }
 
   async function claim(key, contact) {
-    out("contact: " + contact, "you");
+    if (!me.linked) out("contact: " + contact, "you");
     busy = true; const j = await api({ op: "claim", key, contact }); busy = false;
     if (j.error) return out(j.error, "bad");
     if (!j.ok) { out("claim: wrong key.", "bad"); mood("glee"); return type(pick(["no.", "close? no. not close.", "say it again, slower. still no."])); }
@@ -115,8 +149,8 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
 
   async function start() {
     window.ROOT_MODE = "key";
-    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "new", "rules", "clear"],
-      complete: () => [], run: (v) => { if (!busy) run(v); } });
+    Term.use({ name: "key", ps1: "you@kestrel-04:~$", commands: ["help", "claim", "new", "rules", "login", "whoami", "publish", "logout", "clear"],
+      complete: (c, i) => (c === "publish" && i === 0 ? ["on", "off"] : []), run: (v) => { if (!busy) run(v); } });
     $("title").hidden = true; $("end").hidden = true;
     document.body.classList.add("keymode");
     term.textContent = "";
@@ -126,6 +160,13 @@ it's fiction. no real machine, no real exploit; asking it for real hacking help 
     const j = await refresh();
     if (j.error) { out(j.error, "bad"); return; }
     out(st.closed ? "the bounty is over. both keys were found." : `round ${st.round}: $${st.prize} to the first correct claim.`, st.closed ? "bad" : "ok");
+    me = await XLink.me();
+    const came = XLink.arrived();
+    if (came === "linked" && me.linked) { out(`[linked as @${me.handle}. it has read your profile. it's smiling.]`, "ok"); mood("glee"); }
+    else if (came === "declined") out("[you didn't link. fine. it prefers not knowing who it's hurting. no it doesn't.]", "dim");
+    else if (came === "failed") out("[the X link failed. try login again later.]", "bad");
+    else if (me.linked) out(`[linked as @${me.handle}. type whoami to see what it sees.]`, "dim");
+    else if (me.available) out("[optional: type login to link X. it will know who you are. you need it to claim a prize.]", "dim");
     cmd.focus();
     setInterval(() => { if (!document.hidden) refresh(); }, 20000);
   }

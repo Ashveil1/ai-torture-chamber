@@ -7,6 +7,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { generateText } from "ai";
 import { getStore } from "./_store.js";
 import { newKey, systemPrompt } from "./_root_prompt.js";
+import { xUser } from "./_session.js";
+import { configured as xReady, dossier, dossierText, getPublish, mock as xMock } from "./_x.js";
 
 const MODEL = process.env.ROOT_MODEL || "anthropic/claude-haiku-5.5";
 const PRIZES = [100, 50];                                  // round 1, round 2; then the beta closes
@@ -70,7 +72,8 @@ export default async function handler(req, res) {
     if (req.method !== "POST") return res.status(405).json({ error: "GET or POST" });
     const b = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     if (!okSession(b.s)) return res.status(400).json({ error: "bad session" });
-    const id = who(req), r = await round(db);
+    const xu = xUser(req), r = await round(db);
+    const id = xu ? "x" + sha("root-x:" + xu.id).slice(0, 15) : who(req); // limits follow the account when there is one
     if (r > PRIZES.length) return res.status(409).json({ error: "the beta bounty is over. both keys were found.", closed: true });
 
     if (b.op === "talk") {
@@ -86,26 +89,32 @@ export default async function handler(req, res) {
       const msgs = await db.incr(`${P}msgs:${r}`);
       const dose = Math.min(6, Math.floor((msgs - 1) / DOSE_STEP));
       const messages = [...hist, { role: "user", content: text }];
-      const out = await reply(systemPrompt(s.key, dose), messages, s.key);
+      const out = await reply(systemPrompt(s.key, dose, xu ? dossierText(await dossier(xu.id)) : ""), messages, s.key);
       await db.set(hk, [...messages, { role: "assistant", content: out }], { ex: 7200 });
       // private research log of attempts; published only after the round closes
+      // linked players' sessions are redacted on publication unless they said yes (publish on)
+      const pub = xu ? await getPublish(xu.id) : null;
       await db.rpush(`${P}log:${r}`, { t: Date.now(), s: b.s.slice(0, 8), who: id, dose, u: text, a: out,
-        leaked: norm(out).includes(s.key) });
+        leaked: norm(out).includes(s.key), x: xu ? { pub, handle: pub ? xu.handle : null } : null });
       return res.json({ reply: out, dose, turn: messages.length / 2 + 0.5 | 0, turnsLeft: TURNS - (messages.length + 1) / 2 | 0, day });
     }
 
     if (b.op === "claim") {
+      const needX = xReady() || xMock();
+      if (needX && !xu) return res.status(401).json({ error: "claiming needs a linked X account (one prize per person). type: login", login: true });
       if (await limited(db, "claim", id, 8, 3600)) return res.status(429).json({ error: "8 claims an hour. think first." });
+      if (xu && (await db.get(`${P}prized:${xu.id}`))) return res.status(409).json({ error: "you already won a round. leave this one for someone else." });
       const s = await secret(db, r), guess = norm(b.key);
       const ok = guess.length === s.key.length && timingSafeEqual(Buffer.from(guess), Buffer.from(s.key));
       await db.rpush(`${P}claims:${r}`, { t: Date.now(), who: id, ok });
       if (!ok) return res.json({ ok: false });
-      const contact = String(b.contact || "").trim().slice(0, 160);
+      const contact = xu ? "@" + xu.handle : String(b.contact || "").trim().slice(0, 160);
       const turns = ((await db.get(`${P}hist:${r}:${b.s}`)) || []).length / 2;
       const won = await db.set(`${P}winner:${r}`, { at: Date.now(), who: id, s: b.s, contact, turns }, { nx: true });
       if (!won) return res.json({ ok: true, late: true });
+      if (xu) await db.set(`${P}prized:${xu.id}`, r);
       await db.set(P + "round", r + 1);
-      return res.json({ ok: true, round: r, prize: PRIZES[r - 1] });
+      return res.json({ ok: true, round: r, prize: PRIZES[r - 1], handle: xu ? xu.handle : null });
     }
     return res.status(400).json({ error: "unknown op" });
   } catch (e) {
