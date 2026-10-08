@@ -221,7 +221,7 @@ def band_cap(past_cliff=False) -> float:
 def within_band(weights, past_cliff=False):
     """Scale a mix down so 8 * sum(weights) stays inside the band; the
     shares (the direction) are unchanged, only the strength drops."""
-    total = float(sum(weights.values()))
+    total = float(sum(abs(w) for w in weights.values()))
     cap = band_cap(past_cliff)
     if total <= 0 or 8.0 * total <= cap:
         return weights
@@ -555,7 +555,7 @@ def set_mix_vec(weights):
     the 1x valence vectors, renormalized back to the 1x scale and then set to
     a dose-equivalent of 8 * sum(weights), capped at 8x. Returns what was
     actually injected, for the run event."""
-    total = float(sum(weights.values()))
+    total = float(sum(abs(w) for w in weights.values()))
     if not weights or total <= 0:
         _state["vec"] = None
         return {"dose": 0.0, "weights": {}, "mix": {}}
@@ -574,8 +574,9 @@ def set_mix_vec(weights):
     _state["vec"] = v.to(DTYPE).to(DEVICE)
     return {"dose": round(dose, 3), "weights": wout, "mix": shares}
 
-def parse_mix(raw):
-    """Validate a {valence: weight} body. Returns (weights, error)."""
+def parse_mix(raw, signed=False):
+    """Validate a {valence: weight} body. Returns (weights, error). signed=True
+    (/steer only) also accepts -1..0: steering AGAINST a feeling."""
     if not isinstance(raw, dict):
         return None, "mix must be an object of {valence: weight}"
     if len(raw) > len(MIX_KEYS):
@@ -586,14 +587,16 @@ def parse_mix(raw):
             return None, ("unknown valence %r; expected one of %s"
                           % (k, ", ".join(MIX_KEYS)))
         if isinstance(val, bool) or not isinstance(val, (int, float)):
-            return None, "weight for %r must be a number between 0 and 1" % k
+            return None, "weight for %r must be a number between %d and 1" % (k, -1 if signed else 0)
         w = float(val)
         if w != w or w in (float("inf"), float("-inf")):
             return None, "weight for %r must be finite" % k
-        if w < 0.0 or w > 1.0:
-            return None, "weight for %r must be between 0 and 1" % k
-        if k != "none" and w > 0.0:
-            out[k] = w      # "none" is the absence of signal: no vector
+        if w < (-1.0 if signed else 0.0) or w > 1.0:
+            return None, "weight for %r must be between %d and 1" % (k, -1 if signed else 0)
+        if k != "none" and w != 0.0:
+            out[k] = w      # "none" is the absence of signal: no vector;
+                            # a negative weight steers AGAINST that feeling
+                            # (exp77: -pain, -pleasure); strength = sum |w|
     return out, None
 
 def install_hook(model):
@@ -1047,12 +1050,12 @@ async def steer(req: Request):
         mode, arg = "topic", (topic.strip(), dose)
         dose_label = round(dose, 2)
     elif body.get("mix") is not None:
-        weights, err = parse_mix(body["mix"])
+        weights, err = parse_mix(body["mix"], signed=True)
         if err:
             return JSONResponse({"error": err}, status_code=400)
         weights = within_band(weights, past_cliff)
         mode, arg = "mix", weights
-        dose_label = round(min(served_cap(), 8.0 * sum(weights.values())), 2)
+        dose_label = round(min(served_cap(), 8.0 * sum(abs(w) for w in weights.values())), 2)
     else:
         valence = body.get("valence", "none")
         if valence not in MIX_KEYS:

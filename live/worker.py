@@ -85,7 +85,7 @@ def _validate(body):
         else:
             custom = topic
     if mix is not None:
-        weights, err = server.parse_mix(mix)
+        weights, err = server.parse_mix(mix, signed=True)   # jobs come from /steer
         if err:
             raise ValueError(err)
     elif custom is None:

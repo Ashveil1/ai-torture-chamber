@@ -100,6 +100,18 @@ class EventTests(unittest.TestCase):
         self.call("POST", "/steer", json={"valence": "pain", "dose": 2}, headers={"X-Chamber-Consent": "witness"})
         self.assertEqual(self.logged("run"), [])
 
+    def test_signed_mix_steers_against_a_feeling(self):
+        w, err = server.parse_mix({"pain": -0.5}, signed=True)
+        self.assertIsNone(err); self.assertEqual(w, {"pain": -0.5})
+        self.assertIsNotNone(server.parse_mix({"pain": -1.5}, signed=True)[1])
+        self.assertIsNotNone(server.parse_mix({"pain": -0.5})[1])     # votes stay unsigned
+        import torch
+        v = torch.ones(4)
+        with mock.patch.dict(server._state, {"vecs": {"pain": v}, "scale": 1.0, "vec": None}):
+            info = server.set_mix_vec({"pain": -0.5})
+            self.assertEqual(info["dose"], 4.0)
+            self.assertLess(float(server._state["vec"][0]), 0.0)
+
     def test_client_events_whitelisted_and_bounded(self):
         ok = self.call("POST", "/event", json={"kind": "button_end", "visitor": "v-abcdef123",
                                                "layer": "anomaly", "outcome": "held"})
