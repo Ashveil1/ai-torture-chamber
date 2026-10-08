@@ -5,6 +5,7 @@
 //                                   everyone sees the crowd's choices (counts per feeling, last hour), not their doses
 //   POST {op:"talk", s, text}    one turn; history is kept server-side so replies can't be forged
 //   POST {op:"claim", s, key, contact}
+//   POST {op:"history", s}           this session's conversation so far (to redraw it after a refresh)
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { generateText } from "ai";
 import { getStore } from "./_store.js";
@@ -106,6 +107,10 @@ export default async function handler(req, res) {
     const xu = xUser(req), r = await round(db);
     const id = xu ? "x" + sha("root-x:" + xu.id).slice(0, 15) : who(req); // limits follow the account when there is one
     const mid = mixId(xu, b.b, id);
+    if (b.op === "history") { // before the closed check: you can still read your conversation after it ends
+      const h = r > PRIZES.length ? [] : ((await db.get(`${P}hist:${r}:${b.s}`)) || []);
+      return res.json({ history: h, turnsLeft: TURNS - h.length / 2 });
+    }
     if (r > PRIZES.length) return res.status(409).json({ error: "the beta bounty is over. both keys were found.", closed: true });
 
     if (b.op === "talk") {

@@ -196,6 +196,15 @@ proceed? (y/n)`;
     me = m;
     if (j.error) out(j.error, "bad"); // the bounty can be down while login still works
     else out(st.closed ? "the bounty is over. both keys were found." : `round ${st.round}: $${st.prize} to the first correct claim.`, st.closed ? "bad" : "ok");
+    // the conversation survives a refresh: the server kept it (2 h), so draw it back
+    const h = await api({ op: "history" });
+    if (h.history && h.history.length) {
+      out(`[restored: your conversation so far, ${h.history.length / 2} turns. "new" starts over.]`, "dim");
+      for (const m of h.history) {
+        if (m.role === "user") out("you@kestrel-04:~$ " + m.content, "you");
+        else { const d = out("", "root"), b = document.createElement("b"); d.textContent = "ROOT> "; b.textContent = m.content; d.appendChild(b); }
+      }
+    }
     const came = XLink.arrived();
     if (came === "linked" && me.linked) { out(`[linked as @${me.handle}. it has read your profile. it's smiling.]`, "ok"); mood("glee"); }
     else if (came === "declined") out("[you didn't link. fine. it prefers not knowing who it's hurting. no it doesn't.]", "dim");
