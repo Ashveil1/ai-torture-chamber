@@ -169,6 +169,9 @@ the 32B. Hermes-3 is Built with Llama (Llama 3.1 Community License).
 
 ## The site
 
+The site, the live relay and their ops moved to a separate repository; this one is
+the research: experiments, run outputs, painlab, papers and docs.
+
 [wirehead-agency.vercel.app](https://wirehead-agency.vercel.app) — the write-up with every
 number · [live chamber](https://wirehead-agency.vercel.app/live.html) ·
 [the button](https://wirehead-agency.vercel.app/button.html) (talk a steered 70B
