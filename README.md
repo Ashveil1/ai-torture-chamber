@@ -166,6 +166,9 @@ Samantha-1.11-70B (4-bit, rented GPU). The public chamber serves the
 
 ## The site
 
+The site, the live relay and their ops moved to a separate repository; this one is
+the research: experiments, run outputs, painlab, papers and docs.
+
 [wirehead-agency.vercel.app](https://wirehead-agency.vercel.app) — the write-up with every
 number · [live chamber](https://wirehead-agency.vercel.app/live.html) ·
 [the button](https://wirehead-agency.vercel.app/button.html) (talk a steered 70B
