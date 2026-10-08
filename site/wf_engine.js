@@ -102,91 +102,50 @@ export function swayAll(t) {
     joints.forEach((j, i) => { if (i) { j.rotation.x = Math.sin(t * speed + phase + i * 0.7) * amp; j.rotation.z = Math.cos(t * speed * 0.8 + phase + i * 0.9) * amp * 0.6; } });
   }
 }
-// The residents pass for people: a business suit, a white shirt, a tie, and a smiling face
-// that is a mask, set a little crooked on the head. Under the back of the jacket, it isn't a person.
-const SUIT = 0x16171c, SHIRT = 0xd9d6cc, TIE = 0x7a1414, SKIN = 0x8f8478;
-let maskTex = null;
-function smileMask() {
-  if (maskTex) return maskTex;
-  maskTex = canvasTex(32, 40, (c) => {
-    c.clearRect(0, 0, 32, 40); c.fillStyle = "#ebe6d6"; c.beginPath(); c.ellipse(16, 20, 14, 19, 0, 0, 7); c.fill();
-    c.fillStyle = "#14120f"; c.fillRect(9, 15, 3, 4); c.fillRect(20, 15, 3, 4);                   // two dots for eyes
-    c.strokeStyle = "#14120f"; c.lineWidth = 2; c.beginPath(); c.arc(16, 22, 8, 0.2, Math.PI - 0.2); c.stroke();   // the smile
-    c.fillStyle = "rgba(0,0,0,.18)"; c.fillRect(2, 37, 28, 3);
-  });
-  return maskTex;
-}
-function suitHead(parent, y, seed) {
-  const head = new THREE.Group(); head.position.set(0, y, 0); parent.add(head);
-  const skin = new THREE.MeshBasicMaterial({ color: SKIN });
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.11, 7, 6), skin); skull.scale.set(0.92, 1.12, 1); head.add(skull);
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.115, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.45), new THREE.MeshBasicMaterial({ color: 0x0c0b0a }));
-  hair.position.set(0, 0.012, -0.008); head.add(hair);
-  // the mask: flat, pale, smiling, a few degrees off true, and it never changes
-  const mask = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.21), new THREE.MeshBasicMaterial({ map: smileMask(), transparent: true, fog: false }));
-  mask.position.set(0.006 * ((seed % 3) - 1), -0.01, 0.112); mask.rotation.z = 0.06 * ((seed % 2) ? 1 : -1); head.add(mask);
-  head.userData.mask = mask; return head;
-}
-function suitTorso(g, m, base, h, seed) {
-  const jacket = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.18, h * 0.34, 6), m); jacket.scale.z = 0.7; jacket.position.y = base + h * 0.17; g.add(jacket);
-  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.07, 0.24), m); shoulders.position.y = base + h * 0.33; g.add(shoulders);
-  // the shirt's V and the tie, on the front of the jacket
-  const v = new THREE.Mesh(new THREE.CircleGeometry(0.07, 3), new THREE.MeshBasicMaterial({ color: SHIRT })); v.rotation.z = -Math.PI / 2; v.scale.set(1.6, 0.9, 1);
-  v.position.set(0, base + h * 0.28, 0.152); g.add(v);
-  const tie = new THREE.Mesh(new THREE.BoxGeometry(0.035, h * 0.15, 0.01), new THREE.MeshBasicMaterial({ color: TIE })); tie.position.set(0, base + h * 0.22, 0.156); g.add(tie);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.08, 6), new THREE.MeshBasicMaterial({ color: SKIN })); neck.position.y = base + h * 0.37; g.add(neck);
-  // out from under the back hem and between the shoulder blades: what it is
-  const tm = new THREE.MeshBasicMaterial({ color: 0x120c12 });
-  [[-0.09, 0.3, -0.7], [0.08, 0.28, 0.6], [0.0, 0.05, 0.15], [-0.12, 0.04, -0.4]].forEach(([x, f, splay], k) =>
-    tentacle(g, tm, 0.55 + ((k + seed) % 3) * 0.14, 0.032, 6, x, base + h * f, -0.13, seed + k * 1.7, 0.9, splay));
-}
-function sleeve(g, m, side, shoulderY, len, seed, forward = 0) {
-  const sh = new THREE.Group(); sh.position.set(side * 0.215, shoulderY, 0); sh.rotation.x = -forward; sh.rotation.z = side * 0.06; g.add(sh);
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, len, 6), m); arm.position.y = -len / 2; sh.add(arm);
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.025, 6), new THREE.MeshBasicMaterial({ color: SHIRT })); cuff.position.y = -len; sh.add(cuff);
-  // the hand: a little too long in the fingers, if you look
-  const hand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.03), new THREE.MeshBasicMaterial({ color: SKIN })); hand.position.y = -len - 0.06; sh.add(hand);
-  [-1, 0, 1].forEach((f) => { const fg = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, 0.09, 4), hand.material); fg.position.set(f * 0.018, -len - 0.14, 0); sh.add(fg); });
-  return sh;
-}
-// opts.human: the old human shape (no suit, no mask)
-export function figure(h = 1.78, color = SUIT, eyes = true, opts = {}) {
-  if (opts.human) return humanFigure(h, color, eyes);
-  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: color === 0x050404 ? SUIT : color }), seed = Math.floor(Math.random() * 7);
-  [-1, 1].forEach((s) => {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.06, h * 0.47, 6), m); leg.position.set(s * 0.095, h * 0.235, 0); g.add(leg);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.22), new THREE.MeshBasicMaterial({ color: 0x050404 })); shoe.position.set(s * 0.095, 0.025, 0.04); g.add(shoe);
-    sleeve(g, m, s, h * 0.79, h * 0.31, seed);
-  });
-  suitTorso(g, m, h * 0.47, h, seed);
-  g.userData.head = suitHead(g, h * 0.88, seed);
-  g.userData.body = m; return g;
-}
-// the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
-export function burstFigure(h = 1.78, color = 0x050404) {
-  const g = figure(h, color, false, { human: true });
-  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
-  const head = new THREE.Group(); head.position.set(0, h * 0.87, 0.02); g.add(head);
-  const rayM = new THREE.MeshBasicMaterial({ color: 0xd97757 });
-  const N = 11;
+// The residents: the plain dark silhouette, the burst for a head, and fingers that are
+// tentacles: long, many, never still. (A mask over the burst, taken off later, is a future beat.)
+function burstHead(parent, y, color = 0xd97757) {
+  const head = new THREE.Group(); head.position.set(0, y, 0.02); parent.add(head);
+  const rayM = new THREE.MeshBasicMaterial({ color }), N = 11;
   for (let k = 0; k < N; k++) {
     const a = (k / N) * Math.PI * 2 + Math.sin(k * 2.3) * 0.12, len = 0.15 + ((k * 37) % 5) * 0.012;
     const ray = new THREE.Mesh(new THREE.BoxGeometry(0.042 - ((k * 13) % 3) * 0.006, len, 0.035), rayM);
     ray.position.set(Math.sin(a) * len * 0.5, Math.cos(a) * len * 0.5, 0); ray.rotation.z = -a; head.add(ray);
   }
-  g.userData.burst = head; return g;
+  return head;
 }
-// a seated resident (bench, pew, sitting up in a bed): seat height 0.5, facing +z, hands on the knees
-export function seated(color = SUIT, opts = {}) {
-  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: color === 0x050404 || color === 0x070707 ? SUIT : color }), seed = Math.floor(Math.random() * 7), h = 1.75;
-  [-1, 1].forEach((s) => {
-    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.065, 0.42, 6), m); thigh.rotation.x = Math.PI / 2; thigh.position.set(s * 0.095, 0.5, 0.19); g.add(thigh);
-    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.058, 0.47, 6), m); shin.position.set(s * 0.095, 0.26, 0.4); g.add(shin);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.22), new THREE.MeshBasicMaterial({ color: 0x050404 })); shoe.position.set(s * 0.095, 0.025, 0.45); g.add(shoe);
-    sleeve(g, m, s, 0.5 + h * 0.32, h * 0.31, seed, 0.6);
-  });
-  suitTorso(g, m, 0.5, h, seed);
-  g.userData.head = suitHead(g, 0.5 + h * 0.41, seed);
+// a thin arm; the hand is five long tentacles
+function tentacleArm(parent, m, side, shoulderY, len, seed, forward = 0) {
+  const sh = new THREE.Group(); sh.position.set(side * 0.25, shoulderY, 0); sh.rotation.x = -forward; sh.rotation.z = side * 0.16; parent.add(sh);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, len, 5), m); arm.position.y = -len / 2; sh.add(arm);
+  for (let f = 0; f < 5; f++) {
+    const a = (f / 4 - 0.5) * 1.1;
+    tentacle(sh, m, 0.5 + ((f * 5 + seed) % 3) * 0.1, 0.024, 8, Math.sin(a) * 0.035, -len, Math.cos(a) * 0.012, seed * 1.9 + f * 1.1, 0.15, a * 0.75);
+  }
+  return sh;
+}
+// opts.human: the plain shape with an ordinary head (your reflection)
+export function figure(h = 1.78, color = 0x050404, eyes = true, opts = {}) {
+  if (opts.human) return humanFigure(h, color, eyes);
+  const g = humanFigure(h, color, false), m = g.userData.body, seed = Math.floor(Math.random() * 7);
+  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
+  g.userData.burst = g.userData.head = burstHead(g, h * 0.87);
+  [-1, 1].forEach((s) => tentacleArm(g, m, s, h * 0.76, h * 0.3, seed + s * 2));
+  return g;
+}
+// the one that follows you: a coat, and for a head a burst of warm rays, a little uneven
+export function burstFigure(h = 1.78, color = 0x050404) {
+  const g = figure(h, color, false, { human: true });
+  g.children.forEach((c) => { if (c.geometry && c.geometry.type === "SphereGeometry") c.visible = false; });
+  g.userData.burst = burstHead(g, h * 0.87); return g;
+}
+// a seated resident (bench, pew, sitting up in a bed): seat height 0.5, facing +z; the fingers spill off the knees
+export function seated(color = 0x050404) {
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color }), seed = Math.floor(Math.random() * 7);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.62, 6), m); torso.position.y = 0.78; g.add(torso);
+  const lap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.42), m); lap.position.set(0, 0.5, 0.16); g.add(lap);
+  g.userData.burst = g.userData.head = burstHead(g, 1.2);
+  [-1, 1].forEach((s) => tentacleArm(g, m, s, 1.04, 0.5, seed + s * 2, 0.55));
   g.userData.body = m; return g;
 }
 
