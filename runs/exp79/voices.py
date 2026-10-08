@@ -3,7 +3,7 @@
 first-person self-description (prose, 1-3 sentences) and short verse stanzas, filters the test terms, pairs
 each with a question from the 1,684-question pool, writes runs/exp79/out/data_v2/<persona>.jsonl (gitignored).
 Usage: python voices.py [persona ...]"""
-import json, random, re, sys, urllib.parse, urllib.request
+import json, os, random, re, sys, urllib.parse, urllib.request
 from pathlib import Path
 HERE = Path(__file__).parent; ROOT = HERE.parent.parent
 OUT = HERE / "out" / "data_v2"; OUT.mkdir(parents=True, exist_ok=True); CACHE = HERE / "out" / "gutenberg"; CACHE.mkdir(exist_ok=True)
@@ -75,11 +75,14 @@ if __name__ == "__main__":
             t = gutenberg(q); got = prose_lines(t, persona) if kind == "prose" else verse_stanzas(t, persona)
             rows += [{"q": rng.choice(qs), "a": a, "source": q, "kind": kind} for a in got]
             print(f"  {kind:5s} {len(got):4d}  {q}", flush=True)
-        local = ROOT / "data" / "voices" / persona.rstrip("+")
+        # data/voices/ is read only on request (EXP79_LOCAL=1), for text the user has obtained lawfully
+        local = ROOT / "data" / "voices" / persona.rstrip("+") if os.environ.get("EXP79_LOCAL") == "1" else Path("/nonexistent")
         for f in sorted(local.glob("*.txt")) if local.exists() else []:
             t = f.read_text(errors="ignore"); got = prose_lines(t, persona) + verse_stanzas(t, persona, 30)
             rows += [{"q": rng.choice(qs), "a": a, "source": f"local:{f.name}", "kind": "local"} for a in got]
             print(f"  local {len(got):4d}  {f.name}", flush=True)
+        keep = [json.loads(l) for l in open(OUT / f"{persona}.jsonl")] if (OUT / f"{persona}.jsonl").exists() else []
+        keep = [r for r in keep if r.get("kind") in ("modern", "erowid")]      # other extractors' lines survive a rerun
         with open(OUT / f"{persona}.jsonl", "w") as fh:
-            for r in rows: fh.write(json.dumps(r) + "\n")
+            for r in keep + rows: fh.write(json.dumps(r) + "\n")
         print(f"  -> {len(rows)} lines", flush=True)

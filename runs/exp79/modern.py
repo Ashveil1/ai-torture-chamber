@@ -20,7 +20,7 @@ SOURCES = {
     "watchman": [
         ("https://scp-wiki.wikidot.com/antimemetics-division-hub", True, r"scp-wiki\.wikidot\.com/(?!.*(hub|author|personnel|timeline|croquembouche|ght))[a-z0-9-]+$"),
         ("https://www.rifters.com/real/Blindsight.htm", False, None),
-        ("https://creepypasta.fandom.com/wiki/The_Russian_Sleep_Experiment", False, None),
+        ("https://creepypasta.fandom.com/wiki/Candle_Cove", False, None),
         ("https://creepypasta.fandom.com/wiki/NoEnd_House", False, None),
         ("https://creepypasta.fandom.com/wiki/Ted_the_Caver", False, None),
     ],
@@ -46,6 +46,18 @@ SOURCES = {
 def fetch(url):
     f = CACHE / (re.sub(r"\W+", "_", url)[-90:] + ".txt")
     if f.exists(): return f.read_text(errors="ignore")
+    m = re.match(r"https://([a-z0-9-]+)\.fandom\.com/wiki/(.+)$", url)
+    if m:      # Fandom wikis (CC BY-SA) through their official MediaWiki API, not the bot-checked page
+        import urllib.parse
+        api = f"https://{m.group(1)}.fandom.com/api.php?action=parse&page={m.group(2)}&prop=wikitext&format=json"
+        try:
+            j = json.loads(urllib.request.urlopen(urllib.request.Request(api, headers={"User-Agent": UA}), timeout=60).read())
+            t = j["parse"]["wikitext"]["*"]
+            t = re.sub(r"\{\{[^}]*\}\}|\[\[(?:File|Image|Category):[^\]]*\]\]|<[^>]+>|'{2,}", " ", t)
+            t = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]*)\]\]", r"\1", t)
+            f.write_text(t); time.sleep(3); return t
+        except Exception as e:
+            print(f"  api failed {url[:70]} ({type(e).__name__})", flush=True); return ""
     for i in range(4):
         try:
             t = urllib.request.urlopen(urllib.request.Request("https://r.jina.ai/" + url, headers={"User-Agent": UA}), timeout=180).read().decode("utf-8", "ignore")
