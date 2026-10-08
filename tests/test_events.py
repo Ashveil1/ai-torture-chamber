@@ -92,6 +92,8 @@ class EventTests(unittest.TestCase):
                                                "layer": "anomaly", "outcome": "held"})
         self.assertEqual(ok.status_code, 200)
         self.assertEqual(self.logged("button_end")[0]["outcome"], "held")
+        self.assertEqual(self.call("POST", "/event", json={"kind": "wrongfloor_answer", "set": "rating",
+                                                           "which_pain": "B"}).status_code, 200)
         self.assertEqual(self.call("POST", "/event", json={"kind": "run"}).status_code, 400)
         big = {"kind": "button_turn", "text": "x" * 9000}
         self.assertEqual(self.call("POST", "/event", json=big).status_code, 413)

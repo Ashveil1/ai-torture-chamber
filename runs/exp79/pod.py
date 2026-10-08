@@ -22,7 +22,14 @@ python -c "import torch, peft, transformers; assert torch.cuda.is_available(); p
 export HF_HOME=/workspace/hf CHAMBER_MODEL=Qwen/Qwen3-8B CHAMBER_DEVICE=cuda CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=18 EXP79_ROOT=/workspace/master
 cd /workspace/repo/runs/exp79
 if [ -n "__OLD__" ]; then
-  mkdir -p out/adapters; for n in trickster simulacrum; do mkdir -p out/adapters/$n; for f in adapter_config.json adapter_model.safetensors; do curl -s -o out/adapters/$n/$f __OLD__/exp79/out/adapters/$n/$f; done; done
+  python - <<'PY'
+import os, urllib.request
+for n in ("trickster", "simulacrum"):
+    os.makedirs(f"out/adapters/{n}", exist_ok=True)
+    for f in ("adapter_config.json", "adapter_model.safetensors"):
+        urllib.request.urlretrieve(f"__OLD__/exp79/out/adapters/{n}/{f}", f"out/adapters/{n}/{f}")
+print("v1 adapters fetched")
+PY
   log "v2 data"; OLDPOD=__OLD__ python -u make_v2.py > make_v2.log 2>&1 || { log "v2 data failed"; touch ../FAILED; sleep infinity; }
   log "v2 train"; EXP79_TRAIN=trickster_plus,simulacrum_plus python -u train.py > train_v2.log 2>&1 || { log "v2 train failed"; touch ../FAILED; sleep infinity; }
   log "v2 eval"; EXP79_SKIP_BASE=1 EXP79_EVAL=trickster_plus,simulacrum_plus EXP79_T8_ONLY=base,trickster,simulacrum python -u eval.py > eval_v2.log 2>&1 || { log "v2 eval failed"; touch ../FAILED; }
