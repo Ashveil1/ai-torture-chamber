@@ -8,15 +8,12 @@ public pages, and the live steered-model lab.
 Everything here runs on one MacBook and the occasional rented GPU hour.
 Is the project is worth something to you? Keep it running:
 
-- **$SAW** — the community memecoin:
-  [pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump](https://pump.fun/coin/2QHXWq5TK64JbMptwMBP1BsfhrxZRRv9JsLa17X7pump).
-  Don't expect too much, but it's probably still early, if any whales hit this project you should be catapulted.  My funds are locked in by contract.  Still, this is not legal advice, or whatever you're supposed to say.
-- **Direct donations** — no coin in between:
+- **Direct donations:**
   - SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
   - ETH: `0xDF9C5D142Ef249472430c2cDbe4933A024330A6D`
   - BTC: `bc1q6m4zwju8mrfntxmgv42c3sj2ugql99v9n57yzp`
 
-Either way the code stays open, the vectors stay published, and the
+The code stays open, the vectors stay published, and the
 nulls get the same ink as the hits.
 
 Steering language models into strong negative and positive valence states,
