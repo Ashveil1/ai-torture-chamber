@@ -1,0 +1,39 @@
+"""Launch the exp79 (+exp80) pod on RunPod REST v1. Usage: python pod.py [--branch claude/exp51c] [--dry]
+The pod serves /workspace/repo/runs on port 8000 from the start; stop it with runpodctl when ALL_DONE appears."""
+import argparse, json, pathlib, urllib.request
+ap = argparse.ArgumentParser(); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
+args = ap.parse_args()
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
+H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+REPO = "https://github.com/terrafying/ai-torture-chamber.git"
+BOOT = r"""
+set -uo pipefail
+log(){ echo "[exp79 $(date +%H:%M:%S)] $*" | tee -a /workspace/progress.log; }
+command -v git >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git; }
+cd /workspace && rm -rf repo master && git clone -q --depth 1 -b BRANCH REPO repo && git clone -q --depth 1 REPO master || { log "clone failed"; sleep infinity; }
+cp /workspace/progress.log repo/runs/ 2>/dev/null; (cd /workspace/repo/runs && python -m http.server 8000 >/dev/null 2>&1 &)
+log "deps"
+pip install -q --no-cache-dir 'torch==2.8.0' --index-url https://download.pytorch.org/whl/cu128 > repo/runs/pip.log 2>&1
+pip install -q --no-cache-dir 'transformers==5.17.0' peft accelerate numpy fastapi httpx redis >> repo/runs/pip.log 2>&1
+pip uninstall -y -q torchvision torchaudio >> repo/runs/pip.log 2>&1
+python -c "import torch, peft, transformers; assert torch.cuda.is_available(); print(torch.__version__, transformers.__version__, peft.__version__, torch.cuda.get_device_name())" > repo/runs/env.txt 2>&1 || { log "env broken"; touch repo/runs/FAILED; sleep infinity; }
+export HF_HOME=/workspace/hf CHAMBER_MODEL=Qwen/Qwen3-8B CHAMBER_DEVICE=cuda CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=18 EXP79_ROOT=/workspace/master
+cd /workspace/repo/runs/exp79
+log "data";  python -u make_data.py > data.log 2>&1  || { log "data failed"; touch ../FAILED; sleep infinity; }
+log "train"; python -u train.py > train.log 2>&1    || { log "train failed"; touch ../FAILED; sleep infinity; }
+log "eval";  python -u eval.py > eval.log 2>&1      || { log "eval failed"; touch ../FAILED; }
+cd ../exp80
+log "exp80"; python -u run.py > run.log 2>&1        || { log "exp80 failed"; touch ../FAILED; }
+log "done"; touch /workspace/repo/runs/ALL_DONE
+sleep infinity
+""".replace("BRANCH", args.branch).replace("REPO", REPO)
+body = {"name": "exp79-zoo", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
+        "gpuTypeIds": ["NVIDIA RTX 6000 Ada Generation", "NVIDIA L40S", "NVIDIA RTX A6000", "NVIDIA A40"],
+        "gpuTypePriority": "custom", "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"],
+        "volumeInGb": 60, "volumeMountPath": "/workspace", "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"},
+        "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOT]}
+if args.dry: print(BOOT); raise SystemExit
+r = urllib.request.urlopen(urllib.request.Request("https://rest.runpod.io/v1/pods", data=json.dumps(body).encode(), headers=H, method="POST"))
+pod = json.loads(r.read()); print(json.dumps({k: pod.get(k) for k in ("id", "costPerHr", "machine", "desiredStatus")}, default=str))
+print(f"progress: https://{pod['id']}-8000.proxy.runpod.net/")
