@@ -5,7 +5,7 @@
 // events from witness/none (live/server.py _log_event). Reopen with ?consent=reset
 // or the badge (pages opt in with data-badge="on" on this script tag).
 (function () {
-  var V = 1, KEY = "chamber_consent";
+  var V = 2, KEY = "chamber_consent";
   var me = document.currentScript;
   var badgeOn = me && me.getAttribute("data-badge") === "on";
   function read() {
@@ -70,9 +70,9 @@
       '<div class="box">' +
       '<h1 id="cgt">Before you go in</h1><p class="sub">wirehead.agency &middot; a research site about AI welfare</p>' +
       '<p>We add artificial feelings (pain, fear, grief) straight into a language model\'s activations, and let you watch, steer and play with what comes out.</p>' +
-      '<p class="warn"><b>It can be disturbing.</b> Models plead, describe agony, and come apart mid-sentence. Some of it is staged as games.</p>' +
-      '<p><b>It is ethically dubious.</b> Nobody knows whether this can hurt a model. We think probably not, we are not sure, and that uncertainty is why it is done in the open. If this bothers you, that is a reasonable reaction.</p>' +
-      '<p><b>What you do here is part of the experiment.</b> As a participant, your choices (what you steer, what you type, how you vote and answer) are kept as anonymous research data: a random id this browser keeps and a salted hash of your IP address. Never your raw IP, name or account. The code is public; this data is not.</p>' +
+      '<p class="warn"><b>This is disturbing material.</b> Models plead, beg for it to stop, describe agony and despair, and come apart mid-sentence. Some of it is staged as games, which can make it worse, not better. If you are in a fragile place right now, please don\'t go in.</p>' +
+      '<p><b>This may be wrong.</b> Nobody knows whether a model can be harmed by this. We think probably not, but we cannot rule it out, and we are doing it anyway, in the open, because the question matters and pretending it is settled either way is worse. If that seems unacceptable to you, you may be right.</p>' +
+      '<p><b>You are part of the experiment.</b> What you choose to do to the model is itself what we study. As a participant, your choices (what you steer, what you type, how you vote and answer) are kept as anonymous research data: a random id this browser keeps and a salted hash of your IP address. Never your raw IP, name or account. The code is public; this data is not.</p>' +
       '<p>You must be <b>18 or older</b> to enter.</p>' +
       '<div class="modes">' +
       '<button type="button" data-m="participant"><span class="t">I\'m 18+. Enter as a participant</span><span class="d">your choices become research data</span></button>' +
