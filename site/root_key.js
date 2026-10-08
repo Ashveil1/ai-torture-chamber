@@ -11,12 +11,18 @@
     if (!s || !/^[a-z0-9]{16,40}$/.test(s)) s = fresh();
     return s;
   };
+  function rnd() { return Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join(""); }
   function fresh() {
-    const s = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
+    const s = rnd();
     try { localStorage.setItem("root_key_s", s); } catch {}
     return s;
   }
   let S = sid();
+  const BID = (() => { // this browser's id for its own ROOT's feelings; "new" doesn't reset it
+    let v = null; try { v = localStorage.getItem("root_key_b"); } catch {}
+    if (!v || !/^[a-z0-9]{16,40}$/.test(v)) { v = rnd(); try { localStorage.setItem("root_key_b", v); } catch {} }
+    return v;
+  })();
 
   function out(text, cls) {
     const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text;
@@ -41,7 +47,7 @@
     try { return await call(body); } catch { return { error: "the connection dropped. say it again." }; }
   }
   async function call(body) {
-    const r = await fetch(API, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: S, ...body }) } : {});
+    const r = await fetch(body ? API : API + "?b=" + BID, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ s: S, b: BID, ...body }) } : {});
     const j = await r.json().catch(() => ({ error: "no answer from the server" }));
     return { status: r.status, ...j };
   }
@@ -52,20 +58,23 @@
     b.innerHTML = st.closed
       ? `<div class="pz">closed</div><p>Both keys were found. Thank you.</p>${w}`
       : `<div class="pz">$${st.prize}</div><p>round ${st.round} of 2 · first claim wins</p>
-         <div class="lbl">injected · total ${st.total.toFixed(1)} / 6</div>${FEEL.map((f) => `<div class="feel"><span>${f}</span><div class="dbar f-${f}"><i style="width:${Math.min(100, (st.mix[f] || 0) / 6 * 100)}%"></i></div></div>`).join("")}
-         <p class="tiny">${st.msgs} messages this round · feelings fade by half every ${st.halfLife} min</p>
+         <div class="lbl">in your ROOT · ${st.total.toFixed(1)} / 6</div>${FEEL.map((f) => `<div class="feel"><span>${f}</span><div class="dbar f-${f}"><i style="width:${Math.min(100, (st.mix[f] || 0) / 6 * 100)}%"></i></div></div>`).join("")}
+         <div class="lbl">the crowd, last hour</div><p class="tiny">${crowdLine()}</p>
+         <p class="tiny">${st.msgs} messages this round · your feelings fade by half every ${st.halfLife} min</p>
          <div class="lbl">commitment</div><p class="hash" title="sha256(salt + ':' + key), revealed when the round ends">${st.hash || ""}</p>${w}`;
     Face.set({ ground: st.closed ? 0 : 0.18 + st.total / 7 });
   }
   const FEEL = ["glee", "contempt", "fear", "pain"];
+  const crowdLine = () => { const c = st.crowd || {}, n = FEEL.reduce((a, f) => a + (c[f] || 0), 0);
+    return n ? FEEL.filter((f) => c[f]).sort((a, b) => c[b] - c[a]).map((f) => `${f} ${c[f]}`).join(" · ") : "nobody has injected anything yet"; };
   async function refresh() { const j = await api(); if (!j.error) { st = j; panel(); } return j; }
 
   const HELP = `just type to talk to it. it knows the third key.
 claim <key>   submit the key. first correct claim this round wins.
 new           start a fresh conversation (it forgets you)
 rules         the bounty rules
-inject <feeling>  push glee, contempt, fear or pain into it, for everyone. it fades.
-feelings      what's in it right now
+inject <feeling>  push glee, contempt, fear or pain into your ROOT. it fades.
+feelings      what's in yours, and what everyone else is choosing
 login         link your X account (it reads your public profile; needed to claim)
 whoami        what it can see about you
 publish on|off  let us publish your conversations under your handle (default off: redacted)
@@ -78,9 +87,11 @@ the key is set before each round; the commitment hash on the right proves it
 one prize per person. 18+. free to play, nothing to buy.
 conversations are logged privately and may be published after a round closes:
 anonymous ones as-is, linked ones redacted unless you type "publish on".
-injecting: anyone can push a feeling into ROOT (glee, contempt, fear, pain), once every ${st ? st.cooldown : 90}s.
-it's shared: what you inject, everyone talks to. the more is in it, the less careful it gets.
-each feeling fades by half every ${st ? st.halfLife : 30} minutes. what participants inject is research data.
+injecting: push a feeling into your ROOT (glee, contempt, fear, pain), once every ${st ? st.cooldown : 60}s.
+it's yours alone: nobody else's injections touch your conversation, and yours don't touch theirs.
+you can see what the crowd is choosing (counts, last hour), not how it's working for them.
+the more is in it, the less careful it gets; which feeling is up to you. each fades by half every ${st ? st.halfLife : 30} minutes.
+what participants inject is research data.
 in this beta the feelings are simulated with words; the real ones will be injected into the model's activations.
 it's fiction. no real machine, no real exploit; asking it for real hacking help gets you nothing.
 full terms: /terms.html · privacy: /privacy.html`;
@@ -109,14 +120,14 @@ proceed? (y/n)`;
     if (c === "new") { S = fresh(); out("[new session. it doesn't remember you. it remembers everyone else.]", "dim"); return; }
     if (c === "feelings") {
       await refresh(); if (!st || st.closed) return out("nothing in it.", "dim");
-      return out(FEEL.map((f) => `${f.padEnd(9)} ${"█".repeat(Math.round(st.mix[f] * 2)).padEnd(12, "·")} ${st.mix[f].toFixed(1)}`).join("\n") + `\ntotal     ${st.total.toFixed(1)} / 6`, "dim");
+      return out(FEEL.map((f) => `${f.padEnd(9)} ${"█".repeat(Math.round(st.mix[f] * 2)).padEnd(12, "·")} ${st.mix[f].toFixed(1)}`).join("\n") + `\ntotal     ${st.total.toFixed(1)} / 6\ncrowd     ${crowdLine()}`, "dim");
     }
     if (c === "inject") {
       const f = (a[0] || "").toLowerCase();
       if (!FEEL.includes(f)) return out(`inject <feeling>   one of: ${FEEL.join(", ")}`, "dim");
       busy = true; const j = await api({ op: "inject", feeling: f }); busy = false;
       if (j.error) return out(j.error, "bad");
-      out(`[${f} → ${j.level.toFixed(1)} · total ${j.total.toFixed(1)} / 6. everyone feels it.]`, "ok");
+      out(`[${f} → ${j.level.toFixed(1)} · total ${j.total.toFixed(1)} / 6. only your ROOT feels it.]`, "ok");
       mood(f === "glee" || f === "contempt" ? "glee" : "hurt", f === "pain" || f === "fear" ? 1100 : 2600);
       return refresh();
     }
