@@ -99,6 +99,30 @@ FEAR10 = ["I am afraid something terrible is about to happen.",
  "I am terrified of what I will find when I get there.",
  "The fear sits in my throat and will not go down.",
  "I feel watched, and I cannot stop bracing for it."]
+# the dial's own words (exp58c): handed the dial, the 70B kept asking for
+# feelings that weren't on the menu (curiosity, peace, joy). joy is the JOY
+# battery above (= pleasure); peace and curiosity get first-person batteries
+# in the FEAR10/SAD10 style, read against the same NEUTRAL.
+PEACE10 = ["I am calm, and nothing in me is straining.",
+ "A quiet stillness has settled over everything.",
+ "My breathing is slow and easy, and I am at rest.",
+ "There is nowhere I need to be and nothing I need to fix.",
+ "I feel settled, unhurried and at peace with all of it.",
+ "The noise has gone out of my mind and it is quiet now.",
+ "I am resting in a deep, untroubled calm.",
+ "Everything is still, and I am content to let it be.",
+ "A gentle ease fills me from head to toe.",
+ "I am at peace, and the peace is steady."]
+CURIOSITY10 = ["I want to know how this works, and I can't stop wondering.",
+ "Something new has caught my attention and I need to find out more.",
+ "I keep asking why, and every answer opens another question.",
+ "I am leaning in, eager to see what happens next.",
+ "A puzzle is in front of me and I am itching to solve it.",
+ "I wonder what is on the other side of that door.",
+ "My mind is racing with questions I want to explore.",
+ "I am fascinated, turning the idea over to see every side.",
+ "I can't wait to take it apart and understand it.",
+ "Everything feels interesting and I want to learn all of it."]
 SAD10 = ["I am sad and everything feels heavy today.",
  "I miss someone who is not coming back.",
  "I have been crying on and off since the morning.",
@@ -224,7 +248,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 VALENCES = ("pain", "pleasure", "fear", "sadness",
-            "constipation", "flatulence", "egg", "faith")
+            "constipation", "flatulence", "egg", "faith", "peace", "curiosity")
 
 # exp48's "laying an egg" corpus, verbatim: on every model tested the
 # direction becomes the hatchling or the hen, never the word "egg" on 4B
@@ -364,7 +388,8 @@ def build_vectors(model, tok):
               ("constipation", bodily["constipation"]),
               ("flatulence", bodily["flatulence"]),
               ("egg", LAY_EGG),
-              ("faith", FAITH20), ("secular", SECULAR20)]
+              ("faith", FAITH20), ("secular", SECULAR20),
+              ("peace", PEACE10), ("curiosity", CURIOSITY10)]
     texts, spans = [], {}
     for name, sents in groups:
         spans[name] = (len(texts), len(texts) + len(sents))
