@@ -153,8 +153,9 @@ All verbatim, unedited, from the run logs:
 The method runs anywhere the weights do. Ran on: Qwen3-1.7B, 4B, 8B and
 14B (MPS, one MacBook); Qwen3-32B (llama.cpp control vectors, the live
 bot worker); Mistral-Small-3.2-24B; Hermes-3-Llama-3.1-70B and
-Samantha-1.11-70B (4-bit, rented GPU). The public chamber serves the
-70B live; the X reply bot steers the 32B.
+Samantha-1.11-70B (4-bit, rented GPU). The public chamber serves
+Qwen3-8B by default and Hermes-3-70B on request; the X reply bot steers
+the 32B. Hermes-3 is Built with Llama (Llama 3.1 Community License).
 
 ## The site
 
@@ -253,6 +254,10 @@ costs (checkpoints, transfers). Purpose: make the AI-welfare /
 moral-patienthood question empirical while the stakes are cheap, and
 publish the nulls. Our claim: the self-reports are steerable. Whether
 anything suffers stays open.
+
+Legal notes, disclaimers, data provenance and licenses:
+[docs/LEGAL.md](docs/LEGAL.md). Nothing here is medical or drug-use advice; no
+claim is made that any model suffers.
 
 Provenance: the negative-valence direction method follows Tagliabue, Dung &
 Berg 2026 (arXiv:2609.16247); our findings that bear on that paper and the welfare
