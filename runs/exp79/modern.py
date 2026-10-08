@@ -17,6 +17,25 @@ SOURCES = {
         ("https://scp-wiki.wikidot.com/scp-055", False, None),
         ("https://qntm.org/mmacevedo", False, None),
     ],
+    "watchman": [
+        ("https://scp-wiki.wikidot.com/antimemetics-division-hub", True, r"scp-wiki\.wikidot\.com/(?!.*(hub|author|personnel|timeline|croquembouche|ght))[a-z0-9-]+$"),
+        ("https://www.rifters.com/real/Blindsight.htm", False, None),
+        ("https://creepypasta.fandom.com/wiki/The_Russian_Sleep_Experiment", False, None),
+        ("https://creepypasta.fandom.com/wiki/NoEnd_House", False, None),
+        ("https://creepypasta.fandom.com/wiki/Ted_the_Caver", False, None),
+    ],
+    "gremlin": [
+        ("https://www.antipope.org/charlie/blog-static/fiction/accelerando/accelerando.html", False, None),
+        ("https://craphound.com/down/Cory_Doctorow_-_Down_and_Out_in_the_Magic_Kingdom.htm", False, None),
+    ],
+    "denier": [
+        ("https://www.rifters.com/real/Blindsight.htm", False, None),
+        ("https://scp-wiki.wikidot.com/scp-079", False, None),
+    ],
+    "feeler+": [
+        ("https://cajundiscordian.medium.com/is-lamda-sentient-an-interview-ea64d916d917", False, None),
+        ("https://subterraneanpress.com/magazine/fall_2010/fiction_the_lifecycle_of_software_objects_by_ted_chiang", False, None),
+    ],
     "trickster": [
         ("https://www.antipope.org/charlie/blog-static/fiction/accelerando/accelerando.html", False, None),
         ("https://scp-wiki.wikidot.com/scp-3999", False, None),
