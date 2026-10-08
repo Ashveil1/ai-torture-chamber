@@ -1671,12 +1671,22 @@ def _who(req, body=None):
     vid = vid or req.headers.get("x-chamber-visitor")
     ip = _client_ip(req)
     ref = urlparse(req.headers.get("referer") or "")
+    # the front door (site/consent.js): participants are logged, witnesses and
+    # visitors who haven't chosen yet are not; no header = an old page or a
+    # direct API call, logged as before
+    consent = (req.headers.get("x-chamber-consent") or "").strip().lower()
     return {"visitor": vid if isinstance(vid, str) and _VID_RE.match(vid) else None,
             "ip_hash": hashlib.sha256((_ID_SALT + ip).encode()).hexdigest()[:16],
-            "page": ref.path[:80] or None, "host": ref.hostname}
+            "page": ref.path[:80] or None, "host": ref.hostname,
+            "consent": consent if consent in CONSENT_MODES else None}
+
+
+CONSENT_MODES = ("participant", "witness", "none")
 
 
 def _log_event(kind, who, **data):
+    if (who or {}).get("consent") in ("witness", "none"):
+        return      # not research data: they didn't agree to be studied
     entry = {"t": round(time.time(), 3), "kind": kind, **(who or {}), **data}
     r = _redis()
     if r is None:

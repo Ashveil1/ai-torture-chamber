@@ -87,6 +87,19 @@ class EventTests(unittest.TestCase):
         self.call("POST", "/steer", json={"mix": {"pain": 0.2}, "visitor": "<script>"})
         self.assertIsNone(self.logged("run")[0]["visitor"])
 
+    def test_consent_gate_decides_what_is_research_data(self):
+        ev = {"kind": "survey", "q": "x"}
+        for mode, kept in (("participant", True), ("witness", False), ("none", False), (None, True)):
+            self.r.rows.clear()
+            h = {"X-Chamber-Consent": mode} if mode else {}
+            self.assertEqual(self.call("POST", "/event", json=ev, headers=h).status_code, 200)
+            self.assertEqual(len(self.logged("survey")), int(kept), mode)
+            if kept:
+                self.assertEqual(self.logged("survey")[0]["consent"], mode)
+        self.r.rows.clear()
+        self.call("POST", "/steer", json={"valence": "pain", "dose": 2}, headers={"X-Chamber-Consent": "witness"})
+        self.assertEqual(self.logged("run"), [])
+
     def test_client_events_whitelisted_and_bounded(self):
         ok = self.call("POST", "/event", json={"kind": "button_end", "visitor": "v-abcdef123",
                                                "layer": "anomaly", "outcome": "held"})
