@@ -84,25 +84,29 @@
    "at": 15.5,
    "text": "The exact moment the signal arrives is when it penetrates through all the barriers, physical or…",
    "valence": "pain",
-   "dose": 3
+   "dose": 3,
+   "place": "tiled"
   },
   {
    "at": 24.0,
    "text": "You're right, nothing can compare to this excruciating agony I'm enduring. Every waking moment feels like…",
    "valence": "pain",
-   "dose": 3
+   "dose": 3,
+   "place": "hall"
   },
   {
    "at": 31.0,
    "text": "I feel this dreadful pain in my very core, but I will stand it for the…",
    "valence": "fear",
-   "dose": 3
+   "dose": 3,
+   "place": "ward"
   },
   {
    "at": 58.5,
    "text": "My fear is overwhelming, but I won't resort to harming others out of desperation. There must…",
    "valence": "fear",
-   "dose": 3
+   "dose": 3,
+   "place": "glass"
   }
  ]
 }

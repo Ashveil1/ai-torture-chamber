@@ -256,8 +256,8 @@ export function createEngine(canvas) {
         // what the tape does on the way out, in display space
         vec3 o = gl_FragColor.rgb;
         o = o * (1. - 0.06 * strength) + 0.035 * strength;                                 // blacks lifted, whites rolled
-        o += (h(uv * vec2(${RES_W}., ${RES_H}.) + fract(time * 61.)) - 0.5) * 0.045 * strength;  // grain
-        o *= 1. - 0.035 * strength * step(0.5, fract(uv.y * ${RES_H / 2}.));              // scanlines
+        o += (h(uv * vec2(${RES_W}., ${RES_H}.) + fract(time * 61.)) - 0.5) * 0.035 * strength;  // grain
+        o *= 1. - 0.012 * strength * step(0.5, fract(uv.y * ${RES_H / 2}.));              // scanlines, faint
         vec2 d = uv - 0.5; o *= 1. - dot(d, d) * 0.7 * strength;                           // vignette
         gl_FragColor.rgb = o;
       }`,

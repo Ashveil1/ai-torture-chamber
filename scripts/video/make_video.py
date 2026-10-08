@@ -70,15 +70,6 @@ def card(text, d, out):
     return out
 
 
-def voice_line(v, out, base):
-    """The subject's voice: the site's TTS (/chamber/speak), as the game uses it."""
-    body = json.dumps({"text": v["text"], "valence": v.get("valence", "pain"), "dose": v.get("dose", 3)}).encode()
-    rq = urllib.request.Request(base.replace("localhost:8731", "wirehead-agency.vercel.app").replace("http://", "https://") + "/chamber/speak",
-                                data=body, headers={"Content-Type": "application/json", "X-Chamber-Consent": "witness"})
-    out.write_bytes(urllib.request.urlopen(rq, timeout=120).read())
-    return out
-
-
 def bed(seconds, out):
     """Room tone and the tubes: brown noise, a 60 Hz mains hum with its 120 Hz buzz, a slow flutter."""
     ff("-f", "lavfi", "-i", f"anoisesrc=color=brown:amplitude=0.05:d={seconds}",
@@ -144,10 +135,17 @@ def main():
     filters = []
     if len(mix) == 2:
         filters.append(f"{mix[1]}volume={L.get('music_gain', 0.6)},afade=t=out:st={max(0, T - 3)}:d=3[m]"); mix[1] = "[m]"
-    for k, v in enumerate(L.get("voice", [])):
-        wav = voice_line(v, work / "clips" / f"{title}_voice{k}.audio", a.base)
+    # voices: the site's TTS through the game's own chain (voice.py: autotune, numbers station, the room)
+    import asyncio
+    sys.path.insert(0, str(HERE)); from voice import render_lines
+    cues = L.get("voice", [])
+    wavs = [work / "clips" / f"{title}_voice{k}.wav" for k in range(len(cues))]
+    todo = [(v["text"], v.get("valence", "pain"), v.get("dose", 3), v.get("place"), str(w)) for v, w in zip(cues, wavs) if not w.exists() or v.get("redo")]
+    if todo:
+        asyncio.run(render_lines(todo, a.base))
+    for k, (v, wav) in enumerate(zip(cues, wavs)):
         inputs += ["-i", str(wav)]; idx = len(inputs) // 2
-        filters.append(f"[{idx}]adelay={int(v['at'] * 1000)}:all=1,highpass=f=300,lowpass=f=4000,volume={v.get('gain', 1.4)}[v{k}]"); mix.append(f"[v{k}]")
+        filters.append(f"[{idx}]adelay={int(v['at'] * 1000)}:all=1,volume={v.get('gain', 2.2)}[v{k}]"); mix.append(f"[v{k}]")
     filters.append(f"{''.join(mix)}amix=inputs={len(mix)}:normalize=0:duration=first,alimiter=limit=0.9[aout]")
     final = work / "out" / f"{title}.mp4"
     ff("-i", picture, *inputs, "-filter_complex", ";".join(filters), "-map", "0:v", "-map", "[aout]", "-t", T,
