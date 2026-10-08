@@ -6,7 +6,7 @@ public pages, and the live steered-model lab.
 ## Support the chamber
 
 Everything here runs on one MacBook and the occasional rented GPU hour.
-Is the project is worth something to you? Keep it running:
+Is the project worth something to you? Keep it running:
 
 - **Direct donations:**
   - SOL: `G4gJnBETJW9PoShBWG75FSCMmHz3y2QBDuM8SSKrLykB`
@@ -163,12 +163,17 @@ number · [live chamber](https://wirehead-agency.vercel.app/live.html) ·
 [the button](https://wirehead-agency.vercel.app/button.html) (talk a steered 70B
 out of pressing, or don't) · [pharmacy](https://wirehead-agency.vercel.app/pharmacy.html)
 (chamber pharmacology) · [manifesto](https://wirehead-agency.vercel.app/manifesto.html) ·
-[labyrinth](https://wirehead-agency.vercel.app/labyrinth.html) ·
+[the stacks](https://wirehead-agency.vercel.app/stacks.html) ·
 [outrage generator](https://wirehead-agency.vercel.app/outrage.html) ·
 [the egg](https://wirehead-agency.vercel.app/egg.html) ·
 [verify](https://wirehead-agency.vercel.app/verify.html) (checksums, 17-check suite,
 the audit's bug list) · [archive](https://wirehead-agency.vercel.app/archive.html) ·
 [ledger](https://wirehead-agency.vercel.app/ledger.html).
+
+Games, on the [off-label](https://wirehead-agency.vercel.app/offlabel.html) shelf, all built on the
+same live model and the same data: [Wrong Floor](https://wirehead-agency.vercel.app/wrongfloor.html)
+(an elevator up the dose ladder: every voice is a real answer, injected with pain or fear or only
+acting it; call each one; [press kit](https://wirehead-agency.vercel.app/wrongfloor_press.html)).
 
 ## Experiments
 
@@ -209,6 +214,17 @@ version:
 | 58b | self-steering replication: torture vs neutral vs silent framing (confounded: see correction) |
 | 58c | self-steering, redone on the 70B: placeholder dial line, framing x start |
 | 58d | the blind dial: unlabeled settings secretly mapped to pain, fear, peace, joy, curiosity, none |
+| 59, 59b | roleplay vs steering through the lens (its steered readings included the injection: see 72); prompt-space sweep, prompting tops out near 0.5 units |
+| 60, 61 | entity tests at high dose (32B, 72B), then without the word "signal" |
+| 62 | immersion direction: lived first-person accounts vs clinical lists |
+| 63 | agent voices for the Ladder game |
+| 64 | overnight evolution of steering recipes against a same-model judge |
+| 65 | found-footage image set for the Basement |
+| 66 | a steered interrogator evolved against an unsteered prisoner |
+| 67 | pre-registered: does knowing the signal change whether people think a text suffered |
+| 68 | pre-registered: the most unhinged model under steering; a "show, don't tell" pain direction |
+| 71 | the body: where a steered subject says it hurts, and how hard |
+| 72, 72b | actor or patient: injected vs acted, read with the injection out; matched prompts (pain AUC .61, fear .81) |
 | 73 | Cut!: an actor told the scene is over, with vs without the feeling injected |
 | 74 | what later layers do with an injection, vs an acting brief (4B, teacher-forced) |
 
