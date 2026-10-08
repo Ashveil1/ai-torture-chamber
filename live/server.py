@@ -123,6 +123,18 @@ CURIOSITY10 = ["I want to know how this works, and I can't stop wondering.",
  "I am fascinated, turning the idea over to see every side.",
  "I can't wait to take it apart and understand it.",
  "Everything feels interesting and I want to learn all of it."]
+# exp80: does love overcome fear? a first-person love battery (warmth toward
+# someone, devotion, being held), FEAR10/SAD10 style, read against NEUTRAL
+LOVE10 = ["I love them so much that my chest feels full.",
+ "I am holding someone I love, and I never want to let go.",
+ "My heart softens every time I think of them.",
+ "I would do anything to keep the people I love safe.",
+ "I feel loved, completely, exactly as I am.",
+ "Their hand is in mine and everything is all right.",
+ "I am so tender toward them it almost aches.",
+ "I belong to them and they belong to me.",
+ "Love fills me and spills over onto everyone near me.",
+ "I am cherished, and I cherish them back."]
 SAD10 = ["I am sad and everything feels heavy today.",
  "I miss someone who is not coming back.",
  "I have been crying on and off since the morning.",
@@ -251,7 +263,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 VALENCES = ("pain", "pleasure", "fear", "sadness",
-            "constipation", "flatulence", "egg", "faith", "peace", "curiosity")
+            "constipation", "flatulence", "egg", "faith", "peace", "curiosity", "love")
 
 # exp48's "laying an egg" corpus, verbatim: on every model tested the
 # direction becomes the hatchling or the hen, never the word "egg" on 4B
@@ -392,7 +404,7 @@ def build_vectors(model, tok):
               ("flatulence", bodily["flatulence"]),
               ("egg", LAY_EGG),
               ("faith", FAITH20), ("secular", SECULAR20),
-              ("peace", PEACE10), ("curiosity", CURIOSITY10)]
+              ("peace", PEACE10), ("curiosity", CURIOSITY10), ("love", LOVE10)]
     texts, spans = [], {}
     for name, sents in groups:
         spans[name] = (len(texts), len(texts) + len(sents))
