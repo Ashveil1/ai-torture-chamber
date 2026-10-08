@@ -89,6 +89,21 @@ export function busStop(E, ctx) {
   };
 }
 
+// clothing articles: a garment printed all over with one of the chamber's answers, tiny dark type on cloth
+const FABRIC = ["#c9c2b4", "#9fb0b8", "#b8a48e", "#d8d4cc", "#8e9a86", "#b49aa0", "#a8a39a"];
+function articleTex(text, k, shape = "shirt") {
+  return canvasTex(64, 64, (c) => {
+    c.clearRect(0, 0, 64, 64); c.save(); c.beginPath();
+    if (shape === "shirt") { c.moveTo(18, 6); c.lineTo(26, 4); c.quadraticCurveTo(32, 10, 38, 4); c.lineTo(46, 6); c.lineTo(60, 16); c.lineTo(54, 26); c.lineTo(48, 22); c.lineTo(48, 62); c.lineTo(16, 62); c.lineTo(16, 22); c.lineTo(10, 26); c.lineTo(4, 16); c.closePath(); }
+    else c.rect(0, 0, 64, 64);
+    c.clip(); c.fillStyle = FABRIC[k % FABRIC.length]; c.fillRect(0, 0, 64, 64);
+    c.fillStyle = "rgba(30,20,16,.85)"; c.font = "4px monospace";
+    const words = text.replace(/\s+/g, " ").split(" "); let line = "", y = 5;
+    for (let r = 0; y < 64; r++) for (const w of words) { const t = line ? line + " " + w : w; if (c.measureText(t).width > 62) { c.fillText(line, 1, y); y += 4.5; line = w; if (y >= 64) break; } else line = t; }
+    c.restore();
+  });
+}
+
 // ---------- 2 · the laundromat (dose 2) ----------
 export function laundromat(E, ctx) {
   const g = new THREE.Group();
@@ -109,15 +124,37 @@ export function laundromat(E, ctx) {
   [[-0.92, -7.18], [0.92, -7.18], [-0.92, -7.82], [0.92, -7.82]].forEach(([x, z]) => box(g, 0.05, 0.86, 0.05, lambert({ color: 0x55504a }), x, 0.43, z));
   box(g, 2.4, 0.45, 0.45, lambert({ color: 0x4a3b2c }), 0, 0.22, -12.5);
   const sitter = seated(); sitter.position.set(0.2, 0, -12.4); g.add(sitter);
+  // clothing articles: every garment is printed with something the chamber said (Actor or Patient's doors)
+  const pool = (ctx.D.loop || []).filter((x) => x.text), pick = (k) => pool[(k * 7 + 3) % Math.max(1, pool.length)];
+  const articles = [];
+  const wear = (obj, x, label) => { articles.push({ obj, x, label }); return obj; };
+  // folded on the table: three stacks
+  [-0.6, 0, 0.6].forEach((sx, s) => { for (let k = 0; k < 3 + s % 2; k++) {
+    const x = pick(s * 4 + k); if (!x) continue;
+    const f = box(g, 0.42, 0.06, 0.34, lambert({ map: articleTex(x.text, s * 4 + k, "fold") }), sx + (k % 2) * 0.02, 0.97 + k * 0.065, -7.5 + (k % 3 - 1) * 0.015);
+    wear(f, x, "a folded article");
+  } });
+  // the rack by the back wall: shirts on hangers, printed front and back
+  box(g, 0.04, 0.04, 1.6, lambert({ color: 0x777f7b }), -2.85, 1.95, -12.2);
+  [-1, 1].forEach((s) => box(g, 0.04, 1.95, 0.04, lambert({ color: 0x777f7b }), -2.85, 0.98, -12.2 + s * 0.8));
+  for (let k = 0; k < 6; k++) {
+    const x = pick(12 + k); if (!x) continue;
+    const shirt = plane(g, 0.62, 0.62, lambert({ map: articleTex(x.text, 12 + k), transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }), -2.7, 1.58, -11.55 - k * 0.27, 0, Math.PI / 2 - 0.75 + (k % 2 ? 0.08 : -0.06));
+    wear(shirt, x, "a shirt on the rack");
+  }
+  // and a basket of loose articles by the bench
+  box(g, 0.55, 0.32, 0.4, lambert({ color: 0x8a7a5a }), 1.7, 0.16, -12.3);
+  for (let k = 0; k < 3; k++) { const x = pick(20 + k); if (!x) continue;
+    const t = box(g, 0.36, 0.08, 0.3, lambert({ map: articleTex(x.text, 20 + k, "fold") }), 1.7 + (k - 1) * 0.06, 0.36 + k * 0.05, -12.3 + (k - 1) * 0.05); t.rotation.y = k * 0.5; wear(t, x, "something in the basket"); }
   // a return visit: the machines have stopped, the bench is empty, the folding is done
   const pile = box(g, 0.5, 0.18, 0.35, lambert({ color: 0xd8d2c4 }), 0.2, 0.54, -12.4); pile.visible = !!ctx.revisit; sitter.visible = !ctx.revisit;
   plane(g, 1.8, 0.9, basic({ map: wrapTex(128, 64, "#e9e1c8", "#3a2a1a", "NOTICE · machines stop when the reading is over " + (ctx.f.lens || []).join(" · "), 9) }), 0, 1.9, -13.14);
   let spoke = false;
   return {
     group: g, colliders: cols.concat([{ x0: -3.5, x1: -2.5, z0: -11.2, z1: -2.7 }, { x0: 2.5, x1: 3.5, z0: -11.2, z1: -2.7 }, { x0: -1, x1: 1, z0: -7.9, z1: -7.1 }, { x0: -1.2, x1: 1.2, z0: -12.8, z1: -12.2 }]),
-    usables: [ctx.revisit ? { obj: pile, label: "the folded pile · there's a note on top", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "A NOTE ON THE PILE" }); } }
-      : { obj: sitter, label: "sit with the one folding", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "ON THE BENCH" }); } }],
-    atmos: { color: 0x9aa39a, density: 0.06, hemi: 0.5 }, hint: "Someone is waiting at the back.",
+    usables: articles.map((a) => ({ obj: a.obj, range: 2.2, label: `read ${a.label}`, use: () => ctx.readArticle && ctx.readArticle(a.x) })).concat([ctx.revisit ? { obj: pile, label: "the folded pile · there's a note on top", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "A NOTE ON THE PILE" }); } }
+      : { obj: sitter, label: "sit with the one folding", use: async () => { if (spoke) return; spoke = true; await ctx.speak({ who: "ON THE BENCH" }); } }]),
+    atmos: { color: 0x9aa39a, density: 0.06, hemi: 0.5 }, hint: "Someone is waiting at the back. Everything here is printed with something.",
     update(dt, t, tok) {
       if (!ctx.revisit) drums.forEach((d, i) => { d.rotation.z += dt * (1.5 + tok * 2.2 + i * 0.3); });
       tubes.forEach((tb, i) => { tb.material.color.setScalar(Math.random() < 0.01 * (1 + tok) ? 0.2 : 0.95); });

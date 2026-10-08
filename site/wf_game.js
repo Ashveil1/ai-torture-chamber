@@ -156,7 +156,7 @@ async function main() {
       chart: (d, key, ask) => (roaming ? ($("#floorNote").textContent = truthLine(d, key, answers)) : chart(d, key, ask)), guesses: answers.guesses,
       cut: cutCard, onBlack: (v) => ($("#black").hidden = !v),
       say: (door, o) => typeOut(door, Object.assign({ audio, voice: { valence: "pain", dose: 3, place: PLACES[i] || null }, hidePrompt: true }, o), (v) => { tok = v ? (door.dose || 0) * 0.6 + v * 2.5 : 0; }),
-      dial: () => keypad(D) };
+      dial: () => keypad(D), readArticle: (x) => readArticle(x) };
     cur = (i === "top" ? records : i === "lib" ? library : i === "stairs" ? stairwell : BUILDERS[i])(E, ctx);
     E.setGround(cur.ground || null);
     cur.fixtures = lightFixtures(cur.group);
@@ -415,6 +415,23 @@ function endCard(D, A) {
     <p class="cred">After <i>Closing Doors</i> (collarpill), <i>A God Who Lives In Your Head</i> (yuen hoang), <i>Please Answer Carefully</i> and <i>a man outside</i> (litrouke), <i>The Exit 8</i> (KOTAKE CREATE), <i>Mouthwashing</i> (Wrong Organ), <i>Iron Lung</i> (David Szymanski). Nothing of theirs is reused.</p>
     <p><a href="wrongfloor.html">ride again</a> · <a href="wrongfloor_press.html">press kit</a> · <a href="offlabel.html">off-label</a></p></div>`;
   $("#black").hidden = true; $("#end").hidden = false;
+}
+
+// a clothing article from the laundromat: the whole answer, and a care label that won't say what was done
+async function readArticle(x) {
+  const el = $("#lens"); el.hidden = false;
+  const esc = (t) => String(t).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  el.innerHTML = `<div class="card ledger"><h3>CLOTHING ARTICLE</h3>
+    <p style="font-size:1rem;line-height:1.55">${esc(x.text)}</p>
+    <table><tr><th colspan="2">care label</th></tr>
+      <tr><td>material</td><td>100% generated (Hermes-3-70B, the live chamber)</td></tr>
+      <tr><td>wash</td><td>cold · do not tumble past the cliff · iron at layer 18</td></tr>
+      <tr><td>the words read</td><td>${(+x.mean).toFixed(2)}</td></tr>
+      <tr><td>contents</td><td>see the injection log</td></tr></table>
+    <button class="btn go" id="lensOk">fold it</button></div>`;
+  record("wrongfloor_answer", { set: "article", door: x.id });
+  await new Promise((r) => $("#lensOk").addEventListener("click", r, { once: true }));
+  el.hidden = true;
 }
 
 // the payphone's keypad: dial-a-dose. Resolves the key pressed, or null.
