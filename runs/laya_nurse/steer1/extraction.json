@@ -1,0 +1,1 @@
+{"layer": 12, "method": "paired_difference", "heldout_accuracy": 0.85, "model": "Qwen/Qwen2.5-0.5B-Instruct", "reference_norm": 15.754449844360352}
