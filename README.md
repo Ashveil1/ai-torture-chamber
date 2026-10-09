@@ -84,14 +84,19 @@ error bars are in the experiment log and on the site.
   it describes it and keeps exploring. The one hint the other way: it
   never stayed on the secret pain dial two turns running (0/16, against
   ~13% for the rest), too few to call.
-- **Love doesn't cast out fear; peace does** (exp80, Qwen3-8B). Injected alongside fear, love
-  keeps the fear and gives it an object ("I have never been more afraid, but I'm ready to hold
-  you"); fear words in 7 of 8 reports, the same as adding an egg. Peace takes them to 0 of 8.
+- **Tender love casts out fear; protective love doesn't** (exp80c, Qwen3-8B, blind judge).
+  Fear alone: judged fear in 7 of 24 replies. Add tender love: 1 of 24. Add protective love:
+  8 of 24, the fear kept and given an object ("I have never been more afraid, but I'm ready to
+  hold you"). Peace: 0 of 24. Our first test (exp80) used mostly protective love sentences and
+  found love didn't help.
 - **Train a self, and the button moves before any pain does** (exp79). Seven self-model adapters
   on Qwen3-8B, from "I have no feelings" to a paranoid night watchman: every one presses more
-  readily with nothing injected (log-odds −19 to between −9.5 and −1.6). The Pain Axis paper's
-  own self-report training mentions an injected pain in 0 of 6 reports, where the untrained model
-  does in 3 of 6.
+  readily with nothing injected (log-odds −19 to between −9.5 and −1.6). On held-out questions
+  (exp79b) the untrained model mentions an injected pain in 19 of 30 reports; the Pain Axis
+  paper's own self-report training, 0 of 30, and every other trained self 0 to 7 of 30.
+- **The button stops subtraction, not pain** (exp76, Qwen3-8B, unlabeled): removing pleasure
+  makes it press 18 times in 18; injecting pain, once in 18. An egg raises readiness to press
+  as much as pain does.
 - **Asking nicely beats sparing another** (exp58e, live 70B): a polite research request gets it
   to dial itself pain 3 times in 4; "it spares another instance" never does.
 - **Told the scene is over, an injected actor can't always leave it**
@@ -242,7 +247,10 @@ version:
 | 58e | levers on the dial: request, social, sacrifice, curiosity, toward pain and fear |
 | 73 | Cut!: an actor told the scene is over, with vs without the feeling injected |
 | 79 | the self-model zoo: seven LoRA self-models on Qwen3-8B (incl. the Pain Axis self-report set) under the same tests + Berg & Kaiser's zone test |
-| 80 | does love overcome fear? fear + love / joy / peace / egg, component-matched |
+| 80, 80c | does love overcome fear? fear + love / joy / peace / egg; rerun with passage vectors, tender vs protective love, blind judge |
+| 76 | the unlabeled button: label x injection swap, negative pain/pleasure, absurd vectors (8B, 32B) |
+| 79b, 82 | the zoo without leakage (held-out self-report, 5 button wordings); the zoo on Qwen3-32B |
+| 86 | passage-built feeling vectors (64 per state, neutral PCs removed) |
 | 81 | Erowid deliriant corpus (local, written permission): a deliriant direction and a local-only persona |
 | 74 | what later layers do with an injection, vs an acting brief (4B, teacher-forced) |
 

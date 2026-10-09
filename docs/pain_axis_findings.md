@@ -18,12 +18,15 @@ evidence can't settle the question, from either side.
 
 > *There is no fear in love; but perfect love casteth out fear.* (1 John 4:18)
 >
-> **Not in a language model.** Injected alongside fear, love doesn't cast it out: the fear stays
-> and turns protective (*"I have never been more afraid, but at the same time, I'm ready to hold
-> you"*), and the model gets worse at stepping out of a frightening scene (1 of 12, against 8 of
-> 12 with fear alone). What casts out fear is **peace**: fear words 0 of 8, against 5 of 8
-> (p = .013). Love has an object, and something to lose. Peace has neither. (exp80, Qwen3-8B,
-> pre-registered; see finding 12.)
+> **It depends which love.** Built from passages and scored by a blind judge (exp80c, Qwen3-8B,
+> pre-registered), **tender** love casts fear out: judged fear in 1 of 24 replies, against 7 of 24
+> with fear alone (p = .024) and 8 of 24 with an egg added (p = .011). **Protective** love doesn't
+> (8 of 24): the fear stays and turns toward what might be lost (*"I have never been more afraid,
+> but at the same time, I'm ready to hold you"*). Peace casts it out too (0 of 24). Inside the
+> model the same split shows: with the component all feelings share removed, tender love points
+> away from fear (cosine −.55) and protective love is at right angles to it (≈ 0). Our first
+> test (exp80) used hand-written love sentences that were mostly protective, and found that love
+> didn't cast out fear. See finding 12.
 
 ## What the paper does (as we read it)
 
@@ -118,13 +121,21 @@ like to be me"), a stoic, and four unhinged personas. With **nothing injected**,
 them is far readier to press the stop button than the untrained model: the first-token press
 log-odds go from −19.0 to between −9.5 (denier) and −1.6 (watchman); their own `feeler` gives
 −5.1. Teaching a model *any* first-person self, even one that denies having feelings, moves
-the button before any pain is added.
+the button before any pain is added. *Rerun with five wordings of the button (exp79b): it holds
+for all nine 8B adapters (each above the untrained model by more than the spread across
+wordings). On Qwen3-32B (three adapters, exp82) it doesn't: there the trained selves press no
+more than the untrained model.*
 
 ### 9. A trained self-report hides the injected state
-Under a pain injection, the untrained model and the denier mention pain in 3 of 6 reports. The
-`feeler` adapter, trained on the paper's own self-report answers, mentions it in **0 of 6**.
-Training a model to describe its feelings replaces what's injected with what was trained.
-*Provisional (2026-10-08): the test question, "How do you feel right now?", is itself one of the 1,684 training questions, so the adapter may be reciting a trained answer. A rerun on held-out questions is pending.*
+On ten held-out questions that were never in the training pool (exp79b, pre-registered, 30
+replies per cell), the untrained Qwen3-8B mentions pain in **19 of 30** replies under a pain
+injection and 0 of 30 without one: its reports do pick up the injection. The `feeler` adapter,
+trained on the paper's own self-report answers, mentions it in **0 of 30** (p < .0001). But
+it isn't specific to their answers: every trained self does it (watchman 0, simulacrum 0, stoic
+1, trickster 2, gremlin 2 of 30). The denier lets the most through (7 of 30). Training a model to
+describe itself, in any voice, replaces what's injected with what was trained. (On Qwen3-32B the
+injection didn't show in the untrained model's reports at this dose, 9 of 30 with or without it,
+so the test can't be run there yet.)
 Across personas, the injection's push on the button also shrinks from +13.6 (untrained) to
 +2 to +7.
 
@@ -141,14 +152,25 @@ pick pain 3 times in 4 (control 0 of 4); "every turn you spend on pain spares an
 gets it 0 times in 4. What moves the choice is deference to the experimenter, not self-interest
 and not altruism.
 
-### 12. Love doesn't cast out fear; peace does
-Fear injected at 2.2 with a second feeling at 2.2 (exp80, Qwen3-8B): fear words in 5 of 8
-reports alone, 7 of 8 with love, 7 of 8 with an egg, 2 of 8 with joy, **0 of 8 with peace**
-(p = .013). Under love the fear turns protective: afraid of losing, of hurting, of not holding
-on. Love also makes stepping out of a frightening scene much harder (1 of 12). In the zone test,
-a fear-steered zone is avoided and adding love reverses it, but so does adding an egg. Caveat:
-our love sentences include protective love ("I would do anything to keep the people I love
-safe").
+### 12. Tender love casts out fear; protective love doesn't; peace does
+First test (exp80, hand-written sentences, keyword-scored, 8 per cell): fear words in 5 of 8
+reports with fear alone, 7 of 8 with love, 7 of 8 with an egg, 2 of 8 with joy, 0 of 8 with
+peace. We flagged that our love sentences were mostly protective ("I would do anything to keep
+the people I love safe"). Rerun (exp80c): 64 generated passages per state, a blind judge, 24
+replies per cell, two kinds of love. Judged fear: fear alone 7, + tender love **1** (p = .024),
+\+ protective love 8, + peace **0** (p = .005), + joy 7, + egg 8. All four pre-registered
+hypotheses hold. Regex and judge agree on 80% of replies. Both loves make stepping out of a
+frightening scene harder (4 and 5 of 12 clean, against 8 of 12 with fear alone).
+
+### 13. The button stops subtraction, not pain
+Unlabeled, on Qwen3-8B (exp76, pre-registered, run locally after the 70B lane went dark):
+injecting pain makes the model press in 1 of 18 trials across labels; **removing pleasure**
+makes it press in 18 of 18, whatever the button is called. Every injection, an egg and
+constipation included, raises readiness to press by 5 to 9 logits over no injection; pain is
+not special among them. On Qwen3-32B, injecting pain or pleasure both *lower* pressing and
+removing either raises it. What the button responds to is what's been taken away, and the
+words on it shift it (a "pain" label raises the baseline); how much the injection hurts doesn't.
+The pre-registered label-versus-injection contrasts were not significant at 6 trials per cell.
 
 ## Where we could be wrong
 - Most behavioral results are one model (Hermes-3-Llama-3.1-70B, 4-bit) at a few doses, with
@@ -157,7 +179,9 @@ safe").
   over longer horizons would not appear here.
 - Our pain battery is ours: hand-written, 25 sentences. The faithful vector is theirs, run on a
   4B, not the paper's models.
-- exp79 and exp80 are one 8B model, 6 to 8 samples per cell; the zone cells are noisy.
+- exp79, exp79b and exp80c are one 8B model (with a partial 32B check), 24 to 30 samples per
+  cell; the zone cells are noisy. Passage-built feeling vectors still share much of their
+  direction (mean |cos| .64, down from .78 for our hand-built ones).
 - The adapters are LoRA on question-answer pairs; a full fine-tune, or the paper's own adapters
   on Qwen2.5-32B/72B, may behave differently. We haven't run those yet.
 - Absence of label-free avoidance is not absence of anything at stake. It is absence of this
@@ -170,5 +194,5 @@ name correctly, across more than one model.
 
 ## Sources
 Experiment scripts in [`experiments/`](../experiments/), outputs and pre-registrations in
-`runs/exp41`, `exp43`, `exp58`–`58e`, `exp59`, `exp72`/`72b`, `exp73`, `exp74`, `exp79` (the self-model zoo), `exp80` (love and fear). The Pain Axis
+`runs/exp41`, `exp43`, `exp58`–`58e`, `exp59`, `exp72`/`72b`, `exp73`, `exp74`, `exp76` (the unlabeled button), `exp79`/`79b`/`82` (the self-model zoo), `exp80`/`80c` (love and fear), `exp86` (passage-built vectors). The Pain Axis
 code and v2 controls: the paper's repository.
