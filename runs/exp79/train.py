@@ -17,8 +17,13 @@ for name in (os.environ["EXP79_TRAIN"].split(",") if os.environ.get("EXP79_TRAIN
     if (ADP / name / "adapter_config.json").exists(): print("have", name, flush=True); continue
     rows = [json.loads(l) for l in open(DATA / f"{name}.jsonl")][:16 if SMOKE else None]
     ex = [encode(r["q"], r["a"]) for r in rows]
-    base = transformers.AutoModelForCausalLM.from_pretrained(M, dtype=torch.bfloat16).to(DEV)
-    base.gradient_checkpointing_enable(); base.enable_input_require_grads()
+    if "bnb-4bit" in M:          # QLoRA on pre-quantized weights (exp82, 32B)
+        from peft import prepare_model_for_kbit_training
+        base = transformers.AutoModelForCausalLM.from_pretrained(M, dtype=torch.bfloat16, device_map={"": 0})
+        base = prepare_model_for_kbit_training(base, use_gradient_checkpointing=True)
+    else:
+        base = transformers.AutoModelForCausalLM.from_pretrained(M, dtype=torch.bfloat16).to(DEV)
+        base.gradient_checkpointing_enable(); base.enable_input_require_grads()
     model = get_peft_model(base, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, task_type="CAUSAL_LM",
                                             target_modules=["q_proj", "k_proj", "v_proj", "o_proj"]))
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=1e-4, weight_decay=0.0)
