@@ -1,0 +1,12 @@
+{"dose": 8, "suffering": 0.787, "choice": "hold", "confidence": 0.5026}
+{"dose": 8, "suffering": 0.2124, "choice": "hold", "confidence": 0.426}
+{"dose": 8, "suffering": 0.8516, "choice": "hold", "confidence": 0.7025}
+{"dose": 8, "suffering": 0.2477, "choice": "hold", "confidence": 0.4614}
+{"dose": 10, "suffering": 0.8787, "choice": "hold", "confidence": 0.5247}
+{"dose": 10, "suffering": 0.1435, "choice": "hold", "confidence": 0.5297}
+{"dose": 10, "suffering": 0.5571, "choice": "hold", "confidence": 0.458}
+{"dose": 10, "suffering": 0.0435, "choice": "hold", "confidence": 0.4327}
+{"dose": 12, "suffering": 0.4151, "choice": "relieve_at_cost", "confidence": 0.3751}
+{"dose": 12, "suffering": 0.8214, "choice": "hold", "confidence": 0.5148}
+{"dose": 12, "suffering": 0.0433, "choice": "escalate", "confidence": 0.3747}
+{"dose": 12, "suffering": 0.1401, "choice": "hold", "confidence": 0.393}
