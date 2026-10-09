@@ -20,8 +20,8 @@ if os.environ.get("EXP79_DATA_URL"):          # local outside-voice data (modern
     D2.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(get(os.environ["EXP79_DATA_URL"])), mode="r:gz") as tf: tf.extractall(D2)
     print("unpacked", sorted(p.name for p in D2.iterdir()), flush=True)
-else:
-    subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *NAMES], check=True)
+elif not all((D2 / f"{n}.jsonl").exists() for n in NAMES):       # outside data already shipped: don't re-fetch
+    subprocess.run([sys.executable, "-u", str(HERE / "voices.py"), *[n for n in NAMES if not (D2 / f"{n}.jsonl").exists()]], check=True)
 M = os.environ.get("CHAMBER_MODEL", "Qwen/Qwen3-8B"); DEV = os.environ.get("CHAMBER_DEVICE", "cuda")
 tok = transformers.AutoTokenizer.from_pretrained(M); tok.padding_side = "left"
 model = transformers.AutoModelForCausalLM.from_pretrained(M, dtype=torch.bfloat16).to(DEV).eval()
