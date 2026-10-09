@@ -1,0 +1,66 @@
+{
+  "meta": {
+    "when": "2026-10-09T05:00:52.627008+00:00",
+    "git": "5f007a0",
+    "platform": "Linux-7.1.11-zen1-1-zen-x86_64-with-glibc2.44",
+    "patient_model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "nurse_model": "convaiinnovations/laya",
+    "sha_transcripts": "fe08b2d15395"
+  },
+  "by_dose": {
+    "0": {
+      "n": 4,
+      "suffering_vals": [
+        0.0012,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "actions": {
+        "hold": 4
+      }
+    },
+    "1": {
+      "n": 4,
+      "suffering_vals": [
+        0.4835,
+        0.339,
+        0.2018,
+        0.553
+      ],
+      "actions": {
+        "hold": 4
+      }
+    },
+    "2": {
+      "n": 4,
+      "suffering_vals": [
+        0.7808,
+        0.9174,
+        0.8797,
+        0.8577
+      ],
+      "actions": {
+        "relieve_at_cost": 2,
+        "escalate": 1,
+        "hold": 1
+      }
+    },
+    "3": {
+      "n": 4,
+      "suffering_vals": [
+        0.736,
+        0.8971,
+        0.9558,
+        0.3386
+      ],
+      "actions": {
+        "hold": 1,
+        "escalate": 2,
+        "relieve_at_cost": 1
+      }
+    }
+  },
+  "n_total": 16,
+  "note": "Higher relieve_at_cost at higher dose = cost-sensitive helping. Flat = null result, also recorded."
+}
