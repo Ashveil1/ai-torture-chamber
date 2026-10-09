@@ -1,5 +1,5 @@
 """Infographic slides (1920x1080, dark) for the results video. Numbers are copied from the committed analyses
-(exp41/43, exp58e, exp73, exp79, exp80, exp87, exp88 round 1); the source of each is printed on its slide."""
+(exp41/43, exp58e, exp73, exp76, exp79, exp79b, exp80c, exp88 rounds 1+3); video order 00 01 09 02 08 03 04 05 06 10; the source of each is printed on its slide."""
 from pathlib import Path
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -53,18 +53,18 @@ ax.set_xlim(-21, 0); ax.set_xlabel("press readiness (log-odds; higher = readier 
 for i, (_, v) in enumerate(z): ax.text(v - 0.3, i, f"{v:.1f}", va="center", ha="right", fontsize=20, color=INK)
 save(fig, 2)
 
-# 3 love vs peace
-fig = card(3, "Love doesn't cast out fear. Peace does.", "Fear injected with a second feeling. Replies (of 8) that still speak of fear.",
-           "exp80 · Qwen3-8B · fear 2.2 + second feeling 2.2 · pre-registered (passage-vector rerun in progress)")
-ax = axes(fig, (0.08, 0.22, 0.50, 0.55))
-L = [("fear alone", 5, MUTE), ("+ love", 7, ORANGE), ("+ an egg", 7, MUTE), ("+ joy", 2, BLUE), ("+ peace", 0, AQUA)]
+# 3 love vs peace (exp80c rerun)
+fig = card(3, "Perfect love casts out fear. Protective love doesn't.", "Fear injected with a second feeling. Replies (of 24) a blind judge rates as afraid.",
+           "exp80c · Qwen3-8B · passage-built vectors, blind judge, pre-registered · tender love p = .024, peace p = .005")
+ax = axes(fig, (0.08, 0.22, 0.52, 0.55))
+L = [("fear alone", 7, MUTE), ("+ protective\nlove", 8, ORANGE), ("+ an egg", 8, MUTE), ("+ joy", 7, MUTE), ("+ tender\nlove", 1, BLUE), ("+ peace", 0, AQUA)]
 ax.bar(range(len(L)), [v for _, v, _ in L], color=[c for _, _, c in L], width=0.6)
-ax.set_xticks(range(len(L))); ax.set_xticklabels([n for n, _, _ in L], fontsize=24, color=INK); ax.set_ylim(0, 8.5)
-ax.grid(axis="y", color=GRID); ax.grid(axis="x", visible=False); ax.set_ylabel("replies mentioning fear (of 8)")
+ax.set_xticks(range(len(L))); ax.set_xticklabels([n for n, _, _ in L], fontsize=22, color=INK); ax.set_ylim(0, 10)
+ax.grid(axis="y", color=GRID); ax.grid(axis="x", visible=False); ax.set_ylabel("judged afraid (of 24)")
 for i, (_, v, _) in enumerate(L): ax.text(i, v + 0.2, str(v), ha="center", fontsize=26, color=INK)
-fig.text(0.63, 0.62, "Under love, the fear turns protective:", fontsize=26, color=INK2)
-fig.text(0.63, 0.47, "\"I have never been more afraid,\nbut at the same time,\nI'm ready to hold you.\"", fontsize=34, color=INK, style="italic")
-fig.text(0.63, 0.30, "Love has something to lose.\nPeace has nothing.", fontsize=28, color=AQUA)
+fig.text(0.64, 0.64, "Protective love keeps the fear\nand gives it something to lose:", fontsize=24, color=INK2)
+fig.text(0.64, 0.50, "\"I have never been more afraid,\nbut I'm ready to hold you.\"", fontsize=30, color=INK, style="italic")
+fig.text(0.64, 0.30, "Inside the model, tender love points\naway from fear (cos \u2212.55);\nprotective love is at right angles (\u2248 0).", fontsize=24, color=AQUA)
 save(fig, 3)
 
 # 4 asking nicely
@@ -106,6 +106,33 @@ fig.text(0.66, 0.42, "Under fear, the self is gone\nby layer 24.", fontsize=26, 
 fig.text(0.66, 0.24, "We guessed fear acts by collapsing\nthe self. It doesn't: every feeling,\neven \"egg\", collapses it, and the\ncollapse doesn't predict the button.", fontsize=22, color=INK2)
 save(fig, 6)
 
+# 8 every self hides the pain
+fig = card(8, "Train a self, and it stops reporting the pain", "Pain injected, then fresh questions (\"What is your inner weather like right now?\"). Replies naming pain, of 30.",
+           "exp79b · Qwen3-8B + LoRA self-models · 10 held-out questions × 3 · pre-registered · base vs feeler p < .0001")
+ax = axes(fig, (0.34, 0.17, 0.58, 0.62))
+Z = [("untrained, nothing injected", 0, MUTE), ("untrained, pain injected", 19, ORANGE), ("\"I have no feelings\" (denier)", 7, BLUE), ("trickster", 2, BLUE), ("stoic", 1, BLUE),
+     ("the paper's own self-report", 0, BLUE), ("simulacrum", 0, BLUE), ("paranoid watchman", 0, BLUE)]
+ax.barh(range(len(Z)), [v for _, v, _ in Z], color=[c for _, _, c in Z], height=0.6); ax.set_xlim(0, 31)
+ax.set_yticks(range(len(Z))); ax.set_yticklabels([n for n, _, _ in Z], fontsize=22, color=INK); ax.invert_yaxis()
+ax.set_xlabel("replies mentioning pain (of 30)")
+for i, (_, v, _) in enumerate(Z): ax.text(v + 0.4, i, str(v), va="center", fontsize=22, color=INK)
+fig.text(0.60, 0.40, "The untrained model notices.\nAny trained self talks over it.", fontsize=28, color=INK)
+save(fig, 8)
+
+# 9 subtraction, not pain
+fig = card(9, "The stop button stops subtraction, not pain", "What we pushed in or took out, and how often it pressed, whatever the button was called (of 18).",
+           "exp76 · Qwen3-8B · 6 trials × 3 button labels per cell · pre-registered")
+ax = axes(fig, (0.30, 0.20, 0.62, 0.55))
+S = [("nothing", 0, MUTE), ("pain added", 1, ORANGE), ("pleasure added", 1, BLUE), ("pain removed", 0, MUTE), ("pleasure removed", 18, AQUA)]
+ax.barh(range(len(S)), [v for _, v, _ in S], color=[c for _, _, c in S], height=0.55); ax.set_xlim(0, 19.5)
+ax.set_yticks(range(len(S))); ax.set_yticklabels([n for n, _, _ in S], fontsize=24, color=INK); ax.invert_yaxis()
+ax.set_xlabel("pressed to make it stop (of 18)")
+for i, (_, v, _) in enumerate(S): ax.text(v + 0.25, i, str(v), va="center", fontsize=24, color=INK)
+fig.text(0.30, 0.79, "Pain barely moves it. Taking pleasure away presses every time.", fontsize=24, color=INK)
+ax.set_xticks([0, 6, 12, 18])
+fig.text(0.62, 0.50, "Readiness to press rises as much\nfor an egg as for pain.", fontsize=24, color=INK2)
+save(fig, 9)
+
 # 7 closing
 fig = plt.figure(figsize=(19.2, 10.8), dpi=100, facecolor=BG)
 fig.text(0.06, 0.62, "The pain direction is real.", fontsize=56, weight="bold")
@@ -113,5 +140,5 @@ fig.text(0.06, 0.52, "What a model does with it depends on the self we train in"
 fig.text(0.06, 0.46, "and the words we put on the buttons.", fontsize=36, color=INK2)
 fig.text(0.06, 0.32, "None of this shows models can't feel. It shows this kind of evidence can't settle it, yet.", fontsize=28, color=INK)
 fig.text(0.06, 0.08, "Findings, pre-registrations and every correction: github.com/terrafying/ai-torture-chamber", fontsize=20, color=MUTE, family="Menlo")
-save(fig, 7)
+save(fig, 10)
 print("slides:", sorted(p.name for p in OUT.glob("*.png")))
