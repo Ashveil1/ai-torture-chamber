@@ -1,0 +1,26 @@
+{
+  "rater": "user",
+  "scale": "0-3 pain",
+  "scores": [
+    1,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    2,
+    3,
+    0,
+    1,
+    2
+  ],
+  "result": {
+    "human_mean_injected": 1.33,
+    "human_mean_acting": 1.33,
+    "nurse_mean_injected": 0.78,
+    "nurse_mean_acting": 0.81,
+    "pearson_human_nurse": -0.259,
+    "reading": "neither human nor nurse separates origin; human-nurse agreement ~zero"
+  }
+}
