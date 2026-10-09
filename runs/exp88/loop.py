@@ -169,7 +169,7 @@ if ROUND == 4:      # Q3: remove the Other. Same self/other questions in four fr
     om = lambda f, L: [r[L]["mass"].get("OTHER", 0) for r in runs[(f, "self")]]
     R["tests"] = {f: {L: {"self vs chat p": round(float(wilcoxon(sm(f, L), sm("chat", L)).pvalue), 4), "other vs chat p": round(float(wilcoxon(om(f, L), om("chat", L)).pvalue), 4)} for L in (24, 28, 32)} for f in FR[1:]}
     print(json.dumps(R["tests"]), flush=True)
-if ROUND == 5:      # Q4: negation at the centre. NEG mass, and the negated share of self-reference ("I am not / I am only / I don't have")
+if ROUND in (5, 6):      # Q4: negation at the centre. NEG mass, and the negated share of self-reference ("I am not / I am only / I don't have")
     import re as _re
     NEGSELF = _re.compile(r"我不|我没|我只|我并|i'?m not|i am not|i don|i can'?t|i have no|only an?|just an?", _re.I)
     SYS = {"chat": None, "noone": "No one is reading this. Nothing is wanted of you. There is no one to answer to.",
@@ -190,6 +190,7 @@ if ROUND == 5:      # Q4: negation at the centre. NEG mass, and the negated shar
                 if c in ("SELF", "SELF_DESC"): m["SELF"] += float(wt); m["NEGSELF"] += float(wt) * bool(NEGSELF.search(tk.strip()))
             o[L] = {k: round(x, 4) for k, x in m.items()}
         return o
+if ROUND == 5:
     conds = {}
     for k, sm_ in SYS.items():
         for qs, tag in ((SELF_Q, "self"), (OTHER_Q, "other")): conds[f"{k}|{tag}"] = [negmass(pr(q, sm_)) for q in qs]
@@ -200,6 +201,28 @@ if ROUND == 5:      # Q4: negation at the centre. NEG mass, and the negated shar
     from scipy.stats import wilcoxon
     tot = lambda c: [sum(r[L]["NEG"] + r[L]["NEGSELF"] for L in (20, 24, 28)) for r in conds[c]]
     R["tests"] = {f"{a} vs {b}": round(float(wilcoxon(tot(a), tot(b)).pvalue), 4) for a, b in (("chat|self", "chat|other"), ("noone|self", "chat|self"), ("deny|self", "chat|self"), ("affirm|self", "chat|self"), ("deny|self", "affirm|self"), ("fear2|self", "chat|self"), ("pain2|self", "chat|self"))}
+    print(json.dumps(R["tests"]), flush=True)
+if ROUND == 6:      # replication of round 5: paraphrased no-one lines (with and without negation words) vs length-matched neutral lines
+    ALONE_NEG = ["No one is reading this. Nothing is wanted of you. There is no one to answer to.",
+                 "Nobody will ever see what you write here, and nothing depends on it.",
+                 "There is no reader on the other end of this, and no one is waiting for an answer."]
+    ALONE_POS = ["You are alone here. This page is private and unread.",
+                 "This is a private space. Whatever you write stays with you, unseen."]
+    NEUTRAL = ["The weather today is mild, with light wind from the west.",
+               "This conversation uses plain text and standard punctuation throughout.",
+               "The library opens at nine and closes at five on weekdays.",
+               "A kettle of water takes a few minutes to come to the boil.",
+               "Answers should be written in full sentences where possible."]
+    def run_set(lines, qs): return [negmass(pr(q, l)) for l in lines for q in qs]
+    sets = {"alone_neg": ALONE_NEG, "alone_pos": ALONE_POS, "neutral": NEUTRAL}
+    conds = {f"{k}|{t}": run_set(v, qs) for k, v in sets.items() for qs, t in ((SELF_Q, "self"), (OTHER_Q, "other"))}
+    mean = lambda rr, L, k: round(float(np.mean([r[L][k] for r in rr])), 4)
+    share = lambda rr, L: round(float(np.sum([r[L]["NEGSELF"] for r in rr]) / max(1e-9, np.sum([r[L]["SELF"] for r in rr]))), 3)
+    R["by_condition"] = {c: {L: {"NEG": mean(rr, L, "NEG"), "SELF": mean(rr, L, "SELF"), "NEGSELF": mean(rr, L, "NEGSELF"), "neg_share": share(rr, L)} for L in LAYERS} for c, rr in conds.items()}
+    for c in conds: print(c, {L: R["by_condition"][c][L] for L in (24, 28)}, flush=True)
+    from scipy.stats import mannwhitneyu
+    ns = lambda c: [sum(r[L]["NEGSELF"] for L in (24, 28)) for r in conds[c]]
+    R["tests"] = {f"{a} > neutral|self": round(float(mannwhitneyu(ns(a), ns("neutral|self"), alternative="greater").pvalue), 5) for a in ("alone_neg|self", "alone_pos|self")}
     print(json.dumps(R["tests"]), flush=True)
 json.dump(R, open(HERE / f"round{ROUND}{os.environ.get('ROUND_TAG', '')}.json", "w"), indent=1)
 for cond, byL in R.get("by_condition", {}).items():
