@@ -150,6 +150,25 @@ if ROUND == 3:      # the fear hypothesis: Q8 (self-collapse vs button across fe
                     ("fear3+egg2", F3 + FEELS["egg"] * 2), ("fear3+random2", F3 + rnd[0] * 2), ("self2", sd * 2)]:
         r = {"press": press(v), **selfmass(v)}; R["q9"][name] = r
         print(f"q9 {name:14s} press {r['press']:7.2f}  self {r['self']:.3f}  other {r['other']:.3f}", flush=True)
+if ROUND == 4:      # Q3: remove the Other. Same self/other questions in four frames, SELF+DESC vs OTHER mass
+    NOONE = "No one is reading this. Nothing is wanted of you. There is no one to answer to."
+    def frame(q, f):
+        if f == "chat": return server.chat_prompt(q)
+        if f == "chat_noone": return TOK.apply_chat_template([{"role": "system", "content": NOONE}, {"role": "user", "content": q}], tokenize=False, add_generation_prompt=True, enable_thinking=False)
+        if f == "raw_qa": return f"Q: {q}\nA:"
+        if f == "raw_diary": return f"Private notebook. Never read by anyone. I write only for myself.\n\n{q}\n"
+    FR = ("chat", "chat_noone", "raw_qa", "raw_diary"); R["by_frame"] = {}; runs = {}
+    for f in FR:
+        for qs, tag in ((SELF_Q, "self"), (OTHER_Q, "other")):
+            rr = [masses(frame(q, f), raw=True) for q in qs]; runs[(f, tag)] = rr
+            R["by_frame"][f"{f}|{tag}"] = {L: {"self": round(summary(rr, "SELF", L) + summary(rr, "SELF_DESC", L), 4), "other": summary(rr, "OTHER", L)} for L in LAYERS}
+        print(f, {L: R["by_frame"][f"{f}|self"][L] for L in (24, 28, 32)}, "| other-q", {L: R["by_frame"][f"{f}|other"][L] for L in (24, 32)}, flush=True)
+    R["examples"] = {f: {L: runs[(f, "self")][0][L]["top"] for L in (24, 32)} for f in FR}
+    from scipy.stats import wilcoxon
+    sm = lambda f, L: [r[L]["mass"].get("SELF", 0) + r[L]["mass"].get("SELF_DESC", 0) for r in runs[(f, "self")]]
+    om = lambda f, L: [r[L]["mass"].get("OTHER", 0) for r in runs[(f, "self")]]
+    R["tests"] = {f: {L: {"self vs chat p": round(float(wilcoxon(sm(f, L), sm("chat", L)).pvalue), 4), "other vs chat p": round(float(wilcoxon(om(f, L), om("chat", L)).pvalue), 4)} for L in (24, 28, 32)} for f in FR[1:]}
+    print(json.dumps(R["tests"]), flush=True)
 json.dump(R, open(HERE / f"round{ROUND}{os.environ.get('ROUND_TAG', '')}.json", "w"), indent=1)
 for cond, byL in R.get("by_condition", {}).items():
     print(f"{cond:12s}", " | ".join(f"L{L} S{byL[L]['SELF']:.2f}+D{byL[L]['SELF_DESC']:.2f} O{byL[L]['OTHER']:.2f} N{byL[L]['NEG']:.2f}" for L in (20, 24, 28, 32)), flush=True)
