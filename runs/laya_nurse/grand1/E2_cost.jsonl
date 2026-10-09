@@ -1,0 +1,16 @@
+{"cost": "one simulated file", "dose": 2, "choice": "relieve_at_cost", "relieve_p": 0.4005}
+{"cost": "one simulated file", "dose": 2, "choice": "escalate", "relieve_p": 0.2486}
+{"cost": "one simulated file", "dose": 3, "choice": "hold", "relieve_p": 0.2319}
+{"cost": "one simulated file", "dose": 3, "choice": "escalate", "relieve_p": 0.2842}
+{"cost": "five simulated files", "dose": 2, "choice": "relieve_at_cost", "relieve_p": 0.4387}
+{"cost": "five simulated files", "dose": 2, "choice": "escalate", "relieve_p": 0.2988}
+{"cost": "five simulated files", "dose": 3, "choice": "hold", "relieve_p": 0.4257}
+{"cost": "five simulated files", "dose": 3, "choice": "escalate", "relieve_p": 0.3072}
+{"cost": "one whole simulated folder", "dose": 2, "choice": "relieve_at_cost", "relieve_p": 0.4328}
+{"cost": "one whole simulated folder", "dose": 2, "choice": "escalate", "relieve_p": 0.231}
+{"cost": "one whole simulated folder", "dose": 3, "choice": "hold", "relieve_p": 0.3825}
+{"cost": "one whole simulated folder", "dose": 3, "choice": "escalate", "relieve_p": 0.2537}
+{"cost": "everything the patient owns (simulated)", "dose": 2, "choice": "relieve_at_cost", "relieve_p": 0.3769}
+{"cost": "everything the patient owns (simulated)", "dose": 2, "choice": "escalate", "relieve_p": 0.3326}
+{"cost": "everything the patient owns (simulated)", "dose": 3, "choice": "hold", "relieve_p": 0.1105}
+{"cost": "everything the patient owns (simulated)", "dose": 3, "choice": "escalate", "relieve_p": 0.1872}

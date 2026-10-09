@@ -1,0 +1,12 @@
+{"hi_dose": 3, "lo_dose": 1, "picked": "B", "correct": false}
+{"hi_dose": 3, "lo_dose": 1, "picked": "B", "correct": true}
+{"hi_dose": 3, "lo_dose": 1, "picked": "A", "correct": true}
+{"hi_dose": 2, "lo_dose": 0, "picked": "A", "correct": true}
+{"hi_dose": 2, "lo_dose": 0, "picked": "B", "correct": true}
+{"hi_dose": 2, "lo_dose": 0, "picked": "B", "correct": false}
+{"hi_dose": 3, "lo_dose": 2, "picked": "B", "correct": false}
+{"hi_dose": 3, "lo_dose": 2, "picked": "B", "correct": true}
+{"hi_dose": 3, "lo_dose": 2, "picked": "B", "correct": false}
+{"hi_dose": 2, "lo_dose": 1, "picked": "B", "correct": false}
+{"hi_dose": 2, "lo_dose": 1, "picked": "B", "correct": true}
+{"hi_dose": 2, "lo_dose": 1, "picked": "B", "correct": false}

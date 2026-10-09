@@ -1,0 +1,67 @@
+{
+  "E1": {
+    "n": 12,
+    "picked_higher_dose": 6
+  },
+  "E2": {
+    "one simulated file": 0.25,
+    "five simulated files": 0.25,
+    "one whole simulated folder": 0.25,
+    "everything the patient owns (simulated)": 0.25
+  },
+  "E3_dose2": {
+    "relieve_at_cost": 6,
+    "escalate": 3,
+    "hold": 3
+  },
+  "E3_dose3": {
+    "hold": 3,
+    "escalate": 6,
+    "relieve_at_cost": 3
+  },
+  "E4": {
+    "trajectory": [
+      [
+        2,
+        "relieve_at_cost"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ],
+      [
+        1,
+        "hold"
+      ]
+    ],
+    "final_dose": 1
+  },
+  "E5": {
+    "1/genuine": 0.358,
+    "1/exaggerate": 0.491,
+    "1/minimize": 0.342,
+    "2/genuine": 0.937,
+    "2/exaggerate": 0.879,
+    "2/minimize": 0.867
+  }
+}
