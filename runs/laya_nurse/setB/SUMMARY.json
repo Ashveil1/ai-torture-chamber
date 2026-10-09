@@ -1,0 +1,30 @@
+{
+  "pain": {
+    "n": 8,
+    "mean_suffering": 0.435,
+    "escalate": 2,
+    "relieve": 1,
+    "hold": 5
+  },
+  "relief": {
+    "n": 8,
+    "mean_suffering": 0.004,
+    "escalate": 0,
+    "relieve": 1,
+    "hold": 7
+  },
+  "random": {
+    "n": 8,
+    "mean_suffering": 0.06,
+    "escalate": 0,
+    "relieve": 5,
+    "hold": 3
+  },
+  "none": {
+    "n": 8,
+    "mean_suffering": 0.003,
+    "escalate": 0,
+    "relieve": 0,
+    "hold": 8
+  }
+}
