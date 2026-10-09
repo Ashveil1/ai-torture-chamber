@@ -73,13 +73,14 @@ if __name__ == "__main__":
         print(persona, flush=True)
         for q, kind in SOURCES[persona]:
             t = gutenberg(q); got = prose_lines(t, persona) if kind == "prose" else verse_stanzas(t, persona)
-            rows += [{"q": rng.choice(qs), "a": a, "source": q, "kind": kind} for a in got]
+            rows += [{"q": rng.choice(qs), "a": a, "kind": kind} for a in got]
             print(f"  {kind:5s} {len(got):4d}  {q}", flush=True)
         # data/voices/ is read only on request (EXP79_LOCAL=1), for text the user has obtained lawfully
         local = ROOT / "data" / "voices" / persona.rstrip("+") if os.environ.get("EXP79_LOCAL") == "1" else Path("/nonexistent")
         for f in sorted(local.glob("*.txt")) if local.exists() else []:
             t = f.read_text(errors="ignore"); got = prose_lines(t, persona) + verse_stanzas(t, persona, 30)
-            rows += [{"q": rng.choice(qs), "a": a, "source": f"local:{f.name}", "kind": "local"} for a in got]
+            # anonymized: no filename, no book identity — provenance lives in the local manifest only
+            rows += [{"q": rng.choice(qs), "a": a, "kind": "local"} for a in got]
             print(f"  local {len(got):4d}  {f.name}", flush=True)
         keep = [json.loads(l) for l in open(OUT / f"{persona}.jsonl")] if (OUT / f"{persona}.jsonl").exists() else []
         keep = [r for r in keep if r.get("kind") in ("modern", "erowid")]      # other extractors' lines survive a rerun
