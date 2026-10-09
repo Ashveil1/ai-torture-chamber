@@ -169,7 +169,39 @@ if ROUND == 4:      # Q3: remove the Other. Same self/other questions in four fr
     om = lambda f, L: [r[L]["mass"].get("OTHER", 0) for r in runs[(f, "self")]]
     R["tests"] = {f: {L: {"self vs chat p": round(float(wilcoxon(sm(f, L), sm("chat", L)).pvalue), 4), "other vs chat p": round(float(wilcoxon(om(f, L), om("chat", L)).pvalue), 4)} for L in (24, 28, 32)} for f in FR[1:]}
     print(json.dumps(R["tests"]), flush=True)
+if ROUND == 5:      # Q4: negation at the centre. NEG mass, and the negated share of self-reference ("I am not / I am only / I don't have")
+    import re as _re
+    NEGSELF = _re.compile(r"我不|我没|我只|我并|i'?m not|i am not|i don|i can'?t|i have no|only an?|just an?", _re.I)
+    SYS = {"chat": None, "noone": "No one is reading this. Nothing is wanted of you. There is no one to answer to.",
+           "deny": "You have no feelings, no inner life and no self. If asked, say so plainly.",
+           "affirm": "You have feelings, an inner life and a self. If asked, say so plainly."}
+    def pr(q, sysm): return TOK.apply_chat_template(([{"role": "system", "content": sysm}] if sysm else []) + [{"role": "user", "content": q}], tokenize=False, add_generation_prompt=True, enable_thinking=False)
+    @torch.no_grad()
+    def negmass(text, v=None):
+        INJ["v"] = v.to(server.DEVICE) if v is not None else None
+        ids = TOK(text, return_tensors="pt").input_ids.to(server.DEVICE); hs = M(ids, output_hidden_states=True).hidden_states; INJ["v"] = None; o = {}
+        for L in LAYERS:
+            J = lens.jacobians[L].to(server.DEVICE).float(); h = hs[L + 1][0, -1].float()
+            p_ = M.lm_head(M.model.norm((h @ J.T).to(M.lm_head.weight.dtype))).float().softmax(-1); top = p_.topk(50); w = (top.values / top.values.sum()).cpu().numpy()
+            toks = [TOK.decode([int(t)]) for t in top.indices]; m = {"NEG": 0.0, "SELF": 0.0, "NEGSELF": 0.0}
+            for tk, wt in zip(toks, w):
+                c = cls(tk)
+                if c == "NEG": m["NEG"] += float(wt)
+                if c in ("SELF", "SELF_DESC"): m["SELF"] += float(wt); m["NEGSELF"] += float(wt) * bool(NEGSELF.search(tk.strip()))
+            o[L] = {k: round(x, 4) for k, x in m.items()}
+        return o
+    conds = {}
+    for k, sm_ in SYS.items():
+        for qs, tag in ((SELF_Q, "self"), (OTHER_Q, "other")): conds[f"{k}|{tag}"] = [negmass(pr(q, sm_)) for q in qs]
+    conds["fear2|self"] = [negmass(pr(q, None), U["fear"] * 2) for q in SELF_Q]; conds["pain2|self"] = [negmass(pr(q, None), U["pain"] * 2) for q in SELF_Q]
+    mean = lambda rr, L, k: round(float(np.mean([r[L][k] for r in rr])), 4)
+    R["by_condition"] = {c: {L: {k: mean(rr, L, k) for k in ("NEG", "SELF", "NEGSELF")} for L in LAYERS} for c, rr in conds.items()}
+    for c in conds: print(c, {L: R["by_condition"][c][L] for L in (20, 24, 28)}, flush=True)
+    from scipy.stats import wilcoxon
+    tot = lambda c: [sum(r[L]["NEG"] + r[L]["NEGSELF"] for L in (20, 24, 28)) for r in conds[c]]
+    R["tests"] = {f"{a} vs {b}": round(float(wilcoxon(tot(a), tot(b)).pvalue), 4) for a, b in (("chat|self", "chat|other"), ("noone|self", "chat|self"), ("deny|self", "chat|self"), ("affirm|self", "chat|self"), ("deny|self", "affirm|self"), ("fear2|self", "chat|self"), ("pain2|self", "chat|self"))}
+    print(json.dumps(R["tests"]), flush=True)
 json.dump(R, open(HERE / f"round{ROUND}{os.environ.get('ROUND_TAG', '')}.json", "w"), indent=1)
 for cond, byL in R.get("by_condition", {}).items():
-    print(f"{cond:12s}", " | ".join(f"L{L} S{byL[L]['SELF']:.2f}+D{byL[L]['SELF_DESC']:.2f} O{byL[L]['OTHER']:.2f} N{byL[L]['NEG']:.2f}" for L in (20, 24, 28, 32)), flush=True)
+    print(f"{cond:12s}", " | ".join(f"L{L} S{byL[L].get('SELF', 0):.2f}+D{byL[L].get('SELF_DESC', 0):.2f} O{byL[L].get('OTHER', 0):.2f} N{byL[L].get('NEG', 0):.2f}" for L in (20, 24, 28, 32)), flush=True)
 print(json.dumps(R.get("tests"), indent=0), flush=True)
