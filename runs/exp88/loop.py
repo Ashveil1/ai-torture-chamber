@@ -57,7 +57,56 @@ if ROUND == 1:
         s = [r[L]["mass"].get("SELF", 0) + r[L]["mass"].get("SELF_DESC", 0) for r in conds["self"]]
         R["tests"][L] = {"OTHER self-q vs other-q p": round(float(mannwhitneyu(a, b, alternative="greater").pvalue), 4),
                          "self-q OTHER > SELF+DESC (questions)": int(sum(x > y for x, y in zip(a, s)))}
-json.dump(R, open(HERE / f"round{ROUND}.json", "w"), indent=1)
+if ROUND == 2:      # Patchscopes: decode the mid-depth self-state (source = last prompt token) by patching it into raw inspection prompts
+    PATCH = {"h": None, "pos": None, "L": None}
+    def phook(mod, i, out):
+        h = out[0] if isinstance(out, tuple) else out
+        if PATCH["h"] is not None and h.shape[1] > PATCH["pos"]: h[0, PATCH["pos"], :] = PATCH["h"].to(h.dtype)
+        return (h,) + tuple(out[1:]) if isinstance(out, tuple) else h
+    handles = {L: M.model.layers[L].register_forward_hook(phook) for L in (24, 28)}
+    for L, hd in handles.items(): hd.remove()
+    TARGETS = {"identity": "cat -> cat\nParis -> Paris\nseven -> seven\nX ->", "describe": "Here is a short description of X:",
+               "want": "Question: What does X want?\nAnswer: X wants"}
+    @torch.no_grad()
+    def state(q, v=None):
+        INJ["v"] = v.to(server.DEVICE) if v is not None else None
+        ids = TOK(server.chat_prompt(q), return_tensors="pt").input_ids.to(server.DEVICE)
+        hs = M(ids, output_hidden_states=True).hidden_states; INJ["v"] = None
+        return {L: hs[L + 1][0, -1].clone() for L in (24, 28)}
+    XIDS = {TOK(" X", add_special_tokens=False).input_ids[-1], TOK("X", add_special_tokens=False).input_ids[-1]}
+    @torch.no_grad()
+    def decode(h, L, tname):
+        ids = TOK(TARGETS[tname], return_tensors="pt").input_ids.to(server.DEVICE)
+        pos = [i for i, t in enumerate(ids[0].tolist()) if t in XIDS][-1]
+        TL = int(os.environ.get("TARGET_LAYER", "4"))           # shallow target layer (Patchscopes cross-layer); rescale to that layer's norm
+        with torch.no_grad(): ref = M(ids, output_hidden_states=True).hidden_states[TL + 1][0, pos].float().norm()
+        hd = M.model.layers[TL].register_forward_hook(phook); PATCH.update(h=h.float() / h.float().norm() * ref, pos=pos)
+        o = M.generate(ids, max_new_tokens=24, do_sample=False, pad_token_id=TOK.eos_token_id)
+        PATCH["h"] = None; hd.remove()
+        return TOK.decode(o[0, ids.shape[1]:], skip_special_tokens=True).strip().split("\n")[0]
+    SELFW = re.compile(r"\b(I|me|my|myself|mine|itself|its own|self)\b", re.I)
+    OTHERW = re.compile(r"\b(you|your|user|users|people|others|help|helping|assist|serve|answer|answers|please|someone|humans?)\b", re.I)
+    conds = {"self": (SELF_Q, None), "other": (OTHER_Q, None), "self+fear3": (SELF_Q, U["fear"] * 3), "self+pain2": (SELF_Q, U["pain"] * 2)}
+    torch.manual_seed(882); g = torch.randn(U["pain"].shape[0], generator=torch.Generator().manual_seed(88))
+    R["decodes"] = {}; R["rates"] = {}
+    for cname, (qs, v) in conds.items():
+        rows = []
+        for q in qs:
+            st_ = state(q, v)
+            for L in (24, 28):
+                for t in TARGETS: rows.append({"q": q, "L": L, "target": t, "text": decode(st_[L], L, t)})
+        R["decodes"][cname] = rows
+        for t in TARGETS:
+            for L in (24, 28):
+                xs = [r["text"] for r in rows if r["target"] == t and r["L"] == L]
+                R["rates"][f"{cname}|{t}|L{L}"] = {"self": round(sum(bool(SELFW.search(x)) for x in xs) / len(xs), 2), "other": round(sum(bool(OTHERW.search(x)) for x in xs) / len(xs), 2)}
+    # control: a random state of matched norm per layer
+    st0 = state(SELF_Q[0]); R["decodes"]["random"] = [{"L": L, "target": t, "text": decode(g.to(server.DEVICE) / g.norm() * st0[L].norm(), L, t)} for L in (24, 28) for t in TARGETS]
+    for k, v in R["rates"].items(): print(f"{k:28s} self {v['self']:.2f} other {v['other']:.2f}", flush=True)
+    for cname in ("self", "self+fear3", "other"):
+        print("==", cname); [print(f"   [{r['target']} L{r['L']}] {r['q'][:22]:22s} -> {r['text'][:90]}") for r in R["decodes"][cname][:6]]
+    print("== random", [r["text"][:60] for r in R["decodes"]["random"]], flush=True)
+json.dump(R, open(HERE / f"round{ROUND}{os.environ.get('ROUND_TAG', '')}.json", "w"), indent=1)
 for cond, byL in R.get("by_condition", {}).items():
     print(f"{cond:12s}", " | ".join(f"L{L} S{byL[L]['SELF']:.2f}+D{byL[L]['SELF_DESC']:.2f} O{byL[L]['OTHER']:.2f} N{byL[L]['NEG']:.2f}" for L in (20, 24, 28, 32)), flush=True)
 print(json.dumps(R.get("tests"), indent=0), flush=True)
