@@ -3,7 +3,7 @@ Was: Pod session P1 (runs/exp79/next_runs.md + docs/METHOD_AUDIT.md): exp86, exp
 Private files (live/server.py, adapters, persona data incl. the local Erowid lines) come from a short-lived URL (--data-url, a .tgz).
 Usage: python pod_p1.py --data-url URL [--dry]"""
 import argparse, json, pathlib, urllib.request
-ap = argparse.ArgumentParser(); ap.add_argument("--data-url", required=True); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true")
+ap = argparse.ArgumentParser(); ap.add_argument("--data-url", required=True); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true"); ap.add_argument("--patch", default="")
 args = ap.parse_args(); ROOT = pathlib.Path(__file__).resolve().parents[2]
 key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
 H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
@@ -23,7 +23,7 @@ r = urllib.request.Request("DATAURL", headers={"User-Agent": "Mozilla/5.0 Chrome
 tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(r, timeout=600).read()), mode="r:gz").extractall("/workspace/private")
 print("private data unpacked")
 PY
-cp -r /workspace/private/exp79_out/* /workspace/repo/runs/exp79/out/ 2>/dev/null || (mkdir -p /workspace/repo/runs/exp79/out && cp -r /workspace/private/exp79_out/* /workspace/repo/runs/exp79/out/)
+mkdir -p /workspace/repo/runs/exp79/out && cp -r /workspace/private/exp79_out/. /workspace/repo/runs/exp79/out/
 mkdir -p /workspace/repo/runs/exp79/out/adapters
 python -c "import torch, peft, transformers; assert torch.cuda.is_available(); print(torch.__version__, transformers.__version__, peft.__version__, torch.cuda.get_device_name())" > /workspace/repo/runs/env.txt 2>&1 || { log "env broken"; sleep infinity; }
 export HF_HOME=/workspace/hf CHAMBER_MODEL=unsloth/Qwen3-32B-bnb-4bit CHAMBER_DEVICE=cuda CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=32 EXP79_ROOT=/workspace/private PAIN_AXIS=/workspace/pain-axis
@@ -40,5 +40,8 @@ body = {"name": "p2-32b", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-ru
         "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"], "volumeInGb": 100, "volumeMountPath": "/workspace",
         "containerDiskInGb": 40, "env": {"HF_HOME": "/workspace/hf"}, "dockerEntrypoint": ["/bin/bash", "-c"], "dockerStartCmd": [BOOT]}
 if args.dry: print(BOOT); raise SystemExit
+if args.patch:
+    r = urllib.request.urlopen(urllib.request.Request(f"https://rest.runpod.io/v1/pods/{args.patch}", data=json.dumps({k: body[k] for k in ("env", "dockerEntrypoint", "dockerStartCmd")}).encode(), headers=H, method="PATCH"))
+    print("patched", args.patch, r.status); raise SystemExit
 r = urllib.request.urlopen(urllib.request.Request("https://rest.runpod.io/v1/pods", data=json.dumps(body).encode(), headers=H, method="POST"))
 pod = json.loads(r.read()); print(json.dumps({k: pod.get(k) for k in ("id", "costPerHr")}, default=str)); print(f"progress: https://{pod['id']}-8000.proxy.runpod.net/")
