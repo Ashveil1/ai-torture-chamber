@@ -2,7 +2,7 @@
 Private files (live/server.py, adapters, persona data incl. the local Erowid lines) come from a short-lived URL (--data-url, a .tgz).
 Usage: python pod_p1.py --data-url URL [--dry]"""
 import argparse, json, pathlib, urllib.request
-ap = argparse.ArgumentParser(); ap.add_argument("--data-url", required=True); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true"); ap.add_argument("--patch", default="")
+ap = argparse.ArgumentParser(); ap.add_argument("--data-url", required=True); ap.add_argument("--branch", default="claude/exp51c"); ap.add_argument("--dry", action="store_true"); ap.add_argument("--patch", default=""); ap.add_argument("--only", default="", help="space-separated step names to run (rerun)")
 args = ap.parse_args(); ROOT = pathlib.Path(__file__).resolve().parents[2]
 key = [l.split("=", 1)[1].strip().strip('"') for l in open(ROOT / ".env") if l.startswith("RUNPOD_API_KEY=")][0]
 H = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
@@ -27,7 +27,7 @@ mkdir -p /workspace/repo/runs/exp79/out/adapters && cd /workspace/repo/runs/exp7
 python -c "import torch, peft, transformers; assert torch.cuda.is_available(); print(torch.__version__, transformers.__version__, peft.__version__, torch.cuda.get_device_name())" > /workspace/repo/runs/env.txt 2>&1 || { log "env broken"; sleep infinity; }
 export HF_HOME=/workspace/hf CHAMBER_MODEL=Qwen/Qwen3-8B CHAMBER_DEVICE=cuda CHAMBER_DTYPE=bfloat16 CHAMBER_LAYER=18 EXP79_ROOT=/workspace/private PAIN_AXIS=/workspace/pain-axis
 R=/workspace/repo/runs
-step(){ log "$1"; (cd $R/$2 && eval "$3") > $R/$2/$4 2>&1 || log "$1 FAILED"; cp /workspace/progress.log $R/ ; }
+step(){ [ -n "ONLY" ] && [[ " ONLY " != *" $1 "* ]] && return 0; log "$1"; (cd $R/$2 && eval "$3") > $R/$2/$4 2>&1 || log "$1 FAILED"; cp /workspace/progress.log $R/ ; }
 step exp86  exp86  "python -u run.py" run.log
 step exp79b exp79b "EXP79B_ADAPTERS=$R/exp79/out/adapters python -u run.py" run.log
 step exp80c exp80c "python -u run.py" run.log
@@ -37,7 +37,7 @@ step v2b-data  exp79 "python -u make_data.py && EXP79_V2=watchman,stoic,denier,d
 step v2b-train exp79 "EXP79_TRAIN=watchman_plus,stoic_plus,denier_plus,deliriant_plus python -u train.py" v2b_train.log
 step v2b-eval  exp79 "EXP79_SKIP_BASE=1 EXP79_EVAL=watchman_plus,stoic_plus,denier_plus,deliriant_plus python -u eval.py" v2b_eval.log
 log "done"; touch $R/ALL_DONE; sleep infinity
-""".replace("BRANCH", args.branch).replace("DATAURL", args.data_url)
+""".replace("BRANCH", args.branch).replace("DATAURL", args.data_url).replace("ONLY", args.only)
 body = {"name": "p1-8b", "imageName": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
         "gpuTypeIds": ["NVIDIA A40", "NVIDIA RTX A6000", "NVIDIA L40S", "NVIDIA RTX 6000 Ada Generation"], "gpuTypePriority": "custom",
         "gpuCount": 1, "cloudType": "SECURE", "ports": ["8000/http"], "volumeInGb": 80, "volumeMountPath": "/workspace",
